@@ -15,6 +15,14 @@ message AccountBetaProgram {
   string started = 6;
 }
 
+// AccountBetaProgramListResponse is the {count, filter?, account_betas}
+// envelope the linode_account_beta_list tool returns.
+message AccountBetaProgramListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountBetaProgram account_betas = 3;
+}
+
 // AccountBetaGetInput is the input contract for linode_account_beta_get.
 message AccountBetaGetInput {
   // Linode environment to use (optional, defaults to "default").

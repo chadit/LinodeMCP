@@ -9,6 +9,12 @@ from uuid import UUID
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    image_pb2,
+    image_sharegroup_member_pb2,
+    image_sharegroup_pb2,
+    image_sharegroup_token_pb2,
+)
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -22,6 +28,10 @@ from linodemcp.tools.helpers import (
     error_response,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -299,26 +309,6 @@ def create_linode_image_sharegroup_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-def image_sharegroup_to_response_dict(sharegroup: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw image share group API dict to proto-canonical form.
-
-    description, updated, and expiry are nullable and omitted when null.
-    """
-    body: dict[str, Any] = {
-        "id": sharegroup.get("id", 0),
-        "uuid": sharegroup.get("uuid", ""),
-        "label": sharegroup.get("label", ""),
-        "is_suspended": bool(sharegroup.get("is_suspended")),
-        "created": sharegroup.get("created", ""),
-        "images_count": sharegroup.get("images_count", 0),
-        "members_count": sharegroup.get("members_count", 0),
-    }
-    for key in ("description", "updated", "expiry"):
-        if sharegroup.get(key) is not None:
-            body[key] = sharegroup[key]
-    return body
-
-
 def create_linode_image_sharegroup_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_sharegroup_get tool."""
     return Tool(
@@ -398,23 +388,6 @@ def create_linode_image_sharegroup_member_list_tool() -> tuple[Tool, Capability]
             "required": ["sharegroup_id"],
         },
     ), Capability.Read
-
-
-def image_sharegroup_member_to_response_dict(member: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw image share group member API dict to proto-canonical form.
-
-    updated and expiry are nullable and omitted when null.
-    """
-    body: dict[str, Any] = {
-        "token_uuid": member.get("token_uuid") or "",
-        "status": member.get("status") or "",
-        "label": member.get("label") or "",
-        "created": member.get("created") or "",
-    }
-    for key in ("updated", "expiry"):
-        if member.get(key) is not None:
-            body[key] = member[key]
-    return body
 
 
 def create_linode_image_sharegroup_member_token_get_tool() -> tuple[Tool, Capability]:
@@ -787,27 +760,6 @@ def create_linode_image_sharegroup_token_list_tool() -> tuple[Tool, Capability]:
             },
         },
     ), Capability.Read
-
-
-def image_sharegroup_token_to_response_dict(token: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw image share group token API dict to proto-canonical form.
-
-    updated and expiry are nullable and omitted when null.
-    """
-    body: dict[str, Any] = {
-        "token": token.get("token") or "",
-        "token_uuid": token.get("token_uuid") or "",
-        "status": token.get("status") or "",
-        "label": token.get("label") or "",
-        "created": token.get("created") or "",
-        "valid_for_sharegroup_uuid": token.get("valid_for_sharegroup_uuid") or "",
-        "sharegroup_uuid": token.get("sharegroup_uuid") or "",
-        "sharegroup_label": token.get("sharegroup_label") or "",
-    }
-    for key in ("updated", "expiry"):
-        if token.get(key) is not None:
-            body[key] = token[key]
-    return body
 
 
 def create_linode_image_sharegroup_token_get_tool() -> tuple[Tool, Capability]:
@@ -1382,10 +1334,16 @@ async def handle_linode_image_sharegroup_create(
             description=cast("str | None", payload.get("description")),
             images=images,
         )
-        return {
-            "message": f"Image share group '{sharegroup.get('label')}' created",
-            "sharegroup": sharegroup,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Image share group '{sharegroup.get('label', '')}' "
+                    f"({sharegroup.get('id', 0)}) created successfully"
+                ),
+                "sharegroup": sharegroup,
+            },
+            image_sharegroup_pb2.ImageShareGroupWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create image share group", _call)
 
@@ -1428,10 +1386,18 @@ async def handle_linode_image_upload(
             description=cast("str | None", payload.get("description")),
             tags=cast("list[str] | None", payload.get("tags")),
         )
-        return {
-            "message": f"Image upload '{payload['label']}' created successfully",
-            "upload": upload,
-        }
+        image = cast("dict[str, Any]", upload.get("image", {}))
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Image upload '{image.get('label')}' "
+                    f"({image.get('id')}) created successfully"
+                ),
+                "upload_to": upload.get("upload_to", ""),
+                "image": image,
+            },
+            image_pb2.ImageUploadWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "upload Linode image", _call)
 
@@ -1471,10 +1437,14 @@ async def handle_linode_image_replicate(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         image = await client.replicate_image(image_id, regions)
-        return {
-            "message": f"Image {image_id!r} replicated successfully",
-            "image": image,
-        }
+        replicated_id = image.get("id", "")
+        return serialize_api_response(
+            {
+                "message": f"Image '{replicated_id}' replicated successfully",
+                "image": image,
+            },
+            image_pb2.ImageWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "replicate Linode image", _call)
 
@@ -1549,19 +1519,14 @@ async def handle_linode_image_sharegroup_by_image_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroups_by_image(
+        raw = await client.list_image_sharegroups_by_image(
             image_id_str, page=page, page_size=page_size
         )
-        sharegroups = data.get("data", [])
-        return {
-            "message": "Image share groups listed for image",
-            "count": len(sharegroups),
-            "image_id": image_id_str,
-            "sharegroups": sharegroups,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        return serialize_list_response(
+            raw,
+            "image_sharegroups",
+            image_sharegroup_pb2.ImageShareGroupListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list image share groups by image", _call)
 
@@ -1577,16 +1542,12 @@ async def handle_linode_image_sharegroup_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroups(page=page, page_size=page_size)
-        sharegroups = data.get("data", [])
-        return {
-            "message": "Image share groups listed",
-            "count": len(sharegroups),
-            "sharegroups": sharegroups,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        raw = await client.list_image_sharegroups(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "image_sharegroups",
+            image_sharegroup_pb2.ImageShareGroupListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list image share groups", _call)
 
@@ -1653,7 +1614,7 @@ async def handle_linode_image_sharegroup_token_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup_token(token_uuid=token_uuid_str)
-        return {"message": "Image share group token deleted"}
+        return {"message": "Image share group token removed successfully"}
 
     return await execute_tool(cfg, arguments, "delete image share group token", _call)
 
@@ -1669,16 +1630,12 @@ async def handle_linode_image_sharegroup_token_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroup_tokens(page=page, page_size=page_size)
-        tokens = data.get("data", [])
-        return {
-            "message": "Image share group tokens listed",
-            "count": len(tokens),
-            "tokens": tokens,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        raw = await client.list_image_sharegroup_tokens(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "image_sharegroup_tokens",
+            image_sharegroup_token_pb2.ImageShareGroupTokenListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list image share group tokens", _call)
 
@@ -1831,7 +1788,8 @@ async def handle_linode_image_sharegroup_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup(sharegroup_id_str)
-        return {"message": "Image share group deleted"}
+        message = f"Image share group {sharegroup_id_str} removed successfully"
+        return {"message": message}
 
     return await execute_tool(cfg, arguments, "delete image share group", _call)
 
@@ -1848,8 +1806,9 @@ async def handle_linode_image_sharegroup_get(
     sharegroup_id_str = str(cast("int", sharegroup_id))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return image_sharegroup_to_response_dict(
-            await client.get_image_sharegroup(sharegroup_id_str)
+        return serialize_api_response(
+            await client.get_image_sharegroup(sharegroup_id_str),
+            image_sharegroup_pb2.ImageShareGroup(),
         )
 
     return await execute_tool(cfg, arguments, "get image share group", _call)
@@ -1873,18 +1832,14 @@ async def handle_linode_image_sharegroup_image_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroup_images(
+        raw = await client.list_image_sharegroup_images(
             sharegroup_id_str, page=page, page_size=page_size
         )
-        images = data.get("data", [])
-        return {
-            "message": "Image share group images retrieved",
-            "count": len(images),
-            "images": images,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        return serialize_list_response(
+            raw,
+            "images",
+            image_pb2.ImageListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list image share group images", _call)
 
@@ -1907,18 +1862,14 @@ async def handle_linode_image_sharegroup_member_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroup_members(
+        raw = await client.list_image_sharegroup_members(
             sharegroup_id_str, page=page, page_size=page_size
         )
-        members = data.get("data", [])
-        return {
-            "message": "Image share group members retrieved",
-            "count": len(members),
-            "members": members,
-            "page": data.get("page", 1),
-            "pages": data.get("pages", 1),
-            "results": data.get("results", len(members)),
-        }
+        return serialize_list_response(
+            raw,
+            "image_sharegroup_members",
+            image_sharegroup_member_pb2.ImageShareGroupMemberListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list image share group members", _call)
 
@@ -1941,10 +1892,11 @@ async def handle_linode_image_sharegroup_member_token_get(
     token_uuid_str = cast("str", token_uuid).strip()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return image_sharegroup_member_to_response_dict(
+        return serialize_api_response(
             await client.get_image_sharegroup_member_token(
                 sharegroup_id_str, token_uuid_str
-            )
+            ),
+            image_sharegroup_member_pb2.ImageShareGroupMember(),
         )
 
     return await execute_tool(
@@ -1992,7 +1944,11 @@ async def handle_linode_image_sharegroup_member_token_delete(
         await client.delete_image_sharegroup_member_token(
             sharegroup_id_str, token_uuid_str
         )
-        return {"message": "Image share group member token revoked"}
+        message = (
+            f"Image share group member token {token_uuid_str} "
+            f"revoked from share group {sharegroup_id_str} successfully"
+        )
+        return {"message": message}
 
     return await execute_tool(
         cfg, arguments, "revoke image share group member token", _call
@@ -2042,13 +1998,19 @@ async def handle_linode_image_sharegroup_member_token_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        token = await client.update_image_sharegroup_member_token(
+        member = await client.update_image_sharegroup_member_token(
             sharegroup_id_str, token_uuid_str, label=label
         )
-        return {
-            "message": "Image share group member token updated",
-            "token": token,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Image share group member token "
+                    f"'{member.get('token_uuid')}' updated successfully"
+                ),
+                "member": member,
+            },
+            image_sharegroup_member_pb2.ImageShareGroupMemberWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "update image share group member token", _call
@@ -2094,7 +2056,11 @@ async def handle_linode_image_sharegroup_image_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup_image(sharegroup_id_str, image_id_str)
-        return {"message": "Shared image access revoked"}
+        message = (
+            f"Shared image {image_id_str} removed from "
+            f"image share group {sharegroup_id_str} successfully"
+        )
+        return {"message": message}
 
     return await execute_tool(
         cfg, arguments, "revoke image share group image access", _call
@@ -2150,10 +2116,16 @@ async def handle_linode_image_sharegroup_image_update(
             label=body.get("label"),
             description=body.get("description"),
         )
-        return {
-            "message": "Shared image updated",
-            "image": image,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Shared image '{image.get('id')}' in image share group "
+                    f"{sharegroup_id_str} updated successfully"
+                ),
+                "image": image,
+            },
+            image_pb2.ImageWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update shared image", _call)
 
@@ -2191,13 +2163,16 @@ async def handle_linode_image_sharegroup_member_add(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.add_members_to_image_sharegroup(
+        sharegroup = await client.add_members_to_image_sharegroup(
             sharegroup_id_str, label=body["label"], token=body["token"]
         )
-        return {
-            "message": "Members added to image share group",
-            "result": result,
-        }
+        return serialize_api_response(
+            {
+                "message": (f"Added members to image share group {sharegroup_id_str}"),
+                "sharegroup": sharegroup,
+            },
+            image_sharegroup_pb2.ImageShareGroupWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "add members to image share group", _call)
 
@@ -2235,11 +2210,17 @@ async def handle_linode_image_sharegroup_image_add(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.add_image_sharegroup_images(sharegroup_id_str, images)
-        return {
-            "message": "Images added to image share group",
-            "result": result,
-        }
+        image = await client.add_image_sharegroup_images(sharegroup_id_str, images)
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Added image set to image share group {sharegroup_id_str}; "
+                    f"last returned image: '{image.get('id')}'"
+                ),
+                "image": image,
+            },
+            image_pb2.ImageWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "add images to image share group", _call)
 
@@ -2283,10 +2264,16 @@ async def handle_linode_image_sharegroup_update(
             label=body.get("label"),
             description=body.get("description"),
         )
-        return {
-            "message": "Image share group updated",
-            "sharegroup": sharegroup,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Image share group '{sharegroup.get('label', '')}' "
+                    f"({sharegroup.get('id', 0)}) updated successfully"
+                ),
+                "sharegroup": sharegroup,
+            },
+            image_sharegroup_pb2.ImageShareGroupWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update image share group", _call)
 
@@ -2303,8 +2290,9 @@ async def handle_linode_image_sharegroup_token_get(
     token_uuid_str = cast("str", token_uuid).strip()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return image_sharegroup_token_to_response_dict(
-            await client.get_image_sharegroup_token(token_uuid_str)
+        return serialize_api_response(
+            await client.get_image_sharegroup_token(token_uuid_str),
+            image_sharegroup_token_pb2.ImageShareGroupToken(),
         )
 
     return await execute_tool(cfg, arguments, "get image share group token", _call)
@@ -2322,8 +2310,9 @@ async def handle_linode_image_sharegroup_by_token_get(
     token_uuid_str = cast("str", token_uuid).strip()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return image_sharegroup_to_response_dict(
-            await client.get_image_sharegroup_by_token(token_uuid_str)
+        return serialize_api_response(
+            await client.get_image_sharegroup_by_token(token_uuid_str),
+            image_sharegroup_pb2.ImageShareGroup(),
         )
 
     return await execute_tool(cfg, arguments, "get image share group by token", _call)
@@ -2347,18 +2336,14 @@ async def handle_linode_image_sharegroup_token_image_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_image_sharegroup_images_by_token(
+        raw = await client.list_image_sharegroup_images_by_token(
             token_uuid_str, page=page, page_size=page_size
         )
-        images = data.get("data", [])
-        return {
-            "message": "Image share group images retrieved",
-            "count": len(images),
-            "images": images,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        return serialize_list_response(
+            raw,
+            "images",
+            image_pb2.ImageListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list image share group images by token", _call
@@ -2402,10 +2387,16 @@ async def handle_linode_image_sharegroup_token_update(
         token = await client.update_image_sharegroup_token(
             token_uuid=token_uuid_str, label=label_str
         )
-        return {
-            "message": "Image share group token updated",
-            "token": token,
-        }
+        token_id = token.get("token_uuid", "")
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Image share group token '{token_id}' updated successfully"
+                ),
+                "token": token,
+            },
+            image_sharegroup_token_pb2.ImageShareGroupTokenWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update image share group token", _call)
 
@@ -2455,10 +2446,16 @@ async def handle_linode_image_sharegroup_token_create(
         token = await client.create_image_sharegroup_token(
             valid_for_sharegroup_uuid=uuid_str, label=label_str
         )
-        return {
-            "message": "Image share group token created",
-            "token": token,
-        }
+        token_id = token.get("token_uuid", "")
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Image share group token '{token_id}' created successfully"
+                ),
+                "token": token,
+            },
+            image_sharegroup_token_pb2.ImageShareGroupTokenWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create image share group token", _call)
 
@@ -2543,9 +2540,13 @@ async def handle_linode_image_get(
         return error_response(image_id_err)
     image_id_str = cast("str", image_id).strip()
 
+    encoded_image_id = quote(image_id_str, safe="")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        image = await client.get_image(image_id_str)
-        return image_to_response_dict(image)
+        return serialize_api_response(
+            await client.get_raw(f"/images/{encoded_image_id}"),
+            image_pb2.Image(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode image", _call)
 
@@ -2608,7 +2609,7 @@ async def handle_linode_image_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image(image_id_str)
-        return {"message": "Private image deleted"}
+        return {"message": f"Image {image_id_str} deleted successfully"}
 
     return await execute_tool(cfg, arguments, "delete private image", _call)
 
@@ -2617,57 +2618,40 @@ async def handle_linode_image_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_list tool request."""
-    type_filter: str = arguments.get("type", "")
-    is_public_filter: str | bool = arguments.get("is_public", "")
-    deprecated_filter: str = arguments.get("deprecated", "")
+    type_filter = str(arguments.get("type", ""))
+    is_public_filter = str(arguments.get("is_public", ""))
+    deprecated_filter = str(arguments.get("deprecated", ""))
+
+    def _matches(image: dict[str, Any]) -> bool:
+        image_type = str(image.get("type", ""))
+        if type_filter and image_type.lower() != type_filter.lower():
+            return False
+        if is_public_filter and bool(image.get("is_public", False)) != (
+            is_public_filter.lower() == "true"
+        ):
+            return False
+        return not (
+            deprecated_filter
+            and bool(image.get("deprecated", False))
+            != (deprecated_filter.lower() == "true")
+        )
+
+    filters: list[str] = []
+    if type_filter:
+        filters.append(f"type={type_filter}")
+    if is_public_filter:
+        filters.append(f"is_public={is_public_filter}")
+    if deprecated_filter:
+        filters.append(f"deprecated={deprecated_filter}")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        images = await client.list_images()
-
-        if type_filter:
-            images = [i for i in images if i.type.lower() == type_filter.lower()]
-
-        if is_public_filter:
-            want_public = (
-                is_public_filter.lower() == "true"
-                if isinstance(is_public_filter, str)
-                else is_public_filter
-            )
-            images = [i for i in images if i.is_public == want_public]
-
-        if deprecated_filter:
-            want_deprecated = deprecated_filter.lower() == "true"
-            images = [i for i in images if i.deprecated == want_deprecated]
-
-        images_data = [
-            {
-                "id": i.id,
-                "label": i.label,
-                "type": i.type,
-                "is_public": i.is_public,
-                "deprecated": i.deprecated,
-                "size": i.size,
-                "vendor": i.vendor,
-                "created": i.created,
-            }
-            for i in images
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(images),
-            "images": images_data,
-        }
-
-        filters: list[str] = []
-        if type_filter:
-            filters.append(f"type={type_filter}")
-        if is_public_filter:
-            filters.append(f"is_public={is_public_filter}")
-        if deprecated_filter:
-            filters.append(f"deprecated={deprecated_filter}")
-        if filters:
-            response["filter"] = ", ".join(filters)
-
-        return response
+        raw = await client.get_raw("/images")
+        return serialize_list_response(
+            raw,
+            "images",
+            image_pb2.ImageListResponse(),
+            filter_value=", ".join(filters) if filters else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode images", _call)

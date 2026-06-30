@@ -22,6 +22,14 @@ message FirewallDevice {
   string updated = 4;
 }
 
+// FirewallDeviceListResponse is the linode_firewall_device_list envelope: a
+// count, an optional filter echo, and the devices attached to one firewall.
+message FirewallDeviceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated FirewallDevice devices = 3;
+}
+
 // FirewallDeviceGetInput is the input contract for linode_firewall_device_get.
 message FirewallDeviceGetInput {
   // Linode environment to use (optional, defaults to "default").

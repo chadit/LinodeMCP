@@ -41,6 +41,14 @@ func (c *Client) httpListDatabaseEngines(ctx context.Context, page, pageSize int
 	return response.Data, nil
 }
 
+// httpListDatabaseEnginesProto retrieves available Managed Database engines as
+// proto messages for the proto-backed list path. page/page_size flow through
+// withPaginationQuery, so the request matches httpListDatabaseEngines.
+func (c *Client) httpListDatabaseEnginesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseEngine, error) {
+	return listProtoElementsPaginated(ctx, c, "ListDatabaseEngines", endpointDatabaseEngines, page, pageSize,
+		func() *linodev1.DatabaseEngine { return &linodev1.DatabaseEngine{} })
+}
+
 // ListDatabaseTypes retrieves available Managed Database node types.
 func (c *Client) httpListDatabaseTypes(ctx context.Context, page, pageSize int) ([]DatabaseType, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -61,6 +69,14 @@ func (c *Client) httpListDatabaseTypes(ctx context.Context, page, pageSize int) 
 	}
 
 	return response.Data, nil
+}
+
+// httpListDatabaseTypesProto retrieves available Managed Database node types as
+// proto messages for the proto-backed list path. page/page_size flow through
+// withPaginationQuery, so the request matches httpListDatabaseTypes.
+func (c *Client) httpListDatabaseTypesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseType, error) {
+	return listProtoElementsPaginated(ctx, c, "ListDatabaseTypes", endpointDatabaseTypes, page, pageSize,
+		func() *linodev1.DatabaseType { return &linodev1.DatabaseType{} })
 }
 
 // GetDatabaseType retrieves a Managed Database node type by ID.
@@ -132,6 +148,32 @@ func (c *Client) httpListAllDatabaseInstances(ctx context.Context, page, pageSiz
 	}
 
 	return response.Data, nil
+}
+
+// httpListAllDatabaseInstancesProto retrieves cross-engine Managed Database
+// instances as proto messages for the proto-backed list path. page/page_size
+// flow through withPaginationQuery, so the request matches
+// httpListAllDatabaseInstances.
+func (c *Client) httpListAllDatabaseInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
+	return listProtoElementsPaginated(ctx, c, "ListAllDatabaseInstances", endpointDatabaseAllInstances, page, pageSize,
+		func() *linodev1.DatabaseInstance { return &linodev1.DatabaseInstance{} })
+}
+
+// httpListDatabaseInstancesProto retrieves MySQL Managed Database instances as
+// proto messages for the proto-backed list path. page/page_size flow through
+// withPaginationQuery, so the request matches httpListDatabaseInstances.
+func (c *Client) httpListDatabaseInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
+	return listProtoElementsPaginated(ctx, c, "ListDatabaseInstances", endpointDatabaseInstances, page, pageSize,
+		func() *linodev1.DatabaseInstance { return &linodev1.DatabaseInstance{} })
+}
+
+// httpListDatabasePostgreSQLInstancesProto retrieves PostgreSQL Managed Database
+// instances as proto messages for the proto-backed list path. page/page_size
+// flow through withPaginationQuery, so the request matches
+// httpListDatabasePostgreSQLInstances.
+func (c *Client) httpListDatabasePostgreSQLInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
+	return listProtoElementsPaginated(ctx, c, "ListDatabasePostgreSQLInstances", endpointDatabasePostgreSQLInstances, page, pageSize,
+		func() *linodev1.DatabaseInstance { return &linodev1.DatabaseInstance{} })
 }
 
 // ListDatabaseInstances retrieves Managed Database instances.
@@ -477,6 +519,57 @@ func (c *Client) httpUpdateDatabasePostgreSQLInstance(ctx context.Context, insta
 	}
 
 	return &instance, nil
+}
+
+// writeDatabaseInstanceProto issues a create/update request and decodes the API
+// body into the proto DatabaseInstance element. The MySQL and PostgreSQL create
+// and update paths only differ by method, endpoint, and operation label, so they
+// route through this one helper to keep dupl happy.
+func (c *Client) writeDatabaseInstanceProto(ctx context.Context, operation, method, endpoint string, body any) (*linodev1.DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, method, endpoint, body)
+	if err != nil {
+		return nil, &NetworkError{Operation: operation, Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instance := &linodev1.DatabaseInstance{}
+	if err := c.handleProtoResponse(resp, instance); err != nil {
+		return nil, err
+	}
+
+	return instance, nil
+}
+
+// httpCreateDatabaseInstanceProto creates a MySQL Managed Database instance and
+// decodes the response into the proto element.
+func (c *Client) httpCreateDatabaseInstanceProto(ctx context.Context, req *CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+	return c.writeDatabaseInstanceProto(ctx, "CreateDatabaseInstance", http.MethodPost, endpointDatabaseInstances, req)
+}
+
+// httpCreateDatabasePostgreSQLInstanceProto creates a PostgreSQL Managed Database
+// instance and decodes the response into the proto element.
+func (c *Client) httpCreateDatabasePostgreSQLInstanceProto(ctx context.Context, req *CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+	return c.writeDatabaseInstanceProto(ctx, "CreateDatabasePostgreSQLInstance", http.MethodPost, endpointDatabasePostgreSQLInstances, req)
+}
+
+// httpUpdateDatabaseInstanceProto updates a MySQL Managed Database instance and
+// decodes the response into the proto element.
+func (c *Client) httpUpdateDatabaseInstanceProto(ctx context.Context, instanceID int, req *UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
+
+	return c.writeDatabaseInstanceProto(ctx, "UpdateDatabaseInstance", http.MethodPut, endpoint, req)
+}
+
+// httpUpdateDatabasePostgreSQLInstanceProto updates a PostgreSQL Managed Database
+// instance and decodes the response into the proto element.
+func (c *Client) httpUpdateDatabasePostgreSQLInstanceProto(ctx context.Context, instanceID int, req *UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
+
+	return c.writeDatabaseInstanceProto(ctx, "UpdateDatabasePostgreSQLInstance", http.MethodPut, endpoint, req)
 }
 
 // DeleteDatabaseInstance deletes one MySQL Managed Database instance.

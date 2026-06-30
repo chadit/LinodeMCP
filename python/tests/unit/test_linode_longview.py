@@ -69,7 +69,7 @@ async def test_longview_client_delete_handler_calls_client(
     )
 
     fake.delete_longview_client.assert_awaited_once_with(123)
-    assert "Longview client 123 deleted" in _text(result)
+    assert "Longview client deleted successfully" in _text(result)
 
 
 @pytest.mark.asyncio

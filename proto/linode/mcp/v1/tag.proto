@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 // Tag mirrors the Linode tag object. The entity-ID lists are repeated fields,
@@ -19,4 +21,31 @@ message Tag {
 message TagWriteResponse {
   string message = 1;
   Tag tag = 2;
+}
+
+// TagListResponse is the {count, filter?, tags} envelope the linode_tag_list
+// tool returns.
+message TagListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Tag tags = 3;
+}
+
+// TaggedObject mirrors one resource returned by GET /tags/{tag_label}. The API
+// returns a different embedded resource per type (linode, domain, nodebalancer,
+// volume, ...), so data is a google.protobuf.Struct that round-trips whatever
+// the API embeds.
+message TaggedObject {
+  string type = 1;
+  string label = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// TaggedObjectListResponse is the {count, filter?, tagged_objects} envelope the
+// linode_tag_object_list tool returns. The tool paginates and has no filter
+// param, so filter is omitted.
+message TaggedObjectListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated TaggedObject tagged_objects = 3;
 }

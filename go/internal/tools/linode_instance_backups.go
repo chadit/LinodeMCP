@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -40,12 +41,12 @@ func handleInstanceBackupsListRequest(ctx context.Context, request *mcp.CallTool
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	backups, err := client.ListInstanceBackups(ctx, linodeID)
+	backups, err := client.ListInstanceBackupsProto(ctx, linodeID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list backups for instance %d: %v", linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(backups)
+	return MarshalProtoToolResponse(backups)
 }
 
 // NewLinodeInstanceBackupGetTool creates a tool for retrieving a specific backup for a Linode instance.
@@ -135,20 +136,15 @@ func handleInstanceBackupCreateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	backup, err := client.CreateInstanceBackup(ctx, linodeID, request.GetString("label", ""))
+	backup, err := client.CreateInstanceBackupProto(ctx, linodeID, request.GetString("label", ""))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create snapshot for instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message string                 `json:"message"`
-		Backup  *linode.InstanceBackup `json:"backup"`
-	}{
-		Message: fmt.Sprintf("Snapshot created for instance %d (backup ID: %d)", linodeID, backup.ID),
+	return MarshalProtoToolResponse(&linodev1.InstanceBackupWriteResponse{
+		Message: fmt.Sprintf("Snapshot created for instance %d (backup ID: %d)", linodeID, backup.GetId()),
 		Backup:  backup,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }
 
 // NewLinodeInstanceBackupRestoreTool creates a tool for restoring a backup to a Linode instance.
@@ -243,19 +239,12 @@ func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to restore backup %d to instance %d: %v", backupID, targetLinodeID, err)), nil
 	}
 
-	response := struct {
-		Message        string `json:"message"`
-		BackupID       int    `json:"backup_id"`
-		TargetLinodeID int    `json:"target_linode_id"`
-		Overwrite      bool   `json:"overwrite"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceBackupRestoreWriteResponse{
 		Message:        fmt.Sprintf("Backup %d restore initiated to instance %d (overwrite=%t)", backupID, targetLinodeID, overwrite),
-		BackupID:       backupID,
-		TargetLinodeID: targetLinodeID,
+		BackupId:       linodeIDToInt32(backupID),
+		TargetLinodeId: linodeIDToInt32(targetLinodeID),
 		Overwrite:      overwrite,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }
 
 // NewLinodeInstanceBackupsEnableTool creates a tool for enabling the backup service on a Linode instance.
@@ -379,15 +368,10 @@ func handleInstanceFirewallsApplyRequest(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to apply firewalls for instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceActionWriteResponse{
 		Message:  fmt.Sprintf("Firewall apply initiated for instance %d", linodeID),
-		LinodeID: linodeID,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId: linodeIDToInt32(linodeID),
+	})
 }
 
 // NewLinodeInstanceBackupsCancelTool creates a tool for canceling the backup service on a Linode instance.

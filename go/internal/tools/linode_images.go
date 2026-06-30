@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -32,35 +33,29 @@ var (
 
 // NewLinodeImageListTool creates a tool for listing Linode images.
 func NewLinodeImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListTool(
+		cfg,
 		"linode_image_list",
-		mcp.WithDescription("Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString("type", mcp.Description("Filter images by type (manual, automatic)")),
-		mcp.WithString("is_public", mcp.Description("Filter by public status (true, false)")),
-		mcp.WithString("deprecated", mcp.Description("Filter by deprecated status (true, false)")),
+		"Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.Image, error) {
+			return client.ListImagesProto(ctx)
+		},
+		[]listFilterParam[*linodev1.Image]{
+			fieldFilter("type", "Filter images by type (manual, automatic)",
+				func(img *linodev1.Image) string { return img.GetType() }),
+			boolFilter("is_public", "Filter by public status (true, false)",
+				func(img *linodev1.Image) bool { return img.GetIsPublic() }),
+			boolFilter("deprecated", "Filter by deprecated status (true, false)",
+				func(img *linodev1.Image) bool { return img.GetDeprecated() }),
+		},
+		imageListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleListRequest(
-			ctx, &request, cfg,
-			func(ctx context.Context, client *linode.Client) ([]linode.Image, error) {
-				return client.ListImages(ctx)
-			},
-			[]filterDef[linode.Image]{
-				{"type", func(items []linode.Image, v string) []linode.Image {
-					return FilterByField(items, v, func(img linode.Image) string { return img.Type })
-				}},
-				{"is_public", filterImagesByPublic},
-				{"deprecated", filterImagesByDeprecated},
-			},
-			func(items []linode.Image, appliedFilters []string) (*mcp.CallToolResult, error) {
-				return FormatListResponse(items, appliedFilters, "images")
-			},
-		)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func imageListResponse(items []*linodev1.Image, count int32, filter *string) *linodev1.ImageListResponse {
+	return &linodev1.ImageListResponse{Count: count, Filter: filter, Images: items}
 }
 
 // NewLinodeImageGetTool creates a tool for retrieving one Linode image.
@@ -122,19 +117,25 @@ func NewLinodeImageDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 
 // NewLinodeImageShareGroupsListTool creates a tool for listing image share groups.
 func NewLinodeImageShareGroupsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_image_sharegroup_list",
-		mcp.WithDescription("Lists owned image share groups with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists owned image share groups with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ImageShareGroup, error) {
+			return client.ListImageShareGroupsProto(ctx, page, pageSize)
+		},
+		imageShareGroupsPaginationFromTool,
+		nil,
+		imageShareGroupListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupsListRequest(ctx, &request, cfg)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func imageShareGroupListResponse(items []*linodev1.ImageShareGroup, count int32, filter *string) *linodev1.ImageShareGroupListResponse {
+	return &linodev1.ImageShareGroupListResponse{Count: count, Filter: filter, ImageSharegroups: items}
 }
 
 // NewLinodeImageShareGroupGetTool creates a tool for retrieving one image share group.
@@ -154,56 +155,79 @@ func NewLinodeImageShareGroupGetTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 
 // NewLinodeImageShareGroupsByImageListTool creates a tool for listing share groups that contain an image.
 func NewLinodeImageShareGroupsByImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolSubresourceStringPaginated(
+		cfg,
 		"linode_image_sharegroup_by_image_list",
-		mcp.WithDescription("Lists owned image share groups that currently include a private image."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString("image_id", mcp.Required(), mcp.Description("Private image ID, for example private/12345.")),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists owned image share groups that currently include a private image.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		protoListPathIDString{
+			option: mcp.WithString("image_id", mcp.Required(), mcp.Description("Private image ID, for example private/12345.")),
+			parse:  imageShareGroupSourceImageIDFromTool,
+		},
+		imageShareGroupsPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, imageID string, page, pageSize int) ([]*linodev1.ImageShareGroup, error) {
+			return client.ListImageShareGroupsByImageProto(ctx, imageID, page, pageSize)
+		},
+		nil,
+		imageShareGroupByImageListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupsByImageListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
+func imageShareGroupByImageListResponse(items []*linodev1.ImageShareGroup, count int32, filter *string) *linodev1.ImageShareGroupListResponse {
+	return &linodev1.ImageShareGroupListResponse{Count: count, Filter: filter, ImageSharegroups: items}
+}
+
 // NewLinodeImageShareGroupImagesListTool creates a tool for listing images shared in an owned image share group.
 func NewLinodeImageShareGroupImagesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolSubresourcePaginated(
+		cfg,
 		"linode_image_sharegroup_image_list",
-		mcp.WithDescription("Lists images shared in an owned image share group."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists images shared in an owned image share group.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		protoListPathID{
+			option: mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
+			parse:  imageShareGroupIDFromTool,
+		},
+		imageShareGroupsPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, shareGroupID, page, pageSize int) ([]*linodev1.Image, error) {
+			return client.ListImagesByShareGroupProto(ctx, shareGroupID, page, pageSize)
+		},
+		nil,
+		imageListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupImagesListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeImageShareGroupMembersListTool creates a tool for listing members linked to an owned image share group.
 func NewLinodeImageShareGroupMembersListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolSubresourcePaginated(
+		cfg,
 		"linode_image_sharegroup_member_list",
-		mcp.WithDescription("Lists members linked to an owned image share group."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists members linked to an owned image share group.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		protoListPathID{
+			option: mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
+			parse:  imageShareGroupIDFromTool,
+		},
+		imageShareGroupsPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, shareGroupID, page, pageSize int) ([]*linodev1.ImageShareGroupMember, error) {
+			return client.ListMembersByImageShareGroupProto(ctx, shareGroupID, page, pageSize)
+		},
+		nil,
+		imageShareGroupMemberListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupMembersListRequest(ctx, &request, cfg)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func imageShareGroupMemberListResponse(items []*linodev1.ImageShareGroupMember, count int32, filter *string) *linodev1.ImageShareGroupMemberListResponse {
+	return &linodev1.ImageShareGroupMemberListResponse{Count: count, Filter: filter, ImageSharegroupMembers: items}
 }
 
 // NewLinodeImageShareGroupMemberTokenGetTool creates a tool for retrieving one share group member token as the owner.
@@ -223,19 +247,25 @@ func NewLinodeImageShareGroupMemberTokenGetTool(cfg *config.Config) (mcp.Tool, p
 
 // NewLinodeImageShareGroupTokensListTool creates a tool for listing image share group tokens.
 func NewLinodeImageShareGroupTokensListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_image_sharegroup_token_list",
-		mcp.WithDescription("Lists image share group tokens for the authenticated user with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists image share group tokens for the authenticated user with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ImageShareGroupToken, error) {
+			return client.ListImageShareGroupTokensProto(ctx, page, pageSize)
+		},
+		imageShareGroupsPaginationFromTool,
+		nil,
+		imageShareGroupTokenListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupTokensListRequest(ctx, &request, cfg)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func imageShareGroupTokenListResponse(items []*linodev1.ImageShareGroupToken, count int32, filter *string) *linodev1.ImageShareGroupTokenListResponse {
+	return &linodev1.ImageShareGroupTokenListResponse{Count: count, Filter: filter, ImageSharegroupTokens: items}
 }
 
 // NewLinodeImageShareGroupDeleteTool creates a tool for deleting an owned image share group.
@@ -315,18 +345,23 @@ func NewLinodeImageShareGroupMemberTokenDeleteTool(cfg *config.Config) (mcp.Tool
 
 // NewLinodeImageShareGroupTokenImagesListTool creates a tool for listing images available through an image share group token.
 func NewLinodeImageShareGroupTokenImagesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolSubresourceStringPaginated(
+		cfg,
 		"linode_image_sharegroup_token_image_list",
-		mcp.WithDescription("Lists images available through an image share group token."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group token UUID.")),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists images available through an image share group token.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		protoListPathIDString{
+			option: mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group token UUID.")),
+			parse:  imageShareGroupTokenUUIDFromTool,
+		},
+		imageShareGroupsPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, tokenUUID string, page, pageSize int) ([]*linodev1.Image, error) {
+			return client.ListImagesByShareGroupTokenProto(ctx, tokenUUID, page, pageSize)
+		},
+		nil,
+		imageListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleImageShareGroupTokenImagesListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -413,25 +448,6 @@ func hasTraversalSegment(value string) bool {
 	return slices.Contains(strings.Split(value, "/"), "..")
 }
 
-func handleImageShareGroupsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	shareGroups, err := client.ListImageShareGroups(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share groups: %v", err)), nil
-	}
-
-	return FormatListResponse(shareGroups.Data, nil, "image_sharegroups")
-}
-
 func handleImageShareGroupGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
 	if validationMessage != "" {
@@ -470,78 +486,6 @@ func handleImageGetRequest(ctx context.Context, request *mcp.CallToolRequest, cf
 	return MarshalProtoToolResponse(image)
 }
 
-func handleImageShareGroupsByImageListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	imageID, validationMessage := imageShareGroupSourceImageIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	shareGroups, err := client.ListImageShareGroupsByImage(ctx, imageID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share groups by image: %v", err)), nil
-	}
-
-	return FormatListResponse(shareGroups.Data, nil, "image_sharegroups")
-}
-
-func handleImageShareGroupImagesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	images, err := client.ListImagesByShareGroup(ctx, shareGroupID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group images: %v", err)), nil
-	}
-
-	return FormatListResponse(images.Data, nil, "images")
-}
-
-func handleImageShareGroupMembersListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	members, err := client.ListMembersByImageShareGroup(ctx, shareGroupID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group members: %v", err)), nil
-	}
-
-	return FormatListResponse(members.Data, nil, "image_sharegroup_members")
-}
-
 func handleImageShareGroupMemberTokenGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	shareGroupID, validationMessage := imageShareGroupIDFromTool(request)
 	if validationMessage != "" {
@@ -564,25 +508,6 @@ func handleImageShareGroupMemberTokenGetRequest(ctx context.Context, request *mc
 	}
 
 	return MarshalProtoToolResponse(member)
-}
-
-func handleImageShareGroupTokensListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	tokens, err := client.ListImageShareGroupTokens(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group tokens: %v", err)), nil
-	}
-
-	return FormatListResponse(tokens.Data, nil, "image_sharegroup_tokens")
 }
 
 func handleImageShareGroupDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -679,30 +604,6 @@ func handleImageShareGroupTokenGetRequest(ctx context.Context, request *mcp.Call
 	}
 
 	return MarshalProtoToolResponse(token)
-}
-
-func handleImageShareGroupTokenImagesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	tokenUUID, validationMessage := imageShareGroupTokenUUIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := imageShareGroupsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	images, err := client.ListImagesByShareGroupToken(ctx, tokenUUID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve image share group token images: %v", err)), nil
-	}
-
-	return FormatListResponse(images.Data, nil, "images")
 }
 
 func handleImageShareGroupTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -877,32 +778,4 @@ func imageShareGroupsPaginationFromTool(request *mcp.CallToolRequest) (int, int,
 	}
 
 	return page, pageSize, ""
-}
-
-func filterImagesByPublic(images []linode.Image, isPublicFilter string) []linode.Image {
-	filtered := make([]linode.Image, 0, len(images))
-
-	wantPublic := strings.EqualFold(isPublicFilter, boolTrue)
-
-	for i := range images {
-		if images[i].IsPublic == wantPublic {
-			filtered = append(filtered, images[i])
-		}
-	}
-
-	return filtered
-}
-
-func filterImagesByDeprecated(images []linode.Image, deprecatedFilter string) []linode.Image {
-	filtered := make([]linode.Image, 0, len(images))
-
-	wantDeprecated := strings.EqualFold(deprecatedFilter, boolTrue)
-
-	for i := range images {
-		if images[i].Deprecated == wantDeprecated {
-			filtered = append(filtered, images[i])
-		}
-	}
-
-	return filtered
 }

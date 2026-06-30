@@ -7,8 +7,17 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    bucket_access_pb2,
+    object_storage_pb2,
+    type_pb2,
+)
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -60,10 +69,11 @@ async def handle_linode_object_storage_bucket_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         buckets = await client.list_object_storage_buckets()
-        return {
-            "count": len(buckets),
-            "buckets": buckets,
-        }
+        return serialize_list_response(
+            {"data": buckets},
+            "buckets",
+            object_storage_pb2.ObjectStorageBucketListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage buckets", _call)
 
@@ -159,8 +169,9 @@ async def handle_linode_object_storage_bucket_get(
         return _error_response("label must be a valid bucket label")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return object_storage_bucket_to_response_dict(
-            await client.get_object_storage_bucket(region, label)
+        return serialize_api_response(
+            await client.get_object_storage_bucket(region, label),
+            object_storage_pb2.ObjectStorageBucket(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage bucket", _call)
@@ -236,22 +247,6 @@ def _build_bucket_params(
     return params
 
 
-def _build_bucket_filter_string(
-    prefix: str, delimiter: str, marker: str, page_size: str
-) -> str:
-    """Build filter string for bucket contents response."""
-    filters: list[str] = []
-    if prefix:
-        filters.append(f"prefix={prefix}")
-    if delimiter:
-        filters.append(f"delimiter={delimiter}")
-    if marker:
-        filters.append(f"marker={marker}")
-    if page_size:
-        filters.append(f"page_size={page_size}")
-    return ", ".join(filters) if filters else ""
-
-
 async def handle_linode_object_storage_bucket_object_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -279,20 +274,29 @@ async def handle_linode_object_storage_bucket_object_list(
         )
 
         objects = result.get("data", [])
-        response: dict[str, Any] = {
+        wrapper: dict[str, Any] = {
             "count": len(objects),
-            "objects": objects,
             "is_truncated": result.get("is_truncated", False),
+            "objects": objects,
         }
 
-        if result.get("next_marker"):
-            response["next_marker"] = result["next_marker"]
+        next_marker = result.get("next_marker")
+        if next_marker:
+            wrapper["next_marker"] = next_marker
 
-        filter_str = _build_bucket_filter_string(prefix, delimiter, marker, page_size)
-        if filter_str:
-            response["filter"] = filter_str
+        # Go echoes only prefix/delimiter in the filter, never marker/page_size.
+        filters: list[str] = []
+        if prefix:
+            filters.append(f"prefix={prefix}")
+        if delimiter:
+            filters.append(f"delimiter={delimiter}")
+        if filters:
+            wrapper["filter"] = ", ".join(filters)
 
-        return response
+        return serialize_api_response(
+            wrapper,
+            object_storage_pb2.ObjectStorageObjectListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Object Storage bucket contents", _call
@@ -332,10 +336,9 @@ async def handle_linode_object_storage_type_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         types = await client.list_object_storage_types()
-        return {
-            "count": len(types),
-            "types": types,
-        }
+        return serialize_list_response(
+            {"data": types}, "types", type_pb2.ObjectStorageTypeListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage types", _call)
 
@@ -366,10 +369,11 @@ async def handle_linode_object_storage_endpoint_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         endpoints = await client.list_object_storage_endpoints()
-        return {
-            "count": len(endpoints),
-            "endpoints": endpoints,
-        }
+        return serialize_list_response(
+            {"data": endpoints},
+            "endpoints",
+            object_storage_pb2.ObjectStorageEndpointListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Object Storage endpoints", _call
@@ -405,10 +409,11 @@ async def handle_linode_object_storage_key_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         keys = await client.list_object_storage_keys()
-        return {
-            "count": len(keys),
-            "keys": keys,
-        }
+        return serialize_list_response(
+            {"data": keys},
+            "keys",
+            object_storage_pb2.ObjectStorageKeyListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage keys", _call)
 
@@ -471,8 +476,9 @@ async def handle_linode_object_storage_key_get(
         return _error_response("key_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return object_storage_key_to_response_dict(
-            await client.get_object_storage_key(int(key_id))
+        return serialize_api_response(
+            await client.get_object_storage_key(int(key_id)),
+            object_storage_pb2.ObjectStorageKey(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage key", _call)
@@ -538,10 +544,11 @@ async def handle_linode_object_storage_quota_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         quotas = await client.list_object_storage_quotas()
-        return {
-            "count": len(quotas),
-            "quotas": quotas,
-        }
+        return serialize_list_response(
+            {"data": quotas},
+            "quotas",
+            object_storage_pb2.ObjectStorageQuotaListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage quotas", _call)
 
@@ -641,16 +648,6 @@ async def handle_linode_object_storage_quota_usage_get(
     )
 
 
-def object_storage_bucket_access_to_response_dict(
-    access: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape a raw bucket access API dict to proto-canonical form."""
-    return {
-        "acl": access.get("acl") or "",
-        "cors_enabled": bool(access.get("cors_enabled")),
-    }
-
-
 def create_linode_object_storage_bucket_access_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_bucket_access_get tool."""
     return Tool(
@@ -675,8 +672,9 @@ async def handle_linode_object_storage_bucket_access_get(
         return _error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return object_storage_bucket_access_to_response_dict(
-            await client.get_object_storage_bucket_access(region, label)
+        return serialize_api_response(
+            await client.get_object_storage_bucket_access(region, label),
+            bucket_access_pb2.ObjectStorageBucketAccess(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve bucket access settings", _call)

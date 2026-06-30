@@ -68,7 +68,7 @@ async def test_plan_then_apply(
         apply_result = await handle_linode_instance_delete(
             {"instance_id": 123, "mode": "apply", "plan_id": plan_id}, sample_config
         )
-        assert "deleted successfully" in apply_result[0].text
+        assert "removed successfully" in apply_result[0].text
         mock_linode_client.delete_instance.assert_awaited_once()
         assert await store.length() == 0
 
@@ -123,7 +123,7 @@ async def test_apply_ignores_cosmetic_drift(
         result = await handle_linode_instance_delete(
             {"instance_id": 123, "mode": "apply", "plan_id": plan_id}, sample_config
         )
-        assert "deleted successfully" in result[0].text
+        assert "removed successfully" in result[0].text
         mock_linode_client.delete_instance.assert_awaited_once()
     finally:
         reset_plan_store(token)

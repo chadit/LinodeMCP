@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.InstanceDiskWriteResponse",
+  "description": "Instance disk write envelope (create, update, clone): a confirmation message plus the full disk element.",
+  "input": {
+    "message": "Disk 'My Disk' (ID: 50) created on instance 123",
+    "disk": {
+      "id": 50,
+      "label": "My Disk",
+      "status": "ready",
+      "size": 1024,
+      "filesystem": "ext4",
+      "created": "2026-06-30T12:00:00",
+      "updated": "2026-06-30T12:05:00"
+    }
+  },
+  "canonical": {
+    "message": "Disk 'My Disk' (ID: 50) created on instance 123",
+    "disk": {
+      "id": 50,
+      "label": "My Disk",
+      "status": "ready",
+      "size": 1024,
+      "filesystem": "ext4",
+      "created": "2026-06-30T12:00:00",
+      "updated": "2026-06-30T12:05:00"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.AccountPaymentMethodListResponse",
+  "description": "linode_account_payment_method_list envelope: count and the full proto AccountPaymentMethod elements. data is a google.protobuf.Struct that round-trips the per-type card object the API returns (credit_card returns card_type/last_four/expiry); the list never returns a full card number, only the masked last_four. The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_payment_methods": [
+      {
+        "id": 123,
+        "type": "credit_card",
+        "is_default": true,
+        "data": {
+          "card_type": "Visa",
+          "last_four": "1111",
+          "expiry": "11/2026"
+        }
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_payment_methods": [
+      {
+        "id": 123,
+        "type": "credit_card",
+        "is_default": true,
+        "data": {
+          "card_type": "Visa",
+          "last_four": "1111",
+          "expiry": "11/2026"
+        }
+      }
+    ]
+  }
+}

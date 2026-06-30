@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.NetworkingIPAssignWriteResponse",
+  "description": "Networking IP assign id-echo: a confirmation message plus the region and assignment list. The assign endpoint returns an opaque body, so these echo the request.",
+  "input": {
+    "message": "Networking IP assignments updated",
+    "region": "us-east",
+    "assignments": [
+      {"address": "192.0.2.50", "linode_id": 5567},
+      {"address": "192.0.2.51", "linode_id": 8891}
+    ]
+  },
+  "canonical": {
+    "message": "Networking IP assignments updated",
+    "region": "us-east",
+    "assignments": [
+      {"address": "192.0.2.50", "linode_id": 5567},
+      {"address": "192.0.2.51", "linode_id": 8891}
+    ]
+  }
+}

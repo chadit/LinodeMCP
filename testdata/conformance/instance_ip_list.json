@@ -1,0 +1,128 @@
+{
+  "message": "linode.mcp.v1.InstanceIPsResponse",
+  "description": "linode_instance_ip_list response: the full IPv4 and IPv6 address configuration for one Linode instance. The endpoint returns a nested object (ipv4 with public/private/shared/reserved, ipv6 with slaac/link_local/global/ranges/pools), not a {count, key} list envelope. slaac and link_local are nullable message fields omitted when unset; the repeated lists emit [] when empty.",
+  "input": {
+    "ipv4": {
+      "public": [
+        {
+          "address": "203.0.113.5",
+          "gateway": "203.0.113.1",
+          "subnet_mask": "255.255.255.0",
+          "prefix": 24,
+          "type": "ipv4",
+          "public": true,
+          "rdns": "li1-5.members.linode.com",
+          "linode_id": 123,
+          "region": "us-east"
+        }
+      ],
+      "private": [
+        {
+          "address": "192.168.133.234",
+          "gateway": "",
+          "subnet_mask": "255.255.128.0",
+          "prefix": 17,
+          "type": "ipv4",
+          "public": false,
+          "rdns": "",
+          "linode_id": 123,
+          "region": "us-east"
+        }
+      ],
+      "shared": [],
+      "reserved": []
+    },
+    "ipv6": {
+      "slaac": {
+        "address": "2600:3c03::f03c:91ff:fe24:3a2f",
+        "gateway": "fe80::1",
+        "subnet_mask": "ffff:ffff:ffff:ffff::",
+        "prefix": 64,
+        "type": "ipv6",
+        "rdns": "",
+        "region": "us-east"
+      },
+      "link_local": {
+        "address": "fe80::f03c:91ff:fe24:3a2f",
+        "gateway": "fe80::1",
+        "subnet_mask": "ffff:ffff:ffff:ffff::",
+        "prefix": 64,
+        "type": "ipv6",
+        "rdns": "",
+        "region": "us-east"
+      },
+      "global": [
+        {
+          "range": "2600:3c03:e000:00ca::",
+          "region": "us-east",
+          "prefix": 64,
+          "route_target": "2600:3c03::f03c:91ff:fe24:3a2f"
+        }
+      ],
+      "ranges": [],
+      "pools": []
+    }
+  },
+  "canonical": {
+    "ipv4": {
+      "public": [
+        {
+          "address": "203.0.113.5",
+          "gateway": "203.0.113.1",
+          "subnet_mask": "255.255.255.0",
+          "prefix": 24,
+          "type": "ipv4",
+          "public": true,
+          "rdns": "li1-5.members.linode.com",
+          "linode_id": 123,
+          "region": "us-east"
+        }
+      ],
+      "private": [
+        {
+          "address": "192.168.133.234",
+          "gateway": "",
+          "subnet_mask": "255.255.128.0",
+          "prefix": 17,
+          "type": "ipv4",
+          "public": false,
+          "rdns": "",
+          "linode_id": 123,
+          "region": "us-east"
+        }
+      ],
+      "shared": [],
+      "reserved": []
+    },
+    "ipv6": {
+      "slaac": {
+        "address": "2600:3c03::f03c:91ff:fe24:3a2f",
+        "gateway": "fe80::1",
+        "subnet_mask": "ffff:ffff:ffff:ffff::",
+        "prefix": 64,
+        "type": "ipv6",
+        "rdns": "",
+        "region": "us-east"
+      },
+      "link_local": {
+        "address": "fe80::f03c:91ff:fe24:3a2f",
+        "gateway": "fe80::1",
+        "subnet_mask": "ffff:ffff:ffff:ffff::",
+        "prefix": 64,
+        "type": "ipv6",
+        "rdns": "",
+        "region": "us-east"
+      },
+      "global": [
+        {
+          "range": "2600:3c03:e000:00ca::",
+          "region": "us-east",
+          "prefix": 64,
+          "route_target": "2600:3c03::f03c:91ff:fe24:3a2f"
+        }
+      ],
+      "ranges": [],
+      "pools": []
+    }
+  }
+}

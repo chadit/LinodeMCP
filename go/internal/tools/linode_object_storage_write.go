@@ -286,12 +286,13 @@ func handleObjectStorageBucketAccessAllowRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	corsEnabled := request.GetBool("cors_enabled", false)
+
 	req := linode.AllowObjectStorageBucketAccessRequest{
 		ACL: acl,
 	}
 
 	if _, ok := request.GetArguments()["cors_enabled"]; ok {
-		corsEnabled := request.GetBool("cors_enabled", false)
 		req.CORSEnabled = &corsEnabled
 	}
 
@@ -299,19 +300,18 @@ func handleObjectStorageBucketAccessAllowRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to apply access for bucket '%s' in %s: %v", label, region, err)), nil
 	}
 
-	response := struct {
-		Message string `json:"message"`
-		Region  string `json:"region"`
-		Label   string `json:"label"`
-		ACL     string `json:"acl,omitempty"`
-	}{
+	// The allow endpoint returns no body, so the access element is built from
+	// the request args (acl + cors_enabled). Python builds the same element so
+	// the output matches.
+	response := &linodev1.ObjectStorageBucketAccessWriteResponse{
 		Message: fmt.Sprintf("Access settings for bucket '%s' in %s applied successfully", label, region),
-		Region:  region,
-		Label:   label,
-		ACL:     acl,
+		Access: &linodev1.ObjectStorageBucketAccess{
+			Acl:         acl,
+			CorsEnabled: corsEnabled,
+		},
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeObjectStorageBucketAccessUpdateTool creates a tool for updating bucket access controls.

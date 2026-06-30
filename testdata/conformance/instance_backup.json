@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.InstanceBackup",
+  "description": "A single Linode instance backup with its disks",
+  "input": {
+    "id": 123456,
+    "label": "nightly",
+    "status": "successful",
+    "type": "auto",
+    "created": "2026-06-01T00:00:00",
+    "updated": "2026-06-01T01:00:00",
+    "finished": "2026-06-01T01:00:00",
+    "region": "us-east",
+    "available": true,
+    "configs": ["My Config"],
+    "disks": [
+      {
+        "label": "Debian 12 Disk",
+        "size": 25600,
+        "filesystem": "ext4"
+      }
+    ]
+  },
+  "canonical": {
+    "id": 123456,
+    "label": "nightly",
+    "status": "successful",
+    "type": "auto",
+    "created": "2026-06-01T00:00:00",
+    "updated": "2026-06-01T01:00:00",
+    "finished": "2026-06-01T01:00:00",
+    "region": "us-east",
+    "available": true,
+    "configs": ["My Config"],
+    "disks": [
+      {
+        "label": "Debian 12 Disk",
+        "size": 25600,
+        "filesystem": "ext4"
+      }
+    ]
+  }
+}

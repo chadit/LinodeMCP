@@ -1,0 +1,62 @@
+{
+  "message": "linode.mcp.v1.ChildAccountListResponse",
+  "description": "linode_account_child_account_list envelope: count and the full proto ChildAccount elements. ChildAccount is a distinct summary shape from Account: it carries credit_card (masked expiry/last_four only, no full card number), euuid, first_name/last_name, and tax_id, with no active_promotions. capabilities is repeated. The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_child_accounts": [
+      {
+        "active_since": "2023-01-01T00:00:00",
+        "address_1": "123 Main St",
+        "address_2": "Suite 4",
+        "balance": 12.5,
+        "balance_uninvoiced": 3.75,
+        "billing_source": "akamai",
+        "capabilities": ["Linodes", "NodeBalancers"],
+        "city": "Philadelphia",
+        "company": "Child Co",
+        "country": "US",
+        "credit_card": {
+          "expiry": "11/2026",
+          "last_four": "1111"
+        },
+        "email": "child@example.com",
+        "euuid": "A1BC2DEF-3456-7890-ABCD-EF1234567890",
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "phone": "555-0100",
+        "state": "PA",
+        "tax_id": "ATU99999999",
+        "zip": "19102"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_child_accounts": [
+      {
+        "active_since": "2023-01-01T00:00:00",
+        "address_1": "123 Main St",
+        "address_2": "Suite 4",
+        "balance": 12.5,
+        "balance_uninvoiced": 3.75,
+        "billing_source": "akamai",
+        "capabilities": ["Linodes", "NodeBalancers"],
+        "city": "Philadelphia",
+        "company": "Child Co",
+        "country": "US",
+        "credit_card": {
+          "expiry": "11/2026",
+          "last_four": "1111"
+        },
+        "email": "child@example.com",
+        "euuid": "A1BC2DEF-3456-7890-ABCD-EF1234567890",
+        "first_name": "Jane",
+        "last_name": "Doe",
+        "phone": "555-0100",
+        "state": "PA",
+        "tax_id": "ATU99999999",
+        "zip": "19102"
+      }
+    ]
+  }
+}

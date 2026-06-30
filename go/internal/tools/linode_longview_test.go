@@ -225,6 +225,53 @@ func TestLinodeLongviewClientCreateToolSuccess(t *testing.T) {
 	if !strings.Contains(textContent.Text, longviewClientInstall) {
 		t.Errorf("textContent.Text does not contain %v", longviewClientInstall)
 	}
+
+	assertLongviewClientCreateResponse(t, textContent.Text)
+}
+
+// assertLongviewClientCreateResponse checks the create proto shape: the warning
+// is kept, the secret-bearing element lives under longview_client (not the legacy
+// client key), and it carries the one-time install secret plus metadata.
+func assertLongviewClientCreateResponse(t *testing.T, text string) {
+	t.Helper()
+
+	var body struct {
+		Warning        string `json:"warning"`
+		LongviewClient struct {
+			APIKey      string `json:"api_key"`
+			ID          int    `json:"id"`
+			InstallCode string `json:"install_code"`
+			Label       string `json:"label"`
+		} `json:"longview_client"`
+		Client any `json:"client"`
+	}
+	if err := json.Unmarshal([]byte(text), &body); err != nil {
+		t.Fatalf("unexpected error decoding response: %v", err)
+	}
+
+	if body.Warning == "" {
+		t.Error("body.Warning is empty, want the one-time-secret reminder")
+	}
+
+	if body.Client != nil {
+		t.Errorf("body.Client = %v, want nil (legacy client key renamed to longview_client)", body.Client)
+	}
+
+	if body.LongviewClient.APIKey != longviewClientAPIKey {
+		t.Errorf("body.LongviewClient.APIKey = %q, want %q", body.LongviewClient.APIKey, longviewClientAPIKey)
+	}
+
+	if body.LongviewClient.InstallCode != longviewClientInstall {
+		t.Errorf("body.LongviewClient.InstallCode = %q, want %q", body.LongviewClient.InstallCode, longviewClientInstall)
+	}
+
+	if body.LongviewClient.ID != 789 {
+		t.Errorf("body.LongviewClient.ID = %d, want 789", body.LongviewClient.ID)
+	}
+
+	if body.LongviewClient.Label != longviewClientLabel {
+		t.Errorf("body.LongviewClient.Label = %q, want %q", body.LongviewClient.Label, longviewClientLabel)
+	}
 }
 
 func TestLinodeLongviewClientCreateToolApiError(t *testing.T) {

@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.ManagedLinodeSettingsListResponse",
+  "description": "linode_managed_linode_settings_list envelope: count, an optional filter echo, and the proto ManagedLinodeSettings elements with the nested ssh message present, including the optional port and user fields.",
+  "input": {
+    "count": 1,
+    "filter": "group=prod",
+    "managed_linode_settings": [
+      {
+        "id": 555,
+        "label": "web-1",
+        "group": "prod",
+        "ssh": {
+          "access": true,
+          "ip": "203.0.113.1",
+          "port": 22,
+          "user": "linode"
+        }
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "group=prod",
+    "managed_linode_settings": [
+      {
+        "id": 555,
+        "label": "web-1",
+        "group": "prod",
+        "ssh": {
+          "access": true,
+          "ip": "203.0.113.1",
+          "port": 22,
+          "user": "linode"
+        }
+      }
+    ]
+  }
+}

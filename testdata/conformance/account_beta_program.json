@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.AccountBetaProgram",
+  "description": "Enrolled account beta program: four plain strings plus optional description/ended, all present.",
+  "input": {
+    "description": "An example beta program.",
+    "ended": "2024-12-31T00:00:00",
+    "enrolled": "2024-06-01T00:00:00",
+    "id": "example-open",
+    "label": "Example Open Beta",
+    "started": "2024-01-01T00:00:00"
+  },
+  "canonical": {
+    "description": "An example beta program.",
+    "ended": "2024-12-31T00:00:00",
+    "enrolled": "2024-06-01T00:00:00",
+    "id": "example-open",
+    "label": "Example Open Beta",
+    "started": "2024-01-01T00:00:00"
+  }
+}

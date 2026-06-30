@@ -20,10 +20,120 @@ message IPAddress {
 }
 
 // IPAddressWriteResponse is the {message, ip} envelope the networking IP update
-// tool returns.
+// and allocate tools return.
 message IPAddressWriteResponse {
   string message = 1;
   IPAddress ip = 2;
+}
+
+// IPAssignment is one address-to-Linode binding in an IP assign request: the IP
+// address and the Linode that receives it.
+message IPAssignment {
+  string address = 1;
+  int32 linode_id = 2;
+}
+
+// NetworkingIPShareWriteResponse is the {message, linode_id, ips} echo the IP
+// share tools return. The share endpoint returns an opaque body, so the echo
+// reports the primary Linode and the shared address list from the request.
+message NetworkingIPShareWriteResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  repeated string ips = 3;
+}
+
+// NetworkingIPAssignWriteResponse is the {message, region, assignments} echo the
+// IP assign tools return. The assign endpoint returns an opaque body, so the
+// echo reports the region and the assignment list from the request.
+message NetworkingIPAssignWriteResponse {
+  string message = 1;
+  string region = 2;
+  repeated IPAssignment assignments = 3;
+}
+
+// NetworkingIPListResponse is the linode_networking_ip_list envelope: count and
+// the full proto IPAddress elements. The tool has no page/page_size or filter
+// param (only skip_ipv6_rdns), so filter is omitted.
+message NetworkingIPListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated IPAddress ips = 3;
+}
+
+// IPv6Pool mirrors an IPv6 pool on the account: a CIDR range, its region, and
+// the prefix length.
+message IPv6Pool {
+  string range = 1;
+  string region = 2;
+  int32 prefix = 3;
+}
+
+// IPv6PoolListResponse is the linode_ipv6_pool_list envelope: count and the full
+// proto IPv6Pool elements. The tool paginates and has no filter param, so filter
+// is omitted.
+message IPv6PoolListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated IPv6Pool ipv6_pools = 3;
+}
+
+// IPv6Range mirrors an IPv6 range on the account: a CIDR range, its region, the
+// prefix length, and the route target it forwards to.
+message IPv6Range {
+  string range = 1;
+  string region = 2;
+  int32 prefix = 3;
+  string route_target = 4;
+}
+
+// IPv6RangeListResponse is the linode_ipv6_range_list envelope: count and the
+// full proto IPv6Range elements. The tool paginates and has no filter param, so
+// filter is omitted.
+message IPv6RangeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated IPv6Range ipv6_ranges = 3;
+}
+
+// IPv6SLAAC mirrors a Linode instance's SLAAC or link-local IPv6 address.
+message IPv6SLAAC {
+  string address = 1;
+  string gateway = 2;
+  string subnet_mask = 3;
+  int32 prefix = 4;
+  string type = 5;
+  string rdns = 6;
+  string region = 7;
+}
+
+// InstanceIPv4 holds the IPv4 address categories for a Linode instance: the
+// public, private, shared, and reserved address lists.
+message InstanceIPv4 {
+  repeated IPAddress public = 1;
+  repeated IPAddress private = 2;
+  repeated IPAddress shared = 3;
+  repeated IPAddress reserved = 4;
+}
+
+// InstanceIPv6 holds a Linode instance's IPv6 addresses: the SLAAC and
+// link-local addresses (nullable, omitted when unset) plus the global, range,
+// and pool lists. ranges and pools are omitted by the API when empty.
+message InstanceIPv6 {
+  IPv6SLAAC slaac = 1;
+  IPv6SLAAC link_local = 2;
+  repeated IPv6Range global = 3;
+  repeated IPv6Range ranges = 4;
+  repeated IPv6Range pools = 5;
+}
+
+// InstanceIPsResponse is the linode_instance_ip_list response: the full IPv4 and
+// IPv6 address configuration for one Linode instance. The endpoint returns a
+// nested object (not a {count, key} list envelope), so this models the whole
+// structure rather than a flat repeated field. ipv4 and ipv6 are nullable
+// (omitted when the API does not return them).
+message InstanceIPsResponse {
+  InstanceIPv4 ipv4 = 1;
+  InstanceIPv6 ipv6 = 2;
 }
 
 // IPAddressGetInput is the input contract for linode_networking_ip_get.

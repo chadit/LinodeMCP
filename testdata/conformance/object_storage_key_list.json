@@ -1,0 +1,53 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageKeyListResponse",
+  "description": "linode_object_storage_key_list envelope: count and the full proto ObjectStorageKey elements. The list endpoint returns keys WITHOUT secret material, so the input element omits secret_key and the canonical output emits it as the empty default (no secret leaks, and no more Go injecting an empty secret_key field divergently). The tool has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "keys": [
+      {
+        "label": "my-key",
+        "access_key": "KVAKUTGBA4WTR2NSJQ81",
+        "bucket_access": [
+          {
+            "bucket_name": "my-bucket",
+            "region": "us-east-1",
+            "permissions": "read_write"
+          }
+        ],
+        "regions": [
+          {
+            "id": "us-east-1",
+            "s3_endpoint": "us-east-1.linodeobjects.com"
+          }
+        ],
+        "id": 123,
+        "limited": true
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "keys": [
+      {
+        "label": "my-key",
+        "access_key": "KVAKUTGBA4WTR2NSJQ81",
+        "secret_key": "",
+        "bucket_access": [
+          {
+            "bucket_name": "my-bucket",
+            "region": "us-east-1",
+            "permissions": "read_write"
+          }
+        ],
+        "regions": [
+          {
+            "id": "us-east-1",
+            "s3_endpoint": "us-east-1.linodeobjects.com"
+          }
+        ],
+        "id": 123,
+        "limited": true
+      }
+    ]
+  }
+}

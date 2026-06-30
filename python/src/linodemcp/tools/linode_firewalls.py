@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote, urlencode
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import firewall_device_pb2, firewall_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-    from linodemcp.linode import (
-        Firewall,
-        FirewallAddresses,
-        FirewallRule,
-        FirewallRules,
-        RetryableClient,
-    )
+    from linodemcp.linode import RetryableClient
 
 
 def create_linode_firewall_list_tool() -> tuple[Tool, Capability]:
@@ -48,48 +48,6 @@ def create_linode_firewall_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def _firewall_addresses_to_response_dict(
-    addresses: FirewallAddresses,
-) -> dict[str, Any]:
-    """Shape firewall rule addresses to proto-canonical form."""
-    return {"ipv4": addresses.ipv4 or [], "ipv6": addresses.ipv6 or []}
-
-
-def _firewall_rule_to_response_dict(rule: FirewallRule) -> dict[str, Any]:
-    """Shape one firewall rule to proto-canonical form."""
-    return {
-        "action": rule.action,
-        "protocol": rule.protocol,
-        "ports": rule.ports,
-        "addresses": _firewall_addresses_to_response_dict(rule.addresses),
-        "label": rule.label,
-        "description": rule.description,
-    }
-
-
-def _firewall_rules_to_response_dict(rules: FirewallRules) -> dict[str, Any]:
-    """Shape a firewall ruleset to proto-canonical form."""
-    return {
-        "inbound": [_firewall_rule_to_response_dict(rule) for rule in rules.inbound],
-        "inbound_policy": rules.inbound_policy,
-        "outbound": [_firewall_rule_to_response_dict(rule) for rule in rules.outbound],
-        "outbound_policy": rules.outbound_policy,
-    }
-
-
-def firewall_to_response_dict(firewall: Firewall) -> dict[str, Any]:
-    """Shape a Firewall dataclass to proto-canonical form (full rules, unwrapped)."""
-    return {
-        "id": firewall.id,
-        "label": firewall.label,
-        "status": firewall.status,
-        "rules": _firewall_rules_to_response_dict(firewall.rules),
-        "tags": firewall.tags or [],
-        "created": firewall.created,
-        "updated": firewall.updated,
-    }
-
-
 def create_linode_firewall_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_get tool."""
     return Tool(
@@ -108,7 +66,10 @@ async def handle_linode_firewall_get(
         return error_response("firewall_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return firewall_to_response_dict(await client.get_firewall(int(firewall_id)))
+        return serialize_api_response(
+            await client.get_raw(f"/networking/firewalls/{int(firewall_id)}"),
+            firewall_pb2.Firewall(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve firewall", _call)
 
@@ -131,8 +92,9 @@ async def handle_linode_firewall_rules_get(
         return error_response("firewall_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return _firewall_rules_to_response_dict(
-            await client.get_firewall_rules(int(firewall_id))
+        return serialize_api_response(
+            await client.get_raw(f"/networking/firewalls/{int(firewall_id)}/rules"),
+            firewall_pb2.FirewallRules(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve firewall rules", _call)
@@ -145,46 +107,28 @@ async def handle_linode_firewall_list(
     status_filter = arguments.get("status", "")
     label_contains = arguments.get("label_contains", "")
 
+    def _matches(firewall: dict[str, Any]) -> bool:
+        status = str(firewall.get("status", ""))
+        if status_filter and status.lower() != status_filter.lower():
+            return False
+        label = str(firewall.get("label", ""))
+        return not (label_contains and label_contains.lower() not in label.lower())
+
+    filters: list[str] = []
+    if status_filter:
+        filters.append(f"status={status_filter}")
+    if label_contains:
+        filters.append(f"label_contains={label_contains}")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        firewalls = await client.list_firewalls()
-
-        if status_filter:
-            firewalls = [
-                f for f in firewalls if f.status.lower() == status_filter.lower()
-            ]
-
-        if label_contains:
-            firewalls = [
-                f for f in firewalls if label_contains.lower() in f.label.lower()
-            ]
-
-        firewalls_data = [
-            {
-                "id": f.id,
-                "label": f.label,
-                "status": f.status,
-                "rules_inbound_count": len(f.rules.inbound),
-                "rules_outbound_count": len(f.rules.outbound),
-                "created": f.created,
-                "updated": f.updated,
-            }
-            for f in firewalls
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(firewalls),
-            "firewalls": firewalls_data,
-        }
-
-        filters: list[str] = []
-        if status_filter:
-            filters.append(f"status={status_filter}")
-        if label_contains:
-            filters.append(f"label_contains={label_contains}")
-        if filters:
-            response["filter"] = ", ".join(filters)
-
-        return response
+        raw = await client.get_raw("/networking/firewalls")
+        return serialize_list_response(
+            raw,
+            "firewalls",
+            firewall_pb2.FirewallListResponse(),
+            filter_value=", ".join(filters) if filters else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve firewalls", _call)
 
@@ -225,21 +169,12 @@ async def handle_linode_firewall_rule_version_list(
         return error_response("firewall_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        versions = await client.list_firewall_rule_versions(fw_id)
-        return {
-            "count": len(versions),
-            "versions": [
-                {
-                    "id": v.id,
-                    "label": v.label,
-                    "status": v.status,
-                    "created": v.created,
-                    "updated": v.updated,
-                    "tags": v.tags,
-                }
-                for v in versions
-            ],
-        }
+        raw = await client.get_raw(f"/networking/firewalls/{fw_id}/history")
+        return serialize_list_response(
+            raw,
+            "firewall_rule_versions",
+            firewall_pb2.FirewallRuleVersionListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list firewall rule versions", _call)
 
@@ -270,33 +205,6 @@ def create_linode_firewall_rule_version_get_tool() -> tuple[Tool, Capability]:
             "required": ["firewall_id", "version"],
         },
     ), Capability.Read
-
-
-def firewall_device_entity_to_response_dict(entity: dict[str, Any]) -> dict[str, Any]:
-    """Shape a firewall device entity to proto-canonical form.
-
-    parent_entity is a nullable self-reference, omitted when null.
-    """
-    result: dict[str, Any] = {
-        "id": entity.get("id", 0),
-        "label": entity.get("label", ""),
-        "type": entity.get("type", ""),
-        "url": entity.get("url", ""),
-    }
-    parent = entity.get("parent_entity")
-    if parent is not None:
-        result["parent_entity"] = firewall_device_entity_to_response_dict(parent)
-    return result
-
-
-def firewall_device_to_response_dict(device: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw firewall device API dict to proto-canonical form."""
-    return {
-        "id": device.get("id", 0),
-        "entity": firewall_device_entity_to_response_dict(device.get("entity") or {}),
-        "created": device.get("created", ""),
-        "updated": device.get("updated", ""),
-    }
 
 
 def create_linode_firewall_device_get_tool() -> tuple[Tool, Capability]:
@@ -360,8 +268,9 @@ async def handle_linode_firewall_device_get(
     dev_id = int(device_id)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return firewall_device_to_response_dict(
-            await client.get_firewall_device(fw_id, dev_id)
+        return serialize_api_response(
+            await client.get_firewall_device(fw_id, dev_id),
+            firewall_device_pb2.FirewallDevice(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve firewall device", _call)
@@ -409,7 +318,12 @@ async def handle_linode_firewall_device_list(
         return error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_firewall_devices(fw_id, page=page, page_size=page_size)
+        raw = await client.list_firewall_devices(fw_id, page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "devices",
+            firewall_device_pb2.FirewallDeviceListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list firewall devices", _call)
 
@@ -418,34 +332,24 @@ async def handle_linode_firewall_rule_version_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_rule_version_get tool request."""
-    firewall_id = arguments.get("firewall_id")
-    version = arguments.get("version", "")
-    if not firewall_id:
+    fw_id, error = _parse_positive_integer_arg(arguments, "firewall_id", required=True)
+    if error is not None:
+        return error
+    if fw_id is None:
         return error_response("firewall_id is required")
-    if not version:
+    version_int, error = _parse_positive_integer_arg(
+        arguments, "version", required=True
+    )
+    if error is not None:
+        return error
+    if version_int is None:
         return error_response("version is required")
-    if isinstance(firewall_id, bool):
-        return error_response("firewall_id must be a valid integer")
-    try:
-        fw_id = int(firewall_id)
-        if fw_id <= 0:
-            return error_response("firewall_id must be a positive integer")
-    except (ValueError, TypeError):
-        return error_response("firewall_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        rule = await client.get_firewall_rule_version(fw_id, str(version))
-        return {
-            "action": rule.action,
-            "protocol": rule.protocol,
-            "ports": rule.ports,
-            "addresses": {
-                "ipv4": rule.addresses.ipv4,
-                "ipv6": rule.addresses.ipv6,
-            },
-            "label": rule.label,
-            "description": rule.description,
-        }
+        raw = await client.get_raw(
+            f"/networking/firewalls/{fw_id}/history/rules/{version_int}"
+        )
+        return serialize_api_response(raw, firewall_pb2.FirewallRuleVersion())
 
     return await execute_tool(cfg, arguments, "retrieve firewall rule version", _call)
 
@@ -527,7 +431,12 @@ async def handle_linode_firewall_template_list(
         return error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_firewall_templates(page=page, page_size=page_size)
+        raw = await client.list_firewall_templates(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "firewall_templates",
+            firewall_pb2.FirewallTemplateListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list firewall templates", _call)
 
@@ -585,44 +494,17 @@ async def handle_linode_firewall_template_get(
     if page_size is not None and (not isinstance(page_size, int) or page_size < 1):
         return error_response("page_size must be a positive integer")
 
+    params: dict[str, Any] = {}
+    if page is not None:
+        params["page"] = page
+    if page_size is not None:
+        params["page_size"] = page_size
+    query = f"?{urlencode(params)}" if params else ""
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        template = await client.get_firewall_template(slug, page, page_size)
-        return {
-            "slug": template.slug,
-            "label": template.label,
-            "description": template.description,
-            "rules": {
-                "inbound": [
-                    {
-                        "action": r.action,
-                        "protocol": r.protocol,
-                        "ports": r.ports,
-                        "addresses": {
-                            "ipv4": r.addresses.ipv4,
-                            "ipv6": r.addresses.ipv6,
-                        },
-                        "label": r.label,
-                        "description": r.description,
-                    }
-                    for r in template.rules.inbound
-                ],
-                "inbound_policy": template.rules.inbound_policy,
-                "outbound": [
-                    {
-                        "action": r.action,
-                        "protocol": r.protocol,
-                        "ports": r.ports,
-                        "addresses": {
-                            "ipv4": r.addresses.ipv4,
-                            "ipv6": r.addresses.ipv6,
-                        },
-                        "label": r.label,
-                        "description": r.description,
-                    }
-                    for r in template.rules.outbound
-                ],
-                "outbound_policy": template.rules.outbound_policy,
-            },
-        }
+        raw = await client.get_raw(
+            f"/networking/firewalls/templates/{quote(slug, safe='')}{query}"
+        )
+        return serialize_api_response(raw, firewall_pb2.FirewallTemplate())
 
     return await execute_tool(cfg, arguments, "retrieve firewall template", _call)

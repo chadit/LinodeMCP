@@ -4219,6 +4219,46 @@ async def test_list_database_instances_sends_get_to_databases_instances_route() 
     await client.close()
 
 
+async def test_list_postgresql_database_instances_uses_postgresql_route() -> None:
+    """Listing PostgreSQL databases sends GET /databases/postgresql/instances."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response_data: dict[str, Any] = {
+        "data": [{"id": 456, "label": "pg-db", "type": "g6-standard-2"}],
+        "page": 2,
+        "pages": 3,
+        "results": 51,
+    }
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = response_data
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.list_postgresql_database_instances(page=2, page_size=25)
+
+    assert result == response_data
+    mock_request.assert_called_once_with(
+        "GET", "/databases/postgresql/instances?page=2&page_size=25"
+    )
+    await client.close()
+
+
+async def test_list_postgresql_database_instances_wraps_http_errors() -> None:
+    """Listing PostgreSQL Managed Databases wraps HTTP errors with context."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_postgresql_database_instances()
+
+    assert "ListPostgresqlDatabaseInstances" in str(excinfo.value)
+    await client.close()
+
+
 async def test_list_database_instances_wraps_http_errors() -> None:
     """Test listing Managed Databases wraps HTTP errors with operation context."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -4286,6 +4326,25 @@ async def test_retryable_list_mysql_database_instances_delegates_to_client() -> 
     ) as mock_list:
         mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
         result = await retryable.list_mysql_database_instances(page=1, page_size=100)
+
+    assert result["data"] == []
+    mock_list.assert_awaited_once_with(page=1, page_size=100)
+    await retryable.close()
+
+
+async def test_retryable_list_postgresql_database_instances_delegates_to_client() -> (
+    None
+):
+    """Test RetryableClient delegates PostgreSQL Managed Database listing."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "list_postgresql_database_instances", new_callable=AsyncMock
+    ) as mock_list:
+        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        result = await retryable.list_postgresql_database_instances(
+            page=1, page_size=100
+        )
 
     assert result["data"] == []
     mock_list.assert_awaited_once_with(page=1, page_size=100)
@@ -8741,6 +8800,58 @@ async def test_list_object_storage_bucket_contents_encodes_path_params() -> None
     await client.close()
 
 
+async def test_list_object_storage_bucket_contents_wraps_http_errors() -> None:
+    """A transport failure surfaces as a NetworkError naming the operation."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ConnectError("boom")
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_object_storage_bucket_contents("us-east-1", "my-bucket")
+
+    assert "ListObjectStorageBucketContents" in str(excinfo.value)
+    await client.close()
+
+
+async def test_list_object_storage_bucket_contents_ignores_unknown_params() -> None:
+    """Only the recognized query keys are forwarded; unknown keys are dropped."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {"data": [], "is_truncated": False, "next_marker": ""}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        await client.list_object_storage_bucket_contents(
+            "us-east-1", "my-bucket", {"marker": "cursor", "unknown": "x"}
+        )
+
+    mock_request.assert_awaited_once_with(
+        "GET",
+        "/object-storage/buckets/us-east-1/my-bucket/object-list?marker=cursor",
+    )
+    await client.close()
+
+
+async def test_retryable_list_object_storage_bucket_contents_delegates() -> None:
+    """RetryableClient forwards the object-list call to the underlying client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    payload = {"data": [{"name": "a.txt", "size": 10}], "is_truncated": False}
+
+    with patch.object(
+        retryable.client,
+        "list_object_storage_bucket_contents",
+        new_callable=AsyncMock,
+    ) as mock_call:
+        mock_call.return_value = payload
+        result = await retryable.list_object_storage_bucket_contents(
+            "us-east-1", "my-bucket", {"prefix": "img/"}
+        )
+
+    assert result == payload
+    mock_call.assert_awaited_once_with("us-east-1", "my-bucket", {"prefix": "img/"})
+    await retryable.close()
+
+
 def test_deprecated_object_storage_cluster_client_methods_absent() -> None:
     """Deprecated Object Storage cluster client methods should be removed."""
     assert not hasattr(Client, "list_object_storage_clusters")
@@ -10322,6 +10433,113 @@ async def test_update_firewall_rules() -> None:
     await client.close()
 
 
+async def test_create_firewall_raw() -> None:
+    """create_firewall_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 7,
+        "label": "new-fw",
+        "status": "enabled",
+        "rules": {"inbound_policy": "ACCEPT", "outbound_policy": "ACCEPT"},
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_firewall_raw("new-fw")
+
+        assert result["id"] == 7
+        assert result["label"] == "new-fw"
+        assert result["rules"]["inbound_policy"] == "ACCEPT"
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "POST"
+        assert args[1] == "/networking/firewalls"
+
+    await client.close()
+
+
+async def test_update_firewall_raw() -> None:
+    """update_firewall_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 1,
+        "label": "updated-fw",
+        "status": "disabled",
+        "rules": {"inbound_policy": "DROP", "outbound_policy": "ACCEPT"},
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_firewall_raw(1, label="updated-fw")
+
+        assert result["label"] == "updated-fw"
+        assert result["status"] == "disabled"
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "PUT"
+        assert args[1] == "/networking/firewalls/1"
+        assert args[2] == {"label": "updated-fw"}
+
+    await client.close()
+
+
+async def test_update_firewall_rules_raw() -> None:
+    """update_firewall_rules_raw keeps the policy fields the proto element needs."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "inbound": [
+            {
+                "action": "ACCEPT",
+                "protocol": "TCP",
+                "ports": "443",
+                "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+                "label": "allow-https",
+                "description": "",
+            }
+        ],
+        "inbound_policy": "DROP",
+        "outbound": [],
+        "outbound_policy": "ACCEPT",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_firewall_rules_raw(
+            12345,
+            inbound=[
+                {
+                    "action": "ACCEPT",
+                    "protocol": "TCP",
+                    "ports": "443",
+                    "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
+                    "label": "allow-https",
+                    "description": "",
+                }
+            ],
+            outbound=[],
+        )
+
+        # Unlike update_firewall_rules, the raw variant keeps the policy fields.
+        assert result["inbound_policy"] == "DROP"
+        assert result["outbound_policy"] == "ACCEPT"
+        assert result["inbound"][0]["label"] == "allow-https"
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "PUT"
+        assert args[1] == "/networking/firewalls/12345/rules"
+
+    await client.close()
+
+
 @pytest.mark.parametrize("firewall_id", [0, -1, "12345", True])
 async def test_update_firewall_rules_rejects_invalid_firewall_id(
     firewall_id: Any,
@@ -10380,6 +10598,56 @@ async def test_retryable_update_firewall_rules_delegates_to_client() -> None:
         result = await retryable.update_firewall_rules(12345, inbound=[], outbound=[])
 
     assert result == {"inbound": [], "outbound": []}
+    mock_update.assert_awaited_once_with(12345, [], [])
+    await retryable.close()
+
+
+async def test_retryable_create_firewall_raw_delegates_to_client() -> None:
+    """Test RetryableClient delegates create_firewall_raw to Client with retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_firewall_raw", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.return_value = {"id": 7, "label": "new-fw"}
+        result = await retryable.create_firewall_raw("new-fw")
+
+    assert result == {"id": 7, "label": "new-fw"}
+    mock_create.assert_awaited_once_with("new-fw", "ACCEPT", "ACCEPT")
+    await retryable.close()
+
+
+async def test_retryable_update_firewall_raw_delegates_to_client() -> None:
+    """Test RetryableClient delegates update_firewall_raw to Client with retry."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_firewall_raw", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = {"id": 1, "label": "updated-fw"}
+        result = await retryable.update_firewall_raw(1, label="updated-fw")
+
+    assert result == {"id": 1, "label": "updated-fw"}
+    mock_update.assert_awaited_once_with(1, "updated-fw", None, None, None)
+    await retryable.close()
+
+
+async def test_retryable_update_firewall_rules_raw_delegates_to_client() -> None:
+    """Test RetryableClient delegates update_firewall_rules_raw to Client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "update_firewall_rules_raw", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = {
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT",
+        }
+        result = await retryable.update_firewall_rules_raw(
+            12345, inbound=[], outbound=[]
+        )
+
+    assert result == {"inbound_policy": "DROP", "outbound_policy": "ACCEPT"}
     mock_update.assert_awaited_once_with(12345, [], [])
     await retryable.close()
 
@@ -10869,6 +11137,36 @@ async def test_list_object_storage_endpoints_sends_exact_route() -> None:
     await client.close()
 
 
+async def test_list_object_storage_endpoints_wraps_http_error() -> None:
+    """Object Storage endpoints list wraps client HTTP errors as NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_object_storage_endpoints()
+
+    assert "ListObjectStorageEndpoints" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_list_object_storage_quotas_wraps_http_error() -> None:
+    """Object Storage quotas list wraps client HTTP errors as NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.list_object_storage_quotas()
+
+    assert "ListObjectStorageQuotas" in str(exc_info.value)
+
+    await client.close()
+
+
 async def test_retryable_list_object_storage_endpoints_delegates_to_client() -> None:
     """Retryable client delegates endpoint list to the low-level client."""
     base_client = AsyncMock()
@@ -11118,6 +11416,51 @@ async def test_retryable_get_object_storage_quota_usage_delegates_to_client() ->
         )
 
 
+async def test_get_object_storage_quota_wraps_http_error() -> None:
+    """A single Object Storage quota fetch wraps HTTP errors as NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_object_storage_quota("obj-buckets")
+
+    assert "GetObjectStorageQuota" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_get_object_storage_quota_usage_wraps_http_error() -> None:
+    """Object Storage quota usage wraps HTTP errors as NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_object_storage_quota_usage(123)
+
+    assert "GetObjectStorageQuotaUsage" in str(exc_info.value)
+
+    await client.close()
+
+
+async def test_get_object_storage_bucket_access_wraps_http_error() -> None:
+    """Bucket access fetch wraps HTTP errors as NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as exc_info:
+            await client.get_object_storage_bucket_access("us-east-1", "my-bucket")
+
+    assert "GetObjectStorageBucketAccess" in str(exc_info.value)
+
+    await client.close()
+
+
 async def test_list_object_storage_buckets_for_region_sends_exact_route() -> None:
     """Region-scoped Object Storage bucket list sends the documented route."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -11250,6 +11593,48 @@ async def test_allow_object_storage_bucket_access() -> None:
             "/object-storage/buckets/us-east-1/app-bucket/access",
             {"acl": "public-read", "cors_enabled": True},
         )
+
+
+async def test_allow_object_storage_bucket_access_wraps_http_errors() -> None:
+    """Allowing bucket access maps an httpx failure to a NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.ConnectError("temporary")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.allow_object_storage_bucket_access(
+                "us-east-1",
+                "app-bucket",
+                acl="public-read",
+                cors_enabled=True,
+            )
+
+    assert "AllowObjectStorageBucketAccess" in str(excinfo.value)
+
+
+async def test_retryable_allow_object_storage_bucket_access_delegates() -> None:
+    """Retryable client forwards allow-access calls to the underlying client."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "allow_object_storage_bucket_access", new_callable=AsyncMock
+    ) as mock_allow:
+        mock_allow.return_value = {}
+        result = await retryable.allow_object_storage_bucket_access(
+            "us-east-1",
+            "app-bucket",
+            "public-read",
+            True,
+        )
+
+    assert result == {}
+    mock_allow.assert_awaited_once_with(
+        "us-east-1",
+        "app-bucket",
+        "public-read",
+        True,
+    )
 
 
 async def test_upload_bucket_ssl() -> None:
@@ -14421,6 +14806,36 @@ class TestMakeRequestBody:
         mock_request.assert_awaited_once_with("GET", "/monitor/dashboards")
         await client.close()
 
+    async def test_list_monitor_dashboards_passes_pagination(self) -> None:
+        """page and page_size are appended to the dashboards query string."""
+        client = Client("https://api.linode.com/v4", "test-token")
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": [], "page": 2}
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.return_value = mock_response
+            await client.list_monitor_dashboards(page=2, page_size=50)
+
+        mock_request.assert_awaited_once_with(
+            "GET", "/monitor/dashboards?page=2&page_size=50"
+        )
+        await client.close()
+
+    async def test_list_monitor_dashboards_wraps_connect_timeout(self) -> None:
+        """A connect timeout while listing dashboards is wrapped as NetworkError."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.ConnectTimeout("boom")
+            with pytest.raises(NetworkError, match="ListMonitorDashboards"):
+                await client.list_monitor_dashboards(page=1)
+
+        await client.close()
+
     async def test_list_monitor_alert_channels_get_shape(self) -> None:
         """GET /monitor/alert-channels returns alert channels."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -15005,6 +15420,23 @@ class TestMakeRequestBody:
         )
         await retryable.close()
 
+    async def test_retryable_list_monitor_service_dashboards_delegates(self) -> None:
+        """Retryable monitor service dashboards list delegates to the client."""
+        retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+        payload = {"data": [{"id": 1, "label": "Resource Usage"}]}
+
+        with patch.object(
+            retryable.client,
+            "list_monitor_service_dashboards",
+            new_callable=AsyncMock,
+        ) as mock_list:
+            mock_list.return_value = payload
+            result = await retryable.list_monitor_service_dashboards("dbaas")
+
+        assert result == payload
+        mock_list.assert_awaited_once_with("dbaas")
+        await retryable.close()
+
     async def test_list_monitor_service_dashboards_get_shape(self) -> None:
         """GET dashboards endpoint URL-encodes the service_type."""
         client = Client("https://api.linode.com/v4", "test-token")
@@ -15040,6 +15472,19 @@ class TestMakeRequestBody:
             )
             assert "json" not in mock_req.call_args[1]
             assert result["data"][0]["label"] == "Resource Usage"
+
+        await client.close()
+
+    async def test_list_monitor_service_dashboards_wraps_http_errors(self) -> None:
+        """HTTP errors while listing service dashboards are wrapped."""
+        client = Client("https://api.linode.com/v4", "test-token")
+
+        with patch.object(
+            client, "make_request", new_callable=AsyncMock
+        ) as mock_request:
+            mock_request.side_effect = httpx.ReadTimeout("boom")
+            with pytest.raises(NetworkError, match="ListMonitorServiceDashboards"):
+                await client.list_monitor_service_dashboards("dbaas")
 
         await client.close()
 
@@ -19184,8 +19629,10 @@ async def test_monitor_global_alert_definitions_list_tool_success() -> None:
         result = await handle_linode_monitor_alert_definition_list({}, cfg)
 
     mock_list.assert_awaited_once_with(page=None, page_size=None)
-    assert "Monitor alert definitions listed" in result[0].text
-    assert "CPU Usage" in result[0].text
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["alert_definitions"][0]["id"] == 123
+    assert payload["alert_definitions"][0]["label"] == "CPU Usage"
 
 
 async def test_monitor_alert_channels_list_tool_schema_and_handler_success() -> None:
@@ -19223,8 +19670,11 @@ async def test_monitor_alert_channels_list_tool_schema_and_handler_success() -> 
         result = await handle_linode_monitor_alert_channel_list({}, cfg)
 
     mock_list.assert_awaited_once_with(page=None, page_size=None)
-    assert "Monitor alert channels listed" in result[0].text
-    assert "Email Ops" in result[0].text
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["alert_channels"][0]["id"] == 10000
+    assert payload["alert_channels"][0]["label"] == "Email Ops"
+    assert payload["alert_channels"][0]["channel_type"] == ""
 
 
 async def test_monitor_alert_definitions_list_tool_schema_and_handler_success() -> None:
@@ -19265,8 +19715,10 @@ async def test_monitor_alert_definitions_list_tool_schema_and_handler_success() 
         )
 
     mock_list.assert_awaited_once_with("dbaas")
-    assert "Monitor service alert definitions listed for 'dbaas'" in result[0].text
-    assert "CPU Usage" in result[0].text
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["alert_definitions"][0]["id"] == 123
+    assert payload["alert_definitions"][0]["label"] == "CPU Usage"
 
 
 @pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
@@ -19393,7 +19845,15 @@ async def test_monitor_dashboards_list_tool_schema_and_handler_success() -> None
     )
 
     response_payload = {
-        "data": [{"id": 1, "label": "Resource Usage"}],
+        "data": [
+            {
+                "id": 1,
+                "label": "Resource Usage",
+                "type": "standard",
+                "service_type": "dbaas",
+                "widgets": [{"metric": "cpu_usage", "chart_type": "line"}],
+            }
+        ],
         "page": 1,
         "pages": 1,
         "results": 1,
@@ -19408,8 +19868,11 @@ async def test_monitor_dashboards_list_tool_schema_and_handler_success() -> None
         result = await handle_linode_monitor_dashboard_list({}, cfg)
 
     mock_list.assert_awaited_once_with(page=None, page_size=None)
-    assert "Monitor dashboards listed" in result[0].text
-    assert "Resource Usage" in result[0].text
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["dashboards"][0]["label"] == "Resource Usage"
+    assert body["dashboards"][0]["widgets"][0]["metric"] == "cpu_usage"
+    assert "message" not in body
 
 
 async def test_monitor_service_dashboards_tool_schema_and_handler_success() -> None:
@@ -19433,7 +19896,15 @@ async def test_monitor_service_dashboards_tool_schema_and_handler_success() -> N
     )
 
     response_payload = {
-        "data": [{"id": 1, "label": "Resource Usage"}],
+        "data": [
+            {
+                "id": 1,
+                "label": "Resource Usage",
+                "type": "standard",
+                "service_type": "dbaas",
+                "widgets": [{"metric": "memory_usage", "chart_type": "area"}],
+            }
+        ],
         "page": 1,
         "pages": 1,
         "results": 1,
@@ -19450,8 +19921,12 @@ async def test_monitor_service_dashboards_tool_schema_and_handler_success() -> N
         )
 
     mock_list.assert_awaited_once_with("dbaas")
-    assert "Monitor service dashboards listed for 'dbaas'" in result[0].text
-    assert "Resource Usage" in result[0].text
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["dashboards"][0]["label"] == "Resource Usage"
+    assert body["dashboards"][0]["widgets"][0]["metric"] == "memory_usage"
+    assert "message" not in body
+    assert "service_type" not in body
 
 
 @pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
@@ -20579,6 +21054,7 @@ async def test_handle_linode_longview_subscription_get_success(
     mock_client.get_longview_subscription.return_value = {
         "id": "longview-10",
         "label": "Longview Pro",
+        "price": {"hourly": 0, "monthly": 0},
     }
 
     async def fake_execute_tool(
@@ -21021,8 +21497,15 @@ async def test_longview_client_create_rejects_invalid_label(
 async def test_longview_client_create_handler_returns_success(
     sample_config: Config,
 ) -> None:
-    """Handler returns the created Longview client data."""
-    response_data = {"id": 123, "label": "web-01", "install_code": "abc"}
+    """Handler returns the created Longview client as a proto-canonical envelope
+    with the save-the-secret warning and the full CreatedLongviewClient element.
+    """
+    response_data = {
+        "id": 123,
+        "label": "web-01",
+        "install_code": "abc",
+        "api_key": "key-xyz",
+    }
     mock_client = AsyncMock()
     mock_client.create_longview_client.return_value = response_data
     mock_cm = AsyncMock()
@@ -21035,10 +21518,13 @@ async def test_longview_client_create_handler_returns_success(
         )
 
     payload = json.loads(result[0].text)
-    assert payload == {
-        "message": "Longview client 'web-01' created successfully",
-        "longview_client": response_data,
-    }
+    assert payload["message"] == "Longview client created successfully"
+    assert payload["warning"].startswith("IMPORTANT: Save the API key")
+    # The one-time install secret survives onto the output element by design.
+    assert payload["longview_client"]["api_key"] == "key-xyz"
+    assert payload["longview_client"]["install_code"] == "abc"
+    assert payload["longview_client"]["id"] == 123
+    assert payload["longview_client"]["label"] == "web-01"
     mock_client.create_longview_client.assert_awaited_once_with("web-01")
 
 
@@ -21155,3 +21641,118 @@ async def test_retryable_update_managed_service_delegates_once_without_retry() -
     finally:
         await retryable.close()
     mock_update.assert_awaited_once_with(429, label="web")
+
+
+async def test_list_profile_devices_walks_every_page() -> None:
+    """With no page argument, list_profile_devices walks all pages and concatenates."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    page_one = MagicMock()
+    page_one.status_code = 200
+    page_one.json.return_value = {"data": [{"id": 1}], "page": 1, "pages": 2}
+    page_two = MagicMock()
+    page_two.status_code = 200
+    page_two.json.return_value = {"data": [{"id": 2}], "page": 2, "pages": 2}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = [page_one, page_two]
+
+        devices = await client.list_profile_devices()
+
+    assert devices == [{"id": 1}, {"id": 2}]
+    assert mock_request.await_count == 2
+
+    await client.close()
+
+
+async def test_list_profile_tokens_single_page_honors_query() -> None:
+    """A page argument makes list_profile_tokens fetch only that page."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {
+        "data": [{"id": 99, "label": "ci"}],
+        "page": 1,
+        "pages": 5,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        tokens = await client.list_profile_tokens(page=1, page_size=25)
+
+    assert tokens == [{"id": 99, "label": "ci"}]
+    # An explicit page stops after one request even when pages reports more.
+    mock_request.assert_awaited_once()
+
+    await client.close()
+
+
+async def test_list_profile_security_questions_returns_envelope() -> None:
+    """list_profile_security_questions returns the raw security_questions envelope."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    payload = {"security_questions": [{"id": 1, "question": "color?"}]}
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = payload
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        result = await client.list_profile_security_questions()
+
+    assert result == payload
+    mock_request.assert_awaited_once_with("GET", "/profile/security-questions")
+
+    await client.close()
+
+
+async def test_list_profile_security_questions_wraps_http_error() -> None:
+    """A transport error from the security questions GET becomes a NetworkError."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.side_effect = httpx.HTTPError("boom")
+
+        with pytest.raises(NetworkError) as excinfo:
+            await client.list_profile_security_questions()
+
+    assert "ListProfileSecurityQuestions" in str(excinfo.value)
+
+    await client.close()
+
+
+async def test_list_profile_devices_rejects_non_object_page() -> None:
+    """A non-object devices page is rejected, guarding the proto decode upstream."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = ["not", "an", "object"]
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        with pytest.raises(TypeError, match="response must be an object"):
+            await client.list_profile_devices(page=1)
+
+    await client.close()
+
+
+async def test_list_profile_tokens_rejects_non_list_data() -> None:
+    """A tokens page whose data is not a list is rejected before returning."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"data": "not-a-list", "pages": 1}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        with pytest.raises(TypeError, match="response data must be a list"):
+            await client.list_profile_tokens(page=1)
+
+    await client.close()

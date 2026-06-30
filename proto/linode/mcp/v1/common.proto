@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// MessageResponse is the bare {message} envelope a write tool returns when the
+// API action has no resource body to echo (the endpoint returns an empty body
+// and there are no useful id echoes). Shared across tools whose only output is a
+// human-readable confirmation string.
+message MessageResponse {
+  string message = 1;
+}

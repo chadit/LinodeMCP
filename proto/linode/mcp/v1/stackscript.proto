@@ -32,6 +32,15 @@ message StackScript {
   bool mine = 14;
 }
 
+// StackScriptListResponse is the linode_stackscript_list envelope: count, an
+// optional filter echo (is_public / mine / label_contains, joined with ", "),
+// and the full proto StackScript elements.
+message StackScriptListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated StackScript stackscripts = 3;
+}
+
 // StackScriptGetInput is the input contract for linode_stackscript_get.
 message StackScriptGetInput {
   // Linode environment to use (optional, defaults to "default").

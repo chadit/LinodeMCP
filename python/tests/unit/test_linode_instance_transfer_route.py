@@ -217,6 +217,28 @@ async def test_handle_linode_instance_transfer_month_get_rejects_invalid_path_pa
     mock_linode_client.get_instance_transfer_by_year_month.assert_not_called()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"linode_id": 123, "month": 5}, "year must be an integer"),
+        ({"linode_id": 123, "year": 2024}, "month must be an integer"),
+    ],
+)
+async def test_handle_linode_instance_transfer_month_get_rejects_missing_period(
+    arguments: dict[str, Any],
+    message: str,
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    # An omitted year/month parses to None (not a raised error), so the handler
+    # must reject it through the explicit None guards, not the value validators.
+    result = await handle_linode_instance_transfer_month_get(arguments, sample_config)
+
+    assert result[0].text == f"Error: {message}"
+    mock_linode_client.get_instance_transfer_by_year_month.assert_not_called()
+
+
 def test_linode_instance_transfer_month_get_registered() -> None:
     entries = {entry.name: entry for entry in get_tool_registry()}
 

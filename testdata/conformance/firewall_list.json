@@ -1,0 +1,92 @@
+{
+  "message": "linode.mcp.v1.FirewallListResponse",
+  "description": "linode_firewall_list envelope: count, an optional filter echo, and the full proto Firewall elements (rules included, not the curated rules_inbound_count/outbound_count shape).",
+  "input": {
+    "count": 1,
+    "filter": "status=enabled",
+    "firewalls": [
+      {
+        "id": 123,
+        "label": "my-firewall",
+        "status": "enabled",
+        "rules": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": {
+                "ipv4": ["192.0.2.0/24"],
+                "ipv6": ["2001:db8::/32"]
+              },
+              "label": "allow-ssh",
+              "description": "Allow inbound SSH"
+            }
+          ],
+          "inbound_policy": "DROP",
+          "outbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "443",
+              "addresses": {
+                "ipv4": ["0.0.0.0/0"],
+                "ipv6": ["::/0"]
+              },
+              "label": "allow-https",
+              "description": "Allow outbound HTTPS"
+            }
+          ],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": ["prod", "web"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "status=enabled",
+    "firewalls": [
+      {
+        "id": 123,
+        "label": "my-firewall",
+        "status": "enabled",
+        "rules": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": {
+                "ipv4": ["192.0.2.0/24"],
+                "ipv6": ["2001:db8::/32"]
+              },
+              "label": "allow-ssh",
+              "description": "Allow inbound SSH"
+            }
+          ],
+          "inbound_policy": "DROP",
+          "outbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "443",
+              "addresses": {
+                "ipv4": ["0.0.0.0/0"],
+                "ipv6": ["::/0"]
+              },
+              "label": "allow-https",
+              "description": "Allow outbound HTTPS"
+            }
+          ],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": ["prod", "web"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  }
+}

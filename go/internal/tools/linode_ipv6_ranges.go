@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -22,19 +23,25 @@ const (
 
 // NewLinodeIPv6RangesListTool creates a tool for listing IPv6 ranges.
 func NewLinodeIPv6RangesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newLinodeIPv6ListTool(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_ipv6_range_list",
 		"Lists IPv6 ranges on the account with optional pagination.",
-		func(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.IPv6Range], string) {
-			items, err := client.ListIPv6Ranges(ctx, page, pageSize)
-			if err != nil {
-				return nil, err.Error()
-			}
-
-			return items, ""
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.IPv6Range, error) {
+			return client.ListIPv6RangesProto(ctx, page, pageSize)
 		},
+		ipv6ListPaginationFromTool,
+		nil,
+		ipv6RangeListResponse,
 	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func ipv6RangeListResponse(items []*linodev1.IPv6Range, count int32, filter *string) *linodev1.IPv6RangeListResponse {
+	return &linodev1.IPv6RangeListResponse{Count: count, Filter: filter, Ipv6Ranges: items}
 }
 
 // NewLinodeIPv6RangeGetTool creates a tool for retrieving one IPv6 range.

@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.ConfigInterfaceWriteResponse",
+  "description": "Config-profile interface write envelope (add, update): a confirmation message plus the full legacy config-profile network interface, exercising the optional vpc fields and the nested ipv4 config.",
+  "input": {
+    "message": "Configuration profile interface added to config 789 on instance 123",
+    "interface": {
+      "id": 202,
+      "active": true,
+      "purpose": "vpc",
+      "label": "vpc-iface",
+      "primary": true,
+      "subnet_id": 555,
+      "vpc_id": 444,
+      "ipv4": {
+        "nat_1_1": "any",
+        "vpc": "10.0.0.5"
+      },
+      "ip_ranges": ["10.0.0.0/24"]
+    }
+  },
+  "canonical": {
+    "message": "Configuration profile interface added to config 789 on instance 123",
+    "interface": {
+      "id": 202,
+      "active": true,
+      "purpose": "vpc",
+      "label": "vpc-iface",
+      "primary": true,
+      "subnet_id": 555,
+      "vpc_id": 444,
+      "ipv4": {
+        "nat_1_1": "any",
+        "vpc": "10.0.0.5"
+      },
+      "ip_ranges": ["10.0.0.0/24"]
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "message": "linode.mcp.v1.FirewallRules",
+  "description": "A Cloud Firewall ruleset with inbound and outbound rules and policies.",
+  "input": {
+    "inbound": [
+      {
+        "action": "ACCEPT",
+        "protocol": "TCP",
+        "ports": "22",
+        "addresses": {
+          "ipv4": ["192.0.2.0/24"],
+          "ipv6": ["2001:db8::/32"]
+        },
+        "label": "allow-ssh",
+        "description": "Allow inbound SSH"
+      }
+    ],
+    "inbound_policy": "DROP",
+    "outbound": [
+      {
+        "action": "ACCEPT",
+        "protocol": "TCP",
+        "ports": "443",
+        "addresses": {
+          "ipv4": ["0.0.0.0/0"],
+          "ipv6": ["::/0"]
+        },
+        "label": "allow-https",
+        "description": "Allow outbound HTTPS"
+      }
+    ],
+    "outbound_policy": "ACCEPT"
+  },
+  "canonical": {
+    "inbound": [
+      {
+        "action": "ACCEPT",
+        "protocol": "TCP",
+        "ports": "22",
+        "addresses": {
+          "ipv4": ["192.0.2.0/24"],
+          "ipv6": ["2001:db8::/32"]
+        },
+        "label": "allow-ssh",
+        "description": "Allow inbound SSH"
+      }
+    ],
+    "inbound_policy": "DROP",
+    "outbound": [
+      {
+        "action": "ACCEPT",
+        "protocol": "TCP",
+        "ports": "443",
+        "addresses": {
+          "ipv4": ["0.0.0.0/0"],
+          "ipv6": ["::/0"]
+        },
+        "label": "allow-https",
+        "description": "Allow outbound HTTPS"
+      }
+    ],
+    "outbound_policy": "ACCEPT"
+  }
+}

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import instance_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -18,6 +19,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
@@ -112,38 +114,12 @@ async def handle_linode_instance_backup_list(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.list_instance_backups(iid)
+        return serialize_api_response(
+            await client.list_instance_backups(iid),
+            instance_pb2.InstanceBackupsResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list instance backups", _call)
-
-
-def _instance_backup_disk_to_response_dict(disk: dict[str, Any]) -> dict[str, Any]:
-    """Shape one instance backup disk to proto-canonical form."""
-    return {
-        "label": disk.get("label") or "",
-        "size": disk.get("size") or 0,
-        "filesystem": disk.get("filesystem") or "",
-    }
-
-
-def instance_backup_to_response_dict(backup: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw instance backup API dict to proto-canonical form."""
-    return {
-        "id": backup.get("id") or 0,
-        "label": backup.get("label") or "",
-        "status": backup.get("status") or "",
-        "type": backup.get("type") or "",
-        "created": backup.get("created") or "",
-        "updated": backup.get("updated") or "",
-        "finished": backup.get("finished") or "",
-        "region": backup.get("region") or "",
-        "available": bool(backup.get("available")),
-        "configs": backup.get("configs") or [],
-        "disks": [
-            _instance_backup_disk_to_response_dict(disk)
-            for disk in cast("list[dict[str, Any]]", backup.get("disks") or [])
-        ],
-    }
 
 
 def create_linode_instance_backup_get_tool() -> tuple[Tool, Capability]:
@@ -167,8 +143,9 @@ async def handle_linode_instance_backup_get(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return instance_backup_to_response_dict(
-            await client.get_instance_backup(linode_id, backup_id)
+        return serialize_api_response(
+            await client.get_instance_backup(linode_id, backup_id),
+            instance_pb2.InstanceBackup(),
         )
 
     return await execute_tool(cfg, arguments, "get instance backup", _call)
@@ -224,7 +201,18 @@ async def handle_linode_instance_backup_create(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.create_instance_backup(iid, label=arguments.get("label"))
+        backup = await client.create_instance_backup(iid, label=arguments.get("label"))
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getter on the backup id.
+                "message": (
+                    f"Snapshot created for instance {iid}"
+                    f" (backup ID: {backup.get('id', 0)})"
+                ),
+                "backup": backup,
+            },
+            instance_pb2.InstanceBackupWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create instance backup", _call)
 
@@ -322,7 +310,7 @@ async def handle_linode_instance_backup_restore(
     if not arguments.get("confirm"):
         return _error_response("Set confirm=true to proceed.")
 
-    overwrite = arguments.get("overwrite", False)
+    overwrite = bool(arguments.get("overwrite", False))
 
     async def _call(
         client: RetryableClient,
@@ -333,11 +321,20 @@ async def handle_linode_instance_backup_restore(
             target_linode_id,
             overwrite=overwrite,
         )
-        return {
-            "message": (f"Backup {backup_id} restored to instance {target_linode_id}"),
-            "linode_id": linode_id,
-            "backup_id": backup_id,
-        }
+        # Match Go's "%t" verb: lowercase true/false in the message string.
+        overwrite_text = "true" if overwrite else "false"
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Backup {backup_id} restore initiated to"
+                    f" instance {target_linode_id} (overwrite={overwrite_text})"
+                ),
+                "backup_id": backup_id,
+                "target_linode_id": target_linode_id,
+                "overwrite": overwrite,
+            },
+            instance_pb2.InstanceBackupRestoreWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "restore instance backup", _call)
 
@@ -390,7 +387,7 @@ async def handle_linode_instance_backups_enable(
     ) -> dict[str, Any]:
         await client.enable_instance_backups(iid)
         return {
-            "message": (f"Backups enabled for instance {iid}"),
+            "message": (f"Backup service enabled for instance {iid}"),
             "linode_id": iid,
         }
 
@@ -441,7 +438,10 @@ async def _instance_backups_cancel_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.cancel_instance_backups(iid)
         return {
-            "message": f"Backups cancelled for instance {iid}",
+            "message": (
+                f"Backup service canceled for instance {iid}."
+                " All backups have been deleted."
+            ),
             "linode_id": iid,
         }
 
@@ -492,7 +492,10 @@ async def handle_linode_instance_backups_cancel(
     ) -> dict[str, Any]:
         await client.cancel_instance_backups(iid)
         return {
-            "message": (f"Backups cancelled for instance {iid}"),
+            "message": (
+                f"Backup service canceled for instance {iid}."
+                " All backups have been deleted."
+            ),
             "linode_id": iid,
         }
 

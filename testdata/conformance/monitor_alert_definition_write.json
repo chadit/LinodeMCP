@@ -1,0 +1,54 @@
+{
+  "message": "linode.mcp.v1.MonitorAlertDefinitionWriteResponse",
+  "description": "Monitor alert-definition write envelope (create and update): a confirmation message plus the full MonitorAlertDefinition element. criteria, rule_criteria, and trigger_conditions are freeform JSON the API returns verbatim, modeled as google.protobuf.Struct.",
+  "input": {
+    "message": "Monitor service alert definition created for 'dbaas'",
+    "alert_definition": {
+      "id": 20000,
+      "label": "High CPU",
+      "type": "user",
+      "service_type": "dbaas",
+      "description": "Alert when CPU usage is high",
+      "severity": 2,
+      "status": "enabled",
+      "rule_criteria": {
+        "rules": [
+          {"metric": "cpu_usage", "operator": "gt", "threshold": 80}
+        ]
+      },
+      "trigger_conditions": {
+        "criteria_condition": "ALL",
+        "evaluation_period_seconds": 300,
+        "polling_interval_seconds": 300,
+        "trigger_occurrences": 3
+      },
+      "channel_ids": [546, 392],
+      "entity_ids": ["13116"]
+    }
+  },
+  "canonical": {
+    "message": "Monitor service alert definition created for 'dbaas'",
+    "alert_definition": {
+      "id": 20000,
+      "label": "High CPU",
+      "type": "user",
+      "service_type": "dbaas",
+      "description": "Alert when CPU usage is high",
+      "severity": 2,
+      "status": "enabled",
+      "rule_criteria": {
+        "rules": [
+          {"metric": "cpu_usage", "operator": "gt", "threshold": 80}
+        ]
+      },
+      "trigger_conditions": {
+        "criteria_condition": "ALL",
+        "evaluation_period_seconds": 300,
+        "polling_interval_seconds": 300,
+        "trigger_occurrences": 3
+      },
+      "channel_ids": [546, 392],
+      "entity_ids": ["13116"]
+    }
+  }
+}

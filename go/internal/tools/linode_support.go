@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -60,18 +61,25 @@ func supportTicketIDFromTool(request *mcp.CallToolRequest) (int, string) {
 
 // NewLinodeSupportTicketsTool creates a tool for listing support tickets.
 func NewLinodeSupportTicketsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_support_ticket_list",
 		"Lists support tickets for the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.SupportTicket, error) {
+			return client.ListSupportTicketsProto(ctx, page, pageSize)
 		},
-		handleLinodeSupportTicketsRequest,
+		supportTicketsPaginationFromTool,
+		nil,
+		supportTicketListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func supportTicketListResponse(items []*linodev1.SupportTicket, count int32, filter *string) *linodev1.SupportTicketListResponse {
+	return &linodev1.SupportTicketListResponse{Count: count, Filter: filter, SupportTickets: items}
 }
 
 // NewLinodeSupportTicketCloseTool creates a tool for closing one support ticket.
@@ -89,25 +97,6 @@ func NewLinodeSupportTicketCloseTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	)
 
 	return tool, profiles.CapWrite, handler
-}
-
-func handleLinodeSupportTicketsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := supportTicketsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	tickets, listFailure := client.ListSupportTickets(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(tickets)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_support_ticket_list: " + listFailure.Error()), nil
 }
 
 func supportTicketsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -153,7 +142,10 @@ func handleLinodeSupportTicketCloseRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(closeFailureMessage), nil
 	}
 
-	return MarshalToolResponse(map[string]any{responseKeyMessage: "Support ticket closed successfully", "ticket_id": ticketID})
+	return MarshalProtoToolResponse(&linodev1.SupportTicketIDResponse{
+		Message:  "Support ticket closed successfully",
+		TicketId: linodeIDToInt32(ticketID),
+	})
 }
 
 func closeSupportTicketErrorMessage(ctx context.Context, client *linode.Client, ticketID int) string {
@@ -166,41 +158,28 @@ func closeSupportTicketErrorMessage(ctx context.Context, client *linode.Client, 
 
 // NewLinodeSupportTicketRepliesTool creates a tool for listing replies for one support ticket.
 func NewLinodeSupportTicketRepliesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		supportTicketRepliesToolName,
 		"Lists replies for one support ticket by ticket_id.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(supportTicketIDParam, mcp.Required(), mcp.Description("Numeric support ticket ID whose replies should be listed.")),
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		protoListPathID{
+			option: mcp.WithNumber(supportTicketIDParam, mcp.Required(),
+				mcp.Description("Numeric support ticket ID whose replies should be listed.")),
+			parse: supportTicketIDFromTool,
 		},
-		handleLinodeSupportTicketRepliesRequest,
+		supportTicketsPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, ticketID, page, pageSize int) ([]*linodev1.SupportTicketReply, error) {
+			return client.ListSupportTicketRepliesProto(ctx, ticketID, page, pageSize)
+		},
+		nil,
+		supportTicketReplyListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeSupportTicketRepliesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	ticketID, validationMessage := supportTicketIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := supportTicketsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	replies, listFailure := client.ListSupportTicketReplies(ctx, ticketID, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(replies)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve " + supportTicketRepliesToolName + ": " + listFailure.Error()), nil
+func supportTicketReplyListResponse(items []*linodev1.SupportTicketReply, count int32, filter *string) *linodev1.SupportTicketReplyListResponse {
+	return &linodev1.SupportTicketReplyListResponse{Count: count, Filter: filter, SupportTicketReplies: items}
 }

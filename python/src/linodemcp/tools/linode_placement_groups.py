@@ -6,8 +6,13 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import Tool
 
+from linodemcp.genpb.linode.mcp.v1 import placement_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -131,7 +136,12 @@ async def handle_linode_placement_group_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_placement_groups(page=page, page_size=page_size)
+        raw = await client.list_placement_groups(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "placement_groups",
+            placement_pb2.PlacementGroupListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list placement groups", _call)
 
@@ -154,8 +164,9 @@ async def handle_linode_placement_group_get(
         return group_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return placement_group_to_response_dict(
-            await client.get_placement_group(group_id)
+        return serialize_api_response(
+            await client.get_placement_group(group_id),
+            placement_pb2.PlacementGroup(),
         )
 
     return await execute_tool(cfg, arguments, "get placement group", _call)

@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -15,23 +16,27 @@ import (
 
 // NewLinodeVPCListTool creates a tool for listing all VPCs with optional label and region filtering.
 func NewLinodeVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newListTool(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_vpc_list",
 		"Lists all VPCs. Can filter by label or region.",
-		func(ctx context.Context, client *linode.Client) ([]linode.VPC, error) {
-			return client.ListVPCs(ctx)
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.Vpc, error) {
+			return client.ListVPCsProto(ctx)
 		},
-		[]listFilterParam[linode.VPC]{
+		[]listFilterParam[*linodev1.Vpc]{
 			containsFilter("label", "Filter VPCs by label containing this string (case-insensitive)",
-				func(v linode.VPC) string { return v.Label }),
+				func(v *linodev1.Vpc) string { return v.GetLabel() }),
 			fieldFilter("region", "Filter VPCs by region (exact match, case-insensitive)",
-				func(v linode.VPC) string { return v.Region }),
+				func(v *linodev1.Vpc) string { return v.GetRegion() }),
 		},
-		"vpcs",
+		vpcListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func vpcListResponse(items []*linodev1.Vpc, count int32, filter *string) *linodev1.VpcListResponse {
+	return &linodev1.VpcListResponse{Count: count, Filter: filter, Vpcs: items}
 }
 
 // NewLinodeVPCGetTool creates a tool for getting a single VPC by ID.
@@ -70,15 +75,15 @@ func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg 
 
 // NewLinodeVPCIPsListTool creates a tool for listing all VPC IP addresses across all VPCs.
 func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newListTool(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_vpc_ip_all_list",
 		"Lists all IP addresses across all VPCs",
-		func(ctx context.Context, client *linode.Client) ([]linode.VPCIP, error) {
-			return client.ListVPCIPs(ctx)
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.VPCIP, error) {
+			return client.ListVPCIPsProto(ctx)
 		},
 		nil,
-		"ips",
+		vpcIPListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -86,94 +91,62 @@ func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 
 // NewLinodeVPCIPListTool creates a tool for listing IP addresses for a specific VPC.
 func NewLinodeVPCIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_vpc_ip_list",
 		"Lists all IP addresses for a specific VPC",
-		[]mcp.ToolOption{
-			mcp.WithString(
-				"vpc_id",
-				mcp.Required(),
-				mcp.Description("The ID of the VPC"),
-			),
+		protoListPathID{
+			option: mcp.WithString("vpc_id", mcp.Required(), mcp.Description("The ID of the VPC")),
+			parse:  parseVPCSubnetListPathID,
 		},
-		handleVPCIPListRequest,
+		func(ctx context.Context, client *linode.Client, vpcID int) ([]*linodev1.VPCIP, error) {
+			return client.ListVPCIPAddressesProto(ctx, vpcID)
+		},
+		nil,
+		vpcIPListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleVPCIPListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	vpcID, err := parseVPCID(request.GetString("vpc_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	ips, err := client.ListVPCIPAddresses(ctx, vpcID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list IP addresses for VPC %d: %v", vpcID, err)), nil
-	}
-
-	response := struct {
-		Count int            `json:"count"`
-		IPs   []linode.VPCIP `json:"ips"`
-	}{
-		Count: len(ips),
-		IPs:   ips,
-	}
-
-	return MarshalToolResponse(response)
+func vpcIPListResponse(items []*linodev1.VPCIP, count int32, filter *string) *linodev1.VPCIPListResponse {
+	return &linodev1.VPCIPListResponse{Count: count, Filter: filter, Ips: items}
 }
 
 // NewLinodeVPCSubnetListTool creates a tool for listing subnets in a specific VPC.
 func NewLinodeVPCSubnetListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_vpc_subnet_list",
 		"Lists all subnets for a specific VPC",
-		[]mcp.ToolOption{
-			mcp.WithString(
-				"vpc_id",
-				mcp.Required(),
-				mcp.Description("The ID of the VPC"),
-			),
+		protoListPathID{
+			option: mcp.WithString("vpc_id", mcp.Required(), mcp.Description("The ID of the VPC")),
+			parse:  parseVPCSubnetListPathID,
 		},
-		handleVPCSubnetsListRequest,
+		func(ctx context.Context, client *linode.Client, vpcID int) ([]*linodev1.VpcSubnet, error) {
+			return client.ListVPCSubnetsProto(ctx, vpcID)
+		},
+		nil,
+		vpcSubnetListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleVPCSubnetsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+// parseVPCSubnetListPathID validates the vpc_id path param the same way the
+// non-proto handler did, returning the same error text (ErrVPCIDRequired /
+// ErrVPCIDInvalid via parseVPCID).
+func parseVPCSubnetListPathID(request *mcp.CallToolRequest) (int, string) {
 	vpcID, err := parseVPCID(request.GetString("vpc_id", ""))
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return 0, err.Error()
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+	return vpcID, ""
+}
 
-	subnets, err := client.ListVPCSubnets(ctx, vpcID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list subnets for VPC %d: %v", vpcID, err)), nil
-	}
-
-	response := struct {
-		Count   int                `json:"count"`
-		Subnets []linode.VPCSubnet `json:"subnets"`
-	}{
-		Count:   len(subnets),
-		Subnets: subnets,
-	}
-
-	return MarshalToolResponse(response)
+func vpcSubnetListResponse(items []*linodev1.VpcSubnet, count int32, filter *string) *linodev1.VpcSubnetListResponse {
+	return &linodev1.VpcSubnetListResponse{Count: count, Filter: filter, Subnets: items}
 }
 
 // NewLinodeVPCSubnetGetTool creates a tool for getting a specific subnet within a VPC.

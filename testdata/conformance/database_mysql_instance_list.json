@@ -1,0 +1,46 @@
+{
+  "message": "linode.mcp.v1.DatabaseMySQLInstanceListResponse",
+  "description": "linode_database_mysql_instance_list envelope (/databases/mysql/instances): count and the full proto DatabaseInstance elements under mysql_instances. An empty allow_list still serializes to [] under EmitDefaultValues. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "mysql_instances": [
+      {
+        "id": 456,
+        "status": "provisioning",
+        "label": "mysql-staging",
+        "region": "eu-west",
+        "type": "g6-nanode-1",
+        "engine": "mysql",
+        "version": "8.0.30",
+        "cluster_size": 1,
+        "replication_type": "none",
+        "ssl_connection": true,
+        "encrypted": false,
+        "allow_list": [],
+        "created": "2026-02-01T12:00:00",
+        "updated": "2026-02-01T12:05:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "mysql_instances": [
+      {
+        "id": 456,
+        "status": "provisioning",
+        "label": "mysql-staging",
+        "region": "eu-west",
+        "type": "g6-nanode-1",
+        "engine": "mysql",
+        "version": "8.0.30",
+        "cluster_size": 1,
+        "replication_type": "none",
+        "ssl_connection": true,
+        "encrypted": false,
+        "allow_list": [],
+        "created": "2026-02-01T12:00:00",
+        "updated": "2026-02-01T12:05:00"
+      }
+    ]
+  }
+}

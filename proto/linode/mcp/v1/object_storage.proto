@@ -30,6 +30,16 @@ message ObjectStorageKey {
   bool limited = 7;
 }
 
+// ObjectStorageKeyListResponse is the linode_object_storage_key_list envelope:
+// count and the full proto ObjectStorageKey elements. The list endpoint returns
+// keys without secret material, so each element's secret_key serializes as its
+// empty default. The tool has no filter params, so filter is omitted.
+message ObjectStorageKeyListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ObjectStorageKey keys = 3;
+}
+
 // ObjectStorageKeyWriteResponse is the {message, key} envelope the Object Storage
 // key create tool returns. warning carries the secret-shown-once notice on create.
 message ObjectStorageKeyWriteResponse {
@@ -57,6 +67,15 @@ message ObjectStorageBucket {
   string cluster = 7;
 }
 
+// ObjectStorageBucketListResponse is the linode_object_storage_bucket_list
+// envelope: count and the full proto ObjectStorageBucket elements. The tool has
+// no filter params, so filter is omitted.
+message ObjectStorageBucketListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ObjectStorageBucket buckets = 3;
+}
+
 // ObjectStorageBucketWriteResponse is the {message, bucket} envelope the Object
 // Storage bucket create tool returns.
 message ObjectStorageBucketWriteResponse {
@@ -73,4 +92,70 @@ message ObjectStorageBucketGetInput {
   string region = 2;
   // The bucket label (required).
   string label = 3;
+}
+
+// ObjectStorageEndpoint mirrors a Linode Object Storage endpoint. s3_endpoint is
+// null until the endpoint is assigned an S3 hostname, so it is an optional string
+// (omitted when the API returns null).
+message ObjectStorageEndpoint {
+  string region = 1;
+  string endpoint_type = 2;
+  optional string s3_endpoint = 3;
+}
+
+// ObjectStorageEndpointListResponse is the linode_object_storage_endpoint_list
+// envelope: count and the full proto ObjectStorageEndpoint elements. The tool has
+// no filter params, so filter is omitted.
+message ObjectStorageEndpointListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ObjectStorageEndpoint endpoints = 3;
+}
+
+// ObjectStorageQuota mirrors a Linode Object Storage quota. quota_limit is the
+// allowed maximum for the metric named by resource_metric.
+message ObjectStorageQuota {
+  string quota_id = 1;
+  string quota_name = 2;
+  string endpoint_type = 3;
+  string s3_endpoint = 4;
+  string description = 5;
+  int64 quota_limit = 6;
+  string resource_metric = 7;
+}
+
+// ObjectStorageQuotaListResponse is the linode_object_storage_quota_list
+// envelope: count and the full proto ObjectStorageQuota elements. The tool has no
+// filter params, so filter is omitted.
+message ObjectStorageQuotaListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ObjectStorageQuota quotas = 3;
+}
+
+// ObjectStorageObject is one object (or common prefix) inside a bucket, as
+// returned by the S3-style object-list endpoint. size is int64 so objects larger
+// than 2GB survive without truncation; protojson serializes it as a JSON string
+// on both languages. is_prefix marks a delimiter-grouped common prefix rather
+// than a real object.
+message ObjectStorageObject {
+  string name = 1;
+  string etag = 2;
+  string last_modified = 3;
+  string owner = 4;
+  int64 size = 5;
+  bool is_prefix = 6;
+}
+
+// ObjectStorageObjectListResponse is the linode_object_storage_bucket_object_list
+// envelope. Unlike the standard {count, filter, repeated} list shape it carries
+// the S3 pagination metadata the endpoint returns: is_truncated signals more
+// pages, and next_marker is the cursor to resume from (omitted when the page is
+// not truncated). filter echoes the applied prefix/delimiter.
+message ObjectStorageObjectListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  bool is_truncated = 3;
+  optional string next_marker = 4;
+  repeated ObjectStorageObject objects = 5;
 }

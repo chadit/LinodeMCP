@@ -1,0 +1,60 @@
+{
+  "message": "linode.mcp.v1.MonitorAlertChannelListResponse",
+  "description": "linode_monitor_alert_channel_list envelope: count and the full proto MonitorAlertChannel elements (nested content.email.email_addresses and repeated alerts). The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "alert_channels": [
+      {
+        "id": 10000,
+        "label": "Read-Write Channel",
+        "type": "system",
+        "channel_type": "email",
+        "content": {
+          "email": {
+            "email_addresses": ["ops@example.com", "alerts@example.com"]
+          }
+        },
+        "alerts": [
+          {
+            "id": 20000,
+            "label": "High Memory Usage Plan Dedicated",
+            "type": "alerts-definitions",
+            "url": "/monitor/alerts-definitions/20000"
+          }
+        ],
+        "created": "2025-03-20T01:41:09",
+        "created_by": "system",
+        "updated": "2025-03-20T01:41:09",
+        "updated_by": "system"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "alert_channels": [
+      {
+        "id": 10000,
+        "label": "Read-Write Channel",
+        "type": "system",
+        "channel_type": "email",
+        "content": {
+          "email": {
+            "email_addresses": ["ops@example.com", "alerts@example.com"]
+          }
+        },
+        "alerts": [
+          {
+            "id": 20000,
+            "label": "High Memory Usage Plan Dedicated",
+            "type": "alerts-definitions",
+            "url": "/monitor/alerts-definitions/20000"
+          }
+        ],
+        "created": "2025-03-20T01:41:09",
+        "created_by": "system",
+        "updated": "2025-03-20T01:41:09",
+        "updated_by": "system"
+      }
+    ]
+  }
+}

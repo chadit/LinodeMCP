@@ -259,15 +259,10 @@ func handleInstanceMutateRequest(ctx context.Context, request *mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to upgrade instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceActionWriteResponse{
 		Message:  fmt.Sprintf("Upgrade initiated for instance %d", linodeID),
-		LinodeID: linodeID,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId: linodeIDToInt32(linodeID),
+	})
 }
 
 // NewLinodeInstanceRebuildTool creates a tool for rebuilding a Linode instance with a new image.
@@ -356,7 +351,7 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 	// Captured by the Execute and Success closures: Execute assigns the
 	// rebuilt instance, Success returns it. The destroy helper's Execute
 	// returns only an error, so the result is threaded through this var.
-	var rebuilt *linode.Instance
+	var rebuilt *linodev1.Instance
 
 	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
 		ToolName:       "linode_instance_rebuild",
@@ -367,7 +362,7 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 			return c.GetInstance(ctx, linodeID)
 		},
 		Execute: func(ctx context.Context, c *linode.Client) error {
-			instance, execErr := c.RebuildInstance(ctx, linodeID, req)
+			instance, execErr := c.RebuildInstanceProto(ctx, linodeID, req)
 			if execErr != nil {
 				return fmt.Errorf("rebuild instance %d: %w", linodeID, execErr)
 			}
@@ -376,10 +371,12 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 
 			return nil
 		},
+		// Success returns a proto.Message so marshalDestroySuccess routes it
+		// through the proto-canonical marshaller, matching the Python side.
 		Success: func() any {
-			return map[string]any{
-				responseKeyMessage: fmt.Sprintf("Instance %d rebuilt with image %s", linodeID, image),
-				"instance":         rebuilt,
+			return &linodev1.InstanceWriteResponse{
+				Message:  fmt.Sprintf("Instance %d rebuilt with image %s", linodeID, image),
+				Instance: rebuilt,
 			}
 		},
 		DependencyWalk: instanceRebuildSideEffectsWalk,

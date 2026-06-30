@@ -3,11 +3,13 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -17,42 +19,22 @@ const defaultPresignedExpiry = 3600
 
 // NewLinodeObjectStorageBucketListTool creates a tool for listing Object Storage buckets.
 func NewLinodeObjectStorageBucketListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListTool(
+		cfg,
 		"linode_object_storage_bucket_list",
-		mcp.WithDescription("Lists all Object Storage buckets across all regions for the authenticated user"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
+		"Lists all Object Storage buckets across all regions for the authenticated user",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.ObjectStorageBucket, error) {
+			return client.ListObjectStorageBucketsProto(ctx)
+		},
+		nil,
+		objectStorageBucketListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageBucketsListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleObjectStorageBucketsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	buckets, err := client.ListObjectStorageBuckets(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage buckets: %v", err)), nil
-	}
-
-	response := struct {
-		Count   int                          `json:"count"`
-		Buckets []linode.ObjectStorageBucket `json:"buckets"`
-	}{
-		Count:   len(buckets),
-		Buckets: buckets,
-	}
-
-	return MarshalToolResponse(response)
+func objectStorageBucketListResponse(items []*linodev1.ObjectStorageBucket, count int32, filter *string) *linodev1.ObjectStorageBucketListResponse {
+	return &linodev1.ObjectStorageBucketListResponse{Count: count, Filter: filter, Buckets: items}
 }
 
 // NewLinodeObjectStorageBucketListByRegionTool creates a tool for listing buckets in a region.
@@ -266,26 +248,28 @@ func handleObjectStorageBucketContentsRequest(ctx context.Context, request *mcp.
 		params["page_size"] = pageSize
 	}
 
-	objects, isTruncated, nextMarker, err := client.ListObjectStorageBucketContents(ctx, region, label, params)
+	page, err := client.ListObjectStorageBucketContentsProto(ctx, region, label, params)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list contents of bucket '%s' in region '%s': %v", label, region, err)), nil
 	}
 
-	return formatBucketContentsResponse(objects, isTruncated, nextMarker, prefix, delimiter)
+	return formatBucketContentsResponse(page, prefix, delimiter)
 }
 
-func formatBucketContentsResponse(objects []linode.ObjectStorageObject, isTruncated bool, nextMarker, prefix, delimiter string) (*mcp.CallToolResult, error) {
-	response := struct {
-		Count       int                          `json:"count"`
-		Filter      string                       `json:"filter,omitempty"`
-		IsTruncated bool                         `json:"is_truncated"`
-		NextMarker  string                       `json:"next_marker,omitempty"`
-		Objects     []linode.ObjectStorageObject `json:"objects"`
-	}{
-		Count:       len(objects),
-		IsTruncated: isTruncated,
-		NextMarker:  nextMarker,
-		Objects:     objects,
+func formatBucketContentsResponse(page *linode.ObjectStorageBucketContentsPage, prefix, delimiter string) (*mcp.CallToolResult, error) {
+	var count int32
+	if n := len(page.Objects); n <= math.MaxInt32 {
+		count = int32(n)
+	}
+
+	response := &linodev1.ObjectStorageObjectListResponse{
+		Count:       count,
+		IsTruncated: page.IsTruncated,
+		Objects:     page.Objects,
+	}
+
+	if page.NextMarker != "" {
+		response.NextMarker = &page.NextMarker
 	}
 
 	var filters []string
@@ -298,170 +282,91 @@ func formatBucketContentsResponse(objects []linode.ObjectStorageObject, isTrunca
 	}
 
 	if len(filters) > 0 {
-		response.Filter = strings.Join(filters, ", ")
+		filter := strings.Join(filters, ", ")
+		response.Filter = &filter
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeObjectStorageEndpointListTool creates a tool for listing Object Storage endpoints.
 func NewLinodeObjectStorageEndpointListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListTool(
+		cfg,
 		"linode_object_storage_endpoint_list",
-		mcp.WithDescription("Lists Object Storage endpoints across regions"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
+		"Lists Object Storage endpoints across regions",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.ObjectStorageEndpoint, error) {
+			return client.ListObjectStorageEndpointsProto(ctx)
+		},
+		nil,
+		objectStorageEndpointListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageEndpointListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleObjectStorageEndpointListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	endpoints, err := client.ListObjectStorageEndpoints(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage endpoints: %v", err)), nil
-	}
-
-	response := struct {
-		Count     int                            `json:"count"`
-		Endpoints []linode.ObjectStorageEndpoint `json:"endpoints"`
-	}{
-		Count:     len(endpoints),
-		Endpoints: endpoints,
-	}
-
-	return MarshalToolResponse(response)
+func objectStorageEndpointListResponse(items []*linodev1.ObjectStorageEndpoint, count int32, filter *string) *linodev1.ObjectStorageEndpointListResponse {
+	return &linodev1.ObjectStorageEndpointListResponse{Count: count, Filter: filter, Endpoints: items}
 }
 
 // NewLinodeObjectStorageTypeListTool creates a tool for listing Object Storage types and pricing.
 func NewLinodeObjectStorageTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListTool(
+		cfg,
 		"linode_object_storage_type_list",
-		mcp.WithDescription("Lists Object Storage types and pricing information"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
+		"Lists Object Storage types and pricing information",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.LinodeType, error) {
+			return client.ListObjectStorageTypesProto(ctx)
+		},
+		nil,
+		objectStorageTypeListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageTypeListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleObjectStorageTypeListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	types, err := client.ListObjectStorageTypes(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage types: %v", err)), nil
-	}
-
-	response := struct {
-		Count int                        `json:"count"`
-		Types []linode.ObjectStorageType `json:"types"`
-	}{
-		Count: len(types),
-		Types: types,
-	}
-
-	return MarshalToolResponse(response)
+func objectStorageTypeListResponse(items []*linodev1.LinodeType, count int32, filter *string) *linodev1.ObjectStorageTypeListResponse {
+	return &linodev1.ObjectStorageTypeListResponse{Count: count, Filter: filter, Types: items}
 }
 
 // NewLinodeObjectStorageQuotasListTool creates a tool for listing Object Storage quotas.
 func NewLinodeObjectStorageQuotasListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListTool(
+		cfg,
 		"linode_object_storage_quota_list",
-		mcp.WithDescription("Lists Object Storage quotas on the account"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
+		"Lists Object Storage quotas on the account",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.ObjectStorageQuota, error) {
+			return client.ListObjectStorageQuotasProto(ctx)
+		},
+		nil,
+		objectStorageQuotaListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageQuotasListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleObjectStorageQuotasListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	quotas, err := client.ListObjectStorageQuotas(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage quotas: %v", err)), nil
-	}
-
-	response := struct {
-		Count  int                         `json:"count"`
-		Quotas []linode.ObjectStorageQuota `json:"quotas"`
-	}{
-		Count:  len(quotas),
-		Quotas: quotas,
-	}
-
-	return MarshalToolResponse(response)
+func objectStorageQuotaListResponse(items []*linodev1.ObjectStorageQuota, count int32, filter *string) *linodev1.ObjectStorageQuotaListResponse {
+	return &linodev1.ObjectStorageQuotaListResponse{Count: count, Filter: filter, Quotas: items}
 }
 
 // NewLinodeObjectStorageKeyListTool creates a tool for listing Object Storage access keys.
 func NewLinodeObjectStorageKeyListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListTool(
+		cfg,
 		"linode_object_storage_key_list",
-		mcp.WithDescription("Lists all Object Storage access keys for the authenticated user"),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
+		"Lists all Object Storage access keys for the authenticated user",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.ObjectStorageKey, error) {
+			return client.ListObjectStorageKeysProto(ctx)
+		},
+		nil,
+		objectStorageKeyListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleObjectStorageKeysListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleObjectStorageKeysListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	keys, err := client.ListObjectStorageKeys(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Object Storage keys: %v", err)), nil
-	}
-
-	response := struct {
-		Count int                       `json:"count"`
-		Keys  []linode.ObjectStorageKey `json:"keys"`
-	}{
-		Count: len(keys),
-		Keys:  keys,
-	}
-
-	return MarshalToolResponse(response)
+func objectStorageKeyListResponse(items []*linodev1.ObjectStorageKey, count int32, filter *string) *linodev1.ObjectStorageKeyListResponse {
+	return &linodev1.ObjectStorageKeyListResponse{Count: count, Filter: filter, Keys: items}
 }
 
 // NewLinodeObjectStorageKeyGetTool creates a tool for getting a specific access key.

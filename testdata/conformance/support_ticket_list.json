@@ -1,0 +1,66 @@
+{
+  "message": "linode.mcp.v1.SupportTicketListResponse",
+  "description": "linode_support_ticket_list envelope: count and the full proto SupportTicket elements (repeated attachments, optional closed, nested entity whose id is a google.protobuf.Value passthrough). The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "support_tickets": [
+      {
+        "attachments": [
+          {
+            "filename": "log.txt",
+            "id": 9,
+            "size": 1024
+          }
+        ],
+        "closable": true,
+        "closed": "2024-06-03T00:00:00",
+        "description": "disk full",
+        "entity": {
+          "id": 123,
+          "label": "web-1",
+          "type": "linode",
+          "url": "/linode/instances/123"
+        },
+        "gravatar_id": "abc123",
+        "id": 555,
+        "opened": "2024-06-01T00:00:00",
+        "opened_by": "alice",
+        "status": "closed",
+        "summary": "disk full on web-1",
+        "updated": "2024-06-03T00:00:00",
+        "updated_by": "support"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "support_tickets": [
+      {
+        "attachments": [
+          {
+            "filename": "log.txt",
+            "id": 9,
+            "size": 1024
+          }
+        ],
+        "closable": true,
+        "closed": "2024-06-03T00:00:00",
+        "description": "disk full",
+        "entity": {
+          "id": 123,
+          "label": "web-1",
+          "type": "linode",
+          "url": "/linode/instances/123"
+        },
+        "gravatar_id": "abc123",
+        "id": 555,
+        "opened": "2024-06-01T00:00:00",
+        "opened_by": "alice",
+        "status": "closed",
+        "summary": "disk full on web-1",
+        "updated": "2024-06-03T00:00:00",
+        "updated_by": "support"
+      }
+    ]
+  }
+}

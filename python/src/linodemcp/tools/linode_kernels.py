@@ -7,8 +7,13 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import kernel_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -69,7 +74,12 @@ async def handle_linode_kernel_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_kernels(page=page, page_size=page_size)
+        raw = await client.list_kernels(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "kernels",
+            kernel_pb2.KernelListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode kernels", _call)
 
@@ -85,20 +95,6 @@ def _validated_kernel_id(value: object) -> tuple[str | None, str | None]:
     if not _KERNEL_ID_PATTERN.fullmatch(kernel_id):
         return None, "kernel_id must look like linode/latest-64bit"
     return kernel_id, None
-
-
-def kernel_to_response_dict(kernel: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Linode kernel API dict to proto-canonical form."""
-    return {
-        "id": kernel.get("id", ""),
-        "label": kernel.get("label", ""),
-        "version": kernel.get("version", ""),
-        "kvm": kernel.get("kvm", False),
-        "architecture": kernel.get("architecture", ""),
-        "pvops": kernel.get("pvops", False),
-        "deprecated": kernel.get("deprecated", False),
-        "built": kernel.get("built", ""),
-    }
 
 
 def create_linode_kernel_get_tool() -> tuple[Tool, Capability]:
@@ -120,6 +116,6 @@ async def handle_linode_kernel_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         kernel = await client.get_kernel(kernel_id)
-        return kernel_to_response_dict(kernel)
+        return serialize_api_response(kernel, kernel_pb2.Kernel())
 
     return await execute_tool(cfg, arguments, "retrieve Linode kernel", _call)

@@ -1,0 +1,44 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageKey",
+  "description": "Object Storage access key details from the key get endpoint.",
+  "input": {
+    "label": "my-key",
+    "access_key": "KVAKUTGBA4WTR2NSJQ81",
+    "secret_key": "OMphCJgEHGHygCk8XZWo9rNmB9ny5tIVxhI9rIRsmIDZ",
+    "bucket_access": [
+      {
+        "bucket_name": "my-bucket",
+        "region": "us-east-1",
+        "permissions": "read_write"
+      }
+    ],
+    "regions": [
+      {
+        "id": "us-east-1",
+        "s3_endpoint": "us-east-1.linodeobjects.com"
+      }
+    ],
+    "id": 123,
+    "limited": true
+  },
+  "canonical": {
+    "label": "my-key",
+    "access_key": "KVAKUTGBA4WTR2NSJQ81",
+    "secret_key": "OMphCJgEHGHygCk8XZWo9rNmB9ny5tIVxhI9rIRsmIDZ",
+    "bucket_access": [
+      {
+        "bucket_name": "my-bucket",
+        "region": "us-east-1",
+        "permissions": "read_write"
+      }
+    ],
+    "regions": [
+      {
+        "id": "us-east-1",
+        "s3_endpoint": "us-east-1.linodeobjects.com"
+      }
+    ],
+    "id": 123,
+    "limited": true
+  }
+}

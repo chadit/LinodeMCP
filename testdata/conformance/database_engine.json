@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.DatabaseEngine",
+  "description": "Managed Databases engine: three flat strings, all present.",
+  "input": {
+    "id": "mysql/8.0.26",
+    "engine": "mysql",
+    "version": "8.0.26"
+  },
+  "canonical": {
+    "id": "mysql/8.0.26",
+    "engine": "mysql",
+    "version": "8.0.26"
+  }
+}

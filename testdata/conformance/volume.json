@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.Volume",
+  "description": "Detached volume: optional linode_id and linode_label are unset, so both are omitted (explicit presence). Implicit-presence scalars (created/updated/hardware_type) emit as empty strings, and the repeated tags emits as []. Locks Go EmitDefaultValues == Python always_print_fields_with_no_presence for optional-field omission.",
+  "input": {
+    "id": 5,
+    "label": "v",
+    "status": "active",
+    "size": 20,
+    "region": "us-east",
+    "filesystem_path": "/dev/disk/by-id/x"
+  },
+  "canonical": {
+    "id": 5,
+    "label": "v",
+    "status": "active",
+    "size": 20,
+    "region": "us-east",
+    "filesystem_path": "/dev/disk/by-id/x",
+    "tags": [],
+    "created": "",
+    "updated": "",
+    "hardware_type": ""
+  }
+}

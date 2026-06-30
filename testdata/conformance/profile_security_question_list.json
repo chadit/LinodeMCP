@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.SecurityQuestionListResponse",
+  "description": "linode_profile_security_question_list envelope: count and the full proto SecurityQuestion elements (not the Linode security_questions envelope). The first question has a saved response (gating the optional-string path); the second is unanswered, so its response is null and omitted. The endpoint is not paginated and applies no filter, so filter is omitted.",
+  "input": {
+    "count": 2,
+    "security_questions": [
+      {
+        "id": 1,
+        "question": "What is your favorite color?",
+        "response": "blue"
+      },
+      {
+        "id": 2,
+        "question": "In what city were you born?"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "security_questions": [
+      {
+        "id": 1,
+        "question": "What is your favorite color?",
+        "response": "blue"
+      },
+      {
+        "id": 2,
+        "question": "In what city were you born?"
+      }
+    ]
+  }
+}

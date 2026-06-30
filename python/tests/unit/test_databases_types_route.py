@@ -15,6 +15,7 @@ from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_databases import (
     create_linode_database_type_get_tool,
     create_linode_database_type_list_tool,
+    handle_linode_database_engine_list,
     handle_linode_database_type_get,
     handle_linode_database_type_list,
 )
@@ -270,6 +271,7 @@ async def test_handle_linode_database_type_get_success(
     mock_linode_client.get_database_type.return_value = {
         "id": "g6-dedicated-2",
         "label": "Dedicated 4GB",
+        "engines": {"mysql": [], "postgresql": []},
     }
 
     result = await handle_linode_database_type_get(
@@ -316,7 +318,7 @@ async def test_handle_linode_database_type_get_rejects_invalid_inputs(
 async def test_handle_linode_databases_types_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Handler returns database types and pagination metadata."""
+    """Handler returns the proto-canonical database type list envelope."""
     mock_linode_client.list_database_types.return_value = {
         "data": [{"id": "g6-dedicated-2", "label": "Dedicated 4GB"}],
         "page": 2,
@@ -330,12 +332,18 @@ async def test_handle_linode_databases_types_list_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Database types listed",
         "count": 1,
-        "types": [{"id": "g6-dedicated-2", "label": "Dedicated 4GB"}],
-        "page": 2,
-        "pages": 3,
-        "results": 7,
+        "database_types": [
+            {
+                "id": "g6-dedicated-2",
+                "label": "Dedicated 4GB",
+                "class": "",
+                "disk": 0,
+                "memory": 0,
+                "vcpus": 0,
+                "deprecated": False,
+            }
+        ],
     }
     mock_linode_client.list_database_types.assert_awaited_once_with(
         page=2, page_size=50
@@ -378,3 +386,49 @@ def test_linode_databases_types_list_registered() -> None:
     assert entry.capability is Capability.Read
     assert entry.tool.name == "linode_database_type_list"
     assert entry.handle_fn is handle_linode_database_type_list
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_databases_engines_list_success(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler returns the proto-canonical database engine list envelope."""
+    mock_linode_client.list_database_engines.return_value = {
+        "data": [{"id": "mysql/8.0.26", "engine": "mysql", "version": "8.0.26"}],
+        "page": 2,
+        "pages": 3,
+        "results": 7,
+    }
+
+    result = await handle_linode_database_engine_list(
+        {"page": 2, "page_size": 50}, sample_config
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload == {
+        "count": 1,
+        "database_engines": [
+            {"id": "mysql/8.0.26", "engine": "mysql", "version": "8.0.26"}
+        ],
+    }
+    mock_linode_client.list_database_engines.assert_awaited_once_with(
+        page=2, page_size=50
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_databases_engines_list_empty(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler emits count 0 and an empty list when the page has no engines."""
+    mock_linode_client.list_database_engines.return_value = {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0,
+    }
+
+    result = await handle_linode_database_engine_list({}, sample_config)
+
+    payload = json.loads(result[0].text)
+    assert payload == {"count": 0, "database_engines": []}

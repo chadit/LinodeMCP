@@ -396,8 +396,8 @@ func TestLinodeLKEPoolsListToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", "g6-standard-4")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 2`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 2`)
+	if got := listResponseCount(t, textContent.Text); got != 2 {
+		t.Errorf("listResponseCount = %d, want 2", got)
 	}
 }
 
@@ -928,11 +928,15 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		acl := linode.LKEControlPlaneACL{
-			Enabled: true,
-			Addresses: linode.LKEControlPlaneACLAddresses{
-				IPv4: []string{cidrV4},
-				IPv6: []string{cidrV6},
+		// The Linode API wraps the ACL under a top-level "acl" key; the
+		// handler must emit the bare ACL object.
+		wrapped := map[string]any{
+			keyACL: linode.LKEControlPlaneACL{
+				Enabled: true,
+				Addresses: linode.LKEControlPlaneACLAddresses{
+					IPv4: []string{cidrV4},
+					IPv6: []string{cidrV6},
+				},
 			},
 		}
 
@@ -943,7 +947,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 
-			if err := json.NewEncoder(w).Encode(acl); err != nil {
+			if err := json.NewEncoder(w).Encode(wrapped); err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
 		}))
@@ -1291,6 +1295,14 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 
 		if !strings.Contains(textContent.Text, typeG6Standard2) {
 			t.Errorf("textContent.Text does not contain %v", typeG6Standard2)
+		}
+
+		if !strings.Contains(textContent.Text, `"lke_types"`) {
+			t.Errorf("textContent.Text does not contain the lke_types key: %s", textContent.Text)
+		}
+
+		if count := listResponseCount(t, textContent.Text); count != 1 {
+			t.Errorf("listResponseCount = %d, want 1", count)
 		}
 	})
 }
@@ -2194,6 +2206,24 @@ func TestLinodeLKEPoolCreateToolSuccessfulCreation(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, typeG6Standard2) {
 		t.Errorf("textContent.Text does not contain %v", typeG6Standard2)
+	}
+
+	var payload struct {
+		Message string `json:"message"`
+		Pool    struct {
+			ID        int    `json:"id"`
+			ClusterID int    `json:"cluster_id"`
+			Type      string `json:"type"`
+			Count     int    `json:"count"`
+		} `json:"pool"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &payload); err != nil {
+		t.Fatalf("unmarshal write response: %v", err)
+	}
+
+	if payload.Pool.ID != 50 || payload.Pool.ClusterID != 123 ||
+		payload.Pool.Type != typeG6Standard2 || payload.Pool.Count != 3 {
+		t.Errorf("pool element = %+v, want full proto element with id 50, cluster 123", payload.Pool)
 	}
 }
 

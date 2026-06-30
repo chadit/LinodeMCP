@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import ip_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -19,6 +20,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -91,7 +96,9 @@ async def handle_linode_instance_ip_list(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.list_instance_ips(iid)
+        return serialize_api_response(
+            await client.list_instance_ips(iid), ip_pb2.InstanceIPsResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list instance IPs", _call)
 
@@ -120,7 +127,9 @@ async def handle_linode_instance_ip_get(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return ip_address_to_response_dict(await client.get_instance_ip(iid, address))
+        return serialize_api_response(
+            await client.get_instance_ip(iid, address), ip_pb2.IPAddress()
+        )
 
     return await execute_tool(cfg, arguments, "get instance IP", _call)
 
@@ -137,28 +146,6 @@ def _parse_ip_address_argument(arguments: dict[str, Any]) -> str | list[TextCont
     except ValueError:
         return _error_response("address must be a valid IP address")
     return address
-
-
-def ip_address_to_response_dict(ip: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw networking IP API dict to proto-canonical IPAddress form.
-
-    vpc_nat_1_1 is omitted when null; other null scalars coerce to the zero value
-    to match the Go struct decoding.
-    """
-    body: dict[str, Any] = {
-        "address": ip.get("address") or "",
-        "gateway": ip.get("gateway") or "",
-        "subnet_mask": ip.get("subnet_mask") or "",
-        "prefix": ip.get("prefix") or 0,
-        "type": ip.get("type") or "",
-        "public": ip.get("public") or False,
-        "rdns": ip.get("rdns") or "",
-        "linode_id": ip.get("linode_id") or 0,
-        "region": ip.get("region") or "",
-    }
-    if ip.get("vpc_nat_1_1") is not None:
-        body["vpc_nat_1_1"] = ip["vpc_nat_1_1"]
-    return body
 
 
 def create_linode_networking_ip_get_tool() -> tuple[Tool, Capability]:
@@ -181,7 +168,9 @@ async def handle_linode_networking_ip_get(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return ip_address_to_response_dict(await client.get_networking_ip(address))
+        return serialize_api_response(
+            await client.get_networking_ip(address), ip_pb2.IPAddress()
+        )
 
     return await execute_tool(cfg, arguments, "get networking IP", _call)
 
@@ -246,7 +235,14 @@ async def handle_linode_instance_ip_allocate(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.allocate_instance_ip(iid, ip_type=ip_type, public=public)
+        ip = await client.allocate_instance_ip(iid, ip_type=ip_type, public=public)
+        return serialize_api_response(
+            {
+                "message": f"IP {ip.get('address')} allocated for instance {iid}",
+                "ip": ip,
+            },
+            ip_pb2.IPAddressWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "allocate instance IP", _call)
 
@@ -334,7 +330,14 @@ async def handle_linode_instance_ip_update(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.update_instance_ip(iid, address, rdns)
+        ip = await client.update_instance_ip(iid, address, rdns)
+        return serialize_api_response(
+            {
+                "message": f"RDNS for IP {address} updated on instance {iid}",
+                "ip": ip,
+            },
+            ip_pb2.IPAddressWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update instance IP", _call)
 
@@ -433,7 +436,7 @@ async def handle_linode_networking_ip_update(
         ip = await client.update_networking_ip(address, rdns)
         return {
             "message": f"Networking IP {address} RDNS updated",
-            "ip": ip_address_to_response_dict(ip),
+            "ip": serialize_api_response(ip, ip_pb2.IPAddress()),
         }
 
     return await execute_tool(cfg, arguments, "update networking IP", _call)
@@ -471,7 +474,9 @@ async def handle_linode_networking_ip_list(
         client: RetryableClient,
     ) -> dict[str, Any]:
         ips = await client.list_networking_ips(skip_ipv6_rdns=skip_ipv6_rdns)
-        return {"count": len(ips), "ips": ips}
+        return serialize_list_response(
+            {"data": ips}, "ips", ip_pb2.NetworkingIPListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list networking IPs", _call)
 
@@ -566,8 +571,16 @@ async def handle_linode_networking_ip_allocate(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.allocate_networking_ip(
+        ip_address = await client.allocate_networking_ip(
             cast("int", linode_id), ip_type=cast("str", ip_type), public=public
+        )
+        address = ip_address.get("address", "")
+        return serialize_api_response(
+            {
+                "message": f"IP {address} allocated for Linode {linode_id}",
+                "ip": ip_address,
+            },
+            ip_pb2.IPAddressWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "allocate networking IP", _call)

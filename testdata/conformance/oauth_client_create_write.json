@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.OAuthClientCreateWriteResponse",
+  "description": "OAuth client create envelope: a confirmation message, the save-the-secret warning, and the created client element carrying the one-time secret. The secret is returned to the user by design and is not output-redacted.",
+  "input": {
+    "message": "OAuth client created successfully",
+    "warning": "IMPORTANT: The secret below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+    "client": {
+      "id": "9f8e7d6c5b4a3210",
+      "label": "deploy-bot",
+      "redirect_uri": "https://app.example.com/oauth/callback",
+      "secret": "s3cr3t-VALUE-shown-once-0011223344556677"
+    }
+  },
+  "canonical": {
+    "message": "OAuth client created successfully",
+    "warning": "IMPORTANT: The secret below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+    "client": {
+      "id": "9f8e7d6c5b4a3210",
+      "label": "deploy-bot",
+      "redirect_uri": "https://app.example.com/oauth/callback",
+      "secret": "s3cr3t-VALUE-shown-once-0011223344556677"
+    }
+  }
+}

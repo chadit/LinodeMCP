@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.AccountUserDeleteResponse",
+  "description": "Account user delete id-echo: a confirmation message plus the removed username. The delete endpoint returns an empty body, so the response echoes the username.",
+  "input": {
+    "message": "Account user deleted successfully",
+    "username": "bob"
+  },
+  "canonical": {
+    "message": "Account user deleted successfully",
+    "username": "bob"
+  }
+}

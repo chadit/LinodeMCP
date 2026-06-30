@@ -31,6 +31,22 @@ message LKENodePool {
   repeated string tags = 8;
 }
 
+// LKENodePoolListResponse is the linode_lke_pool_list envelope: a count, an
+// optional filter echo, and the node pools for one LKE cluster.
+message LKENodePoolListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LKENodePool pools = 3;
+}
+
+// LKENodePoolWriteResponse is the {message, pool} envelope the LKE node pool
+// write tools (create, update) return: a human-readable confirmation plus the
+// affected node pool.
+message LKENodePoolWriteResponse {
+  string message = 1;
+  LKENodePool pool = 2;
+}
+
 // LKENodePoolGetInput is the input contract for linode_lke_pool_get.
 message LKENodePoolGetInput {
   // Linode environment to use (optional, defaults to "default").

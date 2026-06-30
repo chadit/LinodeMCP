@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.AccountPaymentWriteResponse",
+  "description": "Account payment create envelope: a confirmation message plus the full payment element the API created.",
+  "input": {
+    "message": "Account payment created successfully",
+    "payment": {
+      "id": 123456,
+      "date": "2026-06-30T12:00:00",
+      "usd": 25.5
+    }
+  },
+  "canonical": {
+    "message": "Account payment created successfully",
+    "payment": {
+      "id": 123456,
+      "date": "2026-06-30T12:00:00",
+      "usd": 25.5
+    }
+  }
+}

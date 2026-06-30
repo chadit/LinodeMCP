@@ -1,0 +1,56 @@
+{
+  "message": "linode.mcp.v1.SupportTicket",
+  "description": "Support ticket with a populated repeated attachments list, the optional closed scalar, and the nested entity message whose id is a google.protobuf.Value passthrough.",
+  "input": {
+    "attachments": [
+      {
+        "filename": "log.txt",
+        "id": 9,
+        "size": 1024
+      }
+    ],
+    "closable": true,
+    "closed": "2024-06-03T00:00:00",
+    "description": "disk full",
+    "entity": {
+      "id": 123,
+      "label": "web-1",
+      "type": "linode",
+      "url": "/linode/instances/123"
+    },
+    "gravatar_id": "abc123",
+    "id": 555,
+    "opened": "2024-06-01T00:00:00",
+    "opened_by": "alice",
+    "status": "closed",
+    "summary": "disk full on web-1",
+    "updated": "2024-06-03T00:00:00",
+    "updated_by": "support"
+  },
+  "canonical": {
+    "attachments": [
+      {
+        "filename": "log.txt",
+        "id": 9,
+        "size": 1024
+      }
+    ],
+    "closable": true,
+    "closed": "2024-06-03T00:00:00",
+    "description": "disk full",
+    "entity": {
+      "id": 123,
+      "label": "web-1",
+      "type": "linode",
+      "url": "/linode/instances/123"
+    },
+    "gravatar_id": "abc123",
+    "id": 555,
+    "opened": "2024-06-01T00:00:00",
+    "opened_by": "alice",
+    "status": "closed",
+    "summary": "disk full on web-1",
+    "updated": "2024-06-03T00:00:00",
+    "updated_by": "support"
+  }
+}

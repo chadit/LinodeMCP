@@ -1,0 +1,36 @@
+{
+  "message": "linode.mcp.v1.InstanceInterfaceHistoryListResponse",
+  "description": "linode_instance_interface_history_list envelope: count and the full proto InstanceInterfaceHistory elements. interface_data is a google.protobuf.Struct that round-trips the free-form interface snapshot the API returns at that version. Paginated single-path-id tool (linode_id), runtime never echoes a filter, so filter is omitted. Items key is interface_history.",
+  "input": {
+    "count": 1,
+    "interface_history": [
+      {
+        "interface_history_id": 3,
+        "interface_id": 221,
+        "linode_id": 123,
+        "version": 1,
+        "created": "2024-01-01T00:00:00",
+        "interface_data": {
+          "mac_address": "22:00:AB:CD:EF:02",
+          "default_route": {"ipv4": true, "ipv6": false}
+        }
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "interface_history": [
+      {
+        "interface_history_id": 3,
+        "interface_id": 221,
+        "linode_id": 123,
+        "version": 1,
+        "created": "2024-01-01T00:00:00",
+        "interface_data": {
+          "mac_address": "22:00:AB:CD:EF:02",
+          "default_route": {"ipv4": true, "ipv6": false}
+        }
+      }
+    ]
+  }
+}

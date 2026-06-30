@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.FirewallListResponse",
+  "description": "linode_nodebalancer_firewall_list envelope: count and the full proto Firewall elements (nested ruleset) under the firewalls key. Go previously returned a custom {count,firewalls} struct via MarshalToolResponse; the proto envelope is the fix. This sub-resource list paginates and never echoes a filter.",
+  "input": {
+    "count": 1,
+    "firewalls": [
+      {
+        "id": 456,
+        "label": "nodebalancer-firewall",
+        "status": "enabled",
+        "rules": {
+          "inbound": [],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": [],
+        "created": "2024-03-01T00:00:00",
+        "updated": "2024-03-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "firewalls": [
+      {
+        "id": 456,
+        "label": "nodebalancer-firewall",
+        "status": "enabled",
+        "rules": {
+          "inbound": [],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": [],
+        "created": "2024-03-01T00:00:00",
+        "updated": "2024-03-02T00:00:00"
+      }
+    ]
+  }
+}

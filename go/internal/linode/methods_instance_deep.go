@@ -38,6 +38,31 @@ func (c *Client) httpListInstanceBackups(ctx context.Context, linodeID int) (*In
 	return &backups, nil
 }
 
+// httpListInstanceBackupsProto retrieves all backups for a Linode instance as a
+// proto message. The /backups endpoint returns a nested object (automatic[] plus
+// a snapshot object), so this decodes the whole structure into
+// InstanceBackupsResponse.
+func (c *Client) httpListInstanceBackupsProto(ctx context.Context, linodeID int) (*linodev1.InstanceBackupsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/backups", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceBackups", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	backups := &linodev1.InstanceBackupsResponse{}
+	if err := c.handleProtoResponse(resp, backups); err != nil {
+		return nil, err
+	}
+
+	return backups, nil
+}
+
 // GetInstanceStats retrieves daily statistics for a Linode instance.
 func (c *Client) httpGetInstanceStats(ctx context.Context, linodeID int) (*InstanceStats, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -624,6 +649,17 @@ func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]Ins
 	return response.Data, nil
 }
 
+// httpListInstanceDisksProto retrieves a Linode instance's disks as proto
+// messages for the proto-backed list path. The endpoint is formatted with the
+// same fmt.Sprintf(endpointInstanceDeep+"/%d/disks", linodeID) pattern
+// httpListInstanceDisks uses, so the runtime path matches exactly.
+func (c *Client) httpListInstanceDisksProto(ctx context.Context, linodeID int) ([]*linodev1.InstanceDisk, error) {
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/disks", linodeID)
+
+	return listProtoElements(ctx, c, "ListInstanceDisks", endpoint,
+		func() *linodev1.InstanceDisk { return &linodev1.InstanceDisk{} })
+}
+
 // UpdateInstanceConfig updates a configuration profile for a Linode instance.
 func (c *Client) httpUpdateInstanceConfig(ctx context.Context, linodeID, configID int, req *UpdateConfigRequest) (*InstanceConfig, error) {
 	if err := validateInstanceConfigMutation(linodeID, configID, req == nil, ErrUpdateConfigRequestRequired); err != nil {
@@ -700,6 +736,23 @@ func (c *Client) httpListInstanceConfigs(ctx context.Context, linodeID, page, pa
 	return response.Data, nil
 }
 
+// httpListInstanceConfigsProto retrieves a Linode instance's configuration
+// profiles as proto messages for the proto-backed list path. The endpoint is
+// formatted with the same encoded-linode-id path httpListInstanceConfigs uses,
+// then listProtoElementsPaginated adds page/page_size via withPaginationQuery, so
+// the runtime request matches exactly.
+func (c *Client) httpListInstanceConfigsProto(ctx context.Context, linodeID, page, pageSize int) ([]*linodev1.InstanceConfig, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs", encodedLinodeID)
+
+	return listProtoElementsPaginated(ctx, c, "ListInstanceConfigs", endpoint, page, pageSize,
+		func() *linodev1.InstanceConfig { return &linodev1.InstanceConfig{} })
+}
+
 // ListInstanceVolumes retrieves all volumes attached to a Linode instance.
 func (c *Client) httpListInstanceVolumes(ctx context.Context, linodeID, page, pageSize int) ([]Volume, error) {
 	if linodeID <= 0 {
@@ -725,6 +778,23 @@ func (c *Client) httpListInstanceVolumes(ctx context.Context, linodeID, page, pa
 	}
 
 	return response.Data, nil
+}
+
+// httpListInstanceVolumesProto retrieves a Linode instance's attached volumes as
+// proto messages for the proto-backed list path. The endpoint is formatted with
+// the same encoded-linode-id path httpListInstanceVolumes uses, then
+// listProtoElementsPaginated adds page/page_size via withPaginationQuery, so the
+// runtime request matches exactly.
+func (c *Client) httpListInstanceVolumesProto(ctx context.Context, linodeID, page, pageSize int) ([]*linodev1.Volume, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/volumes", encodedLinodeID)
+
+	return listProtoElementsPaginated(ctx, c, "ListInstanceVolumes", endpoint, page, pageSize,
+		func() *linodev1.Volume { return &linodev1.Volume{} })
 }
 
 // ListInstanceNodeBalancers retrieves NodeBalancers assigned to a Linode instance.
@@ -814,6 +884,22 @@ func (c *Client) httpListInstanceInterfaces(ctx context.Context, linodeID int) (
 	return payload.Interfaces, nil
 }
 
+// httpListInstanceInterfacesProto retrieves the current-generation interfaces for
+// a Linode instance as proto messages. The endpoint wraps elements under the
+// "interfaces" key (not the usual "data" page envelope), so it reads through
+// listProtoElementsKeyed with that key.
+func (c *Client) httpListInstanceInterfacesProto(ctx context.Context, linodeID int) ([]*linodev1.InstanceInterface, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID)
+
+	return listProtoElementsKeyed(ctx, c, "ListInstanceInterfaces", endpoint, "interfaces",
+		func() *linodev1.InstanceInterface { return &linodev1.InstanceInterface{} })
+}
+
 // UpgradeLinodeInterfaces upgrades legacy config interfaces to Linode interfaces.
 func (c *Client) httpUpgradeLinodeInterfaces(ctx context.Context, linodeID int, req *UpgradeLinodeInterfacesRequest) (*UpgradeLinodeInterfacesResponse, error) {
 	if linodeID <= 0 {
@@ -873,6 +959,39 @@ func (c *Client) httpGetInstanceInterface(ctx context.Context, linodeID, interfa
 	return &instanceInterface, nil
 }
 
+// httpGetInstanceInterfaceProto retrieves a specific interface for a Linode
+// instance as a proto message.
+func (c *Client) httpGetInstanceInterfaceProto(ctx context.Context, linodeID, interfaceID int) (*linodev1.InstanceInterface, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if interfaceID <= 0 {
+		return nil, ErrInterfaceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/%s", encodedLinodeID, encodedInterfaceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instanceInterface := &linodev1.InstanceInterface{}
+	if err := c.handleProtoResponse(resp, instanceInterface); err != nil {
+		return nil, err
+	}
+
+	return instanceInterface, nil
+}
+
 // ListInstanceInterfaceFirewalls retrieves Cloud Firewalls assigned to a Linode interface.
 func (c *Client) httpListInstanceInterfaceFirewalls(ctx context.Context, linodeID, interfaceID int) ([]Firewall, error) {
 	if linodeID <= 0 {
@@ -905,6 +1024,28 @@ func (c *Client) httpListInstanceInterfaceFirewalls(ctx context.Context, linodeI
 	return response.Data, nil
 }
 
+// httpListInstanceInterfaceFirewallsProto retrieves the Cloud Firewalls assigned
+// to a Linode interface as proto messages for the proto-backed list path. The
+// endpoint is formatted with the same encoded linode-id/interface-id path
+// httpListInstanceInterfaceFirewalls uses; this list is not paginated, so it uses
+// listProtoElements directly.
+func (c *Client) httpListInstanceInterfaceFirewallsProto(ctx context.Context, linodeID, interfaceID int) ([]*linodev1.Firewall, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if interfaceID <= 0 {
+		return nil, ErrInterfaceIDPositive
+	}
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/%s/firewalls", encodedLinodeID, encodedInterfaceID)
+
+	return listProtoElements(ctx, c, "ListInstanceInterfaceFirewalls", endpoint,
+		func() *linodev1.Firewall { return &linodev1.Firewall{} })
+}
+
 // ListInstanceInterfaceHistory retrieves historical interface versions for a Linode instance.
 func (c *Client) httpListInstanceInterfaceHistory(ctx context.Context, linodeID, page, pageSize int) (*PaginatedResponse[InstanceInterfaceHistory], error) {
 	if linodeID <= 0 {
@@ -930,6 +1071,45 @@ func (c *Client) httpListInstanceInterfaceHistory(ctx context.Context, linodeID,
 	}
 
 	return &history, nil
+}
+
+// httpListInstanceConfigInterfacesProto retrieves the legacy config-profile
+// network interfaces of one configuration profile as proto messages. It formats
+// both path ids into the endpoint exactly like httpListInstanceConfigInterfaces,
+// then reads through listProtoElementsBareOrData because the endpoint returns
+// either a bare array or a {data:[...]} page envelope.
+func (c *Client) httpListInstanceConfigInterfacesProto(ctx context.Context, linodeID, configID int) ([]*linodev1.ConfigInterfaceResponse, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s/interfaces", encodedLinodeID, encodedConfigID)
+
+	return listProtoElementsBareOrData(ctx, c, "ListInstanceConfigInterfaces", endpoint,
+		func() *linodev1.ConfigInterfaceResponse { return &linodev1.ConfigInterfaceResponse{} })
+}
+
+// httpListInstanceInterfaceHistoryProto retrieves the historical interface
+// versions of one Linode instance as proto messages. It formats the path id into
+// the endpoint exactly like httpListInstanceInterfaceHistory, then reuses
+// listProtoElementsPaginated (which adds the page/page_size query) to decode the
+// {data:[...]} page envelope.
+func (c *Client) httpListInstanceInterfaceHistoryProto(ctx context.Context, linodeID, page, pageSize int) ([]*linodev1.InstanceInterfaceHistory, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/history", encodedLinodeID)
+
+	return listProtoElementsPaginated(ctx, c, "ListInstanceInterfaceHistory", endpoint, page, pageSize,
+		func() *linodev1.InstanceInterfaceHistory { return &linodev1.InstanceInterfaceHistory{} })
 }
 
 func (c *Client) httpListInstanceConfigInterfaces(ctx context.Context, linodeID, configID int) ([]ConfigInterfaceResponse, error) {
@@ -1103,6 +1283,39 @@ func (c *Client) httpListInstanceFirewalls(ctx context.Context, linodeID, page, 
 	}
 
 	return response.Data, nil
+}
+
+// httpListInstanceFirewallsProto retrieves a Linode instance's assigned Cloud
+// Firewalls as proto messages for the proto-backed list path. The endpoint is
+// formatted with the same encoded-linode-id path httpListInstanceFirewalls uses,
+// then listProtoElementsPaginated adds page/page_size via withPaginationQuery, so
+// the runtime request matches exactly.
+func (c *Client) httpListInstanceFirewallsProto(ctx context.Context, linodeID, page, pageSize int) ([]*linodev1.Firewall, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/firewalls", encodedLinodeID)
+
+	return listProtoElementsPaginated(ctx, c, "ListInstanceFirewalls", endpoint, page, pageSize,
+		func() *linodev1.Firewall { return &linodev1.Firewall{} })
+}
+
+// httpListInstanceNodeBalancersProto retrieves the NodeBalancers assigned to a
+// Linode instance as proto messages for the proto-backed list path. The endpoint
+// is formatted with the same encoded-linode-id path httpListInstanceNodeBalancers
+// uses; this list is not paginated, so it uses listProtoElements directly.
+func (c *Client) httpListInstanceNodeBalancersProto(ctx context.Context, linodeID int) ([]*linodev1.NodeBalancer, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/nodebalancers", encodedLinodeID)
+
+	return listProtoElements(ctx, c, "ListInstanceNodeBalancers", endpoint,
+		func() *linodev1.NodeBalancer { return &linodev1.NodeBalancer{} })
 }
 
 // GetInstanceDisk retrieves a specific disk for a Linode instance.
@@ -1300,6 +1513,30 @@ func (c *Client) httpListInstanceIPs(ctx context.Context, linodeID int) (*Instan
 	return &ips, nil
 }
 
+// httpListInstanceIPsProto retrieves the full IPv4/IPv6 address configuration for
+// a Linode instance as a proto message. The /ips endpoint returns a nested
+// object, so this decodes the whole structure into InstanceIPsResponse.
+func (c *Client) httpListInstanceIPsProto(ctx context.Context, linodeID int) (*linodev1.InstanceIPsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/ips", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListInstanceIPs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ips := &linodev1.InstanceIPsResponse{}
+	if err := c.handleProtoResponse(resp, ips); err != nil {
+		return nil, err
+	}
+
+	return ips, nil
+}
+
 // GetInstanceIP retrieves a specific IP address for a Linode instance.
 func (c *Client) httpGetInstanceIP(ctx context.Context, linodeID int, address string) (*IPAddress, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1387,6 +1624,84 @@ func (c *Client) httpUpdateInstanceIP(ctx context.Context, linodeID int, address
 	}
 
 	return &ip, nil
+}
+
+// AllocateInstanceIPProto allocates an instance IP and returns the proto
+// IPAddress element. The POST is non-idempotent, so it is not retried.
+func (c *Client) AllocateInstanceIPProto(ctx context.Context, linodeID int, req AllocateIPRequest) (*linodev1.IPAddress, error) {
+	var ipAddr *linodev1.IPAddress
+
+	err := c.executeWithoutRetry(ctx, "AllocateInstanceIP", func() error {
+		var err error
+
+		ipAddr, err = c.httpAllocateInstanceIPProto(ctx, linodeID, req)
+
+		return err
+	})
+
+	return ipAddr, err
+}
+
+// httpAllocateInstanceIPProto allocates an instance IP and decodes the response
+// into the proto IPAddress element.
+func (c *Client) httpAllocateInstanceIPProto(ctx context.Context, linodeID int, req AllocateIPRequest) (*linodev1.IPAddress, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/ips", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AllocateInstanceIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ip := &linodev1.IPAddress{}
+	if err := c.handleProtoResponse(resp, ip); err != nil {
+		return nil, err
+	}
+
+	return ip, nil
+}
+
+// UpdateInstanceIPProto updates an instance IP's RDNS and returns the proto
+// IPAddress element.
+func (c *Client) UpdateInstanceIPProto(ctx context.Context, linodeID int, address string, req UpdateIPRDNSRequest) (*linodev1.IPAddress, error) {
+	var ipAddr *linodev1.IPAddress
+
+	err := c.executeWithRetry(ctx, "UpdateInstanceIP", func() error {
+		var retryErr error
+
+		ipAddr, retryErr = c.httpUpdateInstanceIPProto(ctx, linodeID, address, req)
+
+		return retryErr
+	})
+
+	return ipAddr, err
+}
+
+// httpUpdateInstanceIPProto updates an instance IP's RDNS and decodes the
+// response into the proto IPAddress element.
+func (c *Client) httpUpdateInstanceIPProto(ctx context.Context, linodeID int, address string, req UpdateIPRDNSRequest) (*linodev1.IPAddress, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/ips/%s", linodeID, url.PathEscape(address))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ip := &linodev1.IPAddress{}
+	if err := c.handleProtoResponse(resp, ip); err != nil {
+		return nil, err
+	}
+
+	return ip, nil
 }
 
 // DeleteInstanceIP removes an IP address from a Linode instance.
@@ -1545,4 +1860,242 @@ func (c *Client) httpResetInstancePassword(ctx context.Context, linodeID int, ro
 	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
+}
+
+// httpCreateInstanceConfigProto creates a configuration profile and decodes the
+// response into the proto element so the tool emits proto-canonical output.
+func (c *Client) httpCreateInstanceConfigProto(ctx context.Context, linodeID int, req *CreateConfigRequest) (*linodev1.InstanceConfig, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrCreateConfigRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateInstanceConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	config := &linodev1.InstanceConfig{}
+	if err := c.handleProtoResponse(resp, config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+// httpUpdateInstanceConfigProto updates a configuration profile and decodes the
+// response into the proto element.
+func (c *Client) httpUpdateInstanceConfigProto(ctx context.Context, linodeID, configID int, req *UpdateConfigRequest) (*linodev1.InstanceConfig, error) {
+	if err := validateInstanceConfigMutation(linodeID, configID, req == nil, ErrUpdateConfigRequestRequired); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := instanceConfigEndpoint(linodeID, configID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	config := &linodev1.InstanceConfig{}
+	if err := c.handleProtoResponse(resp, config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+// httpAddInstanceConfigInterfaceProto appends a network interface to a
+// configuration profile and decodes the response into the proto element.
+func (c *Client) httpAddInstanceConfigInterfaceProto(ctx context.Context, linodeID, configID int, req *ConfigInterface) (*linodev1.ConfigInterfaceResponse, error) {
+	if err := validateInstanceConfigMutation(linodeID, configID, req == nil, ErrAddConfigInterfaceRequestRequired); err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := instanceConfigEndpoint(linodeID, configID) + "/interfaces"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AddInstanceConfigInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	configInterface := &linodev1.ConfigInterfaceResponse{}
+	if err := c.handleProtoResponse(resp, configInterface); err != nil {
+		return nil, err
+	}
+
+	return configInterface, nil
+}
+
+// httpUpdateInstanceConfigInterfaceProto updates a configuration profile
+// interface and decodes the response into the proto element.
+func (c *Client) httpUpdateInstanceConfigInterfaceProto(ctx context.Context, linodeID, configID, interfaceID int, req *UpdateConfigInterfaceRequest) (*linodev1.ConfigInterfaceResponse, error) {
+	if err := validateInstanceConfigMutation(linodeID, configID, req == nil, ErrUpdateConfigInterfaceRequestRequired); err != nil {
+		return nil, err
+	}
+
+	if interfaceID <= 0 {
+		return nil, ErrInterfaceIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := instanceConfigEndpoint(linodeID, configID) + "/interfaces/" + encodedInterfaceID
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceConfigInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	configInterface := &linodev1.ConfigInterfaceResponse{}
+	if err := c.handleProtoResponse(resp, configInterface); err != nil {
+		return nil, err
+	}
+
+	return configInterface, nil
+}
+
+// httpCreateInstanceDiskProto creates a disk and decodes the response into the
+// proto element.
+func (c *Client) httpCreateInstanceDiskProto(ctx context.Context, linodeID int, req *CreateDiskRequest) (*linodev1.InstanceDisk, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/disks", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateInstanceDisk", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	disk := &linodev1.InstanceDisk{}
+	if err := c.handleProtoResponse(resp, disk); err != nil {
+		return nil, err
+	}
+
+	return disk, nil
+}
+
+// httpUpdateInstanceDiskProto updates a disk and decodes the response into the
+// proto element.
+func (c *Client) httpUpdateInstanceDiskProto(ctx context.Context, linodeID, diskID int, req UpdateDiskRequest) (*linodev1.InstanceDisk, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/disks/%d", linodeID, diskID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceDisk", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	disk := &linodev1.InstanceDisk{}
+	if err := c.handleProtoResponse(resp, disk); err != nil {
+		return nil, err
+	}
+
+	return disk, nil
+}
+
+// httpCloneInstanceDiskProto clones a disk and decodes the response into the
+// proto element.
+func (c *Client) httpCloneInstanceDiskProto(ctx context.Context, linodeID, diskID int) (*linodev1.InstanceDisk, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/disks/%d/clone", linodeID, diskID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CloneInstanceDisk", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	disk := &linodev1.InstanceDisk{}
+	if err := c.handleProtoResponse(resp, disk); err != nil {
+		return nil, err
+	}
+
+	return disk, nil
+}
+
+// httpCreateInstanceBackupProto takes a manual snapshot and decodes the response
+// into the proto element.
+func (c *Client) httpCreateInstanceBackupProto(ctx context.Context, linodeID int, label string) (*linodev1.InstanceBackup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/backups", linodeID)
+
+	var body any
+	if label != "" {
+		body = CreateInstanceBackupRequest{Label: label}
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, body)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateInstanceBackup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	backup := &linodev1.InstanceBackup{}
+	if err := c.handleProtoResponse(resp, backup); err != nil {
+		return nil, err
+	}
+
+	return backup, nil
+}
+
+// httpRebuildInstanceProto rebuilds a Linode instance and decodes the response
+// into the proto element.
+func (c *Client) httpRebuildInstanceProto(ctx context.Context, linodeID int, req *RebuildInstanceRequest) (*linodev1.Instance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/rebuild", linodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "RebuildInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instance := &linodev1.Instance{}
+	if err := c.handleProtoResponse(resp, instance); err != nil {
+		return nil, err
+	}
+
+	return instance, nil
 }

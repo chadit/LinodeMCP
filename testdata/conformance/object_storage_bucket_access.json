@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageBucketAccess",
+  "description": "ACL and CORS settings for an Object Storage bucket.",
+  "input": {
+    "acl": "private",
+    "cors_enabled": true
+  },
+  "canonical": {
+    "acl": "private",
+    "cors_enabled": true
+  }
+}

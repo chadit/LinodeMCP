@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.ImageUploadWriteResponse",
+  "description": "Image upload write envelope: a confirmation message, the one-time upload URL, and the created image element.",
+  "input": {
+    "message": "Image upload 'my-custom-image' (private/12345) created successfully",
+    "upload_to": "https://upload.example.com/v1/upload/abc123def456",
+    "image": {
+      "id": "private/12345",
+      "label": "my-custom-image",
+      "description": "A custom uploaded image",
+      "type": "manual",
+      "vendor": "",
+      "status": "pending_upload",
+      "created": "2026-01-15T10:00:00",
+      "created_by": "user1",
+      "capabilities": ["cloud-init"],
+      "tags": ["prod", "web"],
+      "size": 2048,
+      "is_public": false,
+      "deprecated": false
+    }
+  },
+  "canonical": {
+    "message": "Image upload 'my-custom-image' (private/12345) created successfully",
+    "upload_to": "https://upload.example.com/v1/upload/abc123def456",
+    "image": {
+      "id": "private/12345",
+      "label": "my-custom-image",
+      "description": "A custom uploaded image",
+      "type": "manual",
+      "vendor": "",
+      "status": "pending_upload",
+      "created": "2026-01-15T10:00:00",
+      "created_by": "user1",
+      "capabilities": ["cloud-init"],
+      "tags": ["prod", "web"],
+      "size": 2048,
+      "is_public": false,
+      "deprecated": false
+    }
+  }
+}

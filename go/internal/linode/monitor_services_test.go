@@ -69,37 +69,21 @@ func TestClientListMonitorServicesSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.ListMonitorServices(t.Context())
+	got, err := client.ListMonitorServicesProto(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got == nil {
-		t.Fatal("got is nil")
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
 	}
 
-	if got.Page != 1 {
-		t.Errorf("got.Page = %v, want %v", got.Page, 1)
+	if got[0].GetLabel() != monitorServiceLabel {
+		t.Errorf("got[0].GetLabel() = %v, want %v", got[0].GetLabel(), monitorServiceLabel)
 	}
 
-	if got.Pages != 1 {
-		t.Errorf("got.Pages = %v, want %v", got.Pages, 1)
-	}
-
-	if got.Results != 1 {
-		t.Errorf("got.Results = %v, want %v", got.Results, 1)
-	}
-
-	if len(got.Data) != 1 {
-		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
-	}
-
-	if got.Data[0].Label != monitorServiceLabel {
-		t.Errorf("got.Data[0].Label = %v, want %v", got.Data[0].Label, monitorServiceLabel)
-	}
-
-	if got.Data[0].ServiceType != monitorServiceTypeDatabase {
-		t.Errorf("got.Data[0].ServiceType = %v, want %v", got.Data[0].ServiceType, monitorServiceTypeDatabase)
+	if got[0].GetServiceType() != monitorServiceTypeDatabase {
+		t.Errorf("got[0].GetServiceType() = %v, want %v", got[0].GetServiceType(), monitorServiceTypeDatabase)
 	}
 }
 
@@ -719,7 +703,7 @@ func TestClientListMonitorServicesAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.ListMonitorServices(t.Context())
+	got, err := client.ListMonitorServicesProto(t.Context())
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -777,25 +761,21 @@ func TestClientListMonitorServicesRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 
-	got, err := client.ListMonitorServices(t.Context())
+	got, err := client.ListMonitorServicesProto(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got == nil {
-		t.Fatal("got is nil")
 	}
 
 	if calls.Load() != int32(2) {
 		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
 	}
 
-	if len(got.Data) != 1 {
-		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
 	}
 
-	if got.Data[0].ServiceType != monitorServiceTypeDatabase {
-		t.Errorf("got.Data[0].ServiceType = %v, want %v", got.Data[0].ServiceType, monitorServiceTypeDatabase)
+	if got[0].GetServiceType() != monitorServiceTypeDatabase {
+		t.Errorf("got[0].GetServiceType() = %v, want %v", got[0].GetServiceType(), monitorServiceTypeDatabase)
 	}
 }
 

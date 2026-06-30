@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.AccountPaymentListResponse",
+  "description": "linode_account_payment_list envelope: count and the full proto AccountPayment elements (usd is a double, emitted as a JSON number). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_payments": [
+      {
+        "id": 123456,
+        "date": "2024-06-01T00:00:00",
+        "usd": 19.99
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_payments": [
+      {
+        "id": 123456,
+        "date": "2024-06-01T00:00:00",
+        "usd": 19.99
+      }
+    ]
+  }
+}

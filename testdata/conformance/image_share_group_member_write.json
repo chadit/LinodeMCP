@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.ImageShareGroupMemberWriteResponse",
+  "description": "Image share group member write envelope: a confirmation message plus the full member token element.",
+  "input": {
+    "message": "Image share group member token 'mem-abc12345-def6-7890-abcd-ef1234567890' updated successfully",
+    "member": {
+      "token_uuid": "mem-abc12345-def6-7890-abcd-ef1234567890",
+      "status": "active",
+      "label": "partner-member",
+      "created": "2026-01-15T10:00:00",
+      "updated": "2026-02-01T12:30:00",
+      "expiry": "2026-12-31T23:59:59"
+    }
+  },
+  "canonical": {
+    "message": "Image share group member token 'mem-abc12345-def6-7890-abcd-ef1234567890' updated successfully",
+    "member": {
+      "token_uuid": "mem-abc12345-def6-7890-abcd-ef1234567890",
+      "status": "active",
+      "label": "partner-member",
+      "created": "2026-01-15T10:00:00",
+      "updated": "2026-02-01T12:30:00",
+      "expiry": "2026-12-31T23:59:59"
+    }
+  }
+}

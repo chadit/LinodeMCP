@@ -37,6 +37,13 @@ func (c *Client) httpListLKEClusters(ctx context.Context) ([]LKECluster, error) 
 	return response.Data, nil
 }
 
+// httpListLKEClustersProto retrieves all LKE clusters as proto messages, decoded
+// directly from the API JSON for the proto-backed list path.
+func (c *Client) httpListLKEClustersProto(ctx context.Context) ([]*linodev1.LKECluster, error) {
+	return listProtoElements(ctx, c, "ListLKEClusters", endpointLKEClusters,
+		func() *linodev1.LKECluster { return &linodev1.LKECluster{} })
+}
+
 // GetLKECluster retrieves a single LKE cluster by its ID.
 func (c *Client) httpGetLKECluster(ctx context.Context, clusterID int) (*LKECluster, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -239,6 +246,17 @@ func (c *Client) httpListLKENodePools(ctx context.Context, clusterID int) ([]LKE
 	return response.Data, nil
 }
 
+// httpListLKENodePoolsProto retrieves an LKE cluster's node pools as proto
+// messages for the proto-backed list path. The endpoint is formatted with the
+// same fmt.Sprintf(endpointLKEClusters+"/%d/pools", clusterID) pattern
+// httpListLKENodePools uses, so the runtime path matches exactly.
+func (c *Client) httpListLKENodePoolsProto(ctx context.Context, clusterID int) ([]*linodev1.LKENodePool, error) {
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/pools", clusterID)
+
+	return listProtoElements(ctx, c, "ListLKENodePools", endpoint,
+		func() *linodev1.LKENodePool { return &linodev1.LKENodePool{} })
+}
+
 // GetLKENodePool retrieves a single node pool by its ID.
 func (c *Client) httpGetLKENodePool(ctx context.Context, clusterID, poolID int) (*LKENodePool, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -283,8 +301,10 @@ func (c *Client) httpGetLKENodePoolProto(ctx context.Context, clusterID, poolID 
 	return pool, nil
 }
 
-// CreateLKENodePool creates a new node pool for an LKE cluster.
-func (c *Client) httpCreateLKENodePool(ctx context.Context, clusterID int, req *CreateLKENodePoolRequest) (*LKENodePool, error) {
+// httpCreateLKENodePoolProto creates a node pool and decodes the response into the
+// proto element so the write tool emits the same field set as the pool GET/LIST
+// path.
+func (c *Client) httpCreateLKENodePoolProto(ctx context.Context, clusterID int, req *CreateLKENodePoolRequest) (*linodev1.LKENodePool, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -297,16 +317,17 @@ func (c *Client) httpCreateLKENodePool(ctx context.Context, clusterID int, req *
 
 	defer drainClose(resp)
 
-	var pool LKENodePool
-	if err := c.handleResponse(resp, &pool); err != nil {
+	pool := &linodev1.LKENodePool{}
+	if err := c.handleProtoResponse(resp, pool); err != nil {
 		return nil, err
 	}
 
-	return &pool, nil
+	return pool, nil
 }
 
-// UpdateLKENodePool updates an existing node pool.
-func (c *Client) httpUpdateLKENodePool(ctx context.Context, clusterID, poolID int, req UpdateLKENodePoolRequest) (*LKENodePool, error) {
+// httpUpdateLKENodePoolProto updates a node pool and decodes the response into the
+// proto element.
+func (c *Client) httpUpdateLKENodePoolProto(ctx context.Context, clusterID, poolID int, req UpdateLKENodePoolRequest) (*linodev1.LKENodePool, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -319,12 +340,12 @@ func (c *Client) httpUpdateLKENodePool(ctx context.Context, clusterID, poolID in
 
 	defer drainClose(resp)
 
-	var pool LKENodePool
-	if err := c.handleResponse(resp, &pool); err != nil {
+	pool := &linodev1.LKENodePool{}
+	if err := c.handleProtoResponse(resp, pool); err != nil {
 		return nil, err
 	}
 
-	return &pool, nil
+	return pool, nil
 }
 
 // DeleteLKENodePool deletes a node pool from an LKE cluster.
@@ -568,6 +589,17 @@ func (c *Client) httpListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]
 	return response.Data, nil
 }
 
+// httpListLKEAPIEndpointsProto retrieves an LKE cluster's API endpoints as proto
+// messages for the proto-backed list path. The endpoint is formatted with the
+// same fmt.Sprintf(endpointLKEClusters+"/%d/api-endpoints", clusterID) pattern
+// httpListLKEAPIEndpoints uses, so the runtime path matches exactly.
+func (c *Client) httpListLKEAPIEndpointsProto(ctx context.Context, clusterID int) ([]*linodev1.LKEAPIEndpoint, error) {
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/api-endpoints", clusterID)
+
+	return listProtoElements(ctx, c, "ListLKEAPIEndpoints", endpoint,
+		func() *linodev1.LKEAPIEndpoint { return &linodev1.LKEAPIEndpoint{} })
+}
+
 // DeleteLKEServiceToken deletes and regenerates the service token for an LKE cluster.
 func (c *Client) httpDeleteLKEServiceToken(ctx context.Context, clusterID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -599,12 +631,16 @@ func (c *Client) httpGetLKEControlPlaneACL(ctx context.Context, clusterID int) (
 
 	defer drainClose(resp)
 
-	var acl LKEControlPlaneACL
-	if err := c.handleResponse(resp, &acl); err != nil {
+	// The Linode API wraps the ACL under a top-level "acl" key. Decode the
+	// wrapper and return the bare ACL so the handler emits the unwrapped object.
+	var wrapper struct {
+		ACL LKEControlPlaneACL `json:"acl"`
+	}
+	if err := c.handleResponse(resp, &wrapper); err != nil {
 		return nil, err
 	}
 
-	return &acl, nil
+	return &wrapper.ACL, nil
 }
 
 // UpdateLKEControlPlaneACL updates the control plane ACL for an LKE cluster.
@@ -665,6 +701,13 @@ func (c *Client) httpListLKEVersions(ctx context.Context) ([]LKEVersion, error) 
 	}
 
 	return response.Data, nil
+}
+
+// httpListLKEVersionsProto retrieves all available Kubernetes versions as proto
+// messages, decoded directly from the API JSON for the proto-backed list path.
+func (c *Client) httpListLKEVersionsProto(ctx context.Context) ([]*linodev1.LKEVersion, error) {
+	return listProtoElements(ctx, c, "ListLKEVersions", endpointLKEVersions,
+		func() *linodev1.LKEVersion { return &linodev1.LKEVersion{} })
 }
 
 // GetLKEVersion retrieves a specific Kubernetes version for LKE.
@@ -730,6 +773,24 @@ func (c *Client) httpListLKETypes(ctx context.Context) ([]LKEType, error) {
 	}
 
 	return response.Data, nil
+}
+
+// httpListLKETypesProto retrieves all available LKE node types as proto
+// messages, decoded directly from the API JSON for the proto-backed list path.
+func (c *Client) httpListLKETypesProto(ctx context.Context) ([]*linodev1.LinodeType, error) {
+	return listProtoElements(ctx, c, "ListLKETypes", endpointLKETypes,
+		func() *linodev1.LinodeType { return &linodev1.LinodeType{} })
+}
+
+// httpListLKETierVersionsProto retrieves available LKE tier versions for a tier
+// as proto messages for the proto-backed list path. The endpoint returns a
+// {data,page,...} page envelope, so listProtoElements reads data. The tier string
+// is path-escaped into the endpoint exactly like httpListLKETierVersions.
+func (c *Client) httpListLKETierVersionsProto(ctx context.Context, tier string) ([]*linodev1.LKETierVersion, error) {
+	endpoint := endpointLKETierVersions + "/" + url.PathEscape(tier) + "/versions"
+
+	return listProtoElements(ctx, c, "ListLKETierVersions", endpoint,
+		func() *linodev1.LKETierVersion { return &linodev1.LKETierVersion{} })
 }
 
 // ListLKETierVersions retrieves available LKE tier versions for a tier.

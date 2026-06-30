@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.ManagedIssue",
+  "description": "Managed issue with a populated nested entity message and a repeated int32 services list. All fields present, so the entity is emitted and services is the number list.",
+  "input": {
+    "id": 555,
+    "created": "2024-06-01T00:00:00",
+    "services": [101, 102],
+    "entity": {
+      "id": 12,
+      "label": "web-1",
+      "type": "linode",
+      "url": "/linode/instances/12"
+    }
+  },
+  "canonical": {
+    "id": 555,
+    "created": "2024-06-01T00:00:00",
+    "services": [101, 102],
+    "entity": {
+      "id": 12,
+      "label": "web-1",
+      "type": "linode",
+      "url": "/linode/instances/12"
+    }
+  }
+}

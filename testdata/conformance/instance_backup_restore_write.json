@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.InstanceBackupRestoreWriteResponse",
+  "description": "Instance backup restore id-echo: a confirmation message plus the backup, the target Linode, and whether the target was overwritten. The restore endpoint returns no body, so these echo the request.",
+  "input": {
+    "message": "Backup 4001 restore initiated to instance 456 (overwrite=true)",
+    "backup_id": 4001,
+    "target_linode_id": 456,
+    "overwrite": true
+  },
+  "canonical": {
+    "message": "Backup 4001 restore initiated to instance 456 (overwrite=true)",
+    "backup_id": 4001,
+    "target_linode_id": 456,
+    "overwrite": true
+  }
+}

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import lke_pool_pb2
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -25,6 +26,7 @@ from linodemcp.tools.helpers import (
     is_dry_run,
 )
 from linodemcp.tools.linode_lke import lke_cluster_to_response_dict
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -380,7 +382,7 @@ async def _lke_cluster_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_cluster(cluster_id)
         return {
-            "message": f"LKE cluster {cluster_id} deleted successfully",
+            "message": f"LKE cluster {cluster_id} removed successfully",
             "cluster_id": cluster_id,
         }
 
@@ -446,7 +448,7 @@ async def handle_linode_lke_cluster_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_cluster(cluster_id)
         return {
-            "message": f"LKE cluster {cluster_id} deleted successfully",
+            "message": f"LKE cluster {cluster_id} removed successfully",
             "cluster_id": cluster_id,
         }
 
@@ -507,7 +509,7 @@ async def handle_linode_lke_cluster_recycle(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_cluster(cluster_id)
         return {
-            "message": f"LKE cluster {cluster_id} nodes recycled successfully",
+            "message": f"LKE cluster {cluster_id} recycle initiated successfully",
             "cluster_id": cluster_id,
         }
 
@@ -569,7 +571,9 @@ async def handle_linode_lke_cluster_regenerate(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.regenerate_lke_cluster(cluster_id)
         return {
-            "message": f"LKE cluster {cluster_id} service token regenerated",
+            "message": (
+                f"Service token for LKE cluster {cluster_id} regenerated successfully"
+            ),
             "cluster_id": cluster_id,
         }
 
@@ -680,12 +684,23 @@ async def handle_linode_lke_pool_create(
         ]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_lke_node_pool(
+        pool = await client.create_lke_node_pool(
             cluster_id=cluster_id,
             node_type=node_type,
             count=count,
             autoscaler=arguments.get("autoscaler"),
             tags=arguments.get("tags"),
+        )
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Node pool (ID: {pool.get('id', 0)}) created in cluster "
+                    f"{cluster_id} with {pool.get('count', 0)} "
+                    f"{pool.get('type', '')} node(s)"
+                ),
+                "pool": pool,
+            },
+            lke_pool_pb2.LKENodePoolWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "create LKE node pool", _call)
@@ -782,12 +797,21 @@ async def handle_linode_lke_pool_update(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_lke_node_pool(
+        pool = await client.update_lke_node_pool(
             cluster_id=cluster_id,
             pool_id=pool_id,
             count=arguments.get("count"),
             autoscaler=arguments.get("autoscaler"),
             tags=arguments.get("tags"),
+        )
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Node pool {pool_id} in cluster {cluster_id} modified successfully"
+                ),
+                "pool": pool,
+            },
+            lke_pool_pb2.LKENodePoolWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "update LKE node pool", _call)
@@ -1028,7 +1052,10 @@ async def handle_linode_lke_pool_recycle(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_node_pool(cluster_id, pool_id)
         return {
-            "message": f"Node pool {pool_id} in cluster {cluster_id} recycled",
+            "message": (
+                f"Node pool {pool_id} in cluster {cluster_id}"
+                " recycle initiated successfully"
+            ),
             "cluster_id": cluster_id,
             "pool_id": pool_id,
         }
@@ -1259,7 +1286,9 @@ async def handle_linode_lke_node_recycle(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_node(cluster_id, node_id)
         return {
-            "message": f"Node {node_id} in cluster {cluster_id} recycled",
+            "message": (
+                f"Node {node_id} in cluster {cluster_id} recycle initiated successfully"
+            ),
             "cluster_id": cluster_id,
             "node_id": node_id,
         }

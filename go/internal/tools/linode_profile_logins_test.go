@@ -203,7 +203,7 @@ func TestLinodeProfileLoginsToolUpstreamError(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_login_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_login_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }

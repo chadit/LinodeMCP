@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.AccountServiceTransferActionResponse",
+  "description": "Service-transfer accept and delete id-echo: a confirmation message plus the affected transfer token (empty-body endpoints).",
+  "input": {
+    "message": "Account service transfer accepted successfully",
+    "token": "12345678-90ab-cdef-1234-567890abcdef"
+  },
+  "canonical": {
+    "message": "Account service transfer accepted successfully",
+    "token": "12345678-90ab-cdef-1234-567890abcdef"
+  }
+}

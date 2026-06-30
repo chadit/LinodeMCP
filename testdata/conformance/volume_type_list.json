@@ -1,0 +1,46 @@
+{
+  "message": "linode.mcp.v1.VolumeTypeListResponse",
+  "description": "linode_volume_type_list envelope: count and the full proto LinodeType elements (price plus a region_prices array). No filter params, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "volume_types": [
+      {
+        "id": "block_storage",
+        "label": "Block Storage",
+        "price": {
+          "hourly": 0.0001,
+          "monthly": 0.1
+        },
+        "region_prices": [
+          {
+            "id": "id-cgk",
+            "hourly": 0.00012,
+            "monthly": 0.12
+          }
+        ],
+        "transfer": 0
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "volume_types": [
+      {
+        "id": "block_storage",
+        "label": "Block Storage",
+        "price": {
+          "hourly": 0.0001,
+          "monthly": 0.1
+        },
+        "region_prices": [
+          {
+            "id": "id-cgk",
+            "hourly": 0.00012,
+            "monthly": 0.12
+          }
+        ],
+        "transfer": 0
+      }
+    ]
+  }
+}

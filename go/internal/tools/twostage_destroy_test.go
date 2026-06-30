@@ -601,7 +601,7 @@ func TestInstanceDeleteTwoStageIgnoresCosmeticDrift(t *testing.T) {
 
 	state := &atomic.Pointer[linode.Instance]{}
 	state.Store(&linode.Instance{
-		ID: 123, Label: labelWebProd, Status: statusRunning, Updated: "2026-01-01T00:00:00",
+		ID: 123, Label: labelWebProd, Status: statusRunning, Updated: tfaConfirmExpiry,
 	})
 
 	deleted := &atomic.Bool{}

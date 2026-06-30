@@ -1,0 +1,68 @@
+{
+  "message": "linode.mcp.v1.MonitorAlertDefinitionListResponse",
+  "description": "linode_monitor_alert_definition_list envelope: count and the full proto MonitorAlertDefinition elements. criteria, rule_criteria, and trigger_conditions are arbitrary JSON objects modeled as google.protobuf.Struct; channel_ids and entity_ids are repeated. The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "alert_definitions": [
+      {
+        "id": 20000,
+        "label": "High CPU Usage",
+        "type": "alerts-definitions",
+        "service_type": "linode",
+        "description": "CPU usage is high",
+        "severity": 2,
+        "status": "enabled",
+        "criteria": {
+          "threshold": 90,
+          "operator": "gt"
+        },
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage",
+              "aggregate_function": "avg"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "evaluation_period_seconds": 300,
+          "polling_interval_seconds": 60
+        },
+        "channel_ids": [10000, 10001],
+        "entity_ids": ["123", "456"]
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "alert_definitions": [
+      {
+        "id": 20000,
+        "label": "High CPU Usage",
+        "type": "alerts-definitions",
+        "service_type": "linode",
+        "description": "CPU usage is high",
+        "severity": 2,
+        "status": "enabled",
+        "criteria": {
+          "threshold": 90,
+          "operator": "gt"
+        },
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage",
+              "aggregate_function": "avg"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "evaluation_period_seconds": 300,
+          "polling_interval_seconds": 60
+        },
+        "channel_ids": [10000, 10001],
+        "entity_ids": ["123", "456"]
+      }
+    ]
+  }
+}

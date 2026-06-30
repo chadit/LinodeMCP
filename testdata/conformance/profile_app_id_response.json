@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ProfileAppIDResponse",
+  "description": "Profile app id-echo: a confirmation message plus the app id. The revoke endpoint has no resource body to echo.",
+  "input": {
+    "message": "Profile app 333 revoked successfully",
+    "app_id": 333
+  },
+  "canonical": {
+    "message": "Profile app 333 revoked successfully",
+    "app_id": 333
+  }
+}

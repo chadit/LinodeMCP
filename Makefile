@@ -31,6 +31,11 @@ generate: proto
 $(PROTO_STAMP): $(PROTO_SRCS)
 	@command -v buf >/dev/null 2>&1 || { echo "buf is required: https://buf.build/docs/installation"; exit 1; }
 	buf generate
+	@# protoc-gen-python emits absolute cross-proto imports (from linode.mcp.v1 import X)
+	@# based on the proto package path. Rewrite them to the package-qualified path so the
+	@# generated tree imports as one module tree under linodemcp.genpb (no top-level `linode`
+	@# on sys.path, no duplicate descriptor registration).
+	perl -pi -e 's{^from linode\.mcp\.v1 import }{from linodemcp.genpb.linode.mcp.v1 import }' python/src/linodemcp/genpb/linode/mcp/v1/*_pb2.py python/src/linodemcp/genpb/linode/mcp/v1/*_pb2.pyi
 	@mkdir -p $(dir $@)
 	@touch $@
 

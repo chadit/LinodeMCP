@@ -17,6 +17,14 @@ message BetaProgram {
   string started = 8;
 }
 
+// BetaProgramListResponse is the {count, filter?, betas} envelope the
+// linode_beta_list tool returns.
+message BetaProgramListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated BetaProgram betas = 3;
+}
+
 // BetaGetInput is the input contract for linode_beta_get.
 message BetaGetInput {
   // Linode environment to use (optional, defaults to "default").

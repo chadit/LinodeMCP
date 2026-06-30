@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.linode import instance_to_response_dict
+from linodemcp.genpb.linode.mcp.v1 import instance_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -44,7 +45,7 @@ async def handle_linode_instance_get(
         return error_response("instance_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        instance = await client.get_instance(instance_id)
-        return instance_to_response_dict(instance)
+        raw = await client.get_raw(f"/linode/instances/{instance_id}")
+        return serialize_api_response(raw, instance_pb2.Instance())
 
     return await execute_tool(cfg, arguments, "retrieve Linode instance", _call)

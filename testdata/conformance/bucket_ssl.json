@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.BucketSSL",
+  "description": "Whether an Object Storage bucket has a TLS certificate configured.",
+  "input": {
+    "ssl": true
+  },
+  "canonical": {
+    "ssl": true
+  }
+}

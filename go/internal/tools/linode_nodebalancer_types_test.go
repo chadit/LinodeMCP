@@ -111,6 +111,14 @@ func TestLinodeNodeBalancerTypesToolSuccess(t *testing.T) {
 	if !strings.Contains(textContent.Text, "Common") {
 		t.Errorf("textContent.Text does not contain %v", "Common")
 	}
+
+	if !strings.Contains(textContent.Text, `"nodebalancer_types"`) {
+		t.Errorf("textContent.Text does not contain the nodebalancer_types key: %s", textContent.Text)
+	}
+
+	if count := listResponseCount(t, textContent.Text); count != 1 {
+		t.Errorf("listResponseCount = %d, want 1", count)
+	}
 }
 
 func TestLinodeNodeBalancerTypesToolApiError(t *testing.T) {
@@ -157,8 +165,8 @@ func TestLinodeNodeBalancerTypesToolApiError(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_nodebalancer_type_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_nodebalancer_type_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

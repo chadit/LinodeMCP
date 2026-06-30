@@ -1,0 +1,64 @@
+{
+  "message": "linode.mcp.v1.StackScriptListResponse",
+  "description": "linode_stackscript_list envelope: count, an optional filter echo (is_public / mine / label_contains, joined with \", \"), and the full proto StackScript elements (full element, not the curated id/label/username/description subset Python previously emitted).",
+  "input": {
+    "count": 1,
+    "filter": "is_public=true, mine=true",
+    "stackscripts": [
+      {
+        "username": "myuser",
+        "user_gravatar_id": "a445b305abda30ebc766bc7fda037c37",
+        "label": "a-stackscript",
+        "description": "This StackScript installs and configures MySQL",
+        "images": ["linode/debian11", "linode/debian12"],
+        "created": "2018-01-01T00:01:01",
+        "updated": "2018-01-01T00:01:01",
+        "script": "#!/bin/bash\napt-get update",
+        "user_defined_fields": [
+          {
+            "label": "Set the password for the root user",
+            "name": "ssvar_db_password",
+            "example": "hunter2",
+            "oneof": "avalue,bvalue,cvalue",
+            "default": "defaultvalue"
+          }
+        ],
+        "id": 10079,
+        "deployments_total": 12,
+        "deployments_active": 1,
+        "is_public": true,
+        "mine": true
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "is_public=true, mine=true",
+    "stackscripts": [
+      {
+        "username": "myuser",
+        "user_gravatar_id": "a445b305abda30ebc766bc7fda037c37",
+        "label": "a-stackscript",
+        "description": "This StackScript installs and configures MySQL",
+        "images": ["linode/debian11", "linode/debian12"],
+        "created": "2018-01-01T00:01:01",
+        "updated": "2018-01-01T00:01:01",
+        "script": "#!/bin/bash\napt-get update",
+        "user_defined_fields": [
+          {
+            "label": "Set the password for the root user",
+            "name": "ssvar_db_password",
+            "example": "hunter2",
+            "oneof": "avalue,bvalue,cvalue",
+            "default": "defaultvalue"
+          }
+        ],
+        "id": 10079,
+        "deployments_total": 12,
+        "deployments_active": 1,
+        "is_public": true,
+        "mine": true
+      }
+    ]
+  }
+}

@@ -3,11 +3,11 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -15,23 +15,27 @@ import (
 
 // NewLinodeDomainListTool creates a tool for listing domains.
 func NewLinodeDomainListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newListTool(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_domain_list",
 		"Lists all domains managed by your Linode account. Can filter by domain name or type (master/slave).",
-		func(ctx context.Context, client *linode.Client) ([]linode.Domain, error) {
-			return client.ListDomains(ctx)
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.Domain, error) {
+			return client.ListDomainsProto(ctx)
 		},
-		[]listFilterParam[linode.Domain]{
+		[]listFilterParam[*linodev1.Domain]{
 			containsFilter("domain_contains", "Filter domains by name containing this string (case-insensitive)",
-				func(d linode.Domain) string { return d.Domain }),
+				func(d *linodev1.Domain) string { return d.GetDomain() }),
 			fieldFilter("type", "Filter by domain type (master, slave)",
-				func(d linode.Domain) string { return d.Type }),
+				func(d *linodev1.Domain) string { return d.GetType() }),
 		},
-		"domains",
+		domainListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func domainListResponse(items []*linodev1.Domain, count int32, filter *string) *linodev1.DomainListResponse {
+	return &linodev1.DomainListResponse{Count: count, Filter: filter, Domains: items}
 }
 
 // NewLinodeDomainGetTool creates a tool for getting a single domain.
@@ -146,89 +150,43 @@ func handleLinodeDomainRecordGetRequest(ctx context.Context, request *mcp.CallTo
 
 // NewLinodeDomainRecordListTool creates a tool for listing domain records.
 func NewLinodeDomainRecordListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolSubresource(
+		cfg,
 		"linode_domain_record_list",
-		mcp.WithDescription("Lists all DNS records for a specific domain. Can filter by record type or name."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"domain_id",
-			mcp.Required(),
-			mcp.Description("The ID of the domain to list records for"),
-		),
-		mcp.WithString(
-			"type",
-			mcp.Description("Filter by record type (A, AAAA, NS, MX, CNAME, TXT, SRV, CAA)"),
-		),
-		mcp.WithString(
-			"name_contains",
-			mcp.Description("Filter records by name containing this string (case-insensitive)"),
-		),
+		"Lists all DNS records for a specific domain. Can filter by record type or name.",
+		protoListPathID{
+			option: mcp.WithNumber("domain_id", mcp.Required(),
+				mcp.Description("The ID of the domain to list records for")),
+			parse: domainRecordListDomainIDFromTool,
+		},
+		func(ctx context.Context, client *linode.Client, domainID int) ([]*linodev1.DomainRecord, error) {
+			return client.ListDomainRecordsProto(ctx, domainID)
+		},
+		[]listFilterParam[*linodev1.DomainRecord]{
+			fieldFilter("type",
+				"Filter by record type (A, AAAA, NS, MX, CNAME, TXT, SRV, CAA)",
+				func(r *linodev1.DomainRecord) string { return r.GetType() }),
+			containsFilter("name_contains",
+				"Filter records by name containing this string (case-insensitive)",
+				func(r *linodev1.DomainRecord) string { return r.GetName() }),
+		},
+		domainRecordListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeDomainRecordsListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeDomainRecordsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+// domainRecordListDomainIDFromTool validates the domain_id path param the same
+// way the non-proto handler did (a zero id returns "domain_id is required").
+func domainRecordListDomainIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	domainID := request.GetInt("domain_id", 0)
-	typeFilter := request.GetString("type", "")
-	nameContains := request.GetString("name_contains", "")
-
 	if domainID == 0 {
-		return mcp.NewToolResultError("domain_id is required"), nil
+		return 0, "domain_id is required"
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	records, err := client.ListDomainRecords(ctx, domainID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve domain records for domain %d: %v", domainID, err)), nil
-	}
-
-	if typeFilter != "" {
-		records = FilterByField(records, typeFilter, func(r linode.DomainRecord) string { return r.Type })
-	}
-
-	if nameContains != "" {
-		records = FilterByContains(records, nameContains, func(r linode.DomainRecord) string { return r.Name })
-	}
-
-	return formatDomainRecordsResponse(records, domainID, typeFilter, nameContains)
+	return domainID, ""
 }
 
-func formatDomainRecordsResponse(records []linode.DomainRecord, domainID int, typeFilter, nameContains string) (*mcp.CallToolResult, error) {
-	response := struct {
-		Count    int                   `json:"count"`
-		DomainID int                   `json:"domain_id"`
-		Filter   string                `json:"filter,omitempty"`
-		Records  []linode.DomainRecord `json:"records"`
-	}{
-		Count:    len(records),
-		DomainID: domainID,
-		Records:  records,
-	}
-
-	var filters []string
-	if typeFilter != "" {
-		filters = append(filters, "type="+typeFilter)
-	}
-
-	if nameContains != "" {
-		filters = append(filters, "name_contains="+nameContains)
-	}
-
-	if len(filters) > 0 {
-		response.Filter = strings.Join(filters, ", ")
-	}
-
-	return MarshalToolResponse(response)
+func domainRecordListResponse(items []*linodev1.DomainRecord, count int32, filter *string) *linodev1.DomainRecordListResponse {
+	return &linodev1.DomainRecordListResponse{Count: count, Filter: filter, Records: items}
 }

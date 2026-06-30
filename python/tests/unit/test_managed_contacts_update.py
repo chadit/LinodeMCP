@@ -7,11 +7,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from linodemcp.config import Config
+from linodemcp.genpb.linode.mcp.v1 import managed_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_account import (
     create_linode_managed_contact_update_tool,
     handle_linode_managed_contact_update,
 )
+from linodemcp.tools.proto_response import serialize_api_response
 
 
 def test_create_linode_managed_contacts_update_tool() -> None:
@@ -63,7 +65,13 @@ async def test_handle_linode_managed_contacts_update(sample_config: Config) -> N
         )
 
         assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
+        assert json.loads(result[0].text) == serialize_api_response(
+            {
+                "message": "Managed contact 174 updated successfully",
+                "contact": response_data,
+            },
+            managed_pb2.ManagedContactWriteResponse(),
+        )
         mock_client.update_managed_contact.assert_awaited_once_with(
             174,
             email="ops@example.com",
@@ -88,7 +96,13 @@ async def test_handle_linode_managed_contacts_update_allows_null_group(
             {"contact_id": 174, "group": None, "confirm": True}, sample_config
         )
 
-    assert json.loads(result[0].text) == {"id": 174, "group": None}
+    assert json.loads(result[0].text) == serialize_api_response(
+        {
+            "message": "Managed contact 174 updated successfully",
+            "contact": {"id": 174, "group": None},
+        },
+        managed_pb2.ManagedContactWriteResponse(),
+    )
     mock_client.update_managed_contact.assert_awaited_once_with(174, group=None)
 
 

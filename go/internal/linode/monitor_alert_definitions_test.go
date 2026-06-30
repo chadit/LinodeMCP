@@ -65,57 +65,42 @@ func TestClientListMonitorAlertDefinitionsSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.ListMonitorAlertDefinitions(t.Context(), 2, 25)
+	got, err := client.ListMonitorAlertDefinitionsProto(t.Context(), 2, 25)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got == nil {
-		t.Fatal("got is nil")
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
 	}
 
-	if got.Page != 1 {
-		t.Errorf("got.Page = %v, want %v", got.Page, 1)
+	if got[0].GetId() != monitorAlertDefinitionID {
+		t.Errorf("got[0].GetId() = %v, want %v", got[0].GetId(), monitorAlertDefinitionID)
 	}
 
-	if got.Pages != 1 {
-		t.Errorf("got.Pages = %v, want %v", got.Pages, 1)
+	if got[0].GetLabel() != monitorAlertDefinitionLabel {
+		t.Errorf("got[0].GetLabel() = %v, want %v", got[0].GetLabel(), monitorAlertDefinitionLabel)
 	}
 
-	if got.Results != 1 {
-		t.Errorf("got.Results = %v, want %v", got.Results, 1)
+	if got[0].GetType() != monitorAlertDefinitionType {
+		t.Errorf("got[0].GetType() = %v, want %v", got[0].GetType(), monitorAlertDefinitionType)
 	}
 
-	if len(got.Data) != 1 {
-		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	if got[0].GetServiceType() != monitorAlertDefinitionServiceType {
+		t.Errorf("got[0].GetServiceType() = %v, want %v", got[0].GetServiceType(), monitorAlertDefinitionServiceType)
 	}
 
-	if got.Data[0].ID != monitorAlertDefinitionID {
-		t.Errorf("got.Data[0].ID = %v, want %v", got.Data[0].ID, monitorAlertDefinitionID)
+	if got[0].GetDescription() != monitorAlertDefinitionDescription {
+		t.Errorf("got[0].GetDescription() = %v, want %v", got[0].GetDescription(), monitorAlertDefinitionDescription)
 	}
 
-	if got.Data[0].Label != monitorAlertDefinitionLabel {
-		t.Errorf("got.Data[0].Label = %v, want %v", got.Data[0].Label, monitorAlertDefinitionLabel)
+	if got[0].GetSeverity() != 2 {
+		t.Errorf("got[0].GetSeverity() = %v, want %v", got[0].GetSeverity(), 2)
 	}
 
-	if got.Data[0].Type != monitorAlertDefinitionType {
-		t.Errorf("got.Data[0].Type = %v, want %v", got.Data[0].Type, monitorAlertDefinitionType)
-	}
-
-	if got.Data[0].ServiceType != monitorAlertDefinitionServiceType {
-		t.Errorf("got.Data[0].ServiceType = %v, want %v", got.Data[0].ServiceType, monitorAlertDefinitionServiceType)
-	}
-
-	if got.Data[0].Description != monitorAlertDefinitionDescription {
-		t.Errorf("got.Data[0].Description = %v, want %v", got.Data[0].Description, monitorAlertDefinitionDescription)
-	}
-
-	if got.Data[0].Severity != 2 {
-		t.Errorf("got.Data[0].Severity = %v, want %v", got.Data[0].Severity, 2)
-	}
-
-	if numVal, numOK := got.Data[0].Criteria[keyThreshold].(float64); !numOK || math.Abs(numVal-float64(90)) > math.Abs(float64(90))*0.001 {
-		t.Errorf("got.Data[0].Criteria[keyThreshold] = %v, want ~%v", got.Data[0].Criteria[keyThreshold], 90)
+	threshold := got[0].GetCriteria().GetFields()[keyThreshold].GetNumberValue()
+	if math.Abs(threshold-float64(90)) > math.Abs(float64(90))*0.001 {
+		t.Errorf("criteria threshold = %v, want ~%v", threshold, 90)
 	}
 }
 
@@ -142,7 +127,7 @@ func TestClientListMonitorAlertDefinitionsAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.ListMonitorAlertDefinitions(t.Context(), 0, 0)
+	got, err := client.ListMonitorAlertDefinitionsProto(t.Context(), 0, 0)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -197,24 +182,20 @@ func TestClientListMonitorAlertDefinitionsRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 
-	got, err := client.ListMonitorAlertDefinitions(t.Context(), 0, 0)
+	got, err := client.ListMonitorAlertDefinitionsProto(t.Context(), 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got == nil {
-		t.Fatal("got is nil")
 	}
 
 	if calls.Load() != int32(2) {
 		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
 	}
 
-	if len(got.Data) != 1 {
-		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
 	}
 
-	if got.Data[0].ID != monitorAlertDefinitionID {
-		t.Errorf("got.Data[0].ID = %v, want %v", got.Data[0].ID, monitorAlertDefinitionID)
+	if got[0].GetId() != monitorAlertDefinitionID {
+		t.Errorf("got[0].GetId() = %v, want %v", got[0].GetId(), monitorAlertDefinitionID)
 	}
 }

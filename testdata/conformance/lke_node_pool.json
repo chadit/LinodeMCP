@@ -1,0 +1,36 @@
+{
+  "message": "linode.mcp.v1.LKENodePool",
+  "description": "LKE node pool with repeated disks and nodes, repeated tags, and the optional autoscaler message present.",
+  "input": {
+    "id": 456,
+    "cluster_id": 12345,
+    "type": "g6-standard-2",
+    "count": 3,
+    "disks": [
+      {"size": 25600, "type": "ext4"},
+      {"size": 51200, "type": "raw"}
+    ],
+    "autoscaler": {"enabled": true, "min": 1, "max": 5},
+    "nodes": [
+      {"id": "node-1", "instance_id": 9001, "status": "ready"},
+      {"id": "node-2", "instance_id": 9002, "status": "not_ready"}
+    ],
+    "tags": ["pool-a"]
+  },
+  "canonical": {
+    "id": 456,
+    "cluster_id": 12345,
+    "type": "g6-standard-2",
+    "count": 3,
+    "disks": [
+      {"size": 25600, "type": "ext4"},
+      {"size": 51200, "type": "raw"}
+    ],
+    "autoscaler": {"enabled": true, "min": 1, "max": 5},
+    "nodes": [
+      {"id": "node-1", "instance_id": 9001, "status": "ready"},
+      {"id": "node-2", "instance_id": 9002, "status": "not_ready"}
+    ],
+    "tags": ["pool-a"]
+  }
+}

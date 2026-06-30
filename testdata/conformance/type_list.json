@@ -1,0 +1,64 @@
+{
+  "message": "linode.mcp.v1.InstanceTypeListResponse",
+  "description": "linode_type_list envelope: count, the optional class= filter echo, and the full proto InstanceType elements (price, addons, and the optional successor). The fixture sets a filter to gate the optional-string path.",
+  "input": {
+    "count": 1,
+    "filter": "class=standard",
+    "types": [
+      {
+        "id": "g6-standard-2",
+        "label": "Linode 4GB",
+        "class": "standard",
+        "disk": 81920,
+        "memory": 4096,
+        "vcpus": 2,
+        "gpus": 0,
+        "network_out": 4000,
+        "transfer": 4000,
+        "price": {
+          "hourly": 0.036,
+          "monthly": 24.0
+        },
+        "addons": {
+          "backups": {
+            "price": {
+              "hourly": 0.008,
+              "monthly": 5.0
+            }
+          }
+        },
+        "successor": "g7-standard-2"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "class=standard",
+    "types": [
+      {
+        "id": "g6-standard-2",
+        "label": "Linode 4GB",
+        "class": "standard",
+        "disk": 81920,
+        "memory": 4096,
+        "vcpus": 2,
+        "gpus": 0,
+        "network_out": 4000,
+        "transfer": 4000,
+        "price": {
+          "hourly": 0.036,
+          "monthly": 24.0
+        },
+        "addons": {
+          "backups": {
+            "price": {
+              "hourly": 0.008,
+              "monthly": 5.0
+            }
+          }
+        },
+        "successor": "g7-standard-2"
+      }
+    ]
+  }
+}

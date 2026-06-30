@@ -110,8 +110,21 @@ func TestLinodeTagDeleteToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, envProd) {
-		t.Errorf("textContent.Text does not contain %v", envProd)
+	var body struct {
+		Message string `json:"message"`
+		Deleted any    `json:"deleted"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unexpected error decoding response: %v", err)
+	}
+
+	wantMessage := "Tag '" + envProd + "/web' deleted successfully"
+	if body.Message != wantMessage {
+		t.Errorf("body.Message = %q, want %q", body.Message, wantMessage)
+	}
+
+	if body.Deleted != nil {
+		t.Errorf("body.Deleted = %v, want nil (legacy deleted key replaced by message)", body.Deleted)
 	}
 }
 
@@ -498,8 +511,8 @@ func TestLinodeTagsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_tag_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_tag_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

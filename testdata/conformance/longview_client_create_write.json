@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.LongviewClientCreateWriteResponse",
+  "description": "Longview client create envelope: a confirmation message, the save-the-secret warning, and the created client element carrying the one-time install secret (api_key + install_code).",
+  "input": {
+    "message": "Longview client created successfully",
+    "warning": "IMPORTANT: Save the API key and install code if they are present; they are required to configure the Longview client application.",
+    "longview_client": {
+      "api_key": "A1B2C3D4-1234-5678-90AB-CDEF12345678",
+      "apps": {"apache": true, "mysql": false, "nginx": true},
+      "created": "2026-06-30T10:00:00",
+      "id": 778899,
+      "install_code": "00112233-4455-6677-8899-AABBCCDDEEFF",
+      "label": "web-prod-01",
+      "updated": "2026-06-30T10:00:00"
+    }
+  },
+  "canonical": {
+    "message": "Longview client created successfully",
+    "warning": "IMPORTANT: Save the API key and install code if they are present; they are required to configure the Longview client application.",
+    "longview_client": {
+      "api_key": "A1B2C3D4-1234-5678-90AB-CDEF12345678",
+      "apps": {"apache": true, "mysql": false, "nginx": true},
+      "created": "2026-06-30T10:00:00",
+      "id": 778899,
+      "install_code": "00112233-4455-6677-8899-AABBCCDDEEFF",
+      "label": "web-prod-01",
+      "updated": "2026-06-30T10:00:00"
+    }
+  }
+}

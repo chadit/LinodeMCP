@@ -1,0 +1,44 @@
+{
+  "message": "linode.mcp.v1.MonitorServiceMetricQueryResponse",
+  "description": "Monitor service metric-query envelope: a confirmation message, the queried service type, and the freeform metrics payload modeled as google.protobuf.Struct so any API shape round-trips identically on both languages.",
+  "input": {
+    "message": "Monitor service metrics read for 'dbaas'",
+    "service_type": "dbaas",
+    "metrics": {
+      "status": "success",
+      "data": {
+        "result_type": "matrix",
+        "result": [
+          {
+            "metric": {"__name__": "cpu_usage", "entity_id": "13116"},
+            "values": [
+              ["1719748800", "12.5"],
+              ["1719748860", "13.1"]
+            ]
+          }
+        ]
+      },
+      "stats": {"series_fetched": "1"}
+    }
+  },
+  "canonical": {
+    "message": "Monitor service metrics read for 'dbaas'",
+    "service_type": "dbaas",
+    "metrics": {
+      "status": "success",
+      "data": {
+        "result_type": "matrix",
+        "result": [
+          {
+            "metric": {"__name__": "cpu_usage", "entity_id": "13116"},
+            "values": [
+              ["1719748800", "12.5"],
+              ["1719748860", "13.1"]
+            ]
+          }
+        ]
+      },
+      "stats": {"series_fetched": "1"}
+    }
+  }
+}

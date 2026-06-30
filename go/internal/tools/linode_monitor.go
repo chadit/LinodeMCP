@@ -6,8 +6,11 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -56,38 +59,22 @@ const (
 
 // NewLinodeMonitorServicesTool creates a tool for listing supported monitoring service types.
 func NewLinodeMonitorServicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListTool(
 		cfg,
 		monitorServicesToolName,
 		"Lists supported monitoring service types.",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.MonitorService, error) {
+			return client.ListMonitorServicesProto(ctx)
+		},
 		nil,
-		handleLinodeMonitorServicesRequest,
+		monitorServiceListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeMonitorServicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	services, listFailureMessage := listMonitorServices(ctx, client)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve " + monitorServicesToolName + ": " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(services)
-}
-
-func listMonitorServices(ctx context.Context, client *linode.Client) (*linode.PaginatedResponse[linode.MonitorService], string) {
-	services, err := client.ListMonitorServices(ctx)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return services, ""
+func monitorServiceListResponse(items []*linodev1.MonitorService, count int32, filter *string) *linodev1.MonitorServiceListResponse {
+	return &linodev1.MonitorServiceListResponse{Count: count, Filter: filter, Services: items}
 }
 
 // NewLinodeMonitorServiceGetTool creates a tool for retrieving one supported monitoring service type.
@@ -156,131 +143,74 @@ func isMonitorServiceTypeSlug(value string) bool {
 
 // NewLinodeMonitorServiceMetricDefinitionsTool creates a tool for listing metric definitions for one supported monitoring service type.
 func NewLinodeMonitorServiceMetricDefinitionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourceString(
 		cfg,
 		monitorServiceMetricDefinitionsToolName,
 		"Lists metric definitions for one supported monitoring service type by service_type.",
-		[]mcp.ToolOption{
-			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose metric definitions should be listed.")),
+		protoListPathIDString{
+			option: mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose metric definitions should be listed.")),
+			parse:  monitorServiceTypeFromTool,
 		},
-		handleLinodeMonitorServiceMetricDefinitionsRequest,
+		func(ctx context.Context, client *linode.Client, serviceType string) ([]*linodev1.MonitorMetricDefinition, error) {
+			return client.ListMonitorServiceMetricDefinitionsProto(ctx, serviceType)
+		},
+		nil,
+		monitorServiceMetricDefinitionListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeMonitorServiceMetricDefinitionsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	serviceType, validationMessage := monitorServiceTypeFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	definitions, listFailureMessage := listMonitorServiceMetricDefinitions(ctx, client, serviceType)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve " + monitorServiceMetricDefinitionsToolName + ": " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(definitions)
-}
-
-func listMonitorServiceMetricDefinitions(ctx context.Context, client *linode.Client, serviceType string) (*linode.PaginatedResponse[linode.MonitorMetricDefinition], string) {
-	definitions, err := client.ListMonitorServiceMetricDefinitions(ctx, serviceType)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return definitions, ""
+func monitorServiceMetricDefinitionListResponse(items []*linodev1.MonitorMetricDefinition, count int32, filter *string) *linodev1.MonitorServiceMetricDefinitionListResponse {
+	return &linodev1.MonitorServiceMetricDefinitionListResponse{Count: count, Filter: filter, MetricDefinitions: items}
 }
 
 // NewLinodeMonitorServiceAlertDefinitionsTool creates a tool for listing alert definitions for one monitoring service type.
 func NewLinodeMonitorServiceAlertDefinitionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourceString(
 		cfg,
 		monitorServiceAlertDefinitionsToolName,
 		"Lists alert definitions for one supported monitoring service type by service_type.",
-		[]mcp.ToolOption{
-			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose alert definitions should be listed.")),
+		protoListPathIDString{
+			option: mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose alert definitions should be listed.")),
+			parse:  monitorServiceTypeFromTool,
 		},
-		handleLinodeMonitorServiceAlertDefinitionsRequest,
+		func(ctx context.Context, client *linode.Client, serviceType string) ([]*linodev1.MonitorAlertDefinition, error) {
+			return client.ListMonitorServiceAlertDefinitionsProto(ctx, serviceType)
+		},
+		nil,
+		monitorServiceAlertDefinitionListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeMonitorServiceAlertDefinitionsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	serviceType, validationMessage := monitorServiceTypeFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	definitions, listFailureMessage := listMonitorServiceAlertDefinitions(ctx, client, serviceType)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve " + monitorServiceAlertDefinitionsToolName + ": " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(definitions)
-}
-
-func listMonitorServiceAlertDefinitions(ctx context.Context, client *linode.Client, serviceType string) (*linode.PaginatedResponse[linode.AlertDefinition], string) {
-	definitions, err := client.ListMonitorServiceAlertDefinitions(ctx, serviceType)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return definitions, ""
+func monitorServiceAlertDefinitionListResponse(items []*linodev1.MonitorAlertDefinition, count int32, filter *string) *linodev1.MonitorServiceAlertDefinitionListResponse {
+	return &linodev1.MonitorServiceAlertDefinitionListResponse{Count: count, Filter: filter, AlertDefinitions: items}
 }
 
 // NewLinodeMonitorServiceDashboardsTool creates a tool for listing dashboards for one monitoring service type.
 func NewLinodeMonitorServiceDashboardsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourceString(
 		cfg,
 		monitorServiceDashboardsToolName,
 		"Lists dashboards for one supported monitoring service type by service_type.",
-		[]mcp.ToolOption{
-			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose dashboards should be listed.")),
+		protoListPathIDString{
+			option: mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug whose dashboards should be listed.")),
+			parse:  monitorServiceTypeFromTool,
 		},
-		handleLinodeMonitorServiceDashboardsRequest,
+		func(ctx context.Context, client *linode.Client, serviceType string) ([]*linodev1.MonitorDashboard, error) {
+			return client.ListMonitorServiceDashboardsProto(ctx, serviceType)
+		},
+		nil,
+		monitorServiceDashboardListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeMonitorServiceDashboardsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	serviceType, validationMessage := monitorServiceTypeFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	dashboards, listFailureMessage := listMonitorServiceDashboards(ctx, client, serviceType)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve " + monitorServiceDashboardsToolName + ": " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(dashboards)
-}
-
-func listMonitorServiceDashboards(ctx context.Context, client *linode.Client, serviceType string) (*linode.PaginatedResponse[linode.MonitorDashboard], string) {
-	dashboards, err := client.ListMonitorServiceDashboards(ctx, serviceType)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return dashboards, ""
+func monitorServiceDashboardListResponse(items []*linodev1.MonitorDashboard, count int32, filter *string) *linodev1.MonitorServiceDashboardListResponse {
+	return &linodev1.MonitorServiceDashboardListResponse{Count: count, Filter: filter, Dashboards: items}
 }
 
 // NewLinodeMonitorServiceMetricsTool creates a tool for retrieving metrics for one monitoring service type.
@@ -309,21 +239,34 @@ func handleLinodeMonitorServiceMetricsRequest(ctx context.Context, request *mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	metrics, getFailureMessage := getMonitorServiceMetrics(ctx, client, serviceType)
+	metricsStruct, getFailureMessage := getMonitorServiceMetrics(ctx, client, serviceType)
 	if getFailureMessage != "" {
 		return mcp.NewToolResultError("Failed to retrieve " + monitorServiceMetricsToolName + ": " + getFailureMessage), nil
 	}
 
-	return MarshalToolResponse(metrics)
+	return MarshalProtoToolResponse(&linodev1.MonitorServiceMetricQueryResponse{
+		Message:     fmt.Sprintf("Monitor service metrics read for '%s'", serviceType),
+		ServiceType: serviceType,
+		Metrics:     metricsStruct,
+	})
 }
 
-func getMonitorServiceMetrics(ctx context.Context, client *linode.Client, serviceType string) (linode.MonitorMetrics, string) {
+// getMonitorServiceMetrics fetches the metrics map and converts it to the
+// structpb.Struct the proto envelope needs, so the handler never returns a
+// non-nil error as a tool result (which nilerr flags). Either failure surfaces
+// as a string the caller wraps.
+func getMonitorServiceMetrics(ctx context.Context, client *linode.Client, serviceType string) (*structpb.Struct, string) {
 	metrics, err := client.GetMonitorServiceMetrics(ctx, serviceType)
 	if err != nil {
 		return nil, err.Error()
 	}
 
-	return metrics, ""
+	metricsStruct, structFailure := structpb.NewStruct(metrics)
+	if structFailure != nil {
+		return nil, structFailure.Error()
+	}
+
+	return metricsStruct, ""
 }
 
 // NewLinodeMonitorServiceTokenCreateTool creates a tool for creating a token for one monitoring service type.
@@ -386,6 +329,13 @@ func runMonitorServiceCreate(
 	result, createFailureMessage := execute(ctx, client, serviceType)
 	if createFailureMessage != "" {
 		return mcp.NewToolResultError("Failed to create " + toolName + ": " + createFailureMessage), nil
+	}
+
+	// The alert-definition create returns a proto write envelope; the token
+	// create returns a bare token struct that stays on the legacy marshaler
+	// (its {token, expiry} shape is intentionally non-proto, set in Wave 2).
+	if message, ok := result.(proto.Message); ok {
+		return MarshalProtoToolResponse(message)
 	}
 
 	return MarshalToolResponse(result)
@@ -560,7 +510,11 @@ func handleLinodeMonitorServiceAlertDefinitionDeleteRequest(ctx context.Context,
 		return mcp.NewToolResultError("Failed to delete " + monitorServiceAlertDefinitionDeleteToolName + ": " + deleteFailureMessage), nil
 	}
 
-	return mcp.NewToolResultText("Deleted " + monitorServiceAlertDefinitionDeleteToolName + "."), nil
+	return MarshalProtoToolResponse(&linodev1.MonitorAlertDefinitionDeleteResponse{
+		Message:     fmt.Sprintf("Monitor service alert definition %d deleted for '%s'", alertID, serviceType),
+		ServiceType: serviceType,
+		AlertId:     linodeIDToInt32(alertID),
+	})
 }
 
 func deleteMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client, serviceType string, alertID int) string {
@@ -605,7 +559,15 @@ func handleLinodeMonitorServiceAlertDefinitionCreateRequest(ctx context.Context,
 			}
 
 			return func(ctx context.Context, client *linode.Client, serviceType string) (any, string) {
-				return createMonitorServiceAlertDefinition(ctx, client, serviceType, createRequest)
+				definition, failureMessage := createMonitorServiceAlertDefinition(ctx, client, serviceType, createRequest)
+				if failureMessage != "" {
+					return nil, failureMessage
+				}
+
+				return &linodev1.MonitorAlertDefinitionWriteResponse{
+					Message:         fmt.Sprintf("Monitor service alert definition created for '%s'", serviceType),
+					AlertDefinition: definition,
+				}, ""
 			}, ""
 		})
 }
@@ -776,8 +738,8 @@ func intFromAny(raw any) (int, bool) {
 	}
 }
 
-func createMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client, serviceType string, request *linode.CreateAlertDefinitionRequest) (*linode.AlertDefinition, string) {
-	definition, err := client.CreateMonitorServiceAlertDefinition(ctx, serviceType, request)
+func createMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client, serviceType string, request *linode.CreateAlertDefinitionRequest) (*linodev1.MonitorAlertDefinition, string) {
+	definition, err := client.CreateMonitorServiceAlertDefinitionProto(ctx, serviceType, request)
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -787,46 +749,25 @@ func createMonitorServiceAlertDefinition(ctx context.Context, client *linode.Cli
 
 // NewLinodeMonitorDashboardsTool creates a tool for listing monitoring dashboards.
 func NewLinodeMonitorDashboardsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_monitor_dashboard_list",
 		"Lists monitoring dashboards available to the user.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.MonitorDashboard, error) {
+			return client.ListMonitorDashboardsProto(ctx, page, pageSize)
 		},
-		handleLinodeMonitorDashboardsRequest,
+		monitorDashboardsPaginationFromTool,
+		nil,
+		monitorDashboardListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeMonitorDashboardsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := monitorDashboardsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	dashboards, listFailureMessage := listMonitorDashboards(ctx, client, page, pageSize)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_monitor_dashboard_list: " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(dashboards)
-}
-
-func listMonitorDashboards(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.MonitorDashboard], string) {
-	dashboards, err := client.ListMonitorDashboards(ctx, page, pageSize)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return dashboards, ""
+func monitorDashboardListResponse(items []*linodev1.MonitorDashboard, count int32, filter *string) *linodev1.MonitorDashboardListResponse {
+	return &linodev1.MonitorDashboardListResponse{Count: count, Filter: filter, Dashboards: items}
 }
 
 func monitorDashboardsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -890,46 +831,25 @@ func getMonitorDashboard(ctx context.Context, client *linode.Client, dashboardID
 
 // NewLinodeMonitorAlertDefinitionsTool creates a tool for listing monitoring alert definitions.
 func NewLinodeMonitorAlertDefinitionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_monitor_alert_definition_list",
 		"Lists monitoring alert definitions available to the user.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.MonitorAlertDefinition, error) {
+			return client.ListMonitorAlertDefinitionsProto(ctx, page, pageSize)
 		},
-		handleLinodeMonitorAlertDefinitionsRequest,
+		monitorAlertDefinitionsPaginationFromTool,
+		nil,
+		monitorAlertDefinitionListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeMonitorAlertDefinitionsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := monitorAlertDefinitionsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	definitions, listFailureMessage := listMonitorAlertDefinitions(ctx, client, page, pageSize)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_monitor_alert_definition_list: " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(definitions)
-}
-
-func listMonitorAlertDefinitions(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.AlertDefinition], string) {
-	definitions, err := client.ListMonitorAlertDefinitions(ctx, page, pageSize)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return definitions, ""
+func monitorAlertDefinitionListResponse(items []*linodev1.MonitorAlertDefinition, count int32, filter *string) *linodev1.MonitorAlertDefinitionListResponse {
+	return &linodev1.MonitorAlertDefinitionListResponse{Count: count, Filter: filter, AlertDefinitions: items}
 }
 
 func monitorAlertDefinitionsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -950,46 +870,25 @@ func monitorAlertDefinitionsPaginationFromTool(request *mcp.CallToolRequest) (in
 
 // NewLinodeMonitorAlertChannelsTool creates a tool for listing monitoring alert channels.
 func NewLinodeMonitorAlertChannelsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_monitor_alert_channel_list",
 		"Lists monitoring alert channels available to the user.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.MonitorAlertChannel, error) {
+			return client.ListMonitorAlertChannelsProto(ctx, page, pageSize)
 		},
-		handleLinodeMonitorAlertChannelsRequest,
+		monitorAlertChannelsPaginationFromTool,
+		nil,
+		monitorAlertChannelListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeMonitorAlertChannelsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := monitorAlertChannelsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	channels, listFailureMessage := listMonitorAlertChannels(ctx, client, page, pageSize)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_monitor_alert_channel_list: " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(channels)
-}
-
-func listMonitorAlertChannels(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.AlertChannel], string) {
-	channels, err := client.ListMonitorAlertChannels(ctx, page, pageSize)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return channels, ""
+func monitorAlertChannelListResponse(items []*linodev1.MonitorAlertChannel, count int32, filter *string) *linodev1.MonitorAlertChannelListResponse {
+	return &linodev1.MonitorAlertChannelListResponse{Count: count, Filter: filter, AlertChannels: items}
 }
 
 func monitorAlertChannelsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

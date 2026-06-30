@@ -161,8 +161,8 @@ func TestLinodeDatabaseAllInstancesListToolClientError(t *testing.T) {
 		t.Fatal("isText = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve Managed Database instances across engines") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve Managed Database instances across engines")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }
 

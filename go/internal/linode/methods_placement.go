@@ -34,6 +34,14 @@ func (c *Client) httpListPlacementGroups(ctx context.Context, page, pageSize int
 	return &response, nil
 }
 
+// httpListPlacementGroupsProto retrieves placement groups as proto messages for
+// the proto-backed list path. The page/page_size pair flows through the shared
+// withPaginationQuery helper, so the request matches httpListPlacementGroups.
+func (c *Client) httpListPlacementGroupsProto(ctx context.Context, page, pageSize int) ([]*linodev1.PlacementGroup, error) {
+	return listProtoElementsPaginated(ctx, c, "ListPlacementGroups", endpointPlacementGroups, page, pageSize,
+		func() *linodev1.PlacementGroup { return &linodev1.PlacementGroup{} })
+}
+
 // AssignPlacementGroupLinodes assigns Linodes to a placement group.
 func (c *Client) httpAssignPlacementGroupLinodes(ctx context.Context, groupID int, req *AssignPlacementGroupLinodesRequest) (*PlacementGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

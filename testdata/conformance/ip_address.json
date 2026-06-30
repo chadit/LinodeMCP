@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.IPAddress",
+  "description": "Linode networking IP address with all fields present including optional vpc_nat_1_1",
+  "input": {
+    "address": "203.0.113.5",
+    "gateway": "203.0.113.1",
+    "subnet_mask": "255.255.255.0",
+    "prefix": 24,
+    "type": "ipv4",
+    "public": true,
+    "rdns": "li1-5.members.linode.com",
+    "linode_id": 123,
+    "region": "us-east",
+    "vpc_nat_1_1": "10.0.0.5"
+  },
+  "canonical": {
+    "address": "203.0.113.5",
+    "gateway": "203.0.113.1",
+    "subnet_mask": "255.255.255.0",
+    "prefix": 24,
+    "type": "ipv4",
+    "public": true,
+    "rdns": "li1-5.members.linode.com",
+    "linode_id": 123,
+    "region": "us-east",
+    "vpc_nat_1_1": "10.0.0.5"
+  }
+}

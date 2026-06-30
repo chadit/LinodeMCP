@@ -10,6 +10,14 @@ message LKETierVersion {
   string tier = 2;
 }
 
+// LKETierVersionListResponse is the {count, filter?, tier_versions} envelope the
+// linode_lke_tier_version_list tool returns for a requested tier.
+message LKETierVersionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LKETierVersion tier_versions = 3;
+}
+
 // LKETierVersionGetInput is the input contract for linode_lke_tier_version_get.
 message LKETierVersionGetInput {
   // Linode environment to use (optional, defaults to "default").

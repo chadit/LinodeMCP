@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.ConfigInterfaceResponse",
+  "description": "One Linode config profile network interface with all fields present.",
+  "input": {
+    "id": 101,
+    "active": true,
+    "purpose": "vpc",
+    "label": "eth0",
+    "ipam_address": "10.0.0.1/24",
+    "primary": true,
+    "subnet_id": 55,
+    "vpc_id": 77,
+    "ipv4": {
+      "nat_1_1": "192.0.2.10",
+      "vpc": "10.0.0.5"
+    },
+    "ip_ranges": ["2001:db8::/64", "203.0.113.0/24"]
+  },
+  "canonical": {
+    "id": 101,
+    "active": true,
+    "purpose": "vpc",
+    "label": "eth0",
+    "ipam_address": "10.0.0.1/24",
+    "primary": true,
+    "subnet_id": 55,
+    "vpc_id": 77,
+    "ipv4": {
+      "nat_1_1": "192.0.2.10",
+      "vpc": "10.0.0.5"
+    },
+    "ip_ranges": ["2001:db8::/64", "203.0.113.0/24"]
+  }
+}

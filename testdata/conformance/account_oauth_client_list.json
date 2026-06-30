@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.OAuthClientListResponse",
+  "description": "linode_account_oauth_client_list envelope: count and the full proto OAuthClient elements (not the Linode data/page/pages/results page). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_oauth_clients": [
+      {
+        "id": "client-123",
+        "label": "Example OAuth Client",
+        "public": true,
+        "redirect_uri": "https://example.com/callback",
+        "status": "active",
+        "thumbnail_url": "https://example.com/thumb.png"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_oauth_clients": [
+      {
+        "id": "client-123",
+        "label": "Example OAuth Client",
+        "public": true,
+        "redirect_uri": "https://example.com/callback",
+        "status": "active",
+        "thumbnail_url": "https://example.com/thumb.png"
+      }
+    ]
+  }
+}

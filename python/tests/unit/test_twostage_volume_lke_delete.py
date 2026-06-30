@@ -196,7 +196,8 @@ async def test_plan_then_apply(
         apply_result = await handler(
             {id_key: id_val, "mode": "apply", "plan_id": plan_id}, sample_config
         )
-        assert "deleted" in apply_result[0].text
+        apply_text = apply_result[0].text
+        assert "deleted" in apply_text or "removed" in apply_text
         delete.assert_awaited_once()
         assert await store.length() == 0
     finally:
@@ -231,7 +232,8 @@ async def test_apply_ignores_cosmetic_drift(
         apply_result = await handler(
             {id_key: id_val, "mode": "apply", "plan_id": plan_id}, sample_config
         )
-        assert "deleted" in apply_result[0].text
+        apply_text = apply_result[0].text
+        assert "deleted" in apply_text or "removed" in apply_text
         getattr(mock_linode_client, delete_attr).assert_awaited_once()
     finally:
         reset_plan_store(token)
@@ -331,7 +333,8 @@ async def test_two_id_plan_then_apply(
             "plan_id": plan_id,
         }
         apply_result = await handler(apply_args, sample_config)
-        assert "deleted" in apply_result[0].text
+        apply_text = apply_result[0].text
+        assert "deleted" in apply_text or "removed" in apply_text
         delete.assert_awaited_once()
         assert await store.length() == 0
     finally:

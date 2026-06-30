@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import instance_pb2
 from linodemcp.linode import APIError, NetworkError, instance_to_response_dict
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -22,6 +23,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -976,7 +978,7 @@ async def _instance_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance(int(instance_id))
         return {
-            "message": f"Instance {instance_id} deleted successfully",
+            "message": f"Instance {instance_id} removed successfully",
             "instance_id": instance_id,
         }
 
@@ -1043,7 +1045,7 @@ async def handle_linode_instance_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance(int(instance_id))
         return {
-            "message": f"Instance {instance_id} deleted successfully",
+            "message": f"Instance {instance_id} removed successfully",
             "instance_id": instance_id,
         }
 
@@ -1120,15 +1122,16 @@ async def handle_linode_instance_mutate(
         return _error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.mutate_instance(
+        await client.mutate_instance(
             linode_id, allow_auto_disk_resize=allow_auto_disk_resize
         )
-        return {
-            "message": f"Linode {linode_id} upgrade initiated",
-            "linode_id": linode_id,
-            "allow_auto_disk_resize": allow_auto_disk_resize,
-            "response": result,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Upgrade initiated for instance {linode_id}",
+                "linode_id": linode_id,
+            },
+            instance_pb2.InstanceActionWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "mutate Linode instance", _call)
 
@@ -1359,7 +1362,10 @@ async def _instance_resize_two_stage(
             migration_type=arguments.get("migration_type", "warm"),
         )
         return {
-            "message": f"Instance {instance_id} resize to {instance_type} initiated",
+            "message": (
+                f"Instance {instance_id} resize to {instance_type} "
+                "initiated successfully"
+            ),
             "instance_id": instance_id,
             "new_type": instance_type,
         }
@@ -1434,7 +1440,10 @@ async def handle_linode_instance_resize(
             migration_type=arguments.get("migration_type", "warm"),
         )
         return {
-            "message": (f"Instance {instance_id} resize to {instance_type} initiated"),
+            "message": (
+                f"Instance {instance_id} resize to {instance_type} "
+                "initiated successfully"
+            ),
             "instance_id": instance_id,
             "new_type": instance_type,
         }

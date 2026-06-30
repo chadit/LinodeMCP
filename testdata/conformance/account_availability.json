@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.AccountAvailability",
+  "description": "Account availability: region scalar plus two repeated string lists.",
+  "input": {
+    "available": ["Linodes", "NodeBalancers"],
+    "region": "us-east",
+    "unavailable": ["Kubernetes"]
+  },
+  "canonical": {
+    "available": ["Linodes", "NodeBalancers"],
+    "region": "us-east",
+    "unavailable": ["Kubernetes"]
+  }
+}

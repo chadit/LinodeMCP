@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ManagedContactIDResponse",
+  "description": "Managed contact id-echo: a confirmation message plus the contact id. The delete endpoint has no resource body to echo.",
+  "input": {
+    "message": "Managed contact deleted successfully",
+    "contact_id": 555
+  },
+  "canonical": {
+    "message": "Managed contact deleted successfully",
+    "contact_id": 555
+  }
+}

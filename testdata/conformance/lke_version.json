@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.LKEVersion",
+  "description": "Available Kubernetes version single-field message.",
+  "input": {
+    "id": "1.29"
+  },
+  "canonical": {
+    "id": "1.29"
+  }
+}

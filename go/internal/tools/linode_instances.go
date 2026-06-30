@@ -374,18 +374,15 @@ func formatAddInstanceInterfaceError(linodeID int, err error) string {
 
 // NewLinodeInstanceInterfaceGetTool creates a tool for retrieving one interface assigned to a Linode instance.
 func NewLinodeInstanceInterfaceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_interface_get",
 		"Retrieves a specific interface assigned to a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber(paramConfigInterfaceID, mcp.Required(),
-				mcp.Description("The ID of the Linode interface")),
-		},
-		handleInstanceInterfaceGetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceInterfaceGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -406,12 +403,12 @@ func handleInstanceInterfaceGetRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instanceInterface, err := client.GetInstanceInterface(ctx, linodeID, interfaceID)
+	instanceInterface, err := client.GetInstanceInterfaceProto(ctx, linodeID, interfaceID)
 	if err != nil {
 		return mcp.NewToolResultError(formatGetInstanceInterfaceError(linodeID, interfaceID, err)), nil
 	}
 
-	return MarshalToolResponse(instanceInterface)
+	return MarshalProtoToolResponse(instanceInterface)
 }
 
 func instanceInterfaceIDFromTool(request *mcp.CallToolRequest) (int, string) {
@@ -811,48 +808,30 @@ func formatUpdateInstanceInterfaceError(linodeID, interfaceID int, err error) st
 
 // NewLinodeInstanceInterfaceHistoryListTool creates a tool for listing historical interface versions for a Linode instance.
 func NewLinodeInstanceInterfaceHistoryListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_instance_interface_history_list",
 		"Lists historical network interface versions for a specific Linode instance with optional pagination.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		protoListPathID{
+			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+			parse: instanceConfigLinodeIDFromTool,
 		},
-		handleInstanceInterfaceHistoryListRequest,
+		instanceFirewallsPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, linodeID, page, pageSize int) ([]*linodev1.InstanceInterfaceHistory, error) {
+			return client.ListInstanceInterfaceHistoryProto(ctx, linodeID, page, pageSize)
+		},
+		nil,
+		instanceInterfaceHistoryListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleInstanceInterfaceHistoryListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := instanceFirewallsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	history, err := client.ListInstanceInterfaceHistory(ctx, linodeID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(formatListInstanceInterfaceHistoryError(linodeID, err)), nil
-	}
-
-	return MarshalToolResponse(history)
-}
-
-func formatListInstanceInterfaceHistoryError(linodeID int, err error) string {
-	return "Failed to list interface history for instance " + strconv.Itoa(linodeID) + ": " + err.Error()
+func instanceInterfaceHistoryListResponse(items []*linodev1.InstanceInterfaceHistory, count int32, filter *string) *linodev1.InstanceInterfaceHistoryListResponse {
+	return &linodev1.InstanceInterfaceHistoryListResponse{Count: count, Filter: filter, InterfaceHistory: items}
 }
 
 // NewLinodeInterfacesUpgradeTool creates a tool for upgrading legacy config interfaces to Linode interfaces.
@@ -941,45 +920,27 @@ func formatUpgradeLinodeInterfacesError(linodeID int, err error) string {
 
 // NewLinodeInstanceInterfacesListTool creates a tool for listing interfaces assigned to a Linode instance.
 func NewLinodeInstanceInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_instance_interface_list",
 		"Lists interfaces assigned to a specific Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
+		protoListPathID{
+			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
+			parse: instanceConfigLinodeIDFromTool,
 		},
-		handleInstanceInterfacesListRequest,
+		func(ctx context.Context, client *linode.Client, linodeID int) ([]*linodev1.InstanceInterface, error) {
+			return client.ListInstanceInterfacesProto(ctx, linodeID)
+		},
+		nil,
+		instanceInterfaceListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleInstanceInterfacesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	interfaces, err := client.ListInstanceInterfaces(ctx, linodeID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list interfaces for instance %d: %v", linodeID, err)), nil
-	}
-
-	response := struct {
-		Count      int                        `json:"count"`
-		Interfaces []linode.InstanceInterface `json:"interfaces"`
-	}{
-		Count:      len(interfaces),
-		Interfaces: interfaces,
-	}
-
-	return MarshalToolResponse(response)
+func instanceInterfaceListResponse(items []*linodev1.InstanceInterface, count int32, filter *string) *linodev1.InstanceInterfaceListResponse {
+	return &linodev1.InstanceInterfaceListResponse{Count: count, Filter: filter, Interfaces: items}
 }
 
 func selectEnvironment(cfg *config.Config, environment string) (*config.EnvironmentConfig, error) {

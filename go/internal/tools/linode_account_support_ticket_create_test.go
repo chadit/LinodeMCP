@@ -360,6 +360,10 @@ func TestLinodeAccountSupportTicketCreateToolSuccess(t *testing.T) {
 	if !strings.Contains(textContent.Text, supportTicketCreateSummary) {
 		t.Errorf("textContent.Text does not contain %v", supportTicketCreateSummary)
 	}
+
+	if !strings.Contains(textContent.Text, "Support ticket opened successfully") {
+		t.Errorf("response %q does not wrap the ticket with the confirmation message", textContent.Text)
+	}
 }
 
 func TestLinodeAccountSupportTicketCreateToolApiError(t *testing.T) {

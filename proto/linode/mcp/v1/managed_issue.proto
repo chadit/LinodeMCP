@@ -20,6 +20,14 @@ message ManagedIssue {
   ManagedIssueEntity entity = 4;
 }
 
+// ManagedIssueListResponse is the {count, filter?, managed_issues} envelope the
+// linode_managed_issue_list tool returns.
+message ManagedIssueListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ManagedIssue managed_issues = 3;
+}
+
 // ManagedIssueGetInput is the input contract for linode_managed_issue_get.
 message ManagedIssueGetInput {
   // Linode environment to use (optional, defaults to "default").

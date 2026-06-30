@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.AccountNotificationListResponse",
+  "description": "linode_account_notification_list envelope: count and the full proto AccountNotification elements (not the Linode data/page/pages/results page). The entity id is an integer Value; until and when are present timestamps. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_notifications": [
+      {
+        "entity": {
+          "id": 123,
+          "label": "web-1",
+          "type": "linode",
+          "url": "/linode/instances/123"
+        },
+        "label": "Scheduled maintenance",
+        "message": "Maintenance is scheduled for a Linode.",
+        "severity": "major",
+        "type": "maintenance",
+        "until": "2024-06-02T00:00:00",
+        "when": "2024-06-01T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_notifications": [
+      {
+        "entity": {
+          "id": 123,
+          "label": "web-1",
+          "type": "linode",
+          "url": "/linode/instances/123"
+        },
+        "label": "Scheduled maintenance",
+        "message": "Maintenance is scheduled for a Linode.",
+        "severity": "major",
+        "type": "maintenance",
+        "until": "2024-06-02T00:00:00",
+        "when": "2024-06-01T00:00:00"
+      }
+    ]
+  }
+}

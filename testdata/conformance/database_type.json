@@ -1,0 +1,62 @@
+{
+  "message": "linode.mcp.v1.DatabaseType",
+  "description": "Managed Databases type with nested per-engine pricing.",
+  "input": {
+    "id": "g6-dedicated-2",
+    "label": "Dedicated 4GB",
+    "class": "dedicated",
+    "disk": 81920,
+    "memory": 4096,
+    "vcpus": 2,
+    "deprecated": false,
+    "engines": {
+      "mysql": [
+        {
+          "quantity": 1,
+          "price": {
+            "hourly": 0.09,
+            "monthly": 60.0
+          }
+        }
+      ],
+      "postgresql": [
+        {
+          "quantity": 1,
+          "price": {
+            "hourly": 0.09,
+            "monthly": 60.0
+          }
+        }
+      ]
+    }
+  },
+  "canonical": {
+    "id": "g6-dedicated-2",
+    "label": "Dedicated 4GB",
+    "class": "dedicated",
+    "disk": 81920,
+    "memory": 4096,
+    "vcpus": 2,
+    "deprecated": false,
+    "engines": {
+      "mysql": [
+        {
+          "quantity": 1,
+          "price": {
+            "hourly": 0.09,
+            "monthly": 60.0
+          }
+        }
+      ],
+      "postgresql": [
+        {
+          "quantity": 1,
+          "price": {
+            "hourly": 0.09,
+            "monthly": 60.0
+          }
+        }
+      ]
+    }
+  }
+}

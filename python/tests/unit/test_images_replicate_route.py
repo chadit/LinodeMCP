@@ -158,7 +158,21 @@ async def test_handle_linode_image_replicate_success(
     payload = json.loads(result[0].text)
     assert payload == {
         "message": "Image 'private/123' replicated successfully",
-        "image": {"id": "private/123", "label": "replicated-image"},
+        "image": {
+            "id": "private/123",
+            "label": "replicated-image",
+            "description": "",
+            "type": "",
+            "vendor": "",
+            "status": "",
+            "created": "",
+            "created_by": "",
+            "capabilities": [],
+            "tags": [],
+            "size": 0,
+            "is_public": False,
+            "deprecated": False,
+        },
     }
     mock_linode_client.replicate_image.assert_awaited_once_with(
         "private/123", ["us-mia", "us-east"]

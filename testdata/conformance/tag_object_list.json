@@ -1,0 +1,52 @@
+{
+  "message": "linode.mcp.v1.TaggedObjectListResponse",
+  "description": "linode_tag_object_list envelope: count and the full proto TaggedObject elements. data is a google.protobuf.Struct that round-trips whatever embedded resource the API returns for each type (linode, nodebalancer, ...). The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 2,
+    "tagged_objects": [
+      {
+        "type": "linode",
+        "label": "web-1",
+        "data": {
+          "id": 123,
+          "label": "web-1",
+          "region": "us-east",
+          "status": "running"
+        }
+      },
+      {
+        "type": "nodebalancer",
+        "label": "lb-1",
+        "data": {
+          "id": 456,
+          "label": "lb-1",
+          "region": "us-east"
+        }
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "tagged_objects": [
+      {
+        "type": "linode",
+        "label": "web-1",
+        "data": {
+          "id": 123,
+          "label": "web-1",
+          "region": "us-east",
+          "status": "running"
+        }
+      },
+      {
+        "type": "nodebalancer",
+        "label": "lb-1",
+        "data": {
+          "id": 456,
+          "label": "lb-1",
+          "region": "us-east"
+        }
+      }
+    ]
+  }
+}

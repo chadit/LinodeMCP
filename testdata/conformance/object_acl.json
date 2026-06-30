@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ObjectACL",
+  "description": "Access control list for one object in an Object Storage bucket.",
+  "input": {
+    "acl": "public-read",
+    "acl_xml": "<AccessControlPolicy></AccessControlPolicy>"
+  },
+  "canonical": {
+    "acl": "public-read",
+    "acl_xml": "<AccessControlPolicy></AccessControlPolicy>"
+  }
+}

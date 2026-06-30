@@ -4,8 +4,13 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import domain_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -74,44 +79,28 @@ async def handle_linode_domain_list(
     domain_contains = arguments.get("domain_contains", "")
     type_filter = arguments.get("type", "")
 
+    def _matches(domain: dict[str, Any]) -> bool:
+        name = str(domain.get("domain", ""))
+        if domain_contains and domain_contains.lower() not in name.lower():
+            return False
+        domain_type = str(domain.get("type", ""))
+        return not (type_filter and domain_type.lower() != type_filter.lower())
+
+    filters: list[str] = []
+    if domain_contains:
+        filters.append(f"domain_contains={domain_contains}")
+    if type_filter:
+        filters.append(f"type={type_filter}")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        domains = await client.list_domains()
-
-        if domain_contains:
-            domains = [
-                d for d in domains if domain_contains.lower() in d.domain.lower()
-            ]
-
-        if type_filter:
-            domains = [d for d in domains if d.type.lower() == type_filter.lower()]
-
-        domains_data = [
-            {
-                "id": d.id,
-                "domain": d.domain,
-                "type": d.type,
-                "status": d.status,
-                "soa_email": d.soa_email,
-                "created": d.created,
-                "updated": d.updated,
-            }
-            for d in domains
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(domains),
-            "domains": domains_data,
-        }
-
-        filters: list[str] = []
-        if domain_contains:
-            filters.append(f"domain_contains={domain_contains}")
-        if type_filter:
-            filters.append(f"type={type_filter}")
-        if filters:
-            response["filter"] = ", ".join(filters)
-
-        return response
+        raw = await client.get_raw("/domains")
+        return serialize_list_response(
+            raw,
+            "domains",
+            domain_pb2.DomainListResponse(),
+            filter_value=", ".join(filters) if filters else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve domains", _call)
 
@@ -142,8 +131,8 @@ async def handle_linode_domain_get(
         return error_response("domain_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        domain = await client.get_domain(int(domain_id))
-        return domain_to_response_dict(domain)
+        raw = await client.get_raw(f"/domains/{int(domain_id)}")
+        return serialize_api_response(raw, domain_pb2.Domain())
 
     return await execute_tool(cfg, arguments, "retrieve domain", _call)
 

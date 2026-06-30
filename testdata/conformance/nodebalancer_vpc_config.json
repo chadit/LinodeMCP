@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerVPCConfig",
+  "description": "NodeBalancer VPC config with all scalar and optional fields present.",
+  "input": {
+    "id": 321,
+    "vpc_id": 100,
+    "subnet_id": 200,
+    "ipv4_range": "10.0.0.0/24",
+    "ipv6_range": "fd00::/64",
+    "ipv4_range_id": 11,
+    "ipv6_range_id": 22,
+    "ipv4_range_auto_assign": true,
+    "nodebalancer_id": 1234
+  },
+  "canonical": {
+    "id": 321,
+    "vpc_id": 100,
+    "subnet_id": 200,
+    "ipv4_range": "10.0.0.0/24",
+    "ipv6_range": "fd00::/64",
+    "ipv4_range_id": 11,
+    "ipv6_range_id": 22,
+    "ipv4_range_auto_assign": true,
+    "nodebalancer_id": 1234
+  }
+}

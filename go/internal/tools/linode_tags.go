@@ -26,18 +26,25 @@ const (
 
 // NewLinodeTagsTool creates a tool for listing account tags.
 func NewLinodeTagsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_tag_list",
 		"Lists tags visible to the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Tag, error) {
+			return client.ListTagsProto(ctx, page, pageSize)
 		},
-		handleLinodeTagsRequest,
+		tagsPaginationFromTool,
+		nil,
+		tagListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func tagListResponse(items []*linodev1.Tag, count int32, filter *string) *linodev1.TagListResponse {
+	return &linodev1.TagListResponse{Count: count, Filter: filter, Tags: items}
 }
 
 // NewLinodeTagDeleteTool creates a tool for deleting an account tag.
@@ -59,25 +66,6 @@ func NewLinodeTagDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 	return tool, profiles.CapDestroy, handler
 }
 
-func handleLinodeTagsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := tagsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	tags, listFailure := client.ListTags(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(tags)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_tag_list: " + listFailure.Error()), nil
-}
-
 func handleLinodeTagDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	tagLabel, validationMessage := deleteTagLabelArgFromTool(request)
 	if validationMessage != "" {
@@ -97,7 +85,9 @@ func handleLinodeTagDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 			return c.DeleteTag(ctx, tagLabel)
 		},
 		Success: func() any {
-			return map[string]string{"deleted": tagLabel}
+			return &linodev1.MessageResponse{
+				Message: fmt.Sprintf("Tag '%s' deleted successfully", tagLabel),
+			}
 		},
 		// ListTaggedObjects returns a paginated list, not a single object,
 		// so the whole payload is hashed; the unknown "Tag" key returns nil.

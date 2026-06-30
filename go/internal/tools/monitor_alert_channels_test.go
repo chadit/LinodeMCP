@@ -167,8 +167,8 @@ func TestLinodeMonitorAlertChannelsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorAlertChannelsToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorAlertChannelsToolName)
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

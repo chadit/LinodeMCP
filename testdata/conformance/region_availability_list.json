@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.RegionAvailabilityListResponse",
+  "description": "linode_region_availability_list envelope: count and the full proto RegionAvailability elements. The tool has no filter params, so filter is omitted. available is implicit-presence, so a false value is still emitted.",
+  "input": {
+    "count": 2,
+    "region_availabilities": [
+      {
+        "region": "us-east",
+        "plan": "g6-standard-1",
+        "available": true
+      },
+      {
+        "region": "us-west",
+        "plan": "g1-gpu-rtx6000-1",
+        "available": false
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "region_availabilities": [
+      {
+        "region": "us-east",
+        "plan": "g6-standard-1",
+        "available": true
+      },
+      {
+        "region": "us-west",
+        "plan": "g1-gpu-rtx6000-1",
+        "available": false
+      }
+    ]
+  }
+}

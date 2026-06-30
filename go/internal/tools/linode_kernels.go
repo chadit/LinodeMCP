@@ -8,6 +8,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
+	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
@@ -21,19 +23,25 @@ const (
 
 // NewLinodeKernelListTool creates a tool for listing Linode kernels.
 func NewLinodeKernelListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_kernel_list",
-		mcp.WithDescription("Lists available Linode kernels with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists available Linode kernels with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Kernel, error) {
+			return client.ListKernelsProto(ctx, page, pageSize)
+		},
+		kernelsPaginationFromTool,
+		nil,
+		kernelListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeKernelsListRequest(ctx, &request, cfg)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func kernelListResponse(items []*linodev1.Kernel, count int32, filter *string) *linodev1.KernelListResponse {
+	return &linodev1.KernelListResponse{Count: count, Filter: filter, Kernels: items}
 }
 
 // NewLinodeKernelGetTool creates a tool for retrieving one Linode kernel.
@@ -49,25 +57,6 @@ func NewLinodeKernelGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 	}
 
 	return tool, profiles.CapRead, handler
-}
-
-func handleLinodeKernelsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := kernelsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	kernels, err := client.ListKernels(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode kernels: %v", err)), nil
-	}
-
-	return FormatListResponse(kernels, nil, "kernels")
 }
 
 func handleKernelGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.Region",
+  "description": "All-scalar region with a nested resolvers message and a repeated capabilities list. No optional fields, so every field is present in the canonical output.",
+  "input": {
+    "id": "us-east",
+    "label": "Newark",
+    "country": "us",
+    "capabilities": ["Linodes", "NodeBalancers"],
+    "status": "ok",
+    "resolvers": {"ipv4": "1.1.1.1", "ipv6": "::"},
+    "site_type": "core"
+  },
+  "canonical": {
+    "id": "us-east",
+    "label": "Newark",
+    "country": "us",
+    "capabilities": ["Linodes", "NodeBalancers"],
+    "status": "ok",
+    "resolvers": {"ipv4": "1.1.1.1", "ipv6": "::"},
+    "site_type": "core"
+  }
+}

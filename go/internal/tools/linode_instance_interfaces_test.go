@@ -42,9 +42,10 @@ func TestLinodeInstanceInterfaceGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyInterfaceID} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -377,8 +378,17 @@ func TestLinodeInstanceInterfacesListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list interfaces for instance 123") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list interfaces for instance 123")
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("result content is not TextContent")
+	}
+
+	if !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
+	}
+
+	if !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
 	}
 }
 

@@ -1,11 +1,24 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    firewall_pb2,
+    nodebalancer_config_node_pb2,
+    nodebalancer_config_pb2,
+    nodebalancer_pb2,
+    nodebalancer_vpc_config_pb2,
+    type_pb2,
+)
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -83,20 +96,11 @@ async def handle_linode_nodebalancer_type_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         types = await client.list_nodebalancer_types()
-
-        types_data = [
-            {
-                "id": t.get("id", ""),
-                "label": t.get("label", ""),
-                "price": t.get("price", {}),
-            }
-            for t in types
-        ]
-
-        return {
-            "count": len(types),
-            "types": types_data,
-        }
+        return serialize_list_response(
+            {"data": types},
+            "nodebalancer_types",
+            type_pb2.NodeBalancerTypeListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer types", _call)
 
@@ -108,46 +112,28 @@ async def handle_linode_nodebalancer_list(
     region_filter = arguments.get("region", "")
     label_contains = arguments.get("label_contains", "")
 
+    def _matches(nodebalancer: dict[str, Any]) -> bool:
+        region = str(nodebalancer.get("region", ""))
+        if region_filter and region.lower() != region_filter.lower():
+            return False
+        label = str(nodebalancer.get("label", ""))
+        return not (label_contains and label_contains.lower() not in label.lower())
+
+    filters: list[str] = []
+    if region_filter:
+        filters.append(f"region={region_filter}")
+    if label_contains:
+        filters.append(f"label_contains={label_contains}")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        nodebalancers = await client.list_nodebalancers()
-
-        if region_filter:
-            nodebalancers = [
-                nb for nb in nodebalancers if nb.region.lower() == region_filter.lower()
-            ]
-
-        if label_contains:
-            nodebalancers = [
-                nb for nb in nodebalancers if label_contains.lower() in nb.label.lower()
-            ]
-
-        nodebalancers_data = [
-            {
-                "id": nb.id,
-                "label": nb.label,
-                "region": nb.region,
-                "hostname": nb.hostname,
-                "ipv4": nb.ipv4,
-                "created": nb.created,
-                "updated": nb.updated,
-            }
-            for nb in nodebalancers
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(nodebalancers),
-            "nodebalancers": nodebalancers_data,
-        }
-
-        filters: list[str] = []
-        if region_filter:
-            filters.append(f"region={region_filter}")
-        if label_contains:
-            filters.append(f"label_contains={label_contains}")
-        if filters:
-            response["filter"] = ", ".join(filters)
-
-        return response
+        raw = await client.get_raw("/nodebalancers")
+        return serialize_list_response(
+            raw,
+            "nodebalancers",
+            nodebalancer_pb2.NodeBalancerListResponse(),
+            filter_value=", ".join(filters) if filters else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancers", _call)
 
@@ -194,37 +180,15 @@ async def handle_linode_nodebalancer_get(
     if nodebalancer_id is None:
         return error_response("nodebalancer_id must be a positive integer")
 
+    encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        nb = await client.get_nodebalancer(nodebalancer_id)
-        return nodebalancer_to_response_dict(nb)
+        return serialize_api_response(
+            await client.get_raw(f"/nodebalancers/{encoded_nodebalancer_id}"),
+            nodebalancer_pb2.NodeBalancer(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer", _call)
-
-
-def nodebalancer_vpc_config_to_response_dict(
-    config: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape a raw NodeBalancer VPC config API dict to proto-canonical form.
-
-    vpc_id, ipv4_range_id, ipv6_range_id, ipv4_range_auto_assign are nullable and
-    omitted when null, matching the proto optional fields.
-    """
-    body: dict[str, Any] = {
-        "id": config.get("id", 0),
-        "subnet_id": config.get("subnet_id", 0),
-        "ipv4_range": config.get("ipv4_range", ""),
-        "ipv6_range": config.get("ipv6_range", ""),
-        "nodebalancer_id": config.get("nodebalancer_id", 0),
-    }
-    if config.get("vpc_id") is not None:
-        body["vpc_id"] = config["vpc_id"]
-    if config.get("ipv4_range_id") is not None:
-        body["ipv4_range_id"] = config["ipv4_range_id"]
-    if config.get("ipv6_range_id") is not None:
-        body["ipv6_range_id"] = config["ipv6_range_id"]
-    if config.get("ipv4_range_auto_assign") is not None:
-        body["ipv4_range_auto_assign"] = config["ipv4_range_auto_assign"]
-    return body
 
 
 def create_linode_nodebalancer_vpc_config_get_tool() -> tuple[Tool, Capability]:
@@ -282,8 +246,13 @@ async def handle_linode_nodebalancer_vpc_config_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_nodebalancer_vpc_configs(
+        raw = await client.list_nodebalancer_vpc_configs(
             nodebalancer_id, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "vpc_configs",
+            nodebalancer_vpc_config_pb2.NodeBalancerVPCConfigListResponse(),
         )
 
     return await execute_tool(
@@ -304,8 +273,9 @@ async def handle_linode_nodebalancer_vpc_config_get(
         return error_response("vpc_config_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return nodebalancer_vpc_config_to_response_dict(
-            await client.get_nodebalancer_vpc_config(nodebalancer_id, vpc_config_id)
+        return serialize_api_response(
+            await client.get_nodebalancer_vpc_config(nodebalancer_id, vpc_config_id),
+            nodebalancer_vpc_config_pb2.NodeBalancerVPCConfig(),
         )
 
     return await execute_tool(
@@ -397,8 +367,13 @@ async def handle_linode_nodebalancer_firewall_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_nodebalancer_firewalls(
+        raw = await client.list_nodebalancer_firewalls(
             nodebalancer_id, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "firewalls",
+            firewall_pb2.FirewallListResponse(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer firewalls", _call)
@@ -450,38 +425,16 @@ async def handle_linode_nodebalancer_config_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_nodebalancer_configs(
+        raw = await client.list_nodebalancer_configs(
             nodebalancer_id, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "configs",
+            nodebalancer_config_pb2.NodeBalancerConfigListResponse(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer configs", _call)
-
-
-def nodebalancer_config_to_response_dict(config: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw NodeBalancer config API dict to proto-canonical form."""
-    nodes_status: dict[str, Any] = config.get("nodes_status") or {}
-    return {
-        "id": config.get("id", 0),
-        "port": config.get("port", 0),
-        "protocol": config.get("protocol", ""),
-        "algorithm": config.get("algorithm", ""),
-        "stickiness": config.get("stickiness", ""),
-        "check": config.get("check", ""),
-        "check_interval": config.get("check_interval", 0),
-        "check_timeout": config.get("check_timeout", 0),
-        "check_attempts": config.get("check_attempts", 0),
-        "check_path": config.get("check_path", ""),
-        "check_body": config.get("check_body", ""),
-        "check_passive": config.get("check_passive", False),
-        "cipher_suite": config.get("cipher_suite", ""),
-        "ssl_commonname": config.get("ssl_commonname", ""),
-        "ssl_fingerprint": config.get("ssl_fingerprint", ""),
-        "nodebalancer_id": config.get("nodebalancer_id", 0),
-        "nodes_status": {
-            "up": nodes_status.get("up", 0),
-            "down": nodes_status.get("down", 0),
-        },
-    }
 
 
 def create_linode_nodebalancer_config_get_tool() -> tuple[Tool, Capability]:
@@ -506,8 +459,9 @@ async def handle_linode_nodebalancer_config_get(
         return error_response("config_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return nodebalancer_config_to_response_dict(
-            await client.get_nodebalancer_config(nodebalancer_id, config_id)
+        return serialize_api_response(
+            await client.get_nodebalancer_config(nodebalancer_id, config_id),
+            nodebalancer_config_pb2.NodeBalancerConfig(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve NodeBalancer config", _call)
@@ -568,27 +522,18 @@ async def handle_linode_nodebalancer_config_node_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_nodebalancer_config_nodes(
+        raw = await client.list_nodebalancer_config_nodes(
             nodebalancer_id, config_id, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "nodes",
+            nodebalancer_config_node_pb2.NodeBalancerConfigNodeListResponse(),
         )
 
     return await execute_tool(
         cfg, arguments, "retrieve NodeBalancer config nodes", _call
     )
-
-
-def nodebalancer_config_node_to_response_dict(node: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw NodeBalancer config node API dict to proto-canonical form."""
-    return {
-        "id": node.get("id", 0),
-        "address": node.get("address", ""),
-        "label": node.get("label", ""),
-        "status": node.get("status", ""),
-        "weight": node.get("weight", 0),
-        "mode": node.get("mode", ""),
-        "nodebalancer_id": node.get("nodebalancer_id", 0),
-        "config_id": node.get("config_id", 0),
-    }
 
 
 def create_linode_nodebalancer_config_node_get_tool() -> tuple[Tool, Capability]:
@@ -619,10 +564,11 @@ async def handle_linode_nodebalancer_config_node_get(
         return error_response("node_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return nodebalancer_config_node_to_response_dict(
+        return serialize_api_response(
             await client.get_nodebalancer_config_node(
                 nodebalancer_id, config_id, node_id
-            )
+            ),
+            nodebalancer_config_node_pb2.NodeBalancerConfigNode(),
         )
 
     return await execute_tool(

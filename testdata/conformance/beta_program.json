@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.BetaProgram",
+  "description": "Beta program with the optional description present and the optional ended omitted, so description appears in the canonical output and ended does not (explicit presence). class is a proto field name that round-trips as a JSON key.",
+  "input": {
+    "class": "closed",
+    "description": "Limited beta",
+    "greenlight_only": false,
+    "id": "example-beta",
+    "label": "Example Beta",
+    "more_info": "https://example.com/beta",
+    "started": "2024-01-01T00:00:00"
+  },
+  "canonical": {
+    "class": "closed",
+    "description": "Limited beta",
+    "greenlight_only": false,
+    "id": "example-beta",
+    "label": "Example Beta",
+    "more_info": "https://example.com/beta",
+    "started": "2024-01-01T00:00:00"
+  }
+}

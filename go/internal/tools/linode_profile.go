@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
@@ -47,15 +48,22 @@ func NewLinodeProfilePreferencesTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 
 // NewLinodeProfileSecurityQuestionsTool creates a tool for listing available profile security questions.
 func NewLinodeProfileSecurityQuestionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newSimpleGetTool(
-		cfg, "linode_profile_security_question_list",
+	tool, handler := newProtoListTool(
+		cfg,
+		"linode_profile_security_question_list",
 		"Lists available profile security questions for the authenticated profile",
-		func(ctx context.Context, client *linode.Client) (any, error) {
-			return client.ListProfileSecurityQuestions(ctx)
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.SecurityQuestion, error) {
+			return client.ListProfileSecurityQuestionsProto(ctx)
 		},
+		nil,
+		securityQuestionListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func securityQuestionListResponse(items []*linodev1.SecurityQuestion, count int32, filter *string) *linodev1.SecurityQuestionListResponse {
+	return &linodev1.SecurityQuestionListResponse{Count: count, Filter: filter, SecurityQuestions: items}
 }
 
 // NewLinodeProfilePreferencesUpdateTool creates a tool for updating profile preferences.
@@ -127,37 +135,25 @@ func profilePreferencesFromTool(request *mcp.CallToolRequest) (linode.ProfilePre
 
 // NewLinodeProfileTokensTool creates a tool for listing personal access tokens for the authenticated profile.
 func NewLinodeProfileTokensTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_profile_token_list",
 		"Lists personal access tokens for the authenticated profile.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.PersonalAccessToken, error) {
+			return client.ListProfileTokensProto(ctx, page, pageSize)
 		},
-		handleLinodeProfileTokensRequest,
+		profileTokensPaginationFromTool,
+		nil,
+		profileTokenListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeProfileTokensRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := profileTokensPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	tokens, listFailure := client.ListProfileTokens(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(tokens)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_profile_token_list: " + listFailure.Error()), nil
+func profileTokenListResponse(items []*linodev1.PersonalAccessToken, count int32, filter *string) *linodev1.PersonalAccessTokenListResponse {
+	return &linodev1.PersonalAccessTokenListResponse{Count: count, Filter: filter, ProfileTokens: items}
 }
 
 func profileTokensPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -223,11 +219,17 @@ func handleLinodeProfileTokenCreateRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(createFailureMessage), nil
 	}
 
-	return MarshalToolResponse(token)
+	// The one-time token secret is returned to the user by design (it is shown
+	// only at creation), so it is not output-redacted.
+	return MarshalProtoToolResponse(&linodev1.ProfileTokenCreateResponse{
+		Warning: "IMPORTANT: The token below is shown ONLY ONCE. " +
+			"Save it now - it cannot be retrieved later.",
+		Token: token,
+	})
 }
 
-func createProfileTokenResult(ctx context.Context, client *linode.Client, body linode.CreateProfileTokenRequest) (*linode.ProfileToken, string) {
-	token, createFailure := client.CreateProfileToken(ctx, body)
+func createProfileTokenResult(ctx context.Context, client *linode.Client, body linode.CreateProfileTokenRequest) (*linodev1.CreatedPersonalAccessToken, string) {
+	token, createFailure := client.CreateProfileTokenProto(ctx, body)
 	if createFailure != nil {
 		return nil, "Failed to create linode_profile_token_create: " + createFailure.Error()
 	}
@@ -312,9 +314,9 @@ func handleLinodeProfileTokenDeleteRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(deleteFailureMessage), nil
 	}
 
-	return MarshalToolResponse(map[string]any{
-		responseKeyMessage: "Profile token revoked successfully",
-		"token_id":         tokenID,
+	return MarshalProtoToolResponse(&linodev1.ProfileTokenIDResponse{
+		Message: fmt.Sprintf("Profile token %d revoked successfully", tokenID),
+		TokenId: linodeIDToInt32(tokenID),
 	})
 }
 
@@ -374,11 +376,14 @@ func handleLinodeProfileTokenUpdateRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError("Failed to update linode_profile_token_update: " + updateFailureMessage), nil
 	}
 
-	return MarshalToolResponse(token)
+	return MarshalProtoToolResponse(&linodev1.PersonalAccessTokenWriteResponse{
+		Message: "Profile token updated successfully",
+		Token:   token,
+	})
 }
 
-func updateProfileToken(ctx context.Context, client *linode.Client, tokenID string, body linode.UpdateProfileTokenRequest) (*linode.ProfileToken, string) {
-	token, err := client.UpdateProfileToken(ctx, tokenID, body)
+func updateProfileToken(ctx context.Context, client *linode.Client, tokenID string, body linode.UpdateProfileTokenRequest) (*linodev1.PersonalAccessToken, string) {
+	token, err := client.UpdateProfileTokenProto(ctx, tokenID, body)
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -415,37 +420,25 @@ func profileTokenUpdateFromTool(request *mcp.CallToolRequest) (int, linode.Updat
 
 // NewLinodeProfileLoginsTool creates a tool for listing login history for the authenticated profile.
 func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_profile_login_list",
 		"Lists login history for the authenticated profile.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountLogin, error) {
+			return client.ListProfileLoginsProto(ctx, page, pageSize)
 		},
-		handleLinodeProfileLoginsRequest,
+		profileLoginsPaginationFromTool,
+		nil,
+		profileLoginListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeProfileLoginsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := profileLoginsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	logins, listFailure := client.ListProfileLogins(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(logins)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_profile_login_list: " + listFailure.Error()), nil
+func profileLoginListResponse(items []*linodev1.AccountLogin, count int32, filter *string) *linodev1.ProfileLoginListResponse {
+	return &linodev1.ProfileLoginListResponse{Count: count, Filter: filter, ProfileLogins: items}
 }
 
 func profileLoginsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {

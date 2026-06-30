@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.AccountAgreements",
+  "description": "linode_account_agreement_list response: a flat object of boolean acknowledgment flags, one per account agreement. The endpoint returns an object, not a {count, key} list. All four flags are implicit-presence scalars, so each emits its boolean value (false included).",
+  "input": {
+    "billing_agreement": true,
+    "eu_model": false,
+    "master_service_agreement": true,
+    "privacy_policy": false
+  },
+  "canonical": {
+    "billing_agreement": true,
+    "eu_model": false,
+    "master_service_agreement": true,
+    "privacy_policy": false
+  }
+}

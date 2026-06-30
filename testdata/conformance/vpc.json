@@ -1,0 +1,62 @@
+{
+  "message": "linode.mcp.v1.Vpc",
+  "description": "VPC with all scalar fields and a fully populated nested subnet present.",
+  "input": {
+    "id": 555,
+    "label": "prod-vpc",
+    "description": "Primary production VPC",
+    "region": "us-east",
+    "subnets": [
+      {
+        "id": 777,
+        "label": "subnet-a",
+        "ipv4": "10.0.1.0/24",
+        "linodes": [
+          {
+            "id": 999,
+            "interfaces": [
+              {
+                "id": 4001,
+                "active": true,
+                "config_id": 5002
+              }
+            ]
+          }
+        ],
+        "created": "2024-01-02T03:04:05",
+        "updated": "2024-01-03T03:04:05"
+      }
+    ],
+    "created": "2024-01-01T00:00:00",
+    "updated": "2024-01-04T00:00:00"
+  },
+  "canonical": {
+    "id": 555,
+    "label": "prod-vpc",
+    "description": "Primary production VPC",
+    "region": "us-east",
+    "subnets": [
+      {
+        "id": 777,
+        "label": "subnet-a",
+        "ipv4": "10.0.1.0/24",
+        "linodes": [
+          {
+            "id": 999,
+            "interfaces": [
+              {
+                "id": 4001,
+                "active": true,
+                "config_id": 5002
+              }
+            ]
+          }
+        ],
+        "created": "2024-01-02T03:04:05",
+        "updated": "2024-01-03T03:04:05"
+      }
+    ],
+    "created": "2024-01-01T00:00:00",
+    "updated": "2024-01-04T00:00:00"
+  }
+}

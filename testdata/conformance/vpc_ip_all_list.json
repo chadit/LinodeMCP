@@ -1,0 +1,68 @@
+{
+  "message": "linode.mcp.v1.VPCIPListResponse",
+  "description": "linode_vpc_ip_all_list envelope: count and the full proto VPCIP elements. The nullable fields (address, address_range, linode_id, config_id, gateway, prefix) are optional and omitted when the API returns null; the second element omits them to exercise that. Neither VPC IP tool filters, so filter is omitted.",
+  "input": {
+    "count": 2,
+    "ips": [
+      {
+        "address": "10.0.0.5",
+        "address_range": null,
+        "vpc_id": 456,
+        "subnet_id": 20,
+        "region": "us-east",
+        "linode_id": 123,
+        "config_id": 555,
+        "interface_id": 99,
+        "active": true,
+        "nat_1_1": "203.0.113.5",
+        "gateway": "10.0.0.1",
+        "prefix": 24,
+        "subnet_mask": "255.255.255.0"
+      },
+      {
+        "address": null,
+        "address_range": "10.0.1.0/28",
+        "vpc_id": 456,
+        "subnet_id": 21,
+        "region": "us-east",
+        "linode_id": null,
+        "config_id": null,
+        "interface_id": 100,
+        "active": false,
+        "nat_1_1": "",
+        "gateway": null,
+        "prefix": null,
+        "subnet_mask": ""
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "ips": [
+      {
+        "address": "10.0.0.5",
+        "vpc_id": 456,
+        "subnet_id": 20,
+        "region": "us-east",
+        "linode_id": 123,
+        "config_id": 555,
+        "interface_id": 99,
+        "active": true,
+        "nat_1_1": "203.0.113.5",
+        "gateway": "10.0.0.1",
+        "prefix": 24,
+        "subnet_mask": "255.255.255.0"
+      },
+      {
+        "address_range": "10.0.1.0/28",
+        "vpc_id": 456,
+        "subnet_id": 21,
+        "region": "us-east",
+        "interface_id": 100,
+        "active": false,
+        "nat_1_1": "",
+        "subnet_mask": ""
+      }
+    ]
+  }
+}

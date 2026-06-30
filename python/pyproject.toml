@@ -126,10 +126,24 @@ ignore_missing_imports = true
 module = "yaml"
 ignore_missing_imports = true
 
+# The protobuf runtime (google.protobuf.*) ships no type stubs mypy can use, and
+# the generated *_pb2 modules import it. Scope the suppression to that package
+# instead of the blunt global --ignore-missing-imports, so a genuinely missing
+# stub elsewhere still fails. Install types-protobuf instead if real protobuf
+# typing on the serialize path is wanted.
+[[tool.mypy.overrides]]
+module = "google.protobuf.*"
+ignore_missing_imports = true
+
 # Generated protobuf modules: strict typing does not apply to generated code.
+# follow_imports/ignore_missing_imports let source files import the generated
+# _pb2 modules (a namespace package with no __init__.py) without mypy trying to
+# resolve their submodules, the same way ruff excludes the genpb tree.
 [[tool.mypy.overrides]]
 module = "linodemcp.genpb.*"
 ignore_errors = true
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.ruff]
 target-version = "py313"

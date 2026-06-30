@@ -39,6 +39,14 @@ message VpcSubnetLinodeInterface {
   int32 config_id = 3;
 }
 
+// VpcListResponse is the envelope linode_vpc_list returns: a count, an optional
+// echoed filter, and the full proto Vpc elements.
+message VpcListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Vpc vpcs = 3;
+}
+
 // VpcWriteResponse is the {message, vpc} envelope the VPC write tools (create,
 // update) return.
 message VpcWriteResponse {
@@ -61,6 +69,14 @@ message VpcSubnetWriteResponse {
   VpcSubnet subnet = 2;
 }
 
+// VpcSubnetListResponse is the envelope linode_vpc_subnet_list returns: a count,
+// an optional echoed filter, and the full proto VpcSubnet elements for a VPC.
+message VpcSubnetListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated VpcSubnet subnets = 3;
+}
+
 // VpcSubnetGetInput is the input contract for linode_vpc_subnet_get.
 message VpcSubnetGetInput {
   // Linode environment to use (optional, defaults to "default").
@@ -69,4 +85,33 @@ message VpcSubnetGetInput {
   string vpc_id = 2;
   // The ID of the subnet to retrieve (required).
   string subnet_id = 3;
+}
+
+// VPCIP mirrors one IP address associated with a VPC, from GET /vpcs/ips and
+// GET /vpcs/{vpc_id}/ips. The nullable fields (address, address_range,
+// linode_id, config_id, gateway, prefix) are optional and omitted when the API
+// returns null.
+message VPCIP {
+  optional string address = 1;
+  optional string address_range = 2;
+  int32 vpc_id = 3;
+  int32 subnet_id = 4;
+  string region = 5;
+  optional int32 linode_id = 6;
+  optional int32 config_id = 7;
+  int32 interface_id = 8;
+  bool active = 9;
+  string nat_1_1 = 10;
+  optional string gateway = 11;
+  optional int32 prefix = 12;
+  string subnet_mask = 13;
+}
+
+// VPCIPListResponse is the envelope linode_vpc_ip_all_list and
+// linode_vpc_ip_list return: a count, an optional echoed filter, and the full
+// proto VPCIP elements. Neither tool filters, so filter is omitted.
+message VPCIPListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated VPCIP ips = 3;
 }

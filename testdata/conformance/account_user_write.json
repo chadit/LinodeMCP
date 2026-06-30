@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.AccountUserWriteResponse",
+  "description": "Account user create/update envelope: a confirmation message and the full AccountUser element.",
+  "input": {
+    "message": "Account user created successfully",
+    "user": {
+      "email": "bob@example.com",
+      "last_login": {
+        "login_datetime": "2026-06-30T09:30:00",
+        "status": "successful"
+      },
+      "password_created": "2026-06-01T00:00:00",
+      "restricted": true,
+      "ssh_keys": ["key-a", "key-b"],
+      "tfa_enabled": false,
+      "user_type": "child",
+      "username": "bob",
+      "verified_phone_number": "+15555550199"
+    }
+  },
+  "canonical": {
+    "message": "Account user created successfully",
+    "user": {
+      "email": "bob@example.com",
+      "last_login": {
+        "login_datetime": "2026-06-30T09:30:00",
+        "status": "successful"
+      },
+      "password_created": "2026-06-01T00:00:00",
+      "restricted": true,
+      "ssh_keys": ["key-a", "key-b"],
+      "tfa_enabled": false,
+      "user_type": "child",
+      "username": "bob",
+      "verified_phone_number": "+15555550199"
+    }
+  }
+}

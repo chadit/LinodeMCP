@@ -1,0 +1,46 @@
+{
+  "message": "linode.mcp.v1.LKETypeListResponse",
+  "description": "linode_lke_type_list envelope: count and the full proto LinodeType elements (price plus a region_prices array). The tool has no filter params, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "lke_types": [
+      {
+        "id": "lke-ha",
+        "label": "LKE High Availability",
+        "price": {
+          "hourly": 0.09,
+          "monthly": 60.0
+        },
+        "region_prices": [
+          {
+            "id": "id-cgk",
+            "hourly": 0.108,
+            "monthly": 72.0
+          }
+        ],
+        "transfer": 0
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "lke_types": [
+      {
+        "id": "lke-ha",
+        "label": "LKE High Availability",
+        "price": {
+          "hourly": 0.09,
+          "monthly": 60.0
+        },
+        "region_prices": [
+          {
+            "id": "id-cgk",
+            "hourly": 0.108,
+            "monthly": 72.0
+          }
+        ],
+        "transfer": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.AccountPaymentMethodWriteResponse",
+  "description": "Payment-method create envelope: a confirmation message plus the full payment method element the API created.",
+  "input": {
+    "message": "Payment method created successfully",
+    "payment_method": {
+      "id": 420,
+      "type": "credit_card",
+      "is_default": true,
+      "data": {
+        "card_type": "Visa",
+        "last_four": "1111",
+        "expiry": "11/2026"
+      }
+    }
+  },
+  "canonical": {
+    "message": "Payment method created successfully",
+    "payment_method": {
+      "id": 420,
+      "type": "credit_card",
+      "is_default": true,
+      "data": {
+        "card_type": "Visa",
+        "last_four": "1111",
+        "expiry": "11/2026"
+      }
+    }
+  }
+}

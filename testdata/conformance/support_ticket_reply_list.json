@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.SupportTicketReplyListResponse",
+  "description": "linode_support_ticket_reply_list envelope: count and the full proto SupportTicketReply elements (not the Linode data/page/pages/results page). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "support_ticket_replies": [
+      {
+        "created": "2026-06-01T12:00:00",
+        "created_by": "support-agent",
+        "description": "We are investigating this ticket.",
+        "gravatar_id": "474a1b4373ae0be4132649e69c36ce30",
+        "id": 22222,
+        "updated": "2026-06-01T12:05:00",
+        "updated_by": "support-agent"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "support_ticket_replies": [
+      {
+        "created": "2026-06-01T12:00:00",
+        "created_by": "support-agent",
+        "description": "We are investigating this ticket.",
+        "gravatar_id": "474a1b4373ae0be4132649e69c36ce30",
+        "id": 22222,
+        "updated": "2026-06-01T12:05:00",
+        "updated_by": "support-agent"
+      }
+    ]
+  }
+}

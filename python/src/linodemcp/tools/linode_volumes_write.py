@@ -755,7 +755,7 @@ async def _volume_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_volume(int(volume_id))
         return {
-            "message": f"Volume {volume_id} deleted successfully",
+            "message": f"Volume {volume_id} removed successfully",
             "volume_id": volume_id,
         }
 
@@ -815,7 +815,7 @@ async def handle_linode_volume_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_volume(int(volume_id))
         return {
-            "message": f"Volume {volume_id} deleted successfully",
+            "message": f"Volume {volume_id} removed successfully",
             "volume_id": volume_id,
         }
 

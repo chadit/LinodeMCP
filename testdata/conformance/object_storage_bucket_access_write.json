@@ -1,0 +1,18 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageBucketAccessWriteResponse",
+  "description": "Bucket access write envelope: a confirmation message plus the access element built from the request args (acl + cors_enabled).",
+  "input": {
+    "message": "Access settings for bucket 'my-bucket' in us-east-1 applied successfully",
+    "access": {
+      "acl": "public-read",
+      "cors_enabled": true
+    }
+  },
+  "canonical": {
+    "message": "Access settings for bucket 'my-bucket' in us-east-1 applied successfully",
+    "access": {
+      "acl": "public-read",
+      "cors_enabled": true
+    }
+  }
+}

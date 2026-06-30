@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerListResponse",
+  "description": "linode_instance_nodebalancer_list envelope: count and the full proto NodeBalancer elements (nested transfer summary), no filter (the sub-resource list takes no filter param).",
+  "input": {
+    "count": 1,
+    "nodebalancers": [
+      {
+        "id": 12345,
+        "label": "prod-balancer",
+        "region": "us-east",
+        "hostname": "nb-203-0-113-1.newark.nodebalancer.linode.com",
+        "ipv4": "203.0.113.1",
+        "ipv6": "2600:3c03::f03c:91ff:fe24:3a2f",
+        "client_conn_throttle": 20,
+        "transfer": {
+          "in": 12.34,
+          "out": 56.78,
+          "total": 69.12
+        },
+        "tags": ["prod", "web"],
+        "created": "2026-01-15T10:30:00",
+        "updated": "2026-02-20T14:45:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "nodebalancers": [
+      {
+        "id": 12345,
+        "label": "prod-balancer",
+        "region": "us-east",
+        "hostname": "nb-203-0-113-1.newark.nodebalancer.linode.com",
+        "ipv4": "203.0.113.1",
+        "ipv6": "2600:3c03::f03c:91ff:fe24:3a2f",
+        "client_conn_throttle": 20,
+        "transfer": {
+          "in": 12.34,
+          "out": 56.78,
+          "total": 69.12
+        },
+        "tags": ["prod", "web"],
+        "created": "2026-01-15T10:30:00",
+        "updated": "2026-02-20T14:45:00"
+      }
+    ]
+  }
+}

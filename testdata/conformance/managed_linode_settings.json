@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.ManagedLinodeSettings",
+  "description": "Managed Linode settings with the nested ssh message present, including the optional port and user fields.",
+  "input": {
+    "id": 555,
+    "label": "web-1",
+    "group": "prod",
+    "ssh": {
+      "access": true,
+      "ip": "203.0.113.1",
+      "port": 22,
+      "user": "linode"
+    }
+  },
+  "canonical": {
+    "id": 555,
+    "label": "web-1",
+    "group": "prod",
+    "ssh": {
+      "access": true,
+      "ip": "203.0.113.1",
+      "port": 22,
+      "user": "linode"
+    }
+  }
+}

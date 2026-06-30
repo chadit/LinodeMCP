@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.MonitorServiceListResponse",
+  "description": "linode_monitor_service_list envelope: count and the full proto MonitorService elements. The tool is non-paginated and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "services": [
+      {
+        "label": "Databases",
+        "service_type": "dbaas"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "services": [
+      {
+        "label": "Databases",
+        "service_type": "dbaas"
+      }
+    ]
+  }
+}

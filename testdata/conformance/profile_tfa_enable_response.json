@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.ProfileTfaEnableResponse",
+  "description": "Profile TFA enable envelope: the one-time two-factor secret, its provisioning expiry, and the save-the-secret warning. The secret is returned to the user by design (it must be confirmed to activate two-factor auth); it is not output-redacted.",
+  "input": {
+    "secret": "JBSWY3DPEHPK3PXP",
+    "expiry": "2026-06-30T12:15:00",
+    "warning": "IMPORTANT: Save this two-factor authentication secret now. It must be confirmed before two-factor authentication is enabled."
+  },
+  "canonical": {
+    "secret": "JBSWY3DPEHPK3PXP",
+    "expiry": "2026-06-30T12:15:00",
+    "warning": "IMPORTANT: Save this two-factor authentication secret now. It must be confirmed before two-factor authentication is enabled."
+  }
+}

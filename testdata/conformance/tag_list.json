@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.TagListResponse",
+  "description": "linode_tag_list envelope: count, an optional filter echo, and the full proto Tag elements with the repeated entity-ID lists emitted as [].",
+  "input": {
+    "count": 1,
+    "filter": "label=production",
+    "tags": [
+      {
+        "label": "production",
+        "domains": [11, 12],
+        "linodes": [123, 456],
+        "nodebalancers": [789],
+        "volumes": [321]
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "label=production",
+    "tags": [
+      {
+        "label": "production",
+        "domains": [11, 12],
+        "linodes": [123, 456],
+        "nodebalancers": [789],
+        "volumes": [321]
+      }
+    ]
+  }
+}

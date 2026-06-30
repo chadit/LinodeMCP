@@ -107,8 +107,18 @@ func TestLinodeManagedCredentialRevokeToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "revoked") {
-		t.Errorf("textContent.Text does not contain %v", "revoked")
+	var got map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &got); err != nil {
+		t.Fatalf("unexpected error decoding response: %v", err)
+	}
+
+	wantMessage := "Managed credential 9991 revoked successfully"
+	if got["message"] != wantMessage {
+		t.Errorf("got[message] = %v, want %v", got["message"], wantMessage)
+	}
+
+	if got["credential_id"] != float64(managedCredentialID) {
+		t.Errorf("got[credential_id] = %v, want %v", got["credential_id"], managedCredentialID)
 	}
 }
 

@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// DatabaseInstance is one Managed Database instance summary element. The
+// cross-engine /databases/instances list and the per-engine MySQL and
+// PostgreSQL lists all return this same flat summary shape, so the three list
+// tools share one element. Fields mirror the Linode API summary element and the
+// Go DatabaseInstance struct one-for-one.
+message DatabaseInstance {
+  int32 id = 1;
+  string status = 2;
+  string label = 3;
+  string region = 4;
+  string type = 5;
+  string engine = 6;
+  string version = 7;
+  int32 cluster_size = 8;
+  string replication_type = 9;
+  bool ssl_connection = 10;
+  bool encrypted = 11;
+  repeated string allow_list = 12;
+  string created = 13;
+  string updated = 14;
+}
+
+// DatabaseInstanceListResponse is the linode_database_instance_list envelope
+// (cross-engine /databases/instances): count and the full proto DatabaseInstance
+// elements. Pagination does not echo a filter.
+message DatabaseInstanceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated DatabaseInstance database_instances = 3;
+}
+
+// DatabaseMySQLInstanceListResponse is the linode_database_mysql_instance_list
+// envelope (/databases/mysql/instances): count and the full proto
+// DatabaseInstance elements. Pagination does not echo a filter.
+message DatabaseMySQLInstanceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated DatabaseInstance mysql_instances = 3;
+}
+
+// DatabasePostgreSQLInstanceListResponse is the
+// linode_database_postgresql_instance_list envelope
+// (/databases/postgresql/instances): count and the full proto DatabaseInstance
+// elements. Pagination does not echo a filter.
+message DatabasePostgreSQLInstanceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated DatabaseInstance postgresql_instances = 3;
+}
+
+// DatabaseInstanceWriteResponse is the {message, database_instance} envelope the
+// MySQL and PostgreSQL create and update tools return: a confirmation message
+// plus the full DatabaseInstance element decoded from the API body.
+message DatabaseInstanceWriteResponse {
+  string message = 1;
+  DatabaseInstance database_instance = 2;
+}
+
+// DatabaseInstanceActionWriteResponse is the {message, instance_id} id-echo the
+// empty-body database action tools return: credentials reset, patch, suspend,
+// and resume. The API returns no body for these, so the response echoes the
+// confirmation message and the instance ID the action ran against.
+message DatabaseInstanceActionWriteResponse {
+  string message = 1;
+  int32 instance_id = 2;
+}

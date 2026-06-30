@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import monitor_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -14,6 +15,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 
@@ -57,14 +62,6 @@ def create_linode_monitor_service_list_tool() -> tuple[Tool, Capability]:
             },
         },
     ), Capability.Read
-
-
-def monitor_service_to_response_dict(service: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Monitor service API dict to proto-canonical form."""
-    return {
-        "label": service.get("label", ""),
-        "service_type": service.get("service_type", ""),
-    }
 
 
 def create_linode_monitor_service_get_tool() -> tuple[Tool, Capability]:
@@ -505,16 +502,12 @@ async def handle_linode_monitor_service_list(
     """Handle linode_monitor_service_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_monitor_services()
-        services = data.get("data", [])
-        return {
-            "message": "Monitor services listed",
-            "count": len(services),
-            "services": services,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        raw = await client.list_monitor_services()
+        return serialize_list_response(
+            raw,
+            "services",
+            monitor_pb2.MonitorServiceListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list monitor services", _call)
 
@@ -532,7 +525,7 @@ async def handle_linode_monitor_service_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.get_monitor_service(service_type)
-        return monitor_service_to_response_dict(data)
+        return serialize_api_response(data, monitor_pb2.MonitorService())
 
     return await execute_tool(cfg, arguments, "get monitor service", _call)
 
@@ -550,11 +543,14 @@ async def handle_linode_monitor_service_metric_query(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.read_monitor_service_metrics(service_type)
-        return {
-            "message": f"Monitor service metrics read for '{service_type}'",
-            "service_type": service_type,
-            "metrics": data,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Monitor service metrics read for '{service_type}'",
+                "service_type": service_type,
+                "metrics": data,
+            },
+            monitor_pb2.MonitorServiceMetricQueryResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "read monitor service metrics", _call)
 
@@ -570,16 +566,12 @@ async def handle_linode_monitor_dashboard_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_monitor_dashboards(page=page, page_size=page_size)
-        dashboards = data.get("data", [])
-        return {
-            "message": "Monitor dashboards listed",
-            "count": len(dashboards),
-            "dashboards": dashboards,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        raw = await client.list_monitor_dashboards(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "dashboards",
+            monitor_pb2.MonitorDashboardListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list monitor dashboards", _call)
 
@@ -595,18 +587,14 @@ async def handle_linode_monitor_alert_definition_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_monitor_alert_definitions(
+        raw = await client.list_monitor_alert_definitions(
             page=page, page_size=page_size
         )
-        alert_definitions = data.get("data", [])
-        return {
-            "message": "Monitor alert definitions listed",
-            "count": len(alert_definitions),
-            "alert_definitions": alert_definitions,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        return serialize_list_response(
+            raw,
+            "alert_definitions",
+            monitor_pb2.MonitorAlertDefinitionListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list monitor alert definitions", _call)
 
@@ -622,16 +610,12 @@ async def handle_linode_monitor_alert_channel_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.list_monitor_alert_channels(page=page, page_size=page_size)
-        alert_channels = data.get("data", [])
-        return {
-            "message": "Monitor alert channels listed",
-            "count": len(alert_channels),
-            "alert_channels": alert_channels,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        raw = await client.list_monitor_alert_channels(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "alert_channels",
+            monitor_pb2.MonitorAlertChannelListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list monitor alert channels", _call)
 
@@ -649,11 +633,11 @@ async def handle_linode_monitor_service_dashboard_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_monitor_service_dashboards(service_type)
-        return {
-            "message": f"Monitor service dashboards listed for '{service_type}'",
-            "service_type": service_type,
-            "dashboards": data,
-        }
+        return serialize_list_response(
+            data,
+            "dashboards",
+            monitor_pb2.MonitorServiceDashboardListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list monitor service dashboards", _call)
 
@@ -693,13 +677,11 @@ async def handle_linode_monitor_service_metric_definition_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_monitor_service_metric_definitions(service_type)
-        return {
-            "message": (
-                f"Monitor service metric definitions listed for '{service_type}'"
-            ),
-            "service_type": service_type,
-            "metric_definitions": data,
-        }
+        return serialize_list_response(
+            data,
+            "metric_definitions",
+            monitor_pb2.MonitorServiceMetricDefinitionListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list monitor service metric definitions", _call
@@ -719,13 +701,11 @@ async def handle_linode_monitor_service_alert_definition_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_monitor_service_alert_definitions(service_type)
-        return {
-            "message": (
-                f"Monitor service alert definitions listed for '{service_type}'"
-            ),
-            "service_type": service_type,
-            "alert_definitions": data,
-        }
+        return serialize_list_response(
+            data,
+            "alert_definitions",
+            monitor_pb2.MonitorServiceAlertDefinitionListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list monitor service alert definitions", _call
@@ -846,9 +826,9 @@ async def handle_linode_monitor_service_token_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.create_monitor_service_token(service_type, entity_ids)
+        # Emit the bare token object to match the Go implementation's shape
+        # ({"token": ..., "expiry": ...}), not a {message, ...} envelope.
         return {
-            "message": f"Monitor service token created for '{service_type}'",
-            "service_type": service_type,
             "token": data.get("token"),
             "expiry": data.get("expiry"),
         }
@@ -891,14 +871,16 @@ async def handle_linode_monitor_service_alert_definition_create(
             description=parsed["description"],
             entity_ids=parsed["entity_ids"],
         )
-        return {
-            "message": (
-                "Monitor service alert definition created for "
-                f"'{parsed['service_type']}'"
-            ),
-            "service_type": parsed["service_type"],
-            "alert_definition": data,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    "Monitor service alert definition created for "
+                    f"'{parsed['service_type']}'"
+                ),
+                "alert_definition": data,
+            },
+            monitor_pb2.MonitorAlertDefinitionWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "create monitor service alert definition", _call
@@ -982,14 +964,17 @@ async def handle_linode_monitor_service_alert_definition_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_monitor_service_alert_definition(service_type, alert_id)
-        return {
-            "message": (
-                f"Monitor service alert definition {alert_id} "
-                f"deleted for '{service_type}'"
-            ),
-            "service_type": service_type,
-            "alert_id": alert_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Monitor service alert definition {alert_id} "
+                    f"deleted for '{service_type}'"
+                ),
+                "service_type": service_type,
+                "alert_id": alert_id,
+            },
+            monitor_pb2.MonitorAlertDefinitionDeleteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "delete monitor service alert definition", _call
@@ -1119,11 +1104,12 @@ async def handle_linode_monitor_service_alert_definition_update(
         data = await client.update_monitor_alert_definition(
             service_type, alert_id, **fields
         )
-        return {
-            "message": f"Monitor alert definition {alert_id} updated",
-            "service_type": service_type,
-            "alert_id": alert_id,
-            "alert_definition": data,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Monitor alert definition {alert_id} updated",
+                "alert_definition": data,
+            },
+            monitor_pb2.MonitorAlertDefinitionWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update monitor alert definition", _call)

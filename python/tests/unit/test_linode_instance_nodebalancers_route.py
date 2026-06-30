@@ -140,10 +140,11 @@ async def test_handle_linode_instance_nodebalancers_list_success(
         {"linode_id": 123}, sample_config
     )
 
-    assert json.loads(result[0].text) == {
-        "data": [{"id": 456, "label": "nb-1"}],
-        "page": 1,
-    }
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert "filter" not in payload
+    assert payload["nodebalancers"][0]["id"] == 456
+    assert payload["nodebalancers"][0]["label"] == "nb-1"
     mock_linode_client.list_instance_nodebalancers.assert_awaited_once_with(123)
 
 

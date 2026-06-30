@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.ProfileApp",
+  "description": "Profile OAuth app authorization: flat scalars including one int32 (id). All fields present.",
+  "input": {
+    "id": 123,
+    "label": "my-oauth-app",
+    "scopes": "linodes:read_write account:read_only",
+    "website": "https://example.com"
+  },
+  "canonical": {
+    "id": 123,
+    "label": "my-oauth-app",
+    "scopes": "linodes:read_write account:read_only",
+    "website": "https://example.com"
+  }
+}

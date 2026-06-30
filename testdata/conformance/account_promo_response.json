@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.AccountPromoResponse",
+  "description": "Promo-credit add id-echo: a confirmation message plus the applied promo code (empty-body endpoint).",
+  "input": {
+    "message": "Account promo credit applied successfully",
+    "promo_code": "SPRING2026"
+  },
+  "canonical": {
+    "message": "Account promo credit applied successfully",
+    "promo_code": "SPRING2026"
+  }
+}

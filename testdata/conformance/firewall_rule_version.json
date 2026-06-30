@@ -1,0 +1,58 @@
+{
+  "message": "linode.mcp.v1.FirewallRuleVersion",
+  "description": "One snapshot in a Cloud Firewall's rule-version history: a firewall-shaped object with a top-level version and the full ruleset.",
+  "input": {
+    "id": 123,
+    "label": "web-firewall",
+    "status": "enabled",
+    "version": 2,
+    "rules": {
+      "inbound": [
+        {
+          "action": "ACCEPT",
+          "protocol": "TCP",
+          "ports": "443",
+          "addresses": {
+            "ipv4": ["0.0.0.0/0"],
+            "ipv6": ["::/0"]
+          },
+          "label": "allow-https",
+          "description": "Allow inbound HTTPS"
+        }
+      ],
+      "inbound_policy": "DROP",
+      "outbound": [],
+      "outbound_policy": "ACCEPT"
+    },
+    "tags": ["prod"],
+    "created": "2025-01-01T00:00:00",
+    "updated": "2025-01-02T00:00:00"
+  },
+  "canonical": {
+    "id": 123,
+    "label": "web-firewall",
+    "status": "enabled",
+    "version": 2,
+    "rules": {
+      "inbound": [
+        {
+          "action": "ACCEPT",
+          "protocol": "TCP",
+          "ports": "443",
+          "addresses": {
+            "ipv4": ["0.0.0.0/0"],
+            "ipv6": ["::/0"]
+          },
+          "label": "allow-https",
+          "description": "Allow inbound HTTPS"
+        }
+      ],
+      "inbound_policy": "DROP",
+      "outbound": [],
+      "outbound_policy": "ACCEPT"
+    },
+    "tags": ["prod"],
+    "created": "2025-01-01T00:00:00",
+    "updated": "2025-01-02T00:00:00"
+  }
+}

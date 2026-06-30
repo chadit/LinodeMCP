@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.KernelListResponse",
+  "description": "linode_kernel_list envelope: count and the full proto Kernel elements (not the Linode data/page/pages/results page). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "kernels": [
+      {
+        "id": "linode/latest-64bit",
+        "label": "Latest 64 bit",
+        "version": "6.6.0",
+        "kvm": true,
+        "architecture": "x86_64",
+        "pvops": false,
+        "deprecated": false,
+        "built": "2024-01-01T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "kernels": [
+      {
+        "id": "linode/latest-64bit",
+        "label": "Latest 64 bit",
+        "version": "6.6.0",
+        "kvm": true,
+        "architecture": "x86_64",
+        "pvops": false,
+        "deprecated": false,
+        "built": "2024-01-01T00:00:00"
+      }
+    ]
+  }
+}

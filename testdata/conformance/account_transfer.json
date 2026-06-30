@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.AccountTransfer",
+  "description": "Account transfer: three int32 totals plus a repeated AccountRegionTransfer list.",
+  "input": {
+    "billable": 0,
+    "quota": 5000,
+    "used": 1200,
+    "region_transfers": [
+      {"id": "us-east", "billable": 0, "quota": 2000, "used": 800}
+    ]
+  },
+  "canonical": {
+    "billable": 0,
+    "quota": 5000,
+    "used": 1200,
+    "region_transfers": [
+      {"id": "us-east", "billable": 0, "quota": 2000, "used": 800}
+    ]
+  }
+}

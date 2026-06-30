@@ -40,3 +40,80 @@ message InstanceTypeGetInput {
   // The ID of the instance type to retrieve (required).
   string type_id = 2;
 }
+
+// InstanceTypeListResponse is the linode_type_list envelope: count, the optional
+// filter echo (class=...), and the full proto InstanceType elements.
+message InstanceTypeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated InstanceType types = 3;
+}
+
+// LinodeTypeRegionPrice is one region-specific price entry for a LinodeType.
+// The Linode "type" endpoints (lke/types, nodebalancers/types, volumes/types)
+// return a region_prices[] array of {id, hourly, monthly}.
+message LinodeTypeRegionPrice {
+  string id = 1;
+  double hourly = 2;
+  double monthly = 3;
+}
+
+// LinodeType is the shared element returned by the non-instance Linode "type"
+// endpoints (lke/types, nodebalancers/types, volumes/types). All three return
+// the same base shape: id, label, price{hourly,monthly}, region_prices[], and
+// transfer. Instance types (linode/types) carry extra fields and use the richer
+// InstanceType message instead.
+message LinodeType {
+  string id = 1;
+  string label = 2;
+  Price price = 3;
+  repeated LinodeTypeRegionPrice region_prices = 4;
+  int32 transfer = 5;
+}
+
+// LKETypeListResponse is the linode_lke_type_list envelope: count and the full
+// proto LinodeType elements. The tool has no filter params, so filter is omitted.
+message LKETypeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LinodeType lke_types = 3;
+}
+
+// NodeBalancerTypeListResponse is the linode_nodebalancer_type_list envelope:
+// count and the full proto LinodeType elements. No filter params, so filter is
+// omitted.
+message NodeBalancerTypeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LinodeType nodebalancer_types = 3;
+}
+
+// VolumeTypeListResponse is the linode_volume_type_list envelope: count and the
+// full proto LinodeType elements. No filter params, so filter is omitted.
+message VolumeTypeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LinodeType volume_types = 3;
+}
+
+// ObjectStorageTypeListResponse is the linode_object_storage_type_list envelope:
+// count and the full proto LinodeType elements (id, label, price, region_prices[],
+// transfer). The /object-storage/types element shares the LinodeType shape, so it
+// reuses that message; region_prices is a repeated message, not a string. No
+// filter params, so filter is omitted.
+message ObjectStorageTypeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LinodeType types = 3;
+}
+
+// NetworkTransferPriceListResponse is the linode_network_transfer_price_list
+// envelope: count and the full proto LinodeType elements. The /network-transfer/
+// prices element shares the LinodeType shape (id, label, price, region_prices[],
+// transfer), so it reuses that message rather than authoring a new one. The tool
+// has no filter param, so filter is omitted.
+message NetworkTransferPriceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LinodeType network_transfer_prices = 3;
+}

@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// VLAN mirrors a Linode VLAN. linodes is the list of attached Linode instance
+// ids; the live Go struct types it as []int, so it is modeled as repeated int32.
+message VLAN {
+  string label = 1;
+  string region = 2;
+  repeated int32 linodes = 3;
+}
+
+// VLANListResponse is the linode_vlan_list envelope: count and the full proto
+// VLAN elements. The tool paginates and has no filter param, so filter is
+// omitted.
+message VLANListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated VLAN vlans = 3;
+}

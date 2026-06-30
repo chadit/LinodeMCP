@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.InstanceDiskListResponse",
+  "description": "linode_instance_disk_list envelope: count, an optional filter echo, and the full proto InstanceDisk elements with all flat scalar fields present.",
+  "input": {
+    "count": 1,
+    "filter": "label=Ubuntu Disk",
+    "disks": [
+      {
+        "id": 12345,
+        "label": "Ubuntu Disk",
+        "status": "ready",
+        "size": 25600,
+        "filesystem": "ext4",
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "label=Ubuntu Disk",
+    "disks": [
+      {
+        "id": 12345,
+        "label": "Ubuntu Disk",
+        "status": "ready",
+        "size": 25600,
+        "filesystem": "ext4",
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  }
+}

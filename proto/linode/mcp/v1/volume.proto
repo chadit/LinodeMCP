@@ -30,6 +30,15 @@ message VolumeGetResponse {
   Volume volume = 1;
 }
 
+// VolumeListResponse mirrors the linode_volume_list wrapper: a count, an
+// optional filter echo, and the volumes. This is the project's own envelope,
+// not the Linode {data,page,pages,results} list shape.
+message VolumeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Volume volumes = 3;
+}
+
 // VolumeWriteResponse is the {message, volume} envelope the volume write tools
 // (create, update, resize, clone, attach) return: a human-readable confirmation
 // plus the affected volume. For attach, the attached Linode is available on the

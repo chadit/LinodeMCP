@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.InstanceActionWriteResponse",
+  "description": "Instance action id-echo shared by mutate and firewall apply: a confirmation message plus the affected Linode id. These endpoints return no resource body, so the id echoes the request.",
+  "input": {
+    "message": "Upgrade initiated for instance 123",
+    "linode_id": 123
+  },
+  "canonical": {
+    "message": "Upgrade initiated for instance 123",
+    "linode_id": 123
+  }
+}

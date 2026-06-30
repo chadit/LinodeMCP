@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
@@ -49,82 +50,45 @@ func getLongviewPlan(ctx context.Context, client *linode.Client) (*linode.Longvi
 
 // NewLinodeLongviewTypesTool creates a tool for listing available Longview subscription types.
 func NewLinodeLongviewTypesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_longview_type_list",
 		"Lists available Longview subscription types.",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.LongviewType, error) {
+			return client.ListLongviewTypesProto(ctx)
+		},
 		nil,
-		handleLinodeLongviewTypesRequest,
+		longviewTypeListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeLongviewTypesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	types, listFailureMessage := listLongviewTypes(ctx, client)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_longview_type_list: " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(types)
-}
-
-func listLongviewTypes(ctx context.Context, client *linode.Client) (*linode.PaginatedResponse[linode.LongviewType], string) {
-	types, err := client.ListLongviewTypes(ctx)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return types, ""
+func longviewTypeListResponse(items []*linodev1.LongviewType, count int32, filter *string) *linodev1.LongviewTypeListResponse {
+	return &linodev1.LongviewTypeListResponse{Count: count, Filter: filter, Types: items}
 }
 
 // NewLinodeLongviewSubscriptionsTool creates a tool for listing available Longview subscriptions.
 func NewLinodeLongviewSubscriptionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_longview_subscription_list",
 		"Lists available Longview subscription plans.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.LongviewSubscription, error) {
+			return client.ListLongviewSubscriptionsProto(ctx, page, pageSize)
 		},
-		handleLinodeLongviewSubscriptionsRequest,
+		longviewSubscriptionsPaginationFromTool,
+		nil,
+		longviewSubscriptionListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeLongviewSubscriptionsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := longviewSubscriptionsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	subscriptions, listFailureMessage := listLongviewSubscriptions(ctx, client, page, pageSize)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_longview_subscription_list: " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(subscriptions)
-}
-
-func listLongviewSubscriptions(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.LongviewSubscription], string) {
-	subscriptions, err := client.ListLongviewSubscriptions(ctx, page, pageSize)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return subscriptions, ""
+func longviewSubscriptionListResponse(items []*linodev1.LongviewSubscription, count int32, filter *string) *linodev1.LongviewSubscriptionListResponse {
+	return &linodev1.LongviewSubscriptionListResponse{Count: count, Filter: filter, LongviewSubscriptions: items}
 }
 
 func longviewSubscriptionsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -184,19 +148,15 @@ func handleLinodeLongviewClientCreateRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError("Failed to create linode_longview_client_create: " + createFailureMessage), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message string                        `json:"message"`
-		Warning string                        `json:"warning"`
-		Client  *linode.CreatedLongviewClient `json:"client"`
-	}{
-		Message: "Longview client created successfully",
-		Warning: "IMPORTANT: Save the API key and install code if they are present; they are required to configure the Longview client application.",
-		Client:  longviewClient,
+	return MarshalProtoToolResponse(&linodev1.LongviewClientCreateWriteResponse{
+		Message:        "Longview client created successfully",
+		Warning:        "IMPORTANT: Save the API key and install code if they are present; they are required to configure the Longview client application.",
+		LongviewClient: longviewClient,
 	})
 }
 
-func createLongviewClient(ctx context.Context, client *linode.Client, req *linode.CreateLongviewClientRequest) (*linode.CreatedLongviewClient, string) {
-	longviewClient, err := client.CreateLongviewClient(ctx, req)
+func createLongviewClient(ctx context.Context, client *linode.Client, req *linode.CreateLongviewClientRequest) (*linodev1.CreatedLongviewClient, string) {
+	longviewClient, err := client.CreateLongviewClientProto(ctx, req)
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -262,10 +222,7 @@ func handleLinodeLongviewPlanUpdateRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError("Failed to update linode_longview_plan_update: " + updateFailureMessage), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message string                       `json:"message"`
-		Plan    *linode.LongviewSubscription `json:"plan"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.LongviewSubscriptionWriteResponse{
 		Message: "Longview plan updated successfully",
 		Plan:    plan,
 	})
@@ -285,8 +242,8 @@ func longviewPlanUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.Up
 	return &linode.UpdateLongviewPlanRequest{LongviewSubscription: subscription}, ""
 }
 
-func updateLongviewPlan(ctx context.Context, client *linode.Client, req *linode.UpdateLongviewPlanRequest) (*linode.LongviewSubscription, string) {
-	plan, err := client.UpdateLongviewPlan(ctx, req)
+func updateLongviewPlan(ctx context.Context, client *linode.Client, req *linode.UpdateLongviewPlanRequest) (*linodev1.LongviewSubscription, string) {
+	plan, err := client.UpdateLongviewPlanProto(ctx, req)
 	if err != nil {
 		return nil, err.Error()
 	}

@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.Kernel",
+  "description": "All-scalar kernel (three strings, three bools). No optional fields, so every field is present in the canonical output, including the false bools (implicit presence).",
+  "input": {
+    "id": "linode/latest-64bit",
+    "label": "Latest 64 bit",
+    "version": "6.6.0",
+    "kvm": true,
+    "architecture": "x86_64",
+    "pvops": false,
+    "deprecated": false,
+    "built": "2024-01-01T00:00:00"
+  },
+  "canonical": {
+    "id": "linode/latest-64bit",
+    "label": "Latest 64 bit",
+    "version": "6.6.0",
+    "kvm": true,
+    "architecture": "x86_64",
+    "pvops": false,
+    "deprecated": false,
+    "built": "2024-01-01T00:00:00"
+  }
+}

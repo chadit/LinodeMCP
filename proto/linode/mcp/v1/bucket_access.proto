@@ -11,6 +11,14 @@ message ObjectStorageBucketAccess {
   bool cors_enabled = 2;
 }
 
+// ObjectStorageBucketAccessWriteResponse is the {message, access} envelope the
+// bucket-access allow tool returns. The allow endpoint returns no body, so the
+// access element is built from the request args (acl + cors_enabled).
+message ObjectStorageBucketAccessWriteResponse {
+  string message = 1;
+  ObjectStorageBucketAccess access = 2;
+}
+
 // ObjectStorageBucketAccessGetInput is the input contract for
 // linode_object_storage_bucket_access_get.
 message ObjectStorageBucketAccessGetInput {

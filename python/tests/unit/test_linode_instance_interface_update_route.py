@@ -237,6 +237,30 @@ async def test_handle_linode_instance_interface_update_success(
 
 
 @pytest.mark.asyncio
+async def test_handle_linode_instance_interface_update_empty_result_synthesizes_message(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    # The API may answer a successful PUT with an empty body; the handler then
+    # reports a synthesized success message instead of forwarding the empty dict.
+    mock_linode_client.update_instance_interface.return_value = {}
+
+    result = await handle_linode_instance_interface_update(
+        {
+            "linode_id": 123,
+            "interface_id": 789,
+            "default_route": {"ipv4": True},
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["linode_id"] == 123
+    assert payload["interface_id"] == 789
+    assert "update requested" in payload["message"]
+
+
+@pytest.mark.asyncio
 async def test_handle_linode_instance_interface_update_dry_run_skips_client(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:

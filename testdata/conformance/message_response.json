@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.MessageResponse",
+  "description": "Bare {message} envelope a write tool returns when the API action has no resource body to echo (for example tag delete).",
+  "input": {
+    "message": "Tag 'production' deleted successfully"
+  },
+  "canonical": {
+    "message": "Tag 'production' deleted successfully"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "message": "linode.mcp.v1.ConfigInterfaceListResponse",
+  "description": "linode_instance_config_interface_list envelope: count and the full proto ConfigInterfaceResponse elements (every field present, including the nested ipv4 and the repeated ip_ranges). Two-path-id non-paginated tool (linode_id + config_id), runtime never echoes a filter, so filter is omitted. Items key is interfaces.",
+  "input": {
+    "count": 1,
+    "interfaces": [
+      {
+        "id": 101,
+        "active": true,
+        "purpose": "vpc",
+        "label": "eth0",
+        "ipam_address": "10.0.0.1/24",
+        "primary": true,
+        "subnet_id": 55,
+        "vpc_id": 77,
+        "ipv4": {
+          "nat_1_1": "192.0.2.10",
+          "vpc": "10.0.0.5"
+        },
+        "ip_ranges": ["2001:db8::/64", "203.0.113.0/24"]
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "interfaces": [
+      {
+        "id": 101,
+        "active": true,
+        "purpose": "vpc",
+        "label": "eth0",
+        "ipam_address": "10.0.0.1/24",
+        "primary": true,
+        "subnet_id": 55,
+        "vpc_id": 77,
+        "ipv4": {
+          "nat_1_1": "192.0.2.10",
+          "vpc": "10.0.0.5"
+        },
+        "ip_ranges": ["2001:db8::/64", "203.0.113.0/24"]
+      }
+    ]
+  }
+}

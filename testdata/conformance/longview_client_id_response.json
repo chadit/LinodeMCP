@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.LongviewClientIDResponse",
+  "description": "Longview client id-echo: a confirmation message plus the client id. The delete endpoint has no resource body to echo.",
+  "input": {
+    "message": "Longview client deleted successfully",
+    "client_id": 778899
+  },
+  "canonical": {
+    "message": "Longview client deleted successfully",
+    "client_id": 778899
+  }
+}

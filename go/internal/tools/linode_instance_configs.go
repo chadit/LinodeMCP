@@ -14,6 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -33,20 +34,30 @@ const (
 
 // NewLinodeInstanceConfigListTool creates a tool for listing configuration profiles on a Linode instance.
 func NewLinodeInstanceConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_instance_config_list",
 		"Lists configuration profiles for a Linode instance with optional pagination.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		protoListPathID{
+			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+			parse: instanceConfigLinodeIDFromTool,
 		},
-		handleInstanceConfigsListRequest,
+		instanceConfigsPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, linodeID, page, pageSize int) ([]*linodev1.InstanceConfig, error) {
+			return client.ListInstanceConfigsProto(ctx, linodeID, page, pageSize)
+		},
+		nil,
+		instanceConfigListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func instanceConfigListResponse(items []*linodev1.InstanceConfig, count int32, filter *string) *linodev1.InstanceConfigListResponse {
+	return &linodev1.InstanceConfigListResponse{Count: count, Filter: filter, Configs: items}
 }
 
 // NewLinodeInstanceConfigDeleteTool creates a tool for deleting a configuration profile from a Linode instance.
@@ -68,38 +79,6 @@ func NewLinodeInstanceConfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 	)
 
 	return tool, profiles.CapDestroy, handler
-}
-
-func handleInstanceConfigsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := instanceConfigsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	configs, err := client.ListInstanceConfigs(ctx, linodeID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list configuration profiles for instance %d: %v", linodeID, err)), nil
-	}
-
-	response := struct {
-		Count   int                     `json:"count"`
-		Configs []linode.InstanceConfig `json:"configs"`
-	}{
-		Count:   len(configs),
-		Configs: configs,
-	}
-
-	return MarshalToolResponse(response)
 }
 
 func handleInstanceConfigDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -249,52 +228,32 @@ func configIDFromTool(request *mcp.CallToolRequest) (int, string) {
 
 // NewLinodeInstanceConfigInterfacesListTool creates a tool for listing interfaces on a Linode configuration profile.
 func NewLinodeInstanceConfigInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresource2(
 		cfg,
 		"linode_instance_config_interface_list",
 		"Lists interfaces assigned to a specific configuration profile on a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
+		protoListPathID{
+			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile")),
+			parse: instanceConfigLinodeIDFromTool,
 		},
-		handleInstanceConfigInterfacesListRequest,
+		protoListPathID{
+			option: mcp.WithNumber("config_id", mcp.Required(),
+				mcp.Description("The ID of the configuration profile")),
+			parse: configIDFromTool,
+		},
+		func(ctx context.Context, client *linode.Client, linodeID, configID int) ([]*linodev1.ConfigInterfaceResponse, error) {
+			return client.ListInstanceConfigInterfacesProto(ctx, linodeID, configID)
+		},
+		nil,
+		configInterfaceListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleInstanceConfigInterfacesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	configID, validationMessage := configIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	interfaces, err := client.ListInstanceConfigInterfaces(ctx, linodeID, configID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list interfaces for config %d on instance %d: %v", configID, linodeID, err)), nil
-	}
-
-	response := struct {
-		Count      int                              `json:"count"`
-		Interfaces []linode.ConfigInterfaceResponse `json:"interfaces"`
-	}{
-		Count:      len(interfaces),
-		Interfaces: interfaces,
-	}
-
-	return MarshalToolResponse(response)
+func configInterfaceListResponse(items []*linodev1.ConfigInterfaceResponse, count int32, filter *string) *linodev1.ConfigInterfaceListResponse {
+	return &linodev1.ConfigInterfaceListResponse{Count: count, Filter: filter, Interfaces: items}
 }
 
 // NewLinodeInstanceConfigCreateTool creates a tool for creating a Linode configuration profile.
@@ -369,22 +328,15 @@ func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	createdConfig, err := client.CreateInstanceConfig(ctx, linodeID, &createReq)
+	createdConfig, err := client.CreateInstanceConfigProto(ctx, linodeID, &createReq)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create configuration profile for instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string                 `json:"message"`
-		Config   *linode.InstanceConfig `json:"config"`
-		LinodeID int                    `json:"linode_id"`
-	}{
-		Message:  fmt.Sprintf("Configuration profile '%s' (ID: %d) created on instance %d", createdConfig.Label, createdConfig.ID, linodeID),
-		Config:   createdConfig,
-		LinodeID: linodeID,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.InstanceConfigWriteResponse{
+		Message: fmt.Sprintf("Configuration profile '%s' (ID: %d) created on instance %d", createdConfig.GetLabel(), createdConfig.GetId(), linodeID),
+		Config:  createdConfig,
+	})
 }
 
 // NewLinodeInstanceConfigInterfaceAddTool creates a tool for appending a network interface to a Linode configuration profile.
@@ -462,24 +414,15 @@ func handleInstanceConfigInterfaceAddRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	createdInterface, err := client.AddInstanceConfigInterface(ctx, linodeID, configID, configInterface)
+	createdInterface, err := client.AddInstanceConfigInterfaceProto(ctx, linodeID, configID, configInterface)
 	if err != nil {
 		return mcp.NewToolResultError(formatAddConfigInterfaceError(linodeID, configID, err)), nil
 	}
 
-	response := struct {
-		Message   string                  `json:"message"`
-		Interface *linode.ConfigInterface `json:"interface"`
-		LinodeID  int                     `json:"linode_id"`
-		ConfigID  int                     `json:"config_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.ConfigInterfaceWriteResponse{
 		Message:   fmt.Sprintf("Configuration profile interface added to config %d on instance %d", configID, linodeID),
 		Interface: createdInterface,
-		LinodeID:  linodeID,
-		ConfigID:  configID,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }
 
 func configInterfaceFromTool(request *mcp.CallToolRequest) (*linode.ConfigInterface, string) {
@@ -676,26 +619,15 @@ func handleInstanceConfigInterfaceUpdateRequest(ctx context.Context, request *mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updatedInterface, err := client.UpdateInstanceConfigInterface(ctx, linodeID, configID, interfaceID, updateReq)
+	updatedInterface, err := client.UpdateInstanceConfigInterfaceProto(ctx, linodeID, configID, interfaceID, updateReq)
 	if err != nil {
 		return mcp.NewToolResultError(formatUpdateConfigInterfaceError(linodeID, configID, interfaceID, err)), nil
 	}
 
-	response := struct {
-		Message     string                          `json:"message"`
-		Interface   *linode.ConfigInterfaceResponse `json:"interface"`
-		LinodeID    int                             `json:"linode_id"`
-		ConfigID    int                             `json:"config_id"`
-		InterfaceID int                             `json:"interface_id"`
-	}{
-		Message:     fmt.Sprintf("Configuration profile interface %d updated on config %d for instance %d", interfaceID, configID, linodeID),
-		Interface:   updatedInterface,
-		LinodeID:    linodeID,
-		ConfigID:    configID,
-		InterfaceID: interfaceID,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.ConfigInterfaceWriteResponse{
+		Message:   fmt.Sprintf("Configuration profile interface %d updated on config %d for instance %d", interfaceID, configID, linodeID),
+		Interface: updatedInterface,
+	})
 }
 
 func updateConfigInterfaceFromTool(request *mcp.CallToolRequest) (*linode.UpdateConfigInterfaceRequest, string) {
@@ -1048,24 +980,15 @@ func handleInstanceConfigUpdateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updatedConfig, err := client.UpdateInstanceConfig(ctx, linodeID, configID, updateReq)
+	updatedConfig, err := client.UpdateInstanceConfigProto(ctx, linodeID, configID, updateReq)
 	if err != nil {
 		return mcp.NewToolResultError(formatUpdateConfigError(linodeID, configID, err)), nil
 	}
 
-	response := struct {
-		Message  string                 `json:"message"`
-		Config   *linode.InstanceConfig `json:"config"`
-		LinodeID int                    `json:"linode_id"`
-		ConfigID int                    `json:"config_id"`
-	}{
-		Message:  fmt.Sprintf("Configuration profile '%s' (ID: %d) updated on instance %d", updatedConfig.Label, updatedConfig.ID, linodeID),
-		Config:   updatedConfig,
-		LinodeID: linodeID,
-		ConfigID: configID,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.InstanceConfigWriteResponse{
+		Message: fmt.Sprintf("Configuration profile '%s' (ID: %d) updated on instance %d", updatedConfig.GetLabel(), updatedConfig.GetId(), linodeID),
+		Config:  updatedConfig,
+	})
 }
 
 func formatUpdateConfigError(linodeID, configID int, err error) string {

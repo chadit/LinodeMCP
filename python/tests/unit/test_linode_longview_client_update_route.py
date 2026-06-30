@@ -28,7 +28,7 @@ def _longview_client_json() -> dict[str, Any]:
         "id": 123,
         "label": "updated-client",
         "api_key": "test-api-key",
-        "apps": "apache mysql",
+        "apps": {"apache": True, "mysql": True, "nginx": False},
         "created": "2026-01-01T00:00:00",
         "install_code": "install me",
         "updated": "2026-01-02T00:00:00",
@@ -225,8 +225,12 @@ async def test_handle_linode_longview_client_update_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload["message"] == "Longview client 123 updated successfully"
+    assert payload["message"] == "Longview client updated successfully"
     assert payload["longview_client"]["label"] == "updated-client"
+    # The metadata LongviewClient element carries no install secret, so the
+    # api_key and install_code the API returns are dropped from the output.
+    assert "api_key" not in payload["longview_client"]
+    assert "install_code" not in payload["longview_client"]
     mock_linode_client.update_longview_client.assert_awaited_once_with(
         123, label="updated-client"
     )

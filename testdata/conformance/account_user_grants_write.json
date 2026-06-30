@@ -1,0 +1,74 @@
+{
+  "message": "linode.mcp.v1.AccountUserGrantsWriteResponse",
+  "description": "Account user grants update envelope: a confirmation message and the full AccountUserGrants element. Covers the global permission block plus several per-resource grant sections, including a grant with empty permissions (no access) and empty sections emitted as [].",
+  "input": {
+    "message": "Account user grants updated successfully",
+    "grants": {
+      "global": {
+        "account_access": "read_write",
+        "add_databases": true,
+        "add_domains": false,
+        "add_firewalls": true,
+        "add_images": false,
+        "add_linodes": true,
+        "add_longview": false,
+        "add_nodebalancers": true,
+        "add_stackscripts": false,
+        "add_volumes": true,
+        "add_vpcs": false,
+        "cancel_account": false,
+        "child_account_access": true,
+        "longview_subscription": false
+      },
+      "linode": [
+        {"id": 1234, "label": "web-01", "permissions": "read_write"},
+        {"id": 5678, "label": "web-02", "permissions": ""}
+      ],
+      "domain": [
+        {"id": 42, "label": "example.com", "permissions": "read_only"}
+      ],
+      "volume": [
+        {"id": 99, "label": "data-vol", "permissions": "read_write"}
+      ]
+    }
+  },
+  "canonical": {
+    "message": "Account user grants updated successfully",
+    "grants": {
+      "global": {
+        "account_access": "read_write",
+        "add_databases": true,
+        "add_domains": false,
+        "add_firewalls": true,
+        "add_images": false,
+        "add_linodes": true,
+        "add_longview": false,
+        "add_nodebalancers": true,
+        "add_stackscripts": false,
+        "add_volumes": true,
+        "add_vpcs": false,
+        "cancel_account": false,
+        "child_account_access": true,
+        "longview_subscription": false
+      },
+      "linode": [
+        {"id": 1234, "label": "web-01", "permissions": "read_write"},
+        {"id": 5678, "label": "web-02", "permissions": ""}
+      ],
+      "domain": [
+        {"id": 42, "label": "example.com", "permissions": "read_only"}
+      ],
+      "nodebalancer": [],
+      "image": [],
+      "longview": [],
+      "stackscript": [],
+      "volume": [
+        {"id": 99, "label": "data-vol", "permissions": "read_write"}
+      ],
+      "database": [],
+      "firewall": [],
+      "vpc": [],
+      "lkecluster": []
+    }
+  }
+}

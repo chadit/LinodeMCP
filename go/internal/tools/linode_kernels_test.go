@@ -99,8 +99,8 @@ func TestLinodeKernelListToolSuccessWithPagination(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", "linode/latest-64bit")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	if got := listResponseCount(t, textContent.Text); got != 1 {
+		t.Errorf("listResponseCount = %d, want %d", got, 1)
 	}
 }
 

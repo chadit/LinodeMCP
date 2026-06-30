@@ -160,8 +160,8 @@ func TestLinodeFirewallTemplatesListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_template_list") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_template_list")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
 	}
 }
 
@@ -204,18 +204,10 @@ func TestLinodeFirewallTemplateGetToolDefinition(t *testing.T) {
 func TestLinodeFirewallTemplateGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	templates := linode.PaginatedResponse[linode.FirewallTemplate]{
-		Data: []linode.FirewallTemplate{{
-			Slug: purposePublic,
-			Rules: linode.FirewallRules{
-				InboundPolicy:  policyDrop,
-				OutboundPolicy: policyAccept,
-			},
-		}},
-		Page:    1,
-		Pages:   1,
-		Results: 1,
-	}
+	// The by-slug templates endpoint returns a single bare template object. The
+	// handler decodes it into the FirewallTemplate proto element, the same element
+	// the template LIST path emits.
+	const templateBody = `{"slug":"public","rules":{"inbound_policy":"DROP","outbound_policy":"ACCEPT"}}`
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -236,7 +228,7 @@ func TestLinodeFirewallTemplateGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(templates); err != nil {
+		if _, err := w.Write([]byte(templateBody)); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

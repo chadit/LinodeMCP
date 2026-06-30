@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.LKETierVersion",
+  "description": "Kubernetes version for a specific LKE tier with both scalar fields present.",
+  "input": {
+    "id": "1.29",
+    "tier": "standard"
+  },
+  "canonical": {
+    "id": "1.29",
+    "tier": "standard"
+  }
+}

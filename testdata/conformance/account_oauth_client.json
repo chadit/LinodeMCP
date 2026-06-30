@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.OAuthClient",
+  "description": "OAuth client: six flat scalars (id string, public bool), all emitted.",
+  "input": {
+    "id": "client-123",
+    "label": "Example OAuth Client",
+    "public": true,
+    "redirect_uri": "https://example.com/callback",
+    "status": "active",
+    "thumbnail_url": "https://example.com/thumb.png"
+  },
+  "canonical": {
+    "id": "client-123",
+    "label": "Example OAuth Client",
+    "public": true,
+    "redirect_uri": "https://example.com/callback",
+    "status": "active",
+    "thumbnail_url": "https://example.com/thumb.png"
+  }
+}

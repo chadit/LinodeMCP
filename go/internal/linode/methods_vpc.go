@@ -33,6 +33,13 @@ func (c *Client) httpListVPCs(ctx context.Context) ([]VPC, error) {
 	return response.Data, nil
 }
 
+// httpListVPCsProto retrieves all VPCs as proto messages, decoded directly from
+// the API JSON for the proto-backed list path.
+func (c *Client) httpListVPCsProto(ctx context.Context) ([]*linodev1.Vpc, error) {
+	return listProtoElements(ctx, c, "ListVPCs", endpointVPCs,
+		func() *linodev1.Vpc { return &linodev1.Vpc{} })
+}
+
 // GetVPC retrieves a single VPC by its ID.
 func (c *Client) httpGetVPC(ctx context.Context, vpcID int) (*VPC, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -178,48 +185,21 @@ func (c *Client) httpDeleteVPC(ctx context.Context, vpcID int) error {
 	return c.handleResponse(resp, nil)
 }
 
-// ListVPCIPs retrieves all IP addresses across all VPCs.
-func (c *Client) httpListVPCIPs(ctx context.Context) ([]VPCIP, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointVPCs+"/ips", nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListVPCIPs", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[VPCIP]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+// httpListVPCIPsProto retrieves all VPC IP addresses as proto messages for the
+// proto-backed list path. The endpoint matches httpListVPCIPs.
+func (c *Client) httpListVPCIPsProto(ctx context.Context) ([]*linodev1.VPCIP, error) {
+	return listProtoElements(ctx, c, "ListVPCIPs", endpointVPCs+"/ips",
+		func() *linodev1.VPCIP { return &linodev1.VPCIP{} })
 }
 
-// ListVPCIPAddresses retrieves all IP addresses for a specific VPC.
-func (c *Client) httpListVPCIPAddresses(ctx context.Context, vpcID int) ([]VPCIP, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
+// httpListVPCIPAddressesProto retrieves a VPC's IP addresses as proto messages
+// for the proto-backed list path. The endpoint formats vpcID exactly like
+// httpListVPCIPAddresses.
+func (c *Client) httpListVPCIPAddressesProto(ctx context.Context, vpcID int) ([]*linodev1.VPCIP, error) {
 	endpoint := fmt.Sprintf(endpointVPCs+"/%d/ips", vpcID)
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListVPCIPAddresses", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[VPCIP]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return listProtoElements(ctx, c, "ListVPCIPAddresses", endpoint,
+		func() *linodev1.VPCIP { return &linodev1.VPCIP{} })
 }
 
 // ListVPCSubnets retrieves all subnets for a VPC.
@@ -243,6 +223,17 @@ func (c *Client) httpListVPCSubnets(ctx context.Context, vpcID int) ([]VPCSubnet
 	}
 
 	return response.Data, nil
+}
+
+// httpListVPCSubnetsProto retrieves a VPC's subnets as proto messages for the
+// proto-backed list path. The endpoint is formatted with the same
+// fmt.Sprintf(endpointVPCs+"/%d/subnets", vpcID) pattern httpListVPCSubnets uses,
+// so the runtime path matches exactly.
+func (c *Client) httpListVPCSubnetsProto(ctx context.Context, vpcID int) ([]*linodev1.VpcSubnet, error) {
+	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets", vpcID)
+
+	return listProtoElements(ctx, c, "ListVPCSubnets", endpoint,
+		func() *linodev1.VpcSubnet { return &linodev1.VpcSubnet{} })
 }
 
 // GetVPCSubnet retrieves a single subnet by its ID within a VPC.

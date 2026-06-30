@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.AccountPayment",
+  "description": "Account payment: int32 id, string date, and a double usd (emitted as a JSON number, unlike int64). All fields present.",
+  "input": {
+    "id": 123456,
+    "date": "2024-06-01T00:00:00",
+    "usd": 19.99
+  },
+  "canonical": {
+    "id": 123456,
+    "date": "2024-06-01T00:00:00",
+    "usd": 19.99
+  }
+}

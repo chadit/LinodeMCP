@@ -13,20 +13,19 @@ import (
 
 const endpointFirewallRuleVersions = "/networking/firewalls/123/history"
 
+// firewallRuleVersionsPageJSON is the {data:[...]} list shape the live history
+// endpoint returns: each element is a firewall-shaped snapshot plus a top-level
+// version that increments whenever the rules change.
+const firewallRuleVersionsPageJSON = `{"data":[` +
+	`{"id":123,"label":"web-firewall","status":"enabled","version":1,` +
+	`"created":"2025-01-01T00:00:00","updated":"2025-01-01T00:00:00","tags":[],` +
+	`"rules":{"inbound_policy":"ACCEPT","outbound_policy":"ACCEPT"}},` +
+	`{"id":123,"label":"web-firewall","status":"enabled","version":2,` +
+	`"created":"2025-01-01T00:00:00","updated":"2025-01-02T00:00:00","tags":[],` +
+	`"rules":{"inbound_policy":"DROP","outbound_policy":"ACCEPT"}}]}`
+
 func TestClientListFirewallRuleVersionsSuccess(t *testing.T) {
 	t.Parallel()
-
-	firewall := linode.Firewall{
-		ID:     123,
-		Label:  "web-firewall",
-		Status: "enabled",
-		Rules: linode.FirewallRules{
-			Version:        2,
-			Fingerprint:    firewallRulesFingerprint,
-			InboundPolicy:  policyDrop,
-			OutboundPolicy: policyAccept,
-		},
-	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -47,33 +46,29 @@ func TestClientListFirewallRuleVersionsSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(firewall); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if _, writeErr := w.Write([]byte(firewallRuleVersionsPageJSON)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.ListFirewallRuleVersions(t.Context(), 123)
+	result, err := client.ListFirewallRuleVersionsProto(t.Context(), 123)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result == nil {
-		t.Fatal("result is nil")
+	if len(result) != 2 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 2)
 	}
 
-	if result.ID != 123 {
-		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	if result[1].GetVersion() != 2 {
+		t.Errorf("result[1].Version = %v, want %v", result[1].GetVersion(), 2)
 	}
 
-	if result.Rules.Version != 2 {
-		t.Errorf("result.Rules.Version = %v, want %v", result.Rules.Version, 2)
-	}
-
-	if result.Rules.Fingerprint != firewallRulesFingerprint {
-		t.Errorf("result.Rules.Fingerprint = %v, want %v", result.Rules.Fingerprint, firewallRulesFingerprint)
+	if result[1].GetRules().GetInboundPolicy() != policyDrop {
+		t.Errorf("result[1].Rules.InboundPolicy = %v, want %v", result[1].GetRules().GetInboundPolicy(), policyDrop)
 	}
 }
 
@@ -101,7 +96,7 @@ func TestClientListFirewallRuleVersionsHTTPError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.ListFirewallRuleVersions(t.Context(), 123)
+	result, err := client.ListFirewallRuleVersionsProto(t.Context(), 123)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -124,7 +119,7 @@ func TestClientListFirewallRuleVersionsRejectsInvalidInput(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.ListFirewallRuleVersions(t.Context(), 0)
+	result, err := client.ListFirewallRuleVersionsProto(t.Context(), 0)
 
 	if !errors.Is(err, linode.ErrFirewallIDPositive) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrFirewallIDPositive)
@@ -178,25 +173,25 @@ func TestClientListFirewallRuleVersionsRetriesTransientFailure(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.Firewall{ID: 123}); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if _, writeErr := w.Write([]byte(firewallRuleVersionsPageJSON)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	result, err := client.ListFirewallRuleVersions(t.Context(), 123)
+	result, err := client.ListFirewallRuleVersionsProto(t.Context(), 123)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result == nil {
-		t.Fatal("result is nil")
+	if len(result) != 2 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 2)
 	}
 
-	if result.ID != 123 {
-		t.Errorf("result.ID = %v, want %v", result.ID, 123)
+	if result[0].GetId() != 123 {
+		t.Errorf("result[0].Id = %v, want %v", result[0].GetId(), 123)
 	}
 
 	if requestCount.Load() != int32(2) {

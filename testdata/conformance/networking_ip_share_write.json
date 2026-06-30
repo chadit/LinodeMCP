@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.NetworkingIPShareWriteResponse",
+  "description": "Networking IP share id-echo: a confirmation message plus the primary Linode and shared address list. The share endpoint returns an opaque body, so these echo the request.",
+  "input": {
+    "message": "Networking IP sharing updated",
+    "linode_id": 5567,
+    "ips": ["192.0.2.50", "192.0.2.51"]
+  },
+  "canonical": {
+    "message": "Networking IP sharing updated",
+    "linode_id": 5567,
+    "ips": ["192.0.2.50", "192.0.2.51"]
+  }
+}

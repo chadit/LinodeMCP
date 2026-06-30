@@ -227,8 +227,17 @@ func TestLinodeManagedServiceDisableToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "disabled successfully") {
-		t.Errorf("textContent.Text does not contain %v", "disabled successfully")
+	var got map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &got); err != nil {
+		t.Fatalf("unexpected error decoding response: %v", err)
+	}
+
+	if got["message"] != "Managed service disabled successfully" {
+		t.Errorf("got[message] = %v, want %v", got["message"], "Managed service disabled successfully")
+	}
+
+	if got["service_id"] != float64(managedServiceToolIDValue) {
+		t.Errorf("got[service_id] = %v, want %v", got["service_id"], managedServiceToolIDValue)
 	}
 }
 

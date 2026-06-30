@@ -32,6 +32,14 @@ func (c *Client) httpListTags(ctx context.Context, page, pageSize int) (*Paginat
 	return &tags, nil
 }
 
+// httpListTagsProto retrieves tags as proto messages for the proto-backed list
+// path. The page/page_size pair flows through withPaginationQuery, so the
+// request matches httpListTags.
+func (c *Client) httpListTagsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Tag, error) {
+	return listProtoElementsPaginated(ctx, c, "ListTags", endpointTags, page, pageSize,
+		func() *linodev1.Tag { return &linodev1.Tag{} })
+}
+
 // httpListTaggedObjects retrieves objects that have the supplied tag label.
 func (c *Client) httpListTaggedObjects(ctx context.Context, tagLabel string, page, pageSize int) (*PaginatedResponse[TaggedObject], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -52,6 +60,15 @@ func (c *Client) httpListTaggedObjects(ctx context.Context, tagLabel string, pag
 	}
 
 	return &taggedObjects, nil
+}
+
+// httpListTaggedObjectsProto retrieves tagged objects as proto messages for the
+// proto-backed list path. The tag label is path-escaped and the page/page_size
+// pair flows through withPaginationQuery, so the request matches
+// httpListTaggedObjects.
+func (c *Client) httpListTaggedObjectsProto(ctx context.Context, tagLabel string, page, pageSize int) ([]*linodev1.TaggedObject, error) {
+	return listProtoElementsPaginated(ctx, c, "ListTaggedObjects", endpointTags+"/"+url.PathEscape(tagLabel), page, pageSize,
+		func() *linodev1.TaggedObject { return &linodev1.TaggedObject{} })
 }
 
 // httpCreateTag creates a tag and optionally applies it to existing resources.

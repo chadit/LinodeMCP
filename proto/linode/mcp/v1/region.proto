@@ -22,10 +22,35 @@ message Region {
   string site_type = 7;
 }
 
+// RegionListResponse is the envelope linode_region_list returns: a count, an
+// optional echoed filter, and the full proto Region elements.
+message RegionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Region regions = 3;
+}
+
 // RegionGetInput is the input contract for linode_region_get.
 message RegionGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
   // The ID of the region to retrieve, such as us-east (required).
   string region_id = 2;
+}
+
+// RegionAvailability mirrors a single compute-type availability entry for a
+// region: whether a given plan is available in that region.
+message RegionAvailability {
+  string region = 1;
+  string plan = 2;
+  bool available = 3;
+}
+
+// RegionAvailabilityListResponse is the linode_region_availability_list envelope:
+// count and the full proto RegionAvailability elements. The tool has no filter
+// params, so filter is omitted.
+message RegionAvailabilityListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated RegionAvailability region_availabilities = 3;
 }

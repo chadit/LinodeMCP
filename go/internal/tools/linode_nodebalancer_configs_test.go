@@ -215,8 +215,8 @@ func TestLinodeNodeBalancerFirewallListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list firewalls for NodeBalancer 123") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list firewalls for NodeBalancer 123")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -409,8 +409,8 @@ func TestLinodeNodeBalancerConfigListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list configs for NodeBalancer 123") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list configs for NodeBalancer 123")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -612,8 +612,8 @@ func TestLinodeNodeBalancerConfigNodesListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list nodes for NodeBalancer 123 config 456") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list nodes for NodeBalancer 123 config 456")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
@@ -1044,6 +1044,57 @@ func TestLinodeNodeBalancerConfigCreateToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "NodeBalancer 123") {
 		t.Errorf("textContent.Text does not contain %v", "NodeBalancer 123")
+	}
+}
+
+// TestLinodeNodeBalancerConfigCreateToolEmitsProtoConfig asserts the create
+// response body is the full NodeBalancerConfig proto element, not a hand-shaped
+// struct, so Go and Python emit the same {message, config} envelope.
+func TestLinodeNodeBalancerConfigCreateToolEmitsProtoConfig(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolHTTP, keyConfirm: true}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("result content is not TextContent")
+	}
+
+	var payload struct {
+		Message string `json:"message"`
+		Config  struct {
+			ID             int    `json:"id"`
+			Port           int    `json:"port"`
+			Protocol       string `json:"protocol"`
+			NodeBalancerID int    `json:"nodebalancer_id"`
+		} `json:"config"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &payload); err != nil {
+		t.Fatalf("unmarshal write response: %v", err)
+	}
+
+	if payload.Config.ID != 456 || payload.Config.Port != 80 ||
+		payload.Config.Protocol != protocolHTTP || payload.Config.NodeBalancerID != 123 {
+		t.Errorf("config element = %+v, want full proto element with id 456, nodebalancer 123", payload.Config)
 	}
 }
 
@@ -2263,6 +2314,27 @@ func TestLinodeNodeBalancerNodeUpdateToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "789") {
 		t.Errorf("textContent.Text does not contain %v", "789")
+	}
+
+	var payload struct {
+		Message string `json:"message"`
+		Node    struct {
+			ID             int    `json:"id"`
+			Label          string `json:"label"`
+			Address        string `json:"address"`
+			Status         string `json:"status"`
+			Mode           string `json:"mode"`
+			NodeBalancerID int    `json:"nodebalancer_id"`
+			ConfigID       int    `json:"config_id"`
+		} `json:"node"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &payload); err != nil {
+		t.Fatalf("unmarshal write response: %v", err)
+	}
+
+	if payload.Node.ID != 789 || payload.Node.Label != nodeBalancerNodeLabelWeb1 ||
+		payload.Node.NodeBalancerID != 123 || payload.Node.ConfigID != 456 {
+		t.Errorf("node element = %+v, want full proto element with id 789, config 456", payload.Node)
 	}
 }
 

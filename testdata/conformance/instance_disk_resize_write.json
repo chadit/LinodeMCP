@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.InstanceDiskResizeWriteResponse",
+  "description": "Instance disk resize id-echo: a confirmation message plus the target Linode, the disk, and its new size in MB. The resize endpoint returns no body, so these echo the request.",
+  "input": {
+    "message": "Disk 10 on instance 123 resize initiated to 65536 MB",
+    "linode_id": 123,
+    "disk_id": 10,
+    "new_size_mb": 65536
+  },
+  "canonical": {
+    "message": "Disk 10 on instance 123 resize initiated to 65536 MB",
+    "linode_id": 123,
+    "disk_id": 10,
+    "new_size_mb": 65536
+  }
+}

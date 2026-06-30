@@ -1,0 +1,46 @@
+{
+  "message": "linode.mcp.v1.ManagedServiceListResponse",
+  "description": "linode_managed_service_list envelope: count, an optional filter echo, and the full proto ManagedService elements with optional body/notes/region present and a repeated int32 credentials list.",
+  "input": {
+    "count": 1,
+    "filter": "label=web monitor",
+    "managed_services": [
+      {
+        "id": 4567,
+        "label": "web monitor",
+        "service_type": "url",
+        "status": "ok",
+        "address": "https://example.com/health",
+        "body": "200 OK",
+        "consultation_group": "ops",
+        "created": "2024-06-01T00:00:00",
+        "credentials": [11, 12],
+        "notes": "primary monitor",
+        "region": "us-east",
+        "timeout": 30,
+        "updated": "2024-06-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "label=web monitor",
+    "managed_services": [
+      {
+        "id": 4567,
+        "label": "web monitor",
+        "service_type": "url",
+        "status": "ok",
+        "address": "https://example.com/health",
+        "body": "200 OK",
+        "consultation_group": "ops",
+        "created": "2024-06-01T00:00:00",
+        "credentials": [11, 12],
+        "notes": "primary monitor",
+        "region": "us-east",
+        "timeout": 30,
+        "updated": "2024-06-02T00:00:00"
+      }
+    ]
+  }
+}

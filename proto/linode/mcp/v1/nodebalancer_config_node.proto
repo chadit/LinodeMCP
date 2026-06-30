@@ -16,6 +16,23 @@ message NodeBalancerConfigNode {
   int32 config_id = 8;
 }
 
+// NodeBalancerConfigNodeListResponse is the linode_nodebalancer_config_node_list
+// envelope: a count, an optional filter echo, and the backend nodes of one
+// NodeBalancer config.
+message NodeBalancerConfigNodeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated NodeBalancerConfigNode nodes = 3;
+}
+
+// NodeBalancerConfigNodeWriteResponse is the {message, node} envelope the
+// NodeBalancer config node write tools (create, update) return: a
+// human-readable confirmation plus the affected backend node.
+message NodeBalancerConfigNodeWriteResponse {
+  string message = 1;
+  NodeBalancerConfigNode node = 2;
+}
+
 // NodeBalancerConfigNodeGetInput is the input contract for
 // linode_nodebalancer_config_node_get.
 message NodeBalancerConfigNodeGetInput {

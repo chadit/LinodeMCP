@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.ImageShareGroupListResponse",
+  "description": "linode_image_sharegroup_by_image_list envelope: count and the full proto ImageShareGroup elements under the image_sharegroups key. Go previously emitted a FormatListResponse {count,image_sharegroups} of raw structs and Python over-wrapped {message,count,image_id,sharegroups,page,...}; the proto envelope is the fix. This sub-resource list paginates and never echoes a filter.",
+  "input": {
+    "count": 1,
+    "image_sharegroups": [
+      {
+        "id": 4242,
+        "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+        "label": "shared-images",
+        "description": "Images shared with the partner account",
+        "is_suspended": false,
+        "created": "2026-01-15T10:00:00",
+        "updated": "2026-02-01T12:30:00",
+        "expiry": "2026-12-31T23:59:59",
+        "images_count": 7,
+        "members_count": 3
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "image_sharegroups": [
+      {
+        "id": 4242,
+        "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+        "label": "shared-images",
+        "description": "Images shared with the partner account",
+        "is_suspended": false,
+        "created": "2026-01-15T10:00:00",
+        "updated": "2026-02-01T12:30:00",
+        "expiry": "2026-12-31T23:59:59",
+        "images_count": 7,
+        "members_count": 3
+      }
+    ]
+  }
+}

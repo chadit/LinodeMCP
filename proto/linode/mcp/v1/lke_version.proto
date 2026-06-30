@@ -9,6 +9,14 @@ message LKEVersion {
   string id = 1;
 }
 
+// LKEVersionListResponse is the {count, filter?, versions} envelope the
+// linode_lke_version_list tool returns.
+message LKEVersionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LKEVersion versions = 3;
+}
+
 // LKEVersionGetInput is the input contract for linode_lke_version_get.
 message LKEVersionGetInput {
   // Linode environment to use (optional, defaults to "default").

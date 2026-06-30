@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -49,57 +50,23 @@ func handleLinodeSSHKeyGetRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeSSHKeyListTool creates a tool for listing SSH keys.
 func NewLinodeSSHKeyListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListTool(
+		cfg,
 		"linode_sshkey_list",
-		mcp.WithDescription("Lists all SSH keys associated with your Linode profile. Can filter by label."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"label_contains",
-			mcp.Description("Filter SSH keys by label containing this string (case-insensitive)"),
-		),
+		"Lists all SSH keys associated with your Linode profile. Can filter by label.",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.SSHKey, error) {
+			return client.ListSSHKeysProto(ctx)
+		},
+		[]listFilterParam[*linodev1.SSHKey]{
+			containsFilter("label_contains", "Filter SSH keys by label containing this string (case-insensitive)",
+				func(k *linodev1.SSHKey) string { return k.GetLabel() }),
+		},
+		sshKeyListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeSSHKeysListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeSSHKeysListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	labelContains := request.GetString("label_contains", "")
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	keys, err := client.ListSSHKeys(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve SSH keys: %v", err)), nil
-	}
-
-	if labelContains != "" {
-		keys = FilterByContains(keys, labelContains, func(k linode.SSHKey) string {
-			return k.Label
-		})
-	}
-
-	response := struct {
-		Count   int             `json:"count"`
-		Filter  string          `json:"filter,omitempty"`
-		SSHKeys []linode.SSHKey `json:"ssh_keys"`
-	}{
-		Count:   len(keys),
-		SSHKeys: keys,
-	}
-
-	if labelContains != "" {
-		response.Filter = "label_contains=" + labelContains
-	}
-
-	return MarshalToolResponse(response)
+func sshKeyListResponse(items []*linodev1.SSHKey, count int32, filter *string) *linodev1.SSHKeyListResponse {
+	return &linodev1.SSHKeyListResponse{Count: count, Filter: filter, SshKeys: items}
 }

@@ -1,0 +1,93 @@
+{
+  "message": "linode.mcp.v1.InstanceBackupsResponse",
+  "description": "linode_instance_backup_list response: automatic backups as a repeated list plus a snapshot object holding the current and in-progress manual snapshots. automatic emits [] when empty; snapshot.current and snapshot.in_progress are nullable InstanceBackup message fields omitted when the API returns null.",
+  "input": {
+    "automatic": [
+      {
+        "id": 123456,
+        "label": "",
+        "status": "successful",
+        "type": "auto",
+        "created": "2026-06-01T00:00:00",
+        "updated": "2026-06-01T01:00:00",
+        "finished": "2026-06-01T01:00:00",
+        "region": "us-east",
+        "available": true,
+        "configs": ["My Debian 12 Disk Profile"],
+        "disks": [
+          {
+            "label": "Debian 12 Disk",
+            "size": 25600,
+            "filesystem": "ext4"
+          }
+        ]
+      }
+    ],
+    "snapshot": {
+      "current": {
+        "id": 987654,
+        "label": "nightly",
+        "status": "successful",
+        "type": "snapshot",
+        "created": "2026-06-02T00:00:00",
+        "updated": "2026-06-02T01:00:00",
+        "finished": "2026-06-02T01:00:00",
+        "region": "us-east",
+        "available": true,
+        "configs": ["My Debian 12 Disk Profile"],
+        "disks": [
+          {
+            "label": "Debian 12 Disk",
+            "size": 25600,
+            "filesystem": "ext4"
+          }
+        ]
+      },
+      "in_progress": null
+    }
+  },
+  "canonical": {
+    "automatic": [
+      {
+        "id": 123456,
+        "label": "",
+        "status": "successful",
+        "type": "auto",
+        "created": "2026-06-01T00:00:00",
+        "updated": "2026-06-01T01:00:00",
+        "finished": "2026-06-01T01:00:00",
+        "region": "us-east",
+        "available": true,
+        "configs": ["My Debian 12 Disk Profile"],
+        "disks": [
+          {
+            "label": "Debian 12 Disk",
+            "size": 25600,
+            "filesystem": "ext4"
+          }
+        ]
+      }
+    ],
+    "snapshot": {
+      "current": {
+        "id": 987654,
+        "label": "nightly",
+        "status": "successful",
+        "type": "snapshot",
+        "created": "2026-06-02T00:00:00",
+        "updated": "2026-06-02T01:00:00",
+        "finished": "2026-06-02T01:00:00",
+        "region": "us-east",
+        "available": true,
+        "configs": ["My Debian 12 Disk Profile"],
+        "disks": [
+          {
+            "label": "Debian 12 Disk",
+            "size": 25600,
+            "filesystem": "ext4"
+          }
+        ]
+      }
+    }
+  }
+}

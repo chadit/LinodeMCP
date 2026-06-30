@@ -1,0 +1,72 @@
+{
+  "message": "linode.mcp.v1.DatabaseTypeListResponse",
+  "description": "linode_database_type_list envelope: count and the full proto DatabaseType elements with nested per-engine pricing. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "database_types": [
+      {
+        "id": "g6-dedicated-2",
+        "label": "Dedicated 4GB",
+        "class": "dedicated",
+        "disk": 81920,
+        "memory": 4096,
+        "vcpus": 2,
+        "deprecated": false,
+        "engines": {
+          "mysql": [
+            {
+              "quantity": 1,
+              "price": {
+                "hourly": 0.09,
+                "monthly": 60.0
+              }
+            }
+          ],
+          "postgresql": [
+            {
+              "quantity": 1,
+              "price": {
+                "hourly": 0.09,
+                "monthly": 60.0
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "database_types": [
+      {
+        "id": "g6-dedicated-2",
+        "label": "Dedicated 4GB",
+        "class": "dedicated",
+        "disk": 81920,
+        "memory": 4096,
+        "vcpus": 2,
+        "deprecated": false,
+        "engines": {
+          "mysql": [
+            {
+              "quantity": 1,
+              "price": {
+                "hourly": 0.09,
+                "monthly": 60.0
+              }
+            }
+          ],
+          "postgresql": [
+            {
+              "quantity": 1,
+              "price": {
+                "hourly": 0.09,
+                "monthly": 60.0
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -31,10 +31,141 @@ message ProfileApp {
   string website = 4;
 }
 
+// ProfileAppListResponse is the linode_profile_app_list envelope: count and the
+// full proto ProfileApp elements. Pagination does not echo a filter.
+message ProfileAppListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ProfileApp profile_apps = 3;
+}
+
 // ProfileAppGetInput is the input contract for linode_profile_app_get.
 message ProfileAppGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
   // The ID of the authorized app to retrieve (required).
   int32 app_id = 2;
+}
+
+// TrustedDevice mirrors one trusted device on the authenticated profile
+// (GET /profile/devices). expiry is nullable: the Linode API returns null for a
+// device whose trust window does not expire, so it is optional and omitted then.
+message TrustedDevice {
+  int32 id = 1;
+  string created = 2;
+  optional string expiry = 3;
+  string last_authenticated = 4;
+  string last_remote_addr = 5;
+  string user_agent = 6;
+}
+
+// TrustedDeviceListResponse is the linode_profile_device_list envelope: count
+// and the full proto TrustedDevice elements. Pagination does not echo a filter.
+message TrustedDeviceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated TrustedDevice profile_devices = 3;
+}
+
+// PersonalAccessToken mirrors one personal access token's METADATA on the
+// authenticated profile (GET /profile/tokens). The list response carries no
+// token secret: the full token value is returned only once at creation, so no
+// secret field is modeled here and any token value the API returns is dropped.
+// expiry is nullable (a non-expiring token returns null), so it is optional.
+message PersonalAccessToken {
+  int32 id = 1;
+  string label = 2;
+  string scopes = 3;
+  string created = 4;
+  optional string expiry = 5;
+}
+
+// PersonalAccessTokenListResponse is the linode_profile_token_list envelope:
+// count and the full proto PersonalAccessToken metadata elements. Pagination
+// does not echo a filter.
+message PersonalAccessTokenListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated PersonalAccessToken profile_tokens = 3;
+}
+
+// PersonalAccessTokenWriteResponse is the {message, token} envelope the token
+// update tool returns: a confirmation string plus the full PersonalAccessToken
+// metadata element (no secret, an update never returns the token value).
+message PersonalAccessTokenWriteResponse {
+  string message = 1;
+  PersonalAccessToken token = 2;
+}
+
+// CreatedPersonalAccessToken is the response from creating a personal access
+// token. Unlike the metadata PersonalAccessToken element, it carries the
+// one-time secret token value the user needs to authenticate API calls. The
+// secret is returned to the user by design; it is not output-redacted. expiry is
+// nullable (a non-expiring token returns null), so it is optional.
+message CreatedPersonalAccessToken {
+  int32 id = 1;
+  string label = 2;
+  string scopes = 3;
+  string created = 4;
+  optional string expiry = 5;
+  string token = 6;
+}
+
+// ProfileTokenCreateResponse is the {warning, token} envelope the token create
+// tool returns. The warning reminds the user the token secret carried on token
+// is shown only once.
+message ProfileTokenCreateResponse {
+  string warning = 1;
+  CreatedPersonalAccessToken token = 2;
+}
+
+// ProfileTfaEnableResponse is the {secret, expiry, warning} envelope the TFA
+// enable tool returns: the one-time two-factor secret plus its provisioning
+// expiry. The secret is returned to the user by design (it must be confirmed to
+// activate two-factor auth); it is not output-redacted. The warning reminds the
+// user to save the secret before confirming.
+message ProfileTfaEnableResponse {
+  string secret = 1;
+  string expiry = 2;
+  string warning = 3;
+}
+
+// ProfileTokenIDResponse is the {message, token_id} id-echo the token delete
+// (revoke) tool returns; the revoke endpoint returns no resource body to echo.
+message ProfileTokenIDResponse {
+  string message = 1;
+  int32 token_id = 2;
+}
+
+// ProfileAppIDResponse is the {message, app_id} id-echo the app delete tool
+// returns; the revoke endpoint returns no resource body to echo.
+message ProfileAppIDResponse {
+  string message = 1;
+  int32 app_id = 2;
+}
+
+// ProfileDeviceIDResponse is the {message, device_id} id-echo the device revoke
+// tool returns; the revoke endpoint returns no resource body to echo.
+message ProfileDeviceIDResponse {
+  string message = 1;
+  int32 device_id = 2;
+}
+
+// SecurityQuestion mirrors one security question on the authenticated profile
+// (GET /profile/security-questions). response holds the saved answer text and is
+// nullable: the API returns null for a question the user has not answered yet,
+// so it is optional and omitted then.
+message SecurityQuestion {
+  int32 id = 1;
+  string question = 2;
+  optional string response = 3;
+}
+
+// SecurityQuestionListResponse is the linode_profile_security_question_list
+// envelope: count and the full proto SecurityQuestion elements. The endpoint is
+// not paginated and applies no filter.
+message SecurityQuestionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated SecurityQuestion security_questions = 3;
 }

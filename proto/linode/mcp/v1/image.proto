@@ -31,6 +31,23 @@ message ImageWriteResponse {
   Image image = 2;
 }
 
+// ImageUploadWriteResponse is the {message, upload_to, image} envelope the
+// linode_image_upload tool returns. upload_to is the one-time upload URL; image
+// is the created custom image element.
+message ImageUploadWriteResponse {
+  string message = 1;
+  string upload_to = 2;
+  Image image = 3;
+}
+
+// ImageListResponse is the {count, filter?, images} envelope the
+// linode_image_list tool returns.
+message ImageListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Image images = 3;
+}
+
 // ImageGetInput is the input contract for linode_image_get.
 message ImageGetInput {
   // Linode environment to use (optional, defaults to "default").

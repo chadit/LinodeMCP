@@ -12,6 +12,23 @@ message SSHKey {
   string created = 4;
 }
 
+// SSHKeyListResponse is the envelope linode_sshkey_list returns: a count, an
+// optional echoed filter, and the full proto SSHKey elements.
+message SSHKeyListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated SSHKey ssh_keys = 3;
+}
+
+// SSHKeyWriteResponse is the {message, ssh_key} envelope the SSH key create and
+// update tools return: a confirmation string plus the full SSHKey element. The
+// ssh_key field carries the public key, which is public information and kept in
+// full.
+message SSHKeyWriteResponse {
+  string message = 1;
+  SSHKey ssh_key = 2;
+}
+
 // SSHKeyGetInput is the input contract for linode_sshkey_get.
 message SSHKeyGetInput {
   // Linode environment to use (optional, defaults to "default").

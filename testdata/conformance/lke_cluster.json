@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.LKECluster",
+  "description": "Full LKE cluster with all scalar fields, a repeated tags list, and the nested control_plane message present.",
+  "input": {
+    "id": 12345,
+    "label": "prod-cluster",
+    "region": "us-east",
+    "k8s_version": "1.29",
+    "status": "ready",
+    "tags": ["prod", "team-a"],
+    "created": "2024-01-01T00:00:00",
+    "updated": "2024-01-02T00:00:00",
+    "control_plane": {"high_availability": true}
+  },
+  "canonical": {
+    "id": 12345,
+    "label": "prod-cluster",
+    "region": "us-east",
+    "k8s_version": "1.29",
+    "status": "ready",
+    "tags": ["prod", "team-a"],
+    "created": "2024-01-01T00:00:00",
+    "updated": "2024-01-02T00:00:00",
+    "control_plane": {"high_availability": true}
+  }
+}

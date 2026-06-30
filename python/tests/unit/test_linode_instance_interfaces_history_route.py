@@ -151,7 +151,15 @@ async def test_handle_linode_instance_interfaces_history_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     mock_linode_client.list_instance_interface_history.return_value = {
-        "data": [{"linode_id": 123, "action": "interface_create"}],
+        "data": [
+            {
+                "interface_history_id": 3,
+                "interface_id": 221,
+                "linode_id": 123,
+                "version": 1,
+                "interface_data": {"mac_address": "22:00:AB:CD:EF:02"},
+            }
+        ],
         "page": 1,
         "pages": 1,
         "results": 1,
@@ -162,8 +170,12 @@ async def test_handle_linode_instance_interfaces_history_list_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload["results"] == 1
-    assert payload["data"] == [{"linode_id": 123, "action": "interface_create"}]
+    assert payload["count"] == 1
+    assert payload["interface_history"][0]["interface_history_id"] == 3
+    assert payload["interface_history"][0]["linode_id"] == 123
+    assert payload["interface_history"][0]["interface_data"] == {
+        "mac_address": "22:00:AB:CD:EF:02"
+    }
     mock_linode_client.list_instance_interface_history.assert_awaited_once_with(
         123, page=None, page_size=None
     )
@@ -189,6 +201,31 @@ async def test_handle_linode_instance_interfaces_history_list_rejects_invalid_li
     )
 
     assert result[0].text == "Error: linode_id must be a positive integer"
+    mock_linode_client.list_instance_interface_history.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"linode_id": 123, "page": 0}, "page must be at least 1"),
+        ({"linode_id": 123, "page": "2"}, "page must be an integer"),
+        ({"linode_id": 123, "page_size": 24}, "page_size must be at least 25"),
+        ({"linode_id": 123, "page_size": 501}, "page_size must be at most 500"),
+        ({"linode_id": 123, "page_size": True}, "page_size must be an integer"),
+    ],
+)
+async def test_handle_linode_instance_interfaces_history_list_rejects_bad_pagination(
+    arguments: dict[str, Any],
+    message: str,
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    result = await handle_linode_instance_interface_history_list(
+        arguments, sample_config
+    )
+
+    assert result[0].text == f"Error: {message}"
     mock_linode_client.list_instance_interface_history.assert_not_called()
 
 

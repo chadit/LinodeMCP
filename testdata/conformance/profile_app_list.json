@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.ProfileAppListResponse",
+  "description": "linode_profile_app_list envelope: count and the full proto ProfileApp elements. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "profile_apps": [
+      {
+        "id": 123,
+        "label": "my-oauth-app",
+        "scopes": "linodes:read_write account:read_only",
+        "website": "https://example.com"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "profile_apps": [
+      {
+        "id": 123,
+        "label": "my-oauth-app",
+        "scopes": "linodes:read_write account:read_only",
+        "website": "https://example.com"
+      }
+    ]
+  }
+}

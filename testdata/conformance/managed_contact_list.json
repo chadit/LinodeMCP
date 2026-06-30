@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.ManagedContactListResponse",
+  "description": "linode_managed_contact_list envelope: count, an optional filter echo, and the full proto ManagedContact elements with the optional group present and the nested phone message carrying both optional numbers.",
+  "input": {
+    "count": 1,
+    "filter": "group=prod",
+    "managed_contacts": [
+      {
+        "id": 555,
+        "name": "Alice Admin",
+        "email": "alice@example.com",
+        "group": "prod",
+        "phone": {
+          "primary": "555-0100",
+          "secondary": "555-0101"
+        },
+        "updated": "2024-06-01T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "group=prod",
+    "managed_contacts": [
+      {
+        "id": 555,
+        "name": "Alice Admin",
+        "email": "alice@example.com",
+        "group": "prod",
+        "phone": {
+          "primary": "555-0100",
+          "secondary": "555-0101"
+        },
+        "updated": "2024-06-01T00:00:00"
+      }
+    ]
+  }
+}

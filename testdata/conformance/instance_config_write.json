@@ -1,0 +1,72 @@
+{
+  "message": "linode.mcp.v1.InstanceConfigWriteResponse",
+  "description": "Instance config-profile write envelope (create, update): a confirmation message plus the full configuration profile, including its device map, helpers, and interfaces.",
+  "input": {
+    "message": "Configuration profile 'My Ubuntu Config' (ID: 789) created on instance 123",
+    "config": {
+      "id": 789,
+      "label": "My Ubuntu Config",
+      "kernel": "linode/latest-64bit",
+      "comments": "",
+      "memory_limit": 0,
+      "root_device": "/dev/sda",
+      "run_level": "default",
+      "virt_mode": "paravirt",
+      "devices": {
+        "sda": {"disk_id": 50}
+      },
+      "helpers": {
+        "devtmpfs_automount": true,
+        "distro": true,
+        "modules_dep": true,
+        "network": true,
+        "updatedb_disabled": true
+      },
+      "interfaces": [
+        {
+          "id": 101,
+          "active": true,
+          "purpose": "public",
+          "primary": true,
+          "ip_ranges": []
+        }
+      ],
+      "created": "2026-06-30T12:00:00",
+      "updated": "2026-06-30T12:00:00"
+    }
+  },
+  "canonical": {
+    "message": "Configuration profile 'My Ubuntu Config' (ID: 789) created on instance 123",
+    "config": {
+      "id": 789,
+      "label": "My Ubuntu Config",
+      "kernel": "linode/latest-64bit",
+      "comments": "",
+      "memory_limit": 0,
+      "root_device": "/dev/sda",
+      "run_level": "default",
+      "virt_mode": "paravirt",
+      "devices": {
+        "sda": {"disk_id": 50}
+      },
+      "helpers": {
+        "devtmpfs_automount": true,
+        "distro": true,
+        "modules_dep": true,
+        "network": true,
+        "updatedb_disabled": true
+      },
+      "interfaces": [
+        {
+          "id": 101,
+          "active": true,
+          "purpose": "public",
+          "primary": true,
+          "ip_ranges": []
+        }
+      ],
+      "created": "2026-06-30T12:00:00",
+      "updated": "2026-06-30T12:00:00"
+    }
+  }
+}

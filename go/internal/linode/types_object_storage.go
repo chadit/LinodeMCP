@@ -11,16 +11,6 @@ type ObjectStorageBucket struct {
 	Cluster  string `json:"cluster"`
 }
 
-// ObjectStorageObject represents an object within a bucket.
-type ObjectStorageObject struct {
-	Name         string `json:"name"`
-	ETag         string `json:"etag"`
-	LastModified string `json:"last_modified"`
-	Owner        string `json:"owner"`
-	Size         int    `json:"size"`
-	IsPrefix     bool   `json:"is_prefix"`
-}
-
 // ObjectStorageEndpoint represents an Object Storage endpoint.
 type ObjectStorageEndpoint struct {
 	Region       string  `json:"region"`
@@ -30,11 +20,18 @@ type ObjectStorageEndpoint struct {
 
 // ObjectStorageType represents Object Storage pricing and type info.
 type ObjectStorageType struct {
-	ID       string `json:"id"`
-	Label    string `json:"label"`
-	Price    Price  `json:"price"`
-	Transfer int    `json:"transfer"`
-	Region   string `json:"region_prices,omitempty"`
+	ID           string                     `json:"id"`
+	Label        string                     `json:"label"`
+	Price        Price                      `json:"price"`
+	Transfer     int                        `json:"transfer"`
+	RegionPrices []ObjectStorageRegionPrice `json:"region_prices"`
+}
+
+// ObjectStorageRegionPrice represents region-specific Object Storage pricing.
+type ObjectStorageRegionPrice struct {
+	ID      string  `json:"id"`
+	Hourly  float64 `json:"hourly"`
+	Monthly float64 `json:"monthly"`
 }
 
 // ObjectStorageQuota represents Object Storage quota metadata.

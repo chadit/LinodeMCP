@@ -190,7 +190,11 @@ async def test_handle_linode_instance_config_interface_update_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {"id": 789, "primary": True}
+    assert payload["message"] == (
+        "Configuration profile interface 789 updated on config 456 for instance 123"
+    )
+    assert payload["interface"]["id"] == 789
+    assert payload["interface"]["primary"] is True
     mock_linode_client.update_instance_config_interface.assert_awaited_once_with(
         123,
         456,

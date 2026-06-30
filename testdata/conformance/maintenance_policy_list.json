@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.MaintenancePolicyListResponse",
+  "description": "linode_maintenance_policy_list envelope: count and the full proto MaintenancePolicy elements (not the Linode data/page/pages/results page). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "maintenance_policies": [
+      {
+        "slug": "linode/migrate",
+        "label": "Migrate",
+        "description": "Migrates the Linode during maintenance.",
+        "type": "migrate",
+        "notification_period_sec": 86400,
+        "is_default": true
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "maintenance_policies": [
+      {
+        "slug": "linode/migrate",
+        "label": "Migrate",
+        "description": "Migrates the Linode during maintenance.",
+        "type": "migrate",
+        "notification_period_sec": 86400,
+        "is_default": true
+      }
+    ]
+  }
+}

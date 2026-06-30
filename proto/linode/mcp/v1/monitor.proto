@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 // MonitorService mirrors a Linode Monitor supported service type.
@@ -16,4 +18,178 @@ message MonitorServiceGetInput {
   optional string environment = 1;
   // The monitoring service type to retrieve (required).
   string service_type = 2;
+}
+
+// MonitorServiceListResponse is the linode_monitor_service_list envelope: count
+// and the full proto MonitorService elements. The tool has no filter param, so
+// filter is omitted.
+message MonitorServiceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorService services = 3;
+}
+
+// MonitorAlertDefinition mirrors a Linode Monitor alert definition. criteria,
+// rule_criteria, and trigger_conditions are arbitrary JSON objects the API
+// returns verbatim, so they are modeled as google.protobuf.Struct.
+message MonitorAlertDefinition {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string service_type = 4;
+  string description = 5;
+  int32 severity = 6;
+  string status = 7;
+  google.protobuf.Struct criteria = 8;
+  google.protobuf.Struct rule_criteria = 9;
+  google.protobuf.Struct trigger_conditions = 10;
+  repeated int32 channel_ids = 11;
+  repeated string entity_ids = 12;
+}
+
+// MonitorAlertDefinitionListResponse is the
+// linode_monitor_alert_definition_list envelope: count and the full proto
+// MonitorAlertDefinition elements. The tool paginates and has no filter param,
+// so filter is omitted.
+message MonitorAlertDefinitionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorAlertDefinition alert_definitions = 3;
+}
+
+// MonitorServiceAlertDefinitionListResponse is the
+// linode_monitor_service_alert_definition_list envelope: count and the full
+// proto MonitorAlertDefinition elements for one service type. The tool keys off
+// a required service_type path-id and has no filter param, so filter is omitted.
+// It reuses the MonitorAlertDefinition element but is a distinct list-response
+// message from the top-level linode_monitor_alert_definition_list.
+message MonitorServiceAlertDefinitionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorAlertDefinition alert_definitions = 3;
+}
+
+// MonitorServiceMetricQueryResponse is the
+// linode_monitor_service_metric_query envelope: a confirmation message, the
+// queried service type, and the metrics payload. The metrics endpoint returns
+// an arbitrary JSON object the API leaves untyped, so metrics is modeled as
+// google.protobuf.Struct to round-trip any shape identically on both languages.
+message MonitorServiceMetricQueryResponse {
+  string message = 1;
+  string service_type = 2;
+  google.protobuf.Struct metrics = 3;
+}
+
+// MonitorAlertDefinitionWriteResponse is the
+// linode_monitor_service_alert_definition_create and _update envelope: a
+// confirmation message plus the full MonitorAlertDefinition element decoded
+// from the API body.
+message MonitorAlertDefinitionWriteResponse {
+  string message = 1;
+  MonitorAlertDefinition alert_definition = 2;
+}
+
+// MonitorAlertDefinitionDeleteResponse is the
+// linode_monitor_service_alert_definition_delete envelope: a confirmation
+// message plus the service type and alert ID the delete acted on. The delete
+// endpoint returns an empty body, so these id echoes confirm the target.
+message MonitorAlertDefinitionDeleteResponse {
+  string message = 1;
+  string service_type = 2;
+  int32 alert_id = 3;
+}
+
+// MonitorMetricDefinition mirrors a Linode Monitor metric definition as returned
+// by the per-service metric-definitions endpoint.
+message MonitorMetricDefinition {
+  string label = 1;
+  string metric = 2;
+  string metric_type = 3;
+}
+
+// MonitorServiceMetricDefinitionListResponse is the
+// linode_monitor_service_metric_definition_list envelope: count and the full
+// proto MonitorMetricDefinition elements for one service type. The tool keys off
+// a required service_type path-id and has no filter param, so filter is omitted.
+message MonitorServiceMetricDefinitionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorMetricDefinition metric_definitions = 3;
+}
+
+// MonitorAlertChannelEmailContent is the email delivery settings of an alert
+// channel.
+message MonitorAlertChannelEmailContent {
+  repeated string email_addresses = 1;
+}
+
+// MonitorAlertChannelContent is the delivery settings of an alert channel.
+message MonitorAlertChannelContent {
+  MonitorAlertChannelEmailContent email = 1;
+}
+
+// MonitorAlertChannelAlert is one alert associated with an alert channel.
+message MonitorAlertChannelAlert {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// MonitorAlertChannel mirrors a Linode Monitor alert channel.
+message MonitorAlertChannel {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string channel_type = 4;
+  MonitorAlertChannelContent content = 5;
+  repeated MonitorAlertChannelAlert alerts = 6;
+  string created = 7;
+  string created_by = 8;
+  string updated = 9;
+  string updated_by = 10;
+}
+
+// MonitorAlertChannelListResponse is the linode_monitor_alert_channel_list
+// envelope: count and the full proto MonitorAlertChannel elements. The tool
+// paginates and has no filter param, so filter is omitted.
+message MonitorAlertChannelListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorAlertChannel alert_channels = 3;
+}
+
+// MonitorDashboard mirrors a Linode Monitor dashboard. The live API returns the
+// scalar metadata (id, label, type, service_type) plus a widgets array whose
+// per-widget fields the API returns verbatim and the upstream type leaves
+// untyped. Each widget is modeled as google.protobuf.Struct so any widget shape
+// round-trips identically on both languages without guessing field names, the
+// same way MonitorAlertDefinition handles arbitrary JSON.
+message MonitorDashboard {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string service_type = 4;
+  repeated google.protobuf.Struct widgets = 5;
+}
+
+// MonitorDashboardListResponse is the linode_monitor_dashboard_list envelope:
+// count and the full proto MonitorDashboard elements. The tool paginates and has
+// no filter param, so filter is omitted.
+message MonitorDashboardListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorDashboard dashboards = 3;
+}
+
+// MonitorServiceDashboardListResponse is the
+// linode_monitor_service_dashboard_list envelope: count and the full proto
+// MonitorDashboard elements for one service type. The tool keys off a required
+// service_type path-id and has no filter param, so filter is omitted. It reuses
+// the MonitorDashboard element but is a distinct list-response message from the
+// top-level linode_monitor_dashboard_list.
+message MonitorServiceDashboardListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MonitorDashboard dashboards = 3;
 }

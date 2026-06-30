@@ -931,8 +931,53 @@ func TestLinodeNetworkingIPAssignToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "updated") {
-		t.Errorf("textContent.Text does not contain %v", "updated")
+	assertNetworkingIPAssignResponse(t, textContent.Text, "Networking IP assignments updated")
+}
+
+// networkingIPAssignResponseBody decodes the id-echo proto the assign tools emit.
+type networkingIPAssignResponseBody struct {
+	Message     string `json:"message"`
+	Region      string `json:"region"`
+	Assignments []struct {
+		Address  string `json:"address"`
+		LinodeID int    `json:"linode_id"`
+	} `json:"assignments"`
+	Response any `json:"response"`
+}
+
+// assertNetworkingIPAssignResponse checks the assign id-echo proto shape: the
+// expected message, the region and assignment echoes, and the absence of the
+// dropped opaque "response" key.
+func assertNetworkingIPAssignResponse(t *testing.T, text, wantMessage string) {
+	t.Helper()
+
+	var body networkingIPAssignResponseBody
+	if err := json.Unmarshal([]byte(text), &body); err != nil {
+		t.Fatalf("unexpected error decoding response: %v", err)
+	}
+
+	if body.Message != wantMessage {
+		t.Errorf("body.Message = %q, want %q", body.Message, wantMessage)
+	}
+
+	if body.Region != regionUSEast {
+		t.Errorf("body.Region = %q, want %q", body.Region, regionUSEast)
+	}
+
+	if len(body.Assignments) != 1 {
+		t.Fatalf("len(body.Assignments) = %d, want 1", len(body.Assignments))
+	}
+
+	if body.Assignments[0].Address != networkingIPAddressFixture {
+		t.Errorf("body.Assignments[0].Address = %q, want %q", body.Assignments[0].Address, networkingIPAddressFixture)
+	}
+
+	if body.Assignments[0].LinodeID != 123 {
+		t.Errorf("body.Assignments[0].LinodeID = %d, want 123", body.Assignments[0].LinodeID)
+	}
+
+	if body.Response != nil {
+		t.Errorf("body.Response = %v, want nil (opaque response key must be dropped)", body.Response)
 	}
 }
 
@@ -1170,9 +1215,7 @@ func TestLinodeNetworkingIPv4AssignToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "updated") {
-		t.Errorf("textContent.Text does not contain %v", "updated")
-	}
+	assertNetworkingIPAssignResponse(t, textContent.Text, "Networking IPv4 assignments updated")
 }
 
 func TestLinodeNetworkingIPv4AssignToolApiError(t *testing.T) {
@@ -1459,6 +1502,8 @@ func TestLinodeNetworkingIPShareToolSuccess(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("result.IsError = true, text: %s", dryRunResultText(t, result))
 	}
+
+	assertNetworkingIPShareResponse(t, dryRunResultText(t, result))
 }
 
 func TestLinodeNetworkingIPv4ShareToolSuccess(t *testing.T) {
@@ -1534,8 +1579,42 @@ func TestLinodeNetworkingIPv4ShareToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "updated") {
-		t.Errorf("textContent.Text does not contain %v", "updated")
+	assertNetworkingIPShareResponse(t, textContent.Text)
+}
+
+// networkingIPShareResponseBody decodes the id-echo proto the share tools emit.
+type networkingIPShareResponseBody struct {
+	Message  string   `json:"message"`
+	LinodeID int      `json:"linode_id"`
+	IPs      []string `json:"ips"`
+	Result   any      `json:"result"`
+}
+
+// assertNetworkingIPShareResponse checks the share id-echo proto shape: the
+// expected message, the primary Linode and shared-IP echoes, and the absence of
+// the dropped opaque "result" key.
+func assertNetworkingIPShareResponse(t *testing.T, text string) {
+	t.Helper()
+
+	var body networkingIPShareResponseBody
+	if err := json.Unmarshal([]byte(text), &body); err != nil {
+		t.Fatalf("unexpected error decoding response: %v", err)
+	}
+
+	if body.Message != "Networking IP sharing updated" {
+		t.Errorf("body.Message = %q, want %q", body.Message, "Networking IP sharing updated")
+	}
+
+	if body.LinodeID != 123 {
+		t.Errorf("body.LinodeID = %d, want 123", body.LinodeID)
+	}
+
+	if len(body.IPs) != 1 || body.IPs[0] != networkingIPAddressFixture {
+		t.Errorf("body.IPs = %v, want [%q]", body.IPs, networkingIPAddressFixture)
+	}
+
+	if body.Result != nil {
+		t.Errorf("body.Result = %v, want nil (opaque result key must be dropped)", body.Result)
 	}
 }
 

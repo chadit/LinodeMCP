@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 // Promo is an active promotion attached to an account.
@@ -49,6 +51,24 @@ message AccountWriteResponse {
 // AccountGetInput is the input contract for linode_account_get (the singular
 // account, so no resource ID).
 message AccountGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// AccountAgreements mirrors the account agreement acknowledgment status: one
+// boolean per agreement the account may have accepted. The endpoint returns a
+// flat object of bool flags, not a {count, key} list, so this models the live
+// structure directly.
+message AccountAgreements {
+  bool billing_agreement = 1;
+  bool eu_model = 2;
+  bool master_service_agreement = 3;
+  bool privacy_policy = 4;
+}
+
+// AccountAgreementsListInput is the input contract for
+// linode_account_agreement_list (the singular agreement set, so no resource ID).
+message AccountAgreementsListInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
 }
@@ -110,6 +130,15 @@ message AccountInvoiceGetInput {
   int32 invoice_id = 2;
 }
 
+// AccountInvoiceListResponse is the envelope linode_account_invoice_list
+// returns: a count, an optional echoed filter, and the full proto
+// AccountInvoice elements.
+message AccountInvoiceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountInvoice account_invoices = 3;
+}
+
 // AccountLogin mirrors one Linode account login event.
 message AccountLogin {
   string datetime = 1;
@@ -128,6 +157,14 @@ message AccountLoginGetInput {
   int32 login_id = 2;
 }
 
+// AccountLoginListResponse is the envelope linode_account_login_list returns: a
+// count, an optional echoed filter, and the full proto AccountLogin elements.
+message AccountLoginListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountLogin account_logins = 3;
+}
+
 // ProfileLoginGetInput is the input contract for linode_profile_login_get (returns
 // a shared AccountLogin).
 message ProfileLoginGetInput {
@@ -135,6 +172,15 @@ message ProfileLoginGetInput {
   optional string environment = 1;
   // The ID of the login to retrieve (required).
   int32 login_id = 2;
+}
+
+// ProfileLoginListResponse is the envelope linode_profile_login_list returns: a
+// count, an optional echoed filter, and the full proto AccountLogin elements
+// (the same element account logins use; only the wrapper key differs).
+message ProfileLoginListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountLogin profile_logins = 3;
 }
 
 // AccountPayment mirrors one payment made on the account.
@@ -152,6 +198,47 @@ message AccountPaymentGetInput {
   int32 payment_id = 2;
 }
 
+// AccountPaymentListResponse is the envelope linode_account_payment_list
+// returns: a count, an optional echoed filter, and the full proto
+// AccountPayment elements.
+message AccountPaymentListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountPayment account_payments = 3;
+}
+
+// AccountPaymentWriteResponse is the {message, payment} envelope the account
+// payment create tool returns: a confirmation string plus the full payment
+// element the API created.
+message AccountPaymentWriteResponse {
+  string message = 1;
+  AccountPayment payment = 2;
+}
+
+// AccountPromoResponse is the {message, promo_code} id-echo envelope the
+// promo-credit add tool returns. The promo endpoint returns an empty body, so
+// the response echoes the applied promo code.
+message AccountPromoResponse {
+  string message = 1;
+  string promo_code = 2;
+}
+
+// AccountServiceTransferActionResponse is the {message, token} id-echo envelope
+// the service-transfer accept and delete tools return. Those endpoints return
+// an empty body, so the response echoes the affected transfer token.
+message AccountServiceTransferActionResponse {
+  string message = 1;
+  string token = 2;
+}
+
+// AccountEventSeenResponse is the {message, event_id} id-echo envelope the
+// event-seen tool returns. The seen endpoint returns an empty body, so the
+// response echoes the affected event ID.
+message AccountEventSeenResponse {
+  string message = 1;
+  int32 event_id = 2;
+}
+
 // OAuthClient mirrors an OAuth client registered on the account (the secret is not
 // returned by the get).
 message OAuthClient {
@@ -163,6 +250,15 @@ message OAuthClient {
   string thumbnail_url = 6;
 }
 
+// OAuthClientListResponse is the envelope linode_account_oauth_client_list
+// returns: a count, an optional echoed filter, and the full proto OAuthClient
+// elements.
+message OAuthClientListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated OAuthClient account_oauth_clients = 3;
+}
+
 // AccountOAuthClientGetInput is the input contract for
 // linode_account_oauth_client_get.
 message AccountOAuthClientGetInput {
@@ -170,4 +266,232 @@ message AccountOAuthClientGetInput {
   optional string environment = 1;
   // The ID of the OAuth client to retrieve (required).
   string client_id = 2;
+}
+
+// CreatedOAuthClient is the response from creating an OAuth client. Unlike the
+// metadata OAuthClient element, it carries the one-time secret the user needs to
+// authenticate the client. The secret is returned to the user by design; it is
+// not output-redacted.
+message CreatedOAuthClient {
+  string id = 1;
+  string label = 2;
+  string redirect_uri = 3;
+  string secret = 4;
+}
+
+// OAuthClientCreateWriteResponse is the {message, warning, client} envelope the
+// OAuth client create tool returns. The warning reminds the user that the secret
+// carried on client is shown only once.
+message OAuthClientCreateWriteResponse {
+  string message = 1;
+  string warning = 2;
+  CreatedOAuthClient client = 3;
+}
+
+// OAuthClientSecret is the response from resetting an OAuth client secret: the
+// new one-time secret. It is returned to the user by design and is not
+// output-redacted.
+message OAuthClientSecret {
+  string secret = 1;
+}
+
+// OAuthClientSecretResetWriteResponse is the {message, warning, client_id,
+// secret} envelope the OAuth client secret reset tool returns. The warning
+// reminds the user the new secret is shown only once.
+message OAuthClientSecretResetWriteResponse {
+  string message = 1;
+  string warning = 2;
+  string client_id = 3;
+  OAuthClientSecret secret = 4;
+}
+
+// OAuthClientIDResponse is the {message, client_id} id-echo envelope the OAuth
+// client delete and thumbnail-update tools return. Those endpoints return an
+// empty body, so the response echoes the affected client ID.
+message OAuthClientIDResponse {
+  string message = 1;
+  string client_id = 2;
+}
+
+// AccountNotificationEntity identifies the entity attached to an account
+// notification. The Linode API returns id as an integer or null, so it is a
+// google.protobuf.Value to round-trip either form.
+message AccountNotificationEntity {
+  google.protobuf.Value id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// AccountNotification mirrors one notification from GET /account/notifications.
+// until and when are nullable timestamps (omitted when the API returns null).
+message AccountNotification {
+  AccountNotificationEntity entity = 1;
+  string label = 2;
+  string message = 3;
+  string severity = 4;
+  string type = 5;
+  optional string until = 6;
+  optional string when = 7;
+}
+
+// AccountNotificationListResponse is the envelope
+// linode_account_notification_list returns: a count, an optional echoed filter,
+// and the full proto AccountNotification elements.
+message AccountNotificationListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountNotification account_notifications = 3;
+}
+
+// AccountMaintenanceEntity identifies the entity attached to a maintenance
+// record.
+message AccountMaintenanceEntity {
+  int32 id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// AccountMaintenance mirrors one record from GET /account/maintenance.
+message AccountMaintenance {
+  AccountMaintenanceEntity entity = 1;
+  string reason = 2;
+  string status = 3;
+  string type = 4;
+  string when = 5;
+}
+
+// AccountMaintenanceListResponse is the envelope
+// linode_account_maintenance_list returns: a count, an optional echoed filter,
+// and the full proto AccountMaintenance elements.
+message AccountMaintenanceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountMaintenance account_maintenances = 3;
+}
+
+// MaintenancePolicy mirrors one policy from GET /maintenance/policies.
+message MaintenancePolicy {
+  string slug = 1;
+  string label = 2;
+  string description = 3;
+  string type = 4;
+  int32 notification_period_sec = 5;
+  bool is_default = 6;
+}
+
+// MaintenancePolicyListResponse is the linode_maintenance_policy_list envelope:
+// a count, an optional echoed filter, and the full proto MaintenancePolicy
+// elements. The tool paginates and has no filter param, so filter is omitted.
+message MaintenancePolicyListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated MaintenancePolicy maintenance_policies = 3;
+}
+
+// AccountPaymentMethod mirrors one payment method from
+// GET /account/payment-methods. The live Go type carries data as an untyped
+// map[string]any because the Linode API returns a different object per payment
+// method type (credit_card returns card_type/last_four/expiry, google_pay and
+// paypal return their own fields), so data is a google.protobuf.Struct that
+// round-trips whatever the API returns. The list API only returns the masked
+// last_four for cards, never a full card number, so the Struct carries no secret.
+message AccountPaymentMethod {
+  int32 id = 1;
+  string type = 2;
+  bool is_default = 3;
+  google.protobuf.Struct data = 4;
+}
+
+// AccountPaymentMethodListResponse is the envelope
+// linode_account_payment_method_list returns: a count, an optional echoed
+// filter, and the full proto AccountPaymentMethod elements.
+message AccountPaymentMethodListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountPaymentMethod account_payment_methods = 3;
+}
+
+// AccountPaymentMethodWriteResponse is the {message, payment_method} envelope
+// the payment-method create tool returns: a confirmation string plus the full
+// payment method element the API created.
+message AccountPaymentMethodWriteResponse {
+  string message = 1;
+  AccountPaymentMethod payment_method = 2;
+}
+
+// AccountPaymentMethodIDResponse is the {message, payment_method_id} id-echo
+// envelope the payment-method make-default and delete tools return. Those
+// endpoints return an empty body, so the response echoes the affected payment
+// method ID.
+message AccountPaymentMethodIDResponse {
+  string message = 1;
+  int32 payment_method_id = 2;
+}
+
+// AccountInvoiceItem mirrors one line item from
+// GET /account/invoices/{invoiceId}/items. amount, tax, total, and unit_price
+// are doubles; quantity is an int.
+message AccountInvoiceItem {
+  double amount = 1;
+  string from = 2;
+  string label = 3;
+  int32 quantity = 4;
+  double tax = 5;
+  string to = 6;
+  double total = 7;
+  string type = 8;
+  double unit_price = 9;
+}
+
+// AccountInvoiceItemListResponse is the envelope
+// linode_account_invoice_item_list returns: a count, an optional echoed filter,
+// and the full proto AccountInvoiceItem elements.
+message AccountInvoiceItemListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountInvoiceItem account_invoice_items = 3;
+}
+
+// ChildAccountCreditCard contains the masked credit card details a child
+// account exposes (no full card number is returned).
+message ChildAccountCreditCard {
+  string expiry = 1;
+  string last_four = 2;
+}
+
+// ChildAccount mirrors one child-level account from
+// GET /account/child-accounts. It is a distinct summary shape from Account: it
+// carries credit_card, euuid, first_name/last_name, and tax_id, and has no
+// active_promotions.
+message ChildAccount {
+  string active_since = 1;
+  string address_1 = 2;
+  string address_2 = 3;
+  double balance = 4;
+  double balance_uninvoiced = 5;
+  string billing_source = 6;
+  repeated string capabilities = 7;
+  string city = 8;
+  string company = 9;
+  string country = 10;
+  ChildAccountCreditCard credit_card = 11;
+  string email = 12;
+  string euuid = 13;
+  string first_name = 14;
+  string last_name = 15;
+  string phone = 16;
+  string state = 17;
+  string tax_id = 18;
+  string zip = 19;
+}
+
+// ChildAccountListResponse is the envelope linode_account_child_account_list
+// returns: a count, an optional echoed filter, and the full proto ChildAccount
+// elements.
+message ChildAccountListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ChildAccount account_child_accounts = 3;
 }

@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.SSHKeyListResponse",
+  "description": "linode_sshkey_list envelope: count, an optional filter echo, and the full proto SSHKey elements (the ssh_key field is not truncated).",
+  "input": {
+    "count": 1,
+    "filter": "label_contains=laptop",
+    "ssh_keys": [
+      {
+        "id": 42,
+        "label": "my-laptop",
+        "ssh_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDexample user@host",
+        "created": "2026-01-15T10:30:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "label_contains=laptop",
+    "ssh_keys": [
+      {
+        "id": 42,
+        "label": "my-laptop",
+        "ssh_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDexample user@host",
+        "created": "2026-01-15T10:30:00"
+      }
+    ]
+  }
+}

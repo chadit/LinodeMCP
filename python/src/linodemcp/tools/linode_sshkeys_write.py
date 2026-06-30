@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import sshkey_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -20,6 +21,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -107,14 +109,22 @@ async def handle_linode_sshkey_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         key = await client.create_ssh_key(label, ssh_key)
-        return {
-            "message": f"SSH key '{key.label}' (ID: {key.id}) created successfully",
-            "ssh_key": {
-                "id": key.id,
-                "label": key.label,
-                "created": key.created,
+        # The ssh_key field carries the public key, which is public information
+        # and kept in full.
+        return serialize_api_response(
+            {
+                "message": (
+                    f"SSH key '{key.label}' (ID: {key.id}) created successfully"
+                ),
+                "ssh_key": {
+                    "id": key.id,
+                    "label": key.label,
+                    "ssh_key": key.ssh_key,
+                    "created": key.created,
+                },
             },
-        }
+            sshkey_pb2.SSHKeyWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create SSH key", _call)
 
@@ -221,14 +231,22 @@ async def handle_linode_sshkey_update(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         key = await client.update_ssh_key(int(ssh_key_id), label)
-        return {
-            "message": f"SSH key '{key.label}' (ID: {key.id}) updated successfully",
-            "ssh_key": {
-                "id": key.id,
-                "label": key.label,
-                "created": key.created,
+        # The ssh_key field carries the public key, which is public information
+        # and kept in full.
+        return serialize_api_response(
+            {
+                "message": (
+                    f"SSH key '{key.label}' (ID: {key.id}) updated successfully"
+                ),
+                "ssh_key": {
+                    "id": key.id,
+                    "label": key.label,
+                    "ssh_key": key.ssh_key,
+                    "created": key.created,
+                },
             },
-        }
+            sshkey_pb2.SSHKeyWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update SSH key", _call)
 
@@ -284,7 +302,7 @@ async def _sshkey_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ssh_key(ssh_key_id_int)
         return {
-            "message": f"SSH key {ssh_key_id_int} deleted successfully",
+            "message": f"SSH key {ssh_key_id_int} removed successfully",
             "ssh_key_id": ssh_key_id_int,
         }
 
@@ -335,7 +353,7 @@ async def handle_linode_sshkey_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ssh_key(ssh_key_id_int)
         return {
-            "message": f"SSH key {ssh_key_id_int} deleted successfully",
+            "message": f"SSH key {ssh_key_id_int} removed successfully",
             "ssh_key_id": ssh_key_id_int,
         }
 

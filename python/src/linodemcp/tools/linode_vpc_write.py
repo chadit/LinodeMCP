@@ -891,11 +891,12 @@ async def handle_linode_ipv6_range_create(
     prefix_length, linode_id, route_target = parsed_args
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_ipv6_range(
+        ipv6_range = await client.create_ipv6_range(
             prefix_length=prefix_length,
             linode_id=linode_id,
             route_target=route_target,
         )
+        return {"message": "IPv6 range created", _IPV6_RANGE_KEY: ipv6_range}
 
     return await execute_tool(cfg, arguments, "create IPv6 range", _call)
 
@@ -942,7 +943,7 @@ async def _ipv6_range_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ipv6_range(ipv6_range)
         return {
-            "message": f"IPv6 range {ipv6_range} deleted",
+            "message": "IPv6 range deleted",
             _IPV6_RANGE_KEY: ipv6_range,
         }
 
@@ -992,7 +993,7 @@ async def handle_linode_ipv6_range_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ipv6_range(ipv6_range)
         return {
-            "message": f"IPv6 range {ipv6_range} deleted",
+            "message": "IPv6 range deleted",
             _IPV6_RANGE_KEY: ipv6_range,
         }
 

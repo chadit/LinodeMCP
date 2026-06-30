@@ -1,0 +1,33 @@
+{
+  "message": "linode.mcp.v1.MonitorServiceMetricDefinitionListResponse",
+  "description": "linode_monitor_service_metric_definition_list envelope: count and the full proto MonitorMetricDefinition elements for one service type. The tool keys off a required service_type path-id and has no filter param, so filter is omitted. Implicit-presence string fields emit their zero value when absent.",
+  "input": {
+    "count": 2,
+    "metric_definitions": [
+      {
+        "label": "CPU Utilization",
+        "metric": "cpu_usage",
+        "metric_type": "gauge"
+      },
+      {
+        "label": "Disk IO",
+        "metric": "disk_io"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "metric_definitions": [
+      {
+        "label": "CPU Utilization",
+        "metric": "cpu_usage",
+        "metric_type": "gauge"
+      },
+      {
+        "label": "Disk IO",
+        "metric": "disk_io",
+        "metric_type": ""
+      }
+    ]
+  }
+}

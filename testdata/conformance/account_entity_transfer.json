@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.AccountEntityTransfer",
+  "description": "Account service transfer with the nested entities message present and a populated repeated linodes list.",
+  "input": {
+    "created": "2024-06-01T00:00:00",
+    "entities": {
+      "linodes": [101, 102]
+    },
+    "expiry": "2024-06-02T00:00:00",
+    "is_sender": true,
+    "status": "pending",
+    "token": "abc-123",
+    "updated": "2024-06-01T01:00:00"
+  },
+  "canonical": {
+    "created": "2024-06-01T00:00:00",
+    "entities": {
+      "linodes": [101, 102]
+    },
+    "expiry": "2024-06-02T00:00:00",
+    "is_sender": true,
+    "status": "pending",
+    "token": "abc-123",
+    "updated": "2024-06-01T01:00:00"
+  }
+}

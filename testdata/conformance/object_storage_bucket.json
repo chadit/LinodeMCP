@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageBucket",
+  "description": "Object Storage bucket details from the bucket get endpoint.",
+  "input": {
+    "label": "my-bucket",
+    "region": "us-east-1",
+    "hostname": "my-bucket.us-east-1.linodeobjects.com",
+    "created": "2024-01-15T10:30:00",
+    "objects": 42,
+    "size": 1048576,
+    "cluster": "us-east-1"
+  },
+  "canonical": {
+    "label": "my-bucket",
+    "region": "us-east-1",
+    "hostname": "my-bucket.us-east-1.linodeobjects.com",
+    "created": "2024-01-15T10:30:00",
+    "objects": 42,
+    "size": 1048576,
+    "cluster": "us-east-1"
+  }
+}

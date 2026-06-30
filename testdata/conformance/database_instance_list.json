@@ -1,0 +1,50 @@
+{
+  "message": "linode.mcp.v1.DatabaseInstanceListResponse",
+  "description": "linode_database_instance_list envelope (cross-engine /databases/instances): count and the full proto DatabaseInstance elements. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "database_instances": [
+      {
+        "id": 123,
+        "status": "active",
+        "label": "prod-db",
+        "region": "us-east",
+        "type": "g6-dedicated-2",
+        "engine": "mysql",
+        "version": "8.0.26",
+        "cluster_size": 3,
+        "replication_type": "semi_synch",
+        "ssl_connection": true,
+        "encrypted": true,
+        "allow_list": [
+          "203.0.113.1/32"
+        ],
+        "created": "2026-01-01T00:00:00",
+        "updated": "2026-01-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "database_instances": [
+      {
+        "id": 123,
+        "status": "active",
+        "label": "prod-db",
+        "region": "us-east",
+        "type": "g6-dedicated-2",
+        "engine": "mysql",
+        "version": "8.0.26",
+        "cluster_size": 3,
+        "replication_type": "semi_synch",
+        "ssl_connection": true,
+        "encrypted": true,
+        "allow_list": [
+          "203.0.113.1/32"
+        ],
+        "created": "2026-01-01T00:00:00",
+        "updated": "2026-01-02T00:00:00"
+      }
+    ]
+  }
+}

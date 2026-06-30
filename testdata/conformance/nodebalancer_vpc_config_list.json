@@ -1,0 +1,36 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerVPCConfigListResponse",
+  "description": "linode_nodebalancer_vpc_config_list envelope: count and the full proto NodeBalancerVPCConfig elements, no filter (the sub-resource list paginates and never echoes one). The element has all optional range ids and the auto-assign flag set so explicit-presence fields emit.",
+  "input": {
+    "count": 1,
+    "vpc_configs": [
+      {
+        "id": 321,
+        "vpc_id": 100,
+        "subnet_id": 200,
+        "ipv4_range": "10.0.0.0/24",
+        "ipv6_range": "fd00::/64",
+        "ipv4_range_id": 11,
+        "ipv6_range_id": 22,
+        "ipv4_range_auto_assign": true,
+        "nodebalancer_id": 1234
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "vpc_configs": [
+      {
+        "id": 321,
+        "vpc_id": 100,
+        "subnet_id": 200,
+        "ipv4_range": "10.0.0.0/24",
+        "ipv6_range": "fd00::/64",
+        "ipv4_range_id": 11,
+        "ipv6_range_id": 22,
+        "ipv4_range_auto_assign": true,
+        "nodebalancer_id": 1234
+      }
+    ]
+  }
+}

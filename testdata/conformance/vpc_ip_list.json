@@ -1,0 +1,43 @@
+{
+  "message": "linode.mcp.v1.VPCIPListResponse",
+  "description": "linode_vpc_ip_list envelope (a single VPC's IPs): count and the full proto VPCIP elements. Same message as linode_vpc_ip_all_list. The nullable fields omitted when the API returns null; this element populates them. The tool does not filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "ips": [
+      {
+        "address": "10.0.2.7",
+        "address_range": null,
+        "vpc_id": 789,
+        "subnet_id": 30,
+        "region": "us-west",
+        "linode_id": 321,
+        "config_id": 444,
+        "interface_id": 12,
+        "active": true,
+        "nat_1_1": "198.51.100.7",
+        "gateway": "10.0.2.1",
+        "prefix": 25,
+        "subnet_mask": "255.255.255.128"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "ips": [
+      {
+        "address": "10.0.2.7",
+        "vpc_id": 789,
+        "subnet_id": 30,
+        "region": "us-west",
+        "linode_id": 321,
+        "config_id": 444,
+        "interface_id": 12,
+        "active": true,
+        "nat_1_1": "198.51.100.7",
+        "gateway": "10.0.2.1",
+        "prefix": 25,
+        "subnet_mask": "255.255.255.128"
+      }
+    ]
+  }
+}

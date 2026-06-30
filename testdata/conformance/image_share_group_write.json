@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.ImageShareGroupWriteResponse",
+  "description": "Image share group write envelope: a confirmation message plus the full share group element.",
+  "input": {
+    "message": "Image share group 'shared-images' (4242) created successfully",
+    "sharegroup": {
+      "id": 4242,
+      "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+      "label": "shared-images",
+      "description": "Images shared with the partner account",
+      "is_suspended": false,
+      "created": "2026-01-15T10:00:00",
+      "updated": "2026-02-01T12:30:00",
+      "expiry": "2026-12-31T23:59:59",
+      "images_count": 7,
+      "members_count": 3
+    }
+  },
+  "canonical": {
+    "message": "Image share group 'shared-images' (4242) created successfully",
+    "sharegroup": {
+      "id": 4242,
+      "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+      "label": "shared-images",
+      "description": "Images shared with the partner account",
+      "is_suspended": false,
+      "created": "2026-01-15T10:00:00",
+      "updated": "2026-02-01T12:30:00",
+      "expiry": "2026-12-31T23:59:59",
+      "images_count": 7,
+      "members_count": 3
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.ManagedLinodeSettingsWriteResponse",
+  "description": "Managed Linode settings update envelope: a confirmation message plus the full settings element with the nested ssh message present.",
+  "input": {
+    "message": "Managed Linode settings for Linode 555 updated successfully",
+    "settings": {
+      "id": 555,
+      "label": "web-1",
+      "group": "prod",
+      "ssh": {
+        "access": true,
+        "ip": "203.0.113.1",
+        "port": 22,
+        "user": "linode"
+      }
+    }
+  },
+  "canonical": {
+    "message": "Managed Linode settings for Linode 555 updated successfully",
+    "settings": {
+      "id": 555,
+      "label": "web-1",
+      "group": "prod",
+      "ssh": {
+        "access": true,
+        "ip": "203.0.113.1",
+        "port": 22,
+        "user": "linode"
+      }
+    }
+  }
+}

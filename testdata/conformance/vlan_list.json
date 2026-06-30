@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.VLANListResponse",
+  "description": "linode_vlan_list envelope: count and the full proto VLAN elements. linodes is repeated int32 (attached Linode ids) and emits [] when empty. The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 2,
+    "vlans": [
+      {
+        "label": "vlan-prod",
+        "region": "us-east",
+        "linodes": [12345, 67890]
+      },
+      {
+        "label": "vlan-empty",
+        "region": "us-west",
+        "linodes": []
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "vlans": [
+      {
+        "label": "vlan-prod",
+        "region": "us-east",
+        "linodes": [12345, 67890]
+      },
+      {
+        "label": "vlan-empty",
+        "region": "us-west",
+        "linodes": []
+      }
+    ]
+  }
+}

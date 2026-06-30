@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.AccountLogin",
+  "description": "Account login: flat scalars including one int32 (id) and one bool (restricted). All fields present.",
+  "input": {
+    "datetime": "2024-06-01T12:00:00",
+    "id": 99887766,
+    "ip": "203.0.113.5",
+    "restricted": false,
+    "status": "successful",
+    "username": "admin"
+  },
+  "canonical": {
+    "datetime": "2024-06-01T12:00:00",
+    "id": 99887766,
+    "ip": "203.0.113.5",
+    "restricted": false,
+    "status": "successful",
+    "username": "admin"
+  }
+}

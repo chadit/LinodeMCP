@@ -1,0 +1,46 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageTypeListResponse",
+  "description": "linode_object_storage_type_list envelope: count and the full proto LinodeType elements (id, label, price, region_prices[], transfer). region_prices is a repeated message, locking the fix for the old Go string-decode. The tool has no filter params, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "types": [
+      {
+        "id": "objectstorage",
+        "label": "Object Storage",
+        "price": {
+          "hourly": 0.0107,
+          "monthly": 5.0
+        },
+        "region_prices": [
+          {
+            "id": "id-cgk",
+            "hourly": 0.0128,
+            "monthly": 6.0
+          }
+        ],
+        "transfer": 1000
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "types": [
+      {
+        "id": "objectstorage",
+        "label": "Object Storage",
+        "price": {
+          "hourly": 0.0107,
+          "monthly": 5.0
+        },
+        "region_prices": [
+          {
+            "id": "id-cgk",
+            "hourly": 0.0128,
+            "monthly": 6.0
+          }
+        ],
+        "transfer": 1000
+      }
+    ]
+  }
+}

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import firewall_pb2, instance_pb2
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -23,6 +24,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -137,22 +139,21 @@ async def handle_linode_firewall_create(
         return error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        firewall = await client.create_firewall(
+        firewall = await client.create_firewall_raw(
             label=label,
             inbound_policy=inbound_policy,
             outbound_policy=outbound_policy,
         )
-        return {
-            "message": (
-                f"Firewall '{firewall.label}' (ID: {firewall.id}) created successfully"
-            ),
-            "firewall": {
-                "id": firewall.id,
-                "label": firewall.label,
-                "status": firewall.status,
-                "created": firewall.created,
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Firewall '{firewall.get('label', '')}' "
+                    f"(ID: {firewall.get('id', 0)}) created successfully"
+                ),
+                "firewall": firewall,
             },
-        }
+            firewall_pb2.FirewallWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create firewall", _call)
 
@@ -254,22 +255,20 @@ async def handle_linode_firewall_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        firewall = await client.update_firewall(
+        firewall = await client.update_firewall_raw(
             firewall_id=int(firewall_id),
             label=arguments.get("label"),
             status=arguments.get("status"),
             inbound_policy=arguments.get("inbound_policy"),
             outbound_policy=arguments.get("outbound_policy"),
         )
-        return {
-            "message": f"Firewall {firewall_id} updated successfully",
-            "firewall": {
-                "id": firewall.id,
-                "label": firewall.label,
-                "status": firewall.status,
-                "updated": firewall.updated,
+        return serialize_api_response(
+            {
+                "message": f"Firewall {int(firewall_id)} modified successfully",
+                "firewall": firewall,
             },
-        }
+            firewall_pb2.FirewallWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update firewall", _call)
 
@@ -651,17 +650,19 @@ async def handle_linode_firewall_rules_update(
     outbound = cast("list[dict[str, Any]]", arguments.get("outbound"))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.update_firewall_rules(
+        result = await client.update_firewall_rules_raw(
             firewall_id=firewall_id,
             inbound=inbound,
             outbound=outbound,
         )
-        return {
-            "message": f"Firewall {firewall_id} rules updated successfully",
-            "firewall_id": firewall_id,
-            "inbound_count": len(result.get("inbound", [])),
-            "outbound_count": len(result.get("outbound", [])),
-        }
+        return serialize_api_response(
+            {
+                "message": f"Firewall {firewall_id} rules updated successfully",
+                "firewall_id": firewall_id,
+                "rules": result,
+            },
+            firewall_pb2.FirewallRulesWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update firewall rules", _call)
 
@@ -723,12 +724,14 @@ async def handle_linode_instance_firewall_apply(
         return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.apply_linode_firewalls(linode_id_value)
-        return {
-            "message": f"Firewalls applied to Linode {linode_id_value} successfully",
-            "linode_id": linode_id_value,
-            "result": result,
-        }
+        await client.apply_linode_firewalls(linode_id_value)
+        return serialize_api_response(
+            {
+                "message": f"Firewall apply initiated for instance {linode_id_value}",
+                "linode_id": linode_id_value,
+            },
+            instance_pb2.InstanceActionWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "apply Linode firewalls", _call)
 

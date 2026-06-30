@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.AccountUser",
+  "description": "Account user with every field present: nested last_login, optional password_created/verified_phone_number, repeated ssh_keys, two bools.",
+  "input": {
+    "email": "alice@example.com",
+    "last_login": {
+      "login_datetime": "2024-06-01T12:00:00",
+      "status": "successful"
+    },
+    "password_created": "2024-01-01T00:00:00",
+    "restricted": true,
+    "ssh_keys": ["key-a", "key-b"],
+    "tfa_enabled": true,
+    "user_type": "parent",
+    "username": "alice",
+    "verified_phone_number": "+15555550100"
+  },
+  "canonical": {
+    "email": "alice@example.com",
+    "last_login": {
+      "login_datetime": "2024-06-01T12:00:00",
+      "status": "successful"
+    },
+    "password_created": "2024-01-01T00:00:00",
+    "restricted": true,
+    "ssh_keys": ["key-a", "key-b"],
+    "tfa_enabled": true,
+    "user_type": "parent",
+    "username": "alice",
+    "verified_phone_number": "+15555550100"
+  }
+}

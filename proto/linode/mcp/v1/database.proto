@@ -31,6 +31,14 @@ message DatabaseType {
   DatabaseTypeEngines engines = 8;
 }
 
+// DatabaseTypeListResponse is the linode_database_type_list envelope: count and
+// the full proto DatabaseType elements. Pagination does not echo a filter.
+message DatabaseTypeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated DatabaseType database_types = 3;
+}
+
 // DatabaseTypeGetInput is the input contract for linode_database_type_get.
 message DatabaseTypeGetInput {
   // Linode environment to use (optional, defaults to "default").

@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.AccountEventSeenResponse",
+  "description": "Event-seen id-echo: a confirmation message plus the affected event ID (empty-body endpoint).",
+  "input": {
+    "message": "Account event marked as seen successfully",
+    "event_id": 998877
+  },
+  "canonical": {
+    "message": "Account event marked as seen successfully",
+    "event_id": 998877
+  }
+}

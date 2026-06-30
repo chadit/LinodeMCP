@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import longview_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -16,6 +17,10 @@ from linodemcp.tools.helpers import (
     error_response,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 
@@ -58,20 +63,6 @@ def create_linode_longview_client_update_tool() -> tuple[Tool, Capability]:
             "required": ["client_id", "label", "confirm"],
         },
     ), Capability.Write
-
-
-def longview_subscription_to_response_dict(sub: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Longview subscription API dict to proto-canonical form."""
-    price: dict[str, Any] = sub.get("price") or {}
-    return {
-        "clients_included": sub.get("clients_included", 0),
-        "id": sub.get("id", ""),
-        "label": sub.get("label", ""),
-        "price": {
-            "hourly": price.get("hourly", 0.0),
-            "monthly": price.get("monthly", 0.0),
-        },
-    }
 
 
 def create_linode_longview_subscription_get_tool() -> tuple[Tool, Capability]:
@@ -134,22 +125,6 @@ def create_linode_longview_client_list_tool() -> tuple[Tool, Capability]:
             },
         },
     ), Capability.Read
-
-
-def longview_client_to_response_dict(client: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Longview client API dict to proto-canonical form."""
-    apps: dict[str, Any] = client.get("apps") or {}
-    return {
-        "apps": {
-            "apache": apps.get("apache", False),
-            "mysql": apps.get("mysql", False),
-            "nginx": apps.get("nginx", False),
-        },
-        "created": client.get("created", ""),
-        "id": client.get("id", 0),
-        "label": client.get("label", ""),
-        "updated": client.get("updated", ""),
-    }
 
 
 def create_linode_longview_client_get_tool() -> tuple[Tool, Capability]:
@@ -345,10 +320,13 @@ async def handle_linode_longview_client_update(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_longview_client(client_id, label=body["label"])
-        return {
-            "message": f"Longview client {client_id} updated successfully",
-            "longview_client": result,
-        }
+        return serialize_api_response(
+            {
+                "message": "Longview client updated successfully",
+                "longview_client": result,
+            },
+            longview_pb2.LongviewClientWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Longview client", _call)
 
@@ -359,7 +337,10 @@ async def handle_linode_longview_type_list(
     """Handle linode_longview_type_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_longview_types()
+        raw = await client.list_longview_types()
+        return serialize_list_response(
+            raw, "types", longview_pb2.LongviewTypeListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list Longview types", _call)
 
@@ -375,7 +356,10 @@ async def handle_linode_longview_client_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_longview_clients(page=page, page_size=page_size)
+        raw = await client.list_longview_clients(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw, "longview_clients", longview_pb2.LongviewClientListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list Longview clients", _call)
 
@@ -442,7 +426,7 @@ async def handle_linode_longview_client_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         payload = await client.get_longview_client(client_id)
-        return longview_client_to_response_dict(payload)
+        return serialize_api_response(payload, longview_pb2.LongviewClient())
 
     return await execute_tool(cfg, arguments, "retrieve Longview client", _call)
 
@@ -478,10 +462,18 @@ async def handle_linode_longview_client_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         client_data = await client.create_longview_client(label)
-        return {
-            "message": f"Longview client {label!r} created successfully",
-            "longview_client": client_data,
-        }
+        return serialize_api_response(
+            {
+                "message": "Longview client created successfully",
+                "warning": (
+                    "IMPORTANT: Save the API key and install code if they are "
+                    "present; they are required to configure the Longview client "
+                    "application."
+                ),
+                "longview_client": client_data,
+            },
+            longview_pb2.LongviewClientCreateWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create Longview client", _call)
 
@@ -521,7 +513,14 @@ async def handle_linode_longview_plan_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_longview_plan(longview_subscription)
+        plan = await client.update_longview_plan(longview_subscription)
+        return serialize_api_response(
+            {
+                "message": "Longview plan updated successfully",
+                "plan": plan,
+            },
+            longview_pb2.LongviewSubscriptionWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Longview plan", _call)
 
@@ -537,7 +536,12 @@ async def handle_linode_longview_subscription_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_longview_subscriptions(page=page, page_size=page_size)
+        raw = await client.list_longview_subscriptions(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "longview_subscriptions",
+            longview_pb2.LongviewSubscriptionListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Longview subscriptions", _call)
 
@@ -571,10 +575,13 @@ async def handle_linode_longview_client_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_longview_client(client_id)
-        return {
-            "message": f"Longview client {client_id} deleted",
-            "client_id": client_id,
-        }
+        return serialize_api_response(
+            {
+                "message": "Longview client deleted successfully",
+                "client_id": client_id,
+            },
+            longview_pb2.LongviewClientIDResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete Longview client", _call)
 
@@ -590,7 +597,7 @@ async def handle_linode_longview_subscription_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         subscription = await client.get_longview_subscription(subscription_id)
-        return longview_subscription_to_response_dict(subscription)
+        return serialize_api_response(subscription, longview_pb2.LongviewSubscription())
 
     return await execute_tool(
         cfg,

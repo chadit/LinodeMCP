@@ -228,6 +228,7 @@ const (
 	tcProfilePreferences                             = "/profile/preferences"
 	tcProfileSecurityQuestions                       = "/profile/security-questions"
 	tcProfileTfaDisable                              = "/profile/tfa-disable"
+	tcProfileTfaEnable                               = "/profile/tfa-enable"
 	tcProfileTfaEnableConfirm                        = "/profile/tfa-enable-confirm"
 	tcProfileTokens                                  = "/profile/tokens"
 	tcProfileTokens12345                             = "/profile/tokens/12345"

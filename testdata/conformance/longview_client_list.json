@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.LongviewClientListResponse",
+  "description": "linode_longview_client_list envelope: count, an optional filter echo, and the full proto LongviewClient elements with the nested apps message.",
+  "input": {
+    "count": 1,
+    "filter": "label=web-host",
+    "longview_clients": [
+      {
+        "apps": {
+          "apache": true,
+          "mysql": false,
+          "nginx": true
+        },
+        "created": "2024-06-01T12:00:00",
+        "id": 1234,
+        "label": "web-host",
+        "updated": "2024-06-02T08:30:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "label=web-host",
+    "longview_clients": [
+      {
+        "apps": {
+          "apache": true,
+          "mysql": false,
+          "nginx": true
+        },
+        "created": "2024-06-01T12:00:00",
+        "id": 1234,
+        "label": "web-host",
+        "updated": "2024-06-02T08:30:00"
+      }
+    ]
+  }
+}

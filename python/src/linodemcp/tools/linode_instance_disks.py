@@ -5,6 +5,11 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    firewall_pb2,
+    instance_pb2,
+    volume_pb2,
+)
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -18,6 +23,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -242,7 +251,11 @@ async def handle_linode_instance_disk_list(
         client: RetryableClient,
     ) -> dict[str, Any]:
         disks = await client.list_instance_disks(iid)
-        return {"count": len(disks), "disks": disks}
+        return serialize_list_response(
+            {"data": disks},
+            "disks",
+            instance_pb2.InstanceDiskListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list instance disks", _call)
 
@@ -289,7 +302,12 @@ async def handle_linode_instance_volume_list(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.list_instance_volumes(iid, page=page, page_size=page_size)
+        raw = await client.list_instance_volumes(iid, page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "volumes",
+            volume_pb2.VolumeListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list instance volumes", _call)
 
@@ -336,22 +354,14 @@ async def handle_linode_instance_firewall_list(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.list_instance_firewalls(iid, page=page, page_size=page_size)
+        raw = await client.list_instance_firewalls(iid, page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "firewalls",
+            firewall_pb2.FirewallListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list instance firewalls", _call)
-
-
-def instance_disk_to_response_dict(disk: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw instance disk API dict to proto-canonical form."""
-    return {
-        "id": disk.get("id", 0),
-        "label": disk.get("label", ""),
-        "status": disk.get("status", ""),
-        "size": disk.get("size", 0),
-        "filesystem": disk.get("filesystem", ""),
-        "created": disk.get("created", ""),
-        "updated": disk.get("updated", ""),
-    }
 
 
 def create_linode_instance_disk_get_tool() -> tuple[Tool, Capability]:
@@ -375,8 +385,9 @@ async def handle_linode_instance_disk_get(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return instance_disk_to_response_dict(
-            await client.get_instance_disk(linode_id, disk_id)
+        return serialize_api_response(
+            await client.get_instance_disk(linode_id, disk_id),
+            instance_pb2.InstanceDisk(),
         )
 
     return await execute_tool(cfg, arguments, "get instance disk", _call)
@@ -519,7 +530,7 @@ async def _create_instance_config_live(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.create_instance_config(
+        config = await client.create_instance_config(
             iid,
             label=label,
             devices=devices_payload,
@@ -531,6 +542,18 @@ async def _create_instance_config_live(
             virt_mode=arguments.get("virt_mode"),
             helpers=helpers_payload,
             interfaces=interfaces_payload,
+        )
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getters on an empty API body: label "",
+                # id 0, so both languages emit the same message string.
+                "message": (
+                    f"Configuration profile '{config.get('label', '')}'"
+                    f" (ID: {config.get('id', 0)}) created on instance {iid}"
+                ),
+                "config": config,
+            },
+            instance_pb2.InstanceConfigWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "create instance config", _call)
@@ -634,7 +657,7 @@ async def handle_linode_instance_disk_create(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.create_instance_disk(
+        disk = await client.create_instance_disk(
             iid,
             label=label,
             size=int(size),
@@ -643,6 +666,17 @@ async def handle_linode_instance_disk_create(
             root_pass=arguments.get("root_pass"),
             authorized_keys=_split_comma_separated(arguments.get("authorized_keys")),
             authorized_users=_split_comma_separated(arguments.get("authorized_users")),
+        )
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getters on an empty API body.
+                "message": (
+                    f"Disk '{disk.get('label', '')}' (ID: {disk.get('id', 0)})"
+                    f" created on instance {iid}"
+                ),
+                "disk": disk,
+            },
+            instance_pb2.InstanceDiskWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "create instance disk", _call)
@@ -704,10 +738,19 @@ async def handle_linode_instance_disk_update(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.update_instance_disk(
+        disk = await client.update_instance_disk(
             linode_id,
             disk_id,
             label=arguments.get("label"),
+        )
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Disk {disk_id} on instance {linode_id} modified successfully"
+                ),
+                "disk": disk,
+            },
+            instance_pb2.InstanceDiskWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "update instance disk", _call)
@@ -761,7 +804,7 @@ async def _instance_disk_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance_disk(linode_id, disk_id)
         return {
-            "message": f"Disk {disk_id} deleted from instance {linode_id}",
+            "message": f"Disk {disk_id} deleted from instance {linode_id} successfully",
             "linode_id": linode_id,
             "disk_id": disk_id,
         }
@@ -816,7 +859,9 @@ async def handle_linode_instance_disk_delete(
     ) -> dict[str, Any]:
         await client.delete_instance_disk(linode_id, disk_id)
         return {
-            "message": (f"Disk {disk_id} deleted from instance {linode_id}"),
+            "message": (
+                f"Disk {disk_id} deleted from instance {linode_id} successfully"
+            ),
             "linode_id": linode_id,
             "disk_id": disk_id,
         }
@@ -902,7 +947,18 @@ async def handle_linode_instance_disk_clone(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.clone_instance_disk(linode_id, disk_id)
+        disk = await client.clone_instance_disk(linode_id, disk_id)
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getter on the new disk id.
+                "message": (
+                    f"Disk {disk_id} cloned to new disk {disk.get('id', 0)}"
+                    f" on instance {linode_id}"
+                ),
+                "disk": disk,
+            },
+            instance_pb2.InstanceDiskWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "clone instance disk", _call)
 
@@ -990,12 +1046,18 @@ async def handle_linode_instance_disk_resize(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.resize_instance_disk(linode_id, disk_id, int(size))
-        return {
-            "message": (f"Disk {disk_id} resized to {size} MB"),
-            "linode_id": linode_id,
-            "disk_id": disk_id,
-            "size": int(size),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Disk {disk_id} on instance {linode_id}"
+                    f" resize initiated to {size} MB"
+                ),
+                "linode_id": linode_id,
+                "disk_id": disk_id,
+                "new_size_mb": int(size),
+            },
+            instance_pb2.InstanceDiskResizeWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "resize instance disk", _call)
 
@@ -1074,9 +1136,7 @@ async def handle_linode_instance_disk_password_reset(
     ) -> dict[str, Any]:
         await client.reset_instance_disk_password(linode_id, disk_id, password)
         return {
-            "message": (
-                f"Root password reset for disk {disk_id} on instance {linode_id}"
-            ),
+            "message": (f"Password reset for disk {disk_id} on instance {linode_id}"),
             "linode_id": linode_id,
             "disk_id": disk_id,
         }

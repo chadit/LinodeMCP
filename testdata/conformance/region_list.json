@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.RegionListResponse",
+  "description": "linode_region_list envelope: count, an optional filter echo, and the full proto Region elements with the nested resolvers message and repeated capabilities.",
+  "input": {
+    "count": 1,
+    "filter": "country=us",
+    "regions": [
+      {
+        "id": "us-east",
+        "label": "Newark",
+        "country": "us",
+        "capabilities": ["Linodes", "NodeBalancers"],
+        "status": "ok",
+        "resolvers": {"ipv4": "1.1.1.1", "ipv6": "::"},
+        "site_type": "core"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "country=us",
+    "regions": [
+      {
+        "id": "us-east",
+        "label": "Newark",
+        "country": "us",
+        "capabilities": ["Linodes", "NodeBalancers"],
+        "status": "ok",
+        "resolvers": {"ipv4": "1.1.1.1", "ipv6": "::"},
+        "site_type": "core"
+      }
+    ]
+  }
+}

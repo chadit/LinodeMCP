@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.SupportTicketIDResponse",
+  "description": "Support ticket id-echo: a confirmation message plus the ticket id. The attachment create and close endpoints have no resource body to echo.",
+  "input": {
+    "message": "Support ticket closed successfully",
+    "ticket_id": 555
+  },
+  "canonical": {
+    "message": "Support ticket closed successfully",
+    "ticket_id": 555
+  }
+}

@@ -78,53 +78,38 @@ func TestClientListMonitorAlertChannelsSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.ListMonitorAlertChannels(t.Context(), 2, 25)
+	got, err := client.ListMonitorAlertChannelsProto(t.Context(), 2, 25)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got == nil {
-		t.Fatal("got is nil")
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
 	}
 
-	if got.Page != 2 {
-		t.Errorf("got.Page = %v, want %v", got.Page, 2)
+	if got[0].GetId() != monitorAlertChannelID {
+		t.Errorf("got[0].GetId() = %v, want %v", got[0].GetId(), monitorAlertChannelID)
 	}
 
-	if got.Pages != 3 {
-		t.Errorf("got.Pages = %v, want %v", got.Pages, 3)
+	if got[0].GetLabel() != monitorAlertChannelLabel {
+		t.Errorf("got[0].GetLabel() = %v, want %v", got[0].GetLabel(), monitorAlertChannelLabel)
 	}
 
-	if got.Results != 75 {
-		t.Errorf("got.Results = %v, want %v", got.Results, 75)
+	if got[0].GetChannelType() != monitorAlertChannelEmailType {
+		t.Errorf("got[0].GetChannelType() = %v, want %v", got[0].GetChannelType(), monitorAlertChannelEmailType)
 	}
 
-	if len(got.Data) != 1 {
-		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	emails := got[0].GetContent().GetEmail().GetEmailAddresses()
+	if len(emails) != 1 || emails[0] != monitorAlertChannelEmail {
+		t.Errorf("content email addresses = %v, want [%v]", emails, monitorAlertChannelEmail)
 	}
 
-	if got.Data[0].ID != monitorAlertChannelID {
-		t.Errorf("got.Data[0].ID = %v, want %v", got.Data[0].ID, monitorAlertChannelID)
+	if len(got[0].GetAlerts()) != 1 {
+		t.Fatalf("len(got[0].GetAlerts()) = %d, want 1", len(got[0].GetAlerts()))
 	}
 
-	if got.Data[0].Label != monitorAlertChannelLabel {
-		t.Errorf("got.Data[0].Label = %v, want %v", got.Data[0].Label, monitorAlertChannelLabel)
-	}
-
-	if got.Data[0].ChannelType != monitorAlertChannelEmailType {
-		t.Errorf("got.Data[0].ChannelType = %v, want %v", got.Data[0].ChannelType, monitorAlertChannelEmailType)
-	}
-
-	if got.Data[0].Content.Email.EmailAddresses[0] != monitorAlertChannelEmail {
-		t.Errorf("got.Data[0].Content.Email.EmailAddresses[0] = %v, want %v", got.Data[0].Content.Email.EmailAddresses[0], monitorAlertChannelEmail)
-	}
-
-	if len(got.Data[0].Alerts) != 1 {
-		t.Fatalf("len(got.Data[0].Alerts) = %d, want 1", len(got.Data[0].Alerts))
-	}
-
-	if got.Data[0].Alerts[0].URL != monitorAlertDefinitionURL {
-		t.Errorf("got.Data[0].Alerts[0].URL = %v, want %v", got.Data[0].Alerts[0].URL, monitorAlertDefinitionURL)
+	if got[0].GetAlerts()[0].GetUrl() != monitorAlertDefinitionURL {
+		t.Errorf("got[0].GetAlerts()[0].GetUrl() = %v, want %v", got[0].GetAlerts()[0].GetUrl(), monitorAlertDefinitionURL)
 	}
 }
 
@@ -151,7 +136,7 @@ func TestClientListMonitorAlertChannelsAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.ListMonitorAlertChannels(t.Context(), 0, 0)
+	got, err := client.ListMonitorAlertChannelsProto(t.Context(), 0, 0)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -206,24 +191,20 @@ func TestClientListMonitorAlertChannelsRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 
-	got, err := client.ListMonitorAlertChannels(t.Context(), 0, 0)
+	got, err := client.ListMonitorAlertChannelsProto(t.Context(), 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got == nil {
-		t.Fatal("got is nil")
 	}
 
 	if calls.Load() != int32(2) {
 		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
 	}
 
-	if len(got.Data) != 1 {
-		t.Fatalf("len(got.Data) = %d, want 1", len(got.Data))
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
 	}
 
-	if got.Data[0].ID != monitorAlertChannelID {
-		t.Errorf("got.Data[0].ID = %v, want %v", got.Data[0].ID, monitorAlertChannelID)
+	if got[0].GetId() != monitorAlertChannelID {
+		t.Errorf("got[0].GetId() = %v, want %v", got[0].GetId(), monitorAlertChannelID)
 	}
 }

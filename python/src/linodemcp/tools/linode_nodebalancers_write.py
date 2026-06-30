@@ -5,6 +5,10 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    nodebalancer_config_node_pb2,
+    nodebalancer_config_pb2,
+)
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -24,6 +28,7 @@ from linodemcp.tools.helpers import (
     is_dry_run,
 )
 from linodemcp.tools.linode_nodebalancers import nodebalancer_to_response_dict
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -347,16 +352,16 @@ async def handle_linode_nodebalancer_config_rebuild(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
-        if result:
-            return result
-        return {
-            "message": (
-                f"NodeBalancer config {config_id} rebuild requested "
-                f"for NodeBalancer {nodebalancer_id}"
-            ),
-            "nodebalancer_id": nodebalancer_id,
-            "config_id": config_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Rebuilt config {config_id} for "
+                    f"NodeBalancer {nodebalancer_id} successfully"
+                ),
+                "config": result,
+            },
+            nodebalancer_config_pb2.NodeBalancerConfigWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "rebuild NodeBalancer config", _call)
 
@@ -434,8 +439,8 @@ async def handle_linode_nodebalancer_config_delete(
         await client.delete_nodebalancer_config(nodebalancer_id, config_id)
         return {
             "message": (
-                f"NodeBalancer config {config_id} deleted from "
-                f"NodeBalancer {nodebalancer_id}"
+                f"Config {config_id} removed from "
+                f"NodeBalancer {nodebalancer_id} successfully"
             ),
             "nodebalancer_id": nodebalancer_id,
             "config_id": config_id,
@@ -717,7 +722,7 @@ async def _nodebalancer_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer(nodebalancer_id_int)
         return {
-            "message": f"NodeBalancer {nodebalancer_id_int} deleted successfully",
+            "message": f"NodeBalancer {nodebalancer_id_int} removed successfully",
             "nodebalancer_id": nodebalancer_id_int,
         }
 
@@ -790,7 +795,7 @@ async def handle_linode_nodebalancer_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer(nodebalancer_id_int)
         return {
-            "message": f"NodeBalancer {nodebalancer_id_int} deleted successfully",
+            "message": f"NodeBalancer {nodebalancer_id_int} removed successfully",
             "nodebalancer_id": nodebalancer_id_int,
         }
 
@@ -897,16 +902,16 @@ async def handle_linode_nodebalancer_config_node_create(
         result = await client.create_nodebalancer_config_node(
             nodebalancer_id, config_id, fields
         )
-        if result:
-            return result
-        return {
-            "message": (
-                f"Node create requested for NodeBalancer "
-                f"{nodebalancer_id} config {config_id}"
-            ),
-            "nodebalancer_id": nodebalancer_id,
-            "config_id": config_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"NodeBalancer node {result.get('id')} created successfully "
+                    f"for NodeBalancer {nodebalancer_id} config {config_id}"
+                ),
+                "node": result,
+            },
+            nodebalancer_config_node_pb2.NodeBalancerConfigNodeWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create NodeBalancer config node", _call)
 
@@ -1015,17 +1020,16 @@ async def handle_linode_nodebalancer_config_node_update(
         result = await client.update_nodebalancer_config_node(
             nodebalancer_id, config_id, node_id, fields
         )
-        if result:
-            return result
-        return {
-            "message": (
-                f"Node {node_id} update requested for NodeBalancer "
-                f"{nodebalancer_id} config {config_id}"
-            ),
-            "nodebalancer_id": nodebalancer_id,
-            "config_id": config_id,
-            "node_id": node_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"NodeBalancer node {result.get('id')} updated successfully "
+                    f"for NodeBalancer {nodebalancer_id} config {config_id}"
+                ),
+                "node": result,
+            },
+            nodebalancer_config_node_pb2.NodeBalancerConfigNodeWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update NodeBalancer config node", _call)
 
@@ -1129,8 +1133,8 @@ async def handle_linode_nodebalancer_config_node_delete(
         )
         return {
             "message": (
-                f"Node {node_id_int} deleted from NodeBalancer "
-                f"{nodebalancer_id_int} config {config_id_int}"
+                f"NodeBalancer node {node_id_int} removed successfully "
+                f"from NodeBalancer {nodebalancer_id_int} config {config_id_int}"
             ),
             "nodebalancer_id": nodebalancer_id_int,
             "config_id": config_id_int,
@@ -1315,16 +1319,16 @@ async def handle_linode_nodebalancer_config_update(
         result = await client.update_nodebalancer_config(
             nodebalancer_id, config_id, fields
         )
-        if result:
-            return result
-        return {
-            "message": (
-                f"NodeBalancer config {config_id} update requested "
-                f"for NodeBalancer {nodebalancer_id}"
-            ),
-            "nodebalancer_id": nodebalancer_id,
-            "config_id": config_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"NodeBalancer config {result.get('id')} updated successfully "
+                    f"for NodeBalancer {nodebalancer_id}"
+                ),
+                "config": result,
+            },
+            nodebalancer_config_pb2.NodeBalancerConfigWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update NodeBalancer config", _call)
 
@@ -1491,14 +1495,15 @@ async def handle_linode_nodebalancer_config_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.create_nodebalancer_config(nodebalancer_id, fields)
-        if result:
-            return result
-        return {
-            "message": (
-                f"NodeBalancer config create requested "
-                f"for NodeBalancer {nodebalancer_id}"
-            ),
-            "nodebalancer_id": nodebalancer_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"NodeBalancer config {result.get('id')} created successfully "
+                    f"for NodeBalancer {nodebalancer_id}"
+                ),
+                "config": result,
+            },
+            nodebalancer_config_pb2.NodeBalancerConfigWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create NodeBalancer config", _call)

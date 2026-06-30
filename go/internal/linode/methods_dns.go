@@ -33,6 +33,13 @@ func (c *Client) httpListDomains(ctx context.Context) ([]Domain, error) {
 	return response.Data, nil
 }
 
+// httpListDomainsProto retrieves all DNS domains as proto messages, decoded
+// directly from the API JSON for the proto-backed read path.
+func (c *Client) httpListDomainsProto(ctx context.Context) ([]*linodev1.Domain, error) {
+	return listProtoElements(ctx, c, "ListDomains", endpointDomains,
+		func() *linodev1.Domain { return &linodev1.Domain{} })
+}
+
 // GetDomain retrieves a single DNS domain by its ID.
 func (c *Client) httpGetDomain(ctx context.Context, domainID int) (*Domain, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -76,6 +83,17 @@ func (c *Client) httpListDomainRecords(ctx context.Context, domainID int) ([]Dom
 	}
 
 	return response.Data, nil
+}
+
+// httpListDomainRecordsProto retrieves a domain's DNS records as proto messages
+// for the proto-backed list path. The endpoint is formatted with the same
+// fmt.Sprintf(endpointDomains+"/%d/records", domainID) pattern
+// httpListDomainRecords uses, so the runtime path matches exactly.
+func (c *Client) httpListDomainRecordsProto(ctx context.Context, domainID int) ([]*linodev1.DomainRecord, error) {
+	endpoint := fmt.Sprintf(endpointDomains+"/%d/records", domainID)
+
+	return listProtoElements(ctx, c, "ListDomainRecords", endpoint,
+		func() *linodev1.DomainRecord { return &linodev1.DomainRecord{} })
 }
 
 // GetDomainZoneFile retrieves the rendered zone file for a domain.

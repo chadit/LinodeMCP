@@ -1,0 +1,36 @@
+{
+  "message": "linode.mcp.v1.AccountServiceTransferListResponse",
+  "description": "linode_account_service_transfer_list envelope: count and the full proto AccountEntityTransfer elements (not the Linode data/page/pages/results page). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_service_transfers": [
+      {
+        "created": "2024-06-01T00:00:00",
+        "entities": {
+          "linodes": [111, 222]
+        },
+        "expiry": "2024-06-02T00:00:00",
+        "is_sender": true,
+        "status": "pending",
+        "token": "abc-123",
+        "updated": "2024-06-01T01:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_service_transfers": [
+      {
+        "created": "2024-06-01T00:00:00",
+        "entities": {
+          "linodes": [111, 222]
+        },
+        "expiry": "2024-06-02T00:00:00",
+        "is_sender": true,
+        "status": "pending",
+        "token": "abc-123",
+        "updated": "2024-06-01T01:00:00"
+      }
+    ]
+  }
+}

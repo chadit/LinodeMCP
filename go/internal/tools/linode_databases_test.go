@@ -241,8 +241,8 @@ func TestLinodeDatabaseEngineListToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve Managed Database engines") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve Managed Database engines")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }
 
@@ -471,8 +471,8 @@ func TestLinodeDatabaseTypeListToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve Managed Database types") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve Managed Database types")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }
 
@@ -1210,8 +1210,8 @@ func TestLinodeDatabaseInstanceListToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve Managed Database instances") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve Managed Database instances")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }
 
@@ -1430,8 +1430,8 @@ func TestLinodeDatabasePostgreSQLInstanceListToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve PostgreSQL Managed Database instances") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve PostgreSQL Managed Database instances")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }
 
@@ -2680,12 +2680,18 @@ func TestLinodeDatabaseInstanceCredentialsResetToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", "credentials reset")
 	}
 
-	if !strings.Contains(textContent.Text, keyGrantLinode) {
-		t.Errorf("textContent.Text does not contain %v", keyGrantLinode)
+	// The canonical response is the id-echo only: the rotated credentials never
+	// reach the tool output.
+	if !strings.Contains(textContent.Text, `"instance_id"`) {
+		t.Errorf("textContent.Text does not contain %v", `"instance_id"`)
 	}
 
-	if !strings.Contains(textContent.Text, databaseCredentialsPassword) {
-		t.Errorf("textContent.Text does not contain %v", databaseCredentialsPassword)
+	if strings.Contains(textContent.Text, keyGrantLinode) {
+		t.Errorf("textContent.Text leaks the credential username %v", keyGrantLinode)
+	}
+
+	if strings.Contains(textContent.Text, databaseCredentialsPassword) {
+		t.Errorf("textContent.Text leaks the credential password")
 	}
 }
 

@@ -91,8 +91,12 @@ func TestLinodeRegionAvailabilityListToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "region availability") {
-		t.Errorf("textContent.Text does not contain %v", "region availability")
+	if !strings.Contains(textContent.Text, `"region_availabilities"`) {
+		t.Errorf("textContent.Text does not contain %v", `"region_availabilities"`)
+	}
+
+	if got := listResponseCount(t, textContent.Text); got != 1 {
+		t.Errorf("listResponseCount = %d, want 1", got)
 	}
 
 	if !strings.Contains(textContent.Text, "g6-standard-1") {

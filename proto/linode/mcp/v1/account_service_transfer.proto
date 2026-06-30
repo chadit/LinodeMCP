@@ -29,3 +29,12 @@ message AccountServiceTransferGetInput {
   // The service transfer token to retrieve (required).
   string token = 2;
 }
+
+// AccountServiceTransferListResponse is the envelope
+// linode_account_service_transfer_list returns: a count, an optional echoed
+// filter, and the full proto AccountEntityTransfer elements.
+message AccountServiceTransferListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountEntityTransfer account_service_transfers = 3;
+}

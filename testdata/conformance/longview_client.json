@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.LongviewClient",
+  "description": "Longview client with nested apps message and all scalar fields present.",
+  "input": {
+    "apps": {
+      "apache": true,
+      "mysql": false,
+      "nginx": true
+    },
+    "created": "2024-06-01T12:00:00",
+    "id": 1234,
+    "label": "web-host",
+    "updated": "2024-06-02T08:30:00"
+  },
+  "canonical": {
+    "apps": {
+      "apache": true,
+      "mysql": false,
+      "nginx": true
+    },
+    "created": "2024-06-01T12:00:00",
+    "id": 1234,
+    "label": "web-host",
+    "updated": "2024-06-02T08:30:00"
+  }
+}

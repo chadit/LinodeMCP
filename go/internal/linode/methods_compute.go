@@ -50,41 +50,10 @@ func (c *Client) httpListInstances(ctx context.Context) ([]Instance, error) {
 }
 
 // httpListInstancesProto retrieves all Linode instances as proto messages,
-// decoded directly from the API JSON for the proto-backed read path. It decodes
-// the {data:[...]} envelope with the shared handler, then protojson-decodes each
-// element so the decode helper is not duplicated.
+// decoded directly from the API JSON for the proto-backed read path.
 func (c *Client) httpListInstancesProto(ctx context.Context) ([]*linodev1.Instance, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointInstances, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListInstances", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var envelope struct {
-		Data []json.RawMessage `json:"data"`
-	}
-
-	if err := c.handleResponse(resp, &envelope); err != nil {
-		return nil, err
-	}
-
-	opts := protojson.UnmarshalOptions{DiscardUnknown: true}
-	instances := make([]*linodev1.Instance, 0, len(envelope.Data))
-
-	for _, raw := range envelope.Data {
-		instance := &linodev1.Instance{}
-		if err := opts.Unmarshal(raw, instance); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal instance: %w", err)
-		}
-
-		instances = append(instances, instance)
-	}
-
-	return instances, nil
+	return listProtoElements(ctx, c, "ListInstances", endpointInstances,
+		func() *linodev1.Instance { return &linodev1.Instance{} })
 }
 
 // httpGetInstanceProto retrieves a single Linode instance by ID as a proto
@@ -214,6 +183,13 @@ func (c *Client) httpListRegions(ctx context.Context) ([]Region, error) {
 	return response.Data, nil
 }
 
+// httpListRegionsProto retrieves all regions as proto messages for the
+// proto-backed list path, sharing the decode tail with every other proto list.
+func (c *Client) httpListRegionsProto(ctx context.Context) ([]*linodev1.Region, error) {
+	return listProtoElements(ctx, c, "ListRegions", endpointRegions,
+		func() *linodev1.Region { return &linodev1.Region{} })
+}
+
 // GetRegion retrieves a single Linode region by its ID.
 func (c *Client) httpGetRegion(ctx context.Context, regionID string) (*Region, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -278,6 +254,13 @@ func (c *Client) httpListRegionsAvailability(ctx context.Context) ([]RegionAvail
 	return response.Data, nil
 }
 
+// httpListRegionsAvailabilityProto retrieves compute type availability across
+// regions as proto RegionAvailability messages for the proto-backed list path.
+func (c *Client) httpListRegionsAvailabilityProto(ctx context.Context) ([]*linodev1.RegionAvailability, error) {
+	return listProtoElements(ctx, c, "ListRegionsAvailability", endpointRegionsAvailability,
+		func() *linodev1.RegionAvailability { return &linodev1.RegionAvailability{} })
+}
+
 // httpGetRegionAvailability retrieves compute type availability for one region.
 func (c *Client) httpGetRegionAvailability(ctx context.Context, regionID string) ([]RegionAvailability, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -323,6 +306,14 @@ func (c *Client) httpListKernels(ctx context.Context, page, pageSize int) ([]Ker
 	return response.Data, nil
 }
 
+// httpListKernelsProto retrieves kernels as proto messages for the proto-backed
+// list path. The page/page_size pair flows through withPaginationQuery, so the
+// request matches httpListKernels.
+func (c *Client) httpListKernelsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Kernel, error) {
+	return listProtoElementsPaginated(ctx, c, "ListKernels", endpointKernels, page, pageSize,
+		func() *linodev1.Kernel { return &linodev1.Kernel{} })
+}
+
 // ListTypes retrieves all available Linode instance types.
 func (c *Client) httpListTypes(ctx context.Context) ([]InstanceType, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -342,6 +333,13 @@ func (c *Client) httpListTypes(ctx context.Context) ([]InstanceType, error) {
 	}
 
 	return response.Data, nil
+}
+
+// httpListTypesProto retrieves all available Linode instance types as proto
+// messages, decoded directly from the API JSON for the proto-backed list path.
+func (c *Client) httpListTypesProto(ctx context.Context) ([]*linodev1.InstanceType, error) {
+	return listProtoElements(ctx, c, "ListTypes", endpointTypes,
+		func() *linodev1.InstanceType { return &linodev1.InstanceType{} })
 }
 
 // GetType retrieves a single Linode instance type by ID.
@@ -453,6 +451,13 @@ func (c *Client) httpListImages(ctx context.Context) ([]Image, error) {
 	return response.Data, nil
 }
 
+// httpListImagesProto retrieves images as proto messages for the proto-backed
+// list path, decoded directly from the same /images endpoint httpListImages uses.
+func (c *Client) httpListImagesProto(ctx context.Context) ([]*linodev1.Image, error) {
+	return listProtoElements(ctx, c, "ListImages", endpointImages,
+		func() *linodev1.Image { return &linodev1.Image{} })
+}
+
 // GetImage retrieves a single Linode image by ID.
 func (c *Client) httpGetImage(ctx context.Context, imageID string) (*Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -536,6 +541,29 @@ func (c *Client) httpReplicateImage(ctx context.Context, imageID string, req *Re
 	return &image, nil
 }
 
+// httpReplicateImageProto replicates an image and decodes the response as a proto
+// message for the proto-backed write path.
+func (c *Client) httpReplicateImageProto(ctx context.Context, imageID string, req *ReplicateImageRequest) (*linodev1.Image, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID) + "/regions"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ReplicateImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	image := &linodev1.Image{}
+	if err := c.handleProtoResponse(resp, image); err != nil {
+		return nil, err
+	}
+
+	return image, nil
+}
+
 // UpdateImage updates editable fields for a Linode image.
 func (c *Client) httpUpdateImage(ctx context.Context, imageID string, req *UpdateImageRequest) (*Image, error) {
 	if req == nil {
@@ -610,6 +638,14 @@ func (c *Client) httpListImageShareGroups(ctx context.Context, page, pageSize in
 	return &response, nil
 }
 
+// httpListImageShareGroupsProto retrieves owned image share groups as proto
+// messages for the proto-backed list path. The page/page_size pair flows through
+// withPaginationQuery, so the request matches httpListImageShareGroups.
+func (c *Client) httpListImageShareGroupsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ImageShareGroup, error) {
+	return listProtoElementsPaginated(ctx, c, "ListImageShareGroups", endpointImageShareGroups, page, pageSize,
+		func() *linodev1.ImageShareGroup { return &linodev1.ImageShareGroup{} })
+}
+
 // GetImageShareGroup retrieves a single image share group by ID.
 func (c *Client) httpGetImageShareGroup(ctx context.Context, shareGroupID int) (*ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -677,6 +713,18 @@ func (c *Client) httpListImageShareGroupsByImage(ctx context.Context, imageID st
 	return &response, nil
 }
 
+// httpListImageShareGroupsByImageProto retrieves the share groups that contain an
+// image as proto messages for the proto-backed list path. The endpoint is
+// formatted with the same encoded image-id path httpListImageShareGroupsByImage
+// uses, then listProtoElementsPaginated adds page/page_size via
+// withPaginationQuery, so the runtime request matches exactly.
+func (c *Client) httpListImageShareGroupsByImageProto(ctx context.Context, imageID string, page, pageSize int) ([]*linodev1.ImageShareGroup, error) {
+	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID) + "/sharegroups"
+
+	return listProtoElementsPaginated(ctx, c, "ListImageShareGroupsByImage", endpoint, page, pageSize,
+		func() *linodev1.ImageShareGroup { return &linodev1.ImageShareGroup{} })
+}
+
 func (c *Client) httpListImagesByShareGroup(ctx context.Context, shareGroupID, page, pageSize int) (*PaginatedResponse[Image], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -697,6 +745,18 @@ func (c *Client) httpListImagesByShareGroup(ctx context.Context, shareGroupID, p
 	}
 
 	return &response, nil
+}
+
+// httpListImagesByShareGroupProto retrieves the images shared in an owned image
+// share group as proto messages for the proto-backed list path. The endpoint is
+// formatted with the same encoded share-group-id path httpListImagesByShareGroup
+// uses, then listProtoElementsPaginated adds page/page_size via
+// withPaginationQuery, so the runtime request matches exactly.
+func (c *Client) httpListImagesByShareGroupProto(ctx context.Context, shareGroupID, page, pageSize int) ([]*linodev1.Image, error) {
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/images"
+
+	return listProtoElementsPaginated(ctx, c, "ListImagesByShareGroup", endpoint, page, pageSize,
+		func() *linodev1.Image { return &linodev1.Image{} })
 }
 
 // ListMembersByImageShareGroup retrieves members linked to an owned image share group.
@@ -720,6 +780,18 @@ func (c *Client) httpListMembersByImageShareGroup(ctx context.Context, shareGrou
 	}
 
 	return &response, nil
+}
+
+// httpListMembersByImageShareGroupProto retrieves members linked to an owned
+// image share group as proto messages for the proto-backed list path. The
+// endpoint is formatted with the same encoded share-group-id path
+// httpListMembersByImageShareGroup uses, then listProtoElementsPaginated adds
+// page/page_size via withPaginationQuery, so the runtime request matches exactly.
+func (c *Client) httpListMembersByImageShareGroupProto(ctx context.Context, shareGroupID, page, pageSize int) ([]*linodev1.ImageShareGroupMember, error) {
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members"
+
+	return listProtoElementsPaginated(ctx, c, "ListMembersByImageShareGroup", endpoint, page, pageSize,
+		func() *linodev1.ImageShareGroupMember { return &linodev1.ImageShareGroupMember{} })
 }
 
 // GetImageShareGroupMemberToken retrieves a member token linked to an owned image share group.
@@ -789,6 +861,29 @@ func (c *Client) httpUpdateImageShareGroupMember(ctx context.Context, shareGroup
 	return &member, nil
 }
 
+// httpUpdateImageShareGroupMemberProto updates a member token and decodes the
+// response as a proto message for the proto-backed write path.
+func (c *Client) httpUpdateImageShareGroupMemberProto(ctx context.Context, shareGroupID int, tokenUUID string, req *UpdateImageShareGroupMemberRequest) (*linodev1.ImageShareGroupMember, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members/" + escapeImageShareGroupTokenUUID(tokenUUID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateImageShareGroupMember", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	member := &linodev1.ImageShareGroupMember{}
+	if err := c.handleProtoResponse(resp, member); err != nil {
+		return nil, err
+	}
+
+	return member, nil
+}
+
 // CreateImageShareGroup creates a group to share images with other users.
 func (c *Client) httpCreateImageShareGroup(ctx context.Context, req *CreateImageShareGroupRequest) (*ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -807,6 +902,27 @@ func (c *Client) httpCreateImageShareGroup(ctx context.Context, req *CreateImage
 	}
 
 	return &shareGroup, nil
+}
+
+// httpCreateImageShareGroupProto creates a share group and decodes the response
+// as a proto message for the proto-backed write path.
+func (c *Client) httpCreateImageShareGroupProto(ctx context.Context, req *CreateImageShareGroupRequest) (*linodev1.ImageShareGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImageShareGroups, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateImageShareGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	shareGroup := &linodev1.ImageShareGroup{}
+	if err := c.handleProtoResponse(resp, shareGroup); err != nil {
+		return nil, err
+	}
+
+	return shareGroup, nil
 }
 
 // AddImageShareGroupImages adds images to an owned image share group.
@@ -831,6 +947,29 @@ func (c *Client) httpAddImageShareGroupImages(ctx context.Context, shareGroupID 
 	return &image, nil
 }
 
+// httpAddImageShareGroupImagesProto adds images to a share group and decodes the
+// response image as a proto message for the proto-backed write path.
+func (c *Client) httpAddImageShareGroupImagesProto(ctx context.Context, shareGroupID int, req *AddImageShareGroupImagesRequest) (*linodev1.Image, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/images"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AddImageShareGroupImages", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	image := &linodev1.Image{}
+	if err := c.handleProtoResponse(resp, image); err != nil {
+		return nil, err
+	}
+
+	return image, nil
+}
+
 // AddImageShareGroupMembers adds members to an owned image share group.
 func (c *Client) httpAddImageShareGroupMembers(ctx context.Context, shareGroupID int, req *AddImageShareGroupMembersRequest) (*ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -851,6 +990,29 @@ func (c *Client) httpAddImageShareGroupMembers(ctx context.Context, shareGroupID
 	}
 
 	return &shareGroup, nil
+}
+
+// httpAddImageShareGroupMembersProto adds members to a share group and decodes the
+// returned parent share group as a proto message for the proto-backed write path.
+func (c *Client) httpAddImageShareGroupMembersProto(ctx context.Context, shareGroupID int, req *AddImageShareGroupMembersRequest) (*linodev1.ImageShareGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AddImageShareGroupMembers", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	shareGroup := &linodev1.ImageShareGroup{}
+	if err := c.handleProtoResponse(resp, shareGroup); err != nil {
+		return nil, err
+	}
+
+	return shareGroup, nil
 }
 
 // DeleteImageShareGroupImage revokes access to one shared image in an owned image share group.
@@ -892,6 +1054,29 @@ func (c *Client) httpUpdateImageShareGroup(ctx context.Context, shareGroupID int
 	return &shareGroup, nil
 }
 
+// httpUpdateImageShareGroupProto updates a share group and decodes the response
+// as a proto message for the proto-backed write path.
+func (c *Client) httpUpdateImageShareGroupProto(ctx context.Context, shareGroupID int, req *UpdateImageShareGroupRequest) (*linodev1.ImageShareGroup, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateImageShareGroup", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	shareGroup := &linodev1.ImageShareGroup{}
+	if err := c.handleProtoResponse(resp, shareGroup); err != nil {
+		return nil, err
+	}
+
+	return shareGroup, nil
+}
+
 // UpdateImageShareGroupImage updates a shared image's label or description.
 func (c *Client) httpUpdateImageShareGroupImage(ctx context.Context, shareGroupID int, imageID string, req *UpdateImageShareGroupImageRequest) (*Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -912,6 +1097,29 @@ func (c *Client) httpUpdateImageShareGroupImage(ctx context.Context, shareGroupI
 	}
 
 	return &image, nil
+}
+
+// httpUpdateImageShareGroupImageProto updates a shared image and decodes the
+// response as a proto message for the proto-backed write path.
+func (c *Client) httpUpdateImageShareGroupImageProto(ctx context.Context, shareGroupID int, imageID string, req *UpdateImageShareGroupImageRequest) (*linodev1.Image, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/images/" + escapeImageIDSegment(imageID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateImageShareGroupImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	image := &linodev1.Image{}
+	if err := c.handleProtoResponse(resp, image); err != nil {
+		return nil, err
+	}
+
+	return image, nil
 }
 
 // DeleteImageShareGroup removes an owned image share group.
@@ -953,6 +1161,15 @@ func (c *Client) httpListImageShareGroupTokens(ctx context.Context, page, pageSi
 	return &response, nil
 }
 
+// httpListImageShareGroupTokensProto retrieves image share group tokens for the
+// user as proto messages for the proto-backed list path. The page/page_size pair
+// flows through withPaginationQuery, so the request matches
+// httpListImageShareGroupTokens.
+func (c *Client) httpListImageShareGroupTokensProto(ctx context.Context, page, pageSize int) ([]*linodev1.ImageShareGroupToken, error) {
+	return listProtoElementsPaginated(ctx, c, "ListImageShareGroupTokens", endpointImageShareGroups+"/tokens", page, pageSize,
+		func() *linodev1.ImageShareGroupToken { return &linodev1.ImageShareGroupToken{} })
+}
+
 // CreateImageShareGroupToken creates a single-use image share group membership token.
 func (c *Client) httpCreateImageShareGroupToken(ctx context.Context, req *CreateImageShareGroupTokenRequest) (*ImageShareGroupToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -971,6 +1188,27 @@ func (c *Client) httpCreateImageShareGroupToken(ctx context.Context, req *Create
 	}
 
 	return &token, nil
+}
+
+// httpCreateImageShareGroupTokenProto creates a membership token and decodes the
+// response as a proto message for the proto-backed write path.
+func (c *Client) httpCreateImageShareGroupTokenProto(ctx context.Context, req *CreateImageShareGroupTokenRequest) (*linodev1.ImageShareGroupToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImageShareGroupMembershipCreate, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateImageShareGroupToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	token := &linodev1.ImageShareGroupToken{}
+	if err := c.handleProtoResponse(resp, token); err != nil {
+		return nil, err
+	}
+
+	return token, nil
 }
 
 // GetImageShareGroupToken retrieves a single image share group token by UUID.
@@ -1041,6 +1279,18 @@ func (c *Client) httpListImagesByShareGroupToken(ctx context.Context, tokenUUID 
 	return &response, nil
 }
 
+// httpListImagesByShareGroupTokenProto retrieves the images available through an
+// image share group token as proto messages for the proto-backed list path. The
+// endpoint is formatted with the same encoded token-uuid path
+// httpListImagesByShareGroupToken uses, then listProtoElementsPaginated adds
+// page/page_size via withPaginationQuery, so the runtime request matches exactly.
+func (c *Client) httpListImagesByShareGroupTokenProto(ctx context.Context, tokenUUID string, page, pageSize int) ([]*linodev1.Image, error) {
+	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID) + "/sharegroup/images"
+
+	return listProtoElementsPaginated(ctx, c, "ListImagesByShareGroupToken", endpoint, page, pageSize,
+		func() *linodev1.Image { return &linodev1.Image{} })
+}
+
 // UpdateImageShareGroupToken updates a single image share group membership token label.
 func (c *Client) httpUpdateImageShareGroupToken(ctx context.Context, tokenUUID string, req *UpdateImageShareGroupTokenRequest) (*ImageShareGroupToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1061,6 +1311,29 @@ func (c *Client) httpUpdateImageShareGroupToken(ctx context.Context, tokenUUID s
 	}
 
 	return &token, nil
+}
+
+// httpUpdateImageShareGroupTokenProto updates a membership token label and decodes
+// the response as a proto message for the proto-backed write path.
+func (c *Client) httpUpdateImageShareGroupTokenProto(ctx context.Context, tokenUUID string, req *UpdateImageShareGroupTokenRequest) (*linodev1.ImageShareGroupToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointImageShareGroupMembershipCreate + "/" + escapeImageShareGroupTokenUUID(tokenUUID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateImageShareGroupToken", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	token := &linodev1.ImageShareGroupToken{}
+	if err := c.handleProtoResponse(resp, token); err != nil {
+		return nil, err
+	}
+
+	return token, nil
 }
 
 // GetImageShareGroupByToken retrieves a share group through a membership token UUID.
@@ -1219,6 +1492,37 @@ func (c *Client) httpUploadImage(ctx context.Context, req *UploadImageRequest) (
 	return &upload, nil
 }
 
+// httpUploadImageProto creates an image upload target and returns the one-time
+// upload URL plus the created image decoded as a proto message. The endpoint body
+// is {image, upload_to}; the image sub-object is protojson-decoded into the proto
+// Image element (DiscardUnknown) so the output matches the Python serializer.
+func (c *Client) httpUploadImageProto(ctx context.Context, req *UploadImageRequest) (*linodev1.Image, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImagesUpload, req)
+	if err != nil {
+		return nil, "", &NetworkError{Operation: "UploadImage", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var envelope struct {
+		Image    json.RawMessage `json:"image"`
+		UploadTo string          `json:"upload_to"`
+	}
+	if err := c.handleResponse(resp, &envelope); err != nil {
+		return nil, "", err
+	}
+
+	image := &linodev1.Image{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(envelope.Image, image); err != nil {
+		return nil, "", fmt.Errorf("failed to unmarshal upload image element: %w", err)
+	}
+
+	return image, envelope.UploadTo, nil
+}
+
 // ListStackScripts retrieves StackScripts available to the authenticated user.
 func (c *Client) httpListStackScripts(ctx context.Context) ([]StackScript, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1238,6 +1542,15 @@ func (c *Client) httpListStackScripts(ctx context.Context) ([]StackScript, error
 	}
 
 	return response.Data, nil
+}
+
+// httpListStackScriptsProto retrieves StackScripts as proto messages for the
+// proto-backed list path. The endpoint returns a {data, page, ...} page
+// envelope, so listProtoElements reads the data field; the tool filters
+// (is_public / mine / label_contains) are applied client-side by the factory.
+func (c *Client) httpListStackScriptsProto(ctx context.Context) ([]*linodev1.StackScript, error) {
+	return listProtoElements(ctx, c, "ListStackScripts", endpointStackScripts,
+		func() *linodev1.StackScript { return &linodev1.StackScript{} })
 }
 
 // GetStackScript retrieves a single StackScript by ID.

@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.AccountAvailabilityListResponse",
+  "description": "linode_account_availability_list envelope: count and the full proto AccountAvailability elements (each carries two repeated string lists). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_availabilities": [
+      {
+        "available": ["Linodes", "NodeBalancers"],
+        "region": "us-east",
+        "unavailable": ["Kubernetes"]
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_availabilities": [
+      {
+        "available": ["Linodes", "NodeBalancers"],
+        "region": "us-east",
+        "unavailable": ["Kubernetes"]
+      }
+    ]
+  }
+}

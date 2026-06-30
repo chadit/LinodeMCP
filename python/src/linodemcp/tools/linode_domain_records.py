@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import domain_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -20,6 +21,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -108,8 +113,10 @@ async def handle_linode_domain_record_get(
         return error_response("record_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        record = await client.get_domain_record(int(domain_id), int(record_id))
-        return domain_record_to_response_dict(record)
+        raw = await client.get_raw(
+            f"/domains/{int(domain_id)}/records/{int(record_id)}"
+        )
+        return serialize_api_response(raw, domain_pb2.DomainRecord())
 
     return await execute_tool(cfg, arguments, "retrieve domain record", _call)
 
@@ -125,42 +132,30 @@ async def handle_linode_domain_record_list(
     if not domain_id:
         return error_response("domain_id is required")
 
+    def _matches(record: dict[str, Any]) -> bool:
+        if type_filter and str(record.get("type", "")).upper() != type_filter.upper():
+            return False
+        return not (
+            name_contains
+            and name_contains.lower() not in str(record.get("name", "")).lower()
+        )
+
+    filters: list[str] = []
+    if type_filter:
+        filters.append(f"type={type_filter}")
+    if name_contains:
+        filters.append(f"name_contains={name_contains}")
+    filter_echo = ", ".join(filters) if filters else None
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        records = await client.list_domain_records(int(domain_id))
-
-        if type_filter:
-            records = [r for r in records if r.type.upper() == type_filter.upper()]
-
-        if name_contains:
-            records = [r for r in records if name_contains.lower() in r.name.lower()]
-
-        records_data = [
-            {
-                "id": r.id,
-                "type": r.type,
-                "name": r.name,
-                "target": r.target,
-                "priority": r.priority,
-                "ttl_sec": r.ttl_sec,
-            }
-            for r in records
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(records),
-            "domain_id": domain_id,
-            "records": records_data,
-        }
-
-        filters: list[str] = []
-        if type_filter:
-            filters.append(f"type={type_filter}")
-        if name_contains:
-            filters.append(f"name_contains={name_contains}")
-        if filters:
-            response["filter"] = ", ".join(filters)
-
-        return response
+        raw = await client.get_raw(f"/domains/{int(domain_id)}/records")
+        return serialize_list_response(
+            raw,
+            "records",
+            domain_pb2.DomainRecordListResponse(),
+            filter_value=filter_echo,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve domain records", _call)
 
@@ -496,8 +491,9 @@ async def _domain_record_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain_record(domain_id, record_id)
+        message = f"Record {record_id} removed successfully from domain {domain_id}"
         return {
-            "message": f"DNS record {record_id} deleted successfully",
+            "message": message,
             "domain_id": domain_id,
             "record_id": record_id,
         }
@@ -557,8 +553,9 @@ async def handle_linode_domain_record_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain_record(int(domain_id), int(record_id))
+        message = f"Record {record_id} removed successfully from domain {domain_id}"
         return {
-            "message": f"DNS record {record_id} deleted successfully",
+            "message": message,
             "domain_id": domain_id,
             "record_id": record_id,
         }

@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -21,24 +22,25 @@ const (
 
 // NewLinodeTypeListTool creates a tool for listing Linode instance types.
 func NewLinodeTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListTool(
+		cfg,
 		"linode_type_list",
-		mcp.WithDescription("Lists all available Linode instance types (plans) with pricing information. Can filter by class (standard, dedicated, gpu, highmem, premium)."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"class",
-			mcp.Description("Filter types by class (standard, dedicated, gpu, highmem, premium)"),
-		),
+		"Lists all available Linode instance types (plans) with pricing information. Can filter by class (standard, dedicated, gpu, highmem, premium).",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.InstanceType, error) {
+			return client.ListTypesProto(ctx)
+		},
+		[]listFilterParam[*linodev1.InstanceType]{
+			fieldFilter("class", "Filter types by class (standard, dedicated, gpu, highmem, premium)",
+				func(t *linodev1.InstanceType) string { return t.GetClass() }),
+		},
+		instanceTypeListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleLinodeTypesListRequest(ctx, &request, cfg)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func instanceTypeListResponse(items []*linodev1.InstanceType, count int32, filter *string) *linodev1.InstanceTypeListResponse {
+	return &linodev1.InstanceTypeListResponse{Count: count, Filter: filter, Types: items}
 }
 
 // NewLinodeTypeGetTool creates a tool for getting one Linode instance type.
@@ -85,43 +87,4 @@ func validateTypeID(typeID string) (string, string) {
 	}
 
 	return typeID, ""
-}
-
-func handleLinodeTypesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	classFilter := request.GetString("class", "")
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	types, err := client.ListTypes(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode types: %v", err)), nil
-	}
-
-	if classFilter != "" {
-		types = FilterByField(types, classFilter, func(t linode.InstanceType) string {
-			return t.Class
-		})
-	}
-
-	return formatTypesResponse(types, classFilter)
-}
-
-func formatTypesResponse(types []linode.InstanceType, classFilter string) (*mcp.CallToolResult, error) {
-	response := struct {
-		Count  int                   `json:"count"`
-		Filter string                `json:"filter,omitempty"`
-		Types  []linode.InstanceType `json:"types"`
-	}{
-		Count: len(types),
-		Types: types,
-	}
-
-	if classFilter != "" {
-		response.Filter = "class=" + classFilter
-	}
-
-	return MarshalToolResponse(response)
 }

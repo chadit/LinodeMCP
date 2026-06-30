@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.AccountPaymentMethodIDResponse",
+  "description": "Payment-method make-default and delete id-echo: a confirmation message plus the affected payment method ID (empty-body endpoints).",
+  "input": {
+    "message": "Payment method set as default successfully",
+    "payment_method_id": 420
+  },
+  "canonical": {
+    "message": "Payment method set as default successfully",
+    "payment_method_id": 420
+  }
+}

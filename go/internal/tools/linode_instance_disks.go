@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -15,45 +16,38 @@ import (
 
 // NewLinodeInstanceDiskListTool creates a tool for listing all disks on a Linode instance.
 func NewLinodeInstanceDiskListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_instance_disk_list",
 		"Lists all disks attached to a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
+		protoListPathID{
+			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
+			parse: parseInstanceDiskListPathID,
 		},
-		handleInstanceDisksListRequest,
+		func(ctx context.Context, client *linode.Client, linodeID int) ([]*linodev1.InstanceDisk, error) {
+			return client.ListInstanceDisksProto(ctx, linodeID)
+		},
+		nil,
+		instanceDiskListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleInstanceDisksListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+// parseInstanceDiskListPathID validates the linode_id path param the same way the
+// non-proto handler did (a missing or zero id returns ErrLinodeIDRequired).
+func parseInstanceDiskListPathID(request *mcp.CallToolRequest) (int, string) {
 	linodeID := request.GetInt("linode_id", 0)
 	if linodeID == 0 {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+		return 0, ErrLinodeIDRequired.Error()
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+	return linodeID, ""
+}
 
-	disks, err := client.ListInstanceDisks(ctx, linodeID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list disks for instance %d: %v", linodeID, err)), nil
-	}
-
-	response := struct {
-		Count int                   `json:"count"`
-		Disks []linode.InstanceDisk `json:"disks"`
-	}{
-		Count: len(disks),
-		Disks: disks,
-	}
-
-	return MarshalToolResponse(response)
+func instanceDiskListResponse(items []*linodev1.InstanceDisk, count int32, filter *string) *linodev1.InstanceDiskListResponse {
+	return &linodev1.InstanceDiskListResponse{Count: count, Filter: filter, Disks: items}
 }
 
 // NewLinodeInstanceDiskGetTool creates a tool for retrieving a specific disk on a Linode instance.
@@ -206,20 +200,15 @@ func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	disk, err := client.CreateInstanceDisk(ctx, linodeID, &req)
+	disk, err := client.CreateInstanceDiskProto(ctx, linodeID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create disk for instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message string               `json:"message"`
-		Disk    *linode.InstanceDisk `json:"disk"`
-	}{
-		Message: fmt.Sprintf("Disk '%s' (ID: %d) created on instance %d", disk.Label, disk.ID, linodeID),
+	return MarshalProtoToolResponse(&linodev1.InstanceDiskWriteResponse{
+		Message: fmt.Sprintf("Disk '%s' (ID: %d) created on instance %d", disk.GetLabel(), disk.GetId(), linodeID),
 		Disk:    disk,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }
 
 // NewLinodeInstanceDiskUpdateTool creates a tool for updating a disk's label on a Linode instance.
@@ -295,20 +284,15 @@ func handleInstanceDiskUpdateRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	disk, err := client.UpdateInstanceDisk(ctx, linodeID, diskID, req)
+	disk, err := client.UpdateInstanceDiskProto(ctx, linodeID, diskID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify disk %d on instance %d: %v", diskID, linodeID, err)), nil
 	}
 
-	response := struct {
-		Message string               `json:"message"`
-		Disk    *linode.InstanceDisk `json:"disk"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceDiskWriteResponse{
 		Message: fmt.Sprintf("Disk %d on instance %d modified successfully", diskID, linodeID),
 		Disk:    disk,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }
 
 // NewLinodeInstanceDiskDeleteTool creates a tool for deleting a disk from a Linode instance.
@@ -411,20 +395,15 @@ func handleInstanceDiskCloneRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	clonedDisk, err := client.CloneInstanceDisk(ctx, linodeID, diskID)
+	clonedDisk, err := client.CloneInstanceDiskProto(ctx, linodeID, diskID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to clone disk %d on instance %d: %v", diskID, linodeID, err)), nil
 	}
 
-	response := struct {
-		Message string               `json:"message"`
-		Disk    *linode.InstanceDisk `json:"disk"`
-	}{
-		Message: fmt.Sprintf("Disk %d cloned to new disk %d on instance %d", diskID, clonedDisk.ID, linodeID),
+	return MarshalProtoToolResponse(&linodev1.InstanceDiskWriteResponse{
+		Message: fmt.Sprintf("Disk %d cloned to new disk %d on instance %d", diskID, clonedDisk.GetId(), linodeID),
 		Disk:    clonedDisk,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }
 
 // NewLinodeInstanceDiskResizeTool creates a tool for resizing a disk on a Linode instance.
@@ -498,19 +477,12 @@ func handleInstanceDiskResizeRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to resize disk %d on instance %d: %v", diskID, linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-		DiskID   int    `json:"disk_id"`
-		NewSize  int    `json:"new_size_mb"`
-	}{
-		Message:  fmt.Sprintf("Disk %d on instance %d resize initiated to %d MB", diskID, linodeID, size),
-		LinodeID: linodeID,
-		DiskID:   diskID,
-		NewSize:  size,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.InstanceDiskResizeWriteResponse{
+		Message:   fmt.Sprintf("Disk %d on instance %d resize initiated to %d MB", diskID, linodeID, size),
+		LinodeId:  linodeIDToInt32(linodeID),
+		DiskId:    linodeIDToInt32(diskID),
+		NewSizeMb: linodeIDToInt32(size),
+	})
 }
 
 // NewLinodeInstanceDiskPasswordResetTool creates a tool for resetting a disk root password.

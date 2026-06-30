@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.LongviewClientWriteResponse",
+  "description": "Longview client update envelope: a confirmation message plus the full metadata LongviewClient element.",
+  "input": {
+    "message": "Longview client updated successfully",
+    "longview_client": {
+      "id": 789,
+      "label": "prod-web-01",
+      "created": "2026-01-15T10:00:00",
+      "updated": "2026-06-30T12:00:00",
+      "apps": {"apache": true, "mysql": false, "nginx": true}
+    }
+  },
+  "canonical": {
+    "message": "Longview client updated successfully",
+    "longview_client": {
+      "apps": {"apache": true, "mysql": false, "nginx": true},
+      "created": "2026-01-15T10:00:00",
+      "id": 789,
+      "label": "prod-web-01",
+      "updated": "2026-06-30T12:00:00"
+    }
+  }
+}

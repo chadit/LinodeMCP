@@ -109,8 +109,15 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Deleted "+monitorServiceAlertDefinitionDeleteToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Deleted "+monitorServiceAlertDefinitionDeleteToolName)
+	for _, want := range []string{
+		"Monitor service alert definition 20000 deleted for 'dbaas'",
+		"\"service_type\"",
+		"\"alert_id\"",
+		"20000",
+	} {
+		if !strings.Contains(textContent.Text, want) {
+			t.Errorf("textContent.Text does not contain %v", want)
+		}
 	}
 }
 

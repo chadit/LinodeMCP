@@ -18,6 +18,16 @@ message NodeBalancerVPCConfig {
   int32 nodebalancer_id = 9;
 }
 
+// NodeBalancerVPCConfigListResponse mirrors the
+// linode_nodebalancer_vpc_config_list wrapper: a count, an optional filter echo,
+// and the VPC configs. This is the project's own envelope, not the Linode
+// {data,page,pages,results} list shape.
+message NodeBalancerVPCConfigListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated NodeBalancerVPCConfig vpc_configs = 3;
+}
+
 // NodeBalancerVPCConfigGetInput is the input contract for
 // linode_nodebalancer_vpc_config_get.
 message NodeBalancerVPCConfigGetInput {

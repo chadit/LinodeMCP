@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.ProfileLoginListResponse",
+  "description": "linode_profile_login_list envelope: count and the full proto AccountLogin elements under the profile_logins key (the same element account logins use; only the wrapper key differs). Go previously dumped the Linode data/page/pages/results page; the proto envelope is the fix. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "profile_logins": [
+      {
+        "datetime": "2024-06-01T12:00:00",
+        "id": 321,
+        "ip": "203.0.113.20",
+        "restricted": false,
+        "status": "successful",
+        "username": "admin"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "profile_logins": [
+      {
+        "datetime": "2024-06-01T12:00:00",
+        "id": 321,
+        "ip": "203.0.113.20",
+        "restricted": false,
+        "status": "successful",
+        "username": "admin"
+      }
+    ]
+  }
+}

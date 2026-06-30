@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync/atomic"
 
@@ -19,6 +20,8 @@ import (
 const (
 	paramEnvironment     = "environment"
 	paramEnvironmentDesc = "Linode environment to use (optional, defaults to 'default')"
+	paramPage            = "page"
+	paramPageSize        = "page_size"
 	paramConfirm         = "confirm"
 	paramDryRun          = "dry_run"
 	paramDryRunDesc      = "Preview the call without making it: returns the would-be request and current resource state. Default false."
@@ -258,45 +261,6 @@ func FormatListResponse[T any](items []T, appliedFilters []string, key string) (
 	return MarshalToolResponse(response)
 }
 
-// filterDef describes a filter parameter for list tools.
-type filterDef[T any] struct {
-	paramName string
-	matchFunc func(items []T, value string) []T
-}
-
-// handleListRequest is a generic handler for list-style tools that fetch items,
-// apply filters, and format the response.
-func handleListRequest[T any](
-	ctx context.Context,
-	request *mcp.CallToolRequest,
-	cfg *config.Config,
-	apiCall func(context.Context, *linode.Client) ([]T, error),
-	filters []filterDef[T],
-	formatResponse func(items []T, appliedFilters []string) (*mcp.CallToolResult, error),
-) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	items, err := apiCall(ctx, client)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve items: %v", err)), nil
-	}
-
-	var appliedFilters []string
-
-	for _, f := range filters {
-		value := request.GetString(f.paramName, "")
-		if value != "" {
-			items = f.matchFunc(items, value)
-			appliedFilters = append(appliedFilters, f.paramName+"="+value)
-		}
-	}
-
-	return formatResponse(items, appliedFilters)
-}
-
 // listFilterParam combines a tool parameter definition with its filter logic for list tools.
 type listFilterParam[T any] struct {
 	paramName   string
@@ -326,41 +290,490 @@ func containsFilter[T any](paramName, description string, getField func(T) strin
 	}
 }
 
-// newListTool creates a complete list tool with filtering support using a generic factory pattern.
-// It builds the MCP tool definition, filter pipeline, and handler from the provided parameters.
-func newListTool[T any](
-	cfg *config.Config,
-	toolName, description string,
-	apiCall func(context.Context, *linode.Client) ([]T, error),
-	filterParams []listFilterParam[T],
-	responseKey string,
-) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	options := make([]mcp.ToolOption, 0, 2+len(filterParams))
-	options = append(
-		options,
-		mcp.WithDescription(description),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-	)
+// boolFilter creates a list filter parameter that keeps items whose bool field
+// matches the parsed argument. The argument is true when it equals "true"
+// case-insensitively, otherwise false, so the filter accepts the same
+// "true"/"false" inputs the pre-proto image filters did.
+func boolFilter[T any](paramName, description string, getField func(T) bool) listFilterParam[T] {
+	return listFilterParam[T]{
+		paramName:   paramName,
+		description: description,
+		matchFunc: func(items []T, value string) []T {
+			want := strings.EqualFold(value, boolTrue)
 
-	filters := make([]filterDef[T], 0, len(filterParams))
+			filtered := make([]T, 0, len(items))
+			for _, item := range items {
+				if getField(item) == want {
+					filtered = append(filtered, item)
+				}
+			}
+
+			return filtered
+		},
+	}
+}
+
+// protoListFilterOptions appends a WithString option for each filter param to
+// opts. The three proto-list factories share this so their filter inputs stay
+// byte-identical.
+func protoListFilterOptions[T proto.Message](opts []mcp.ToolOption, filterParams []listFilterParam[T]) []mcp.ToolOption {
+	for _, fp := range filterParams {
+		opts = append(opts, mcp.WithString(fp.paramName, mcp.Description(fp.description)))
+	}
+
+	return opts
+}
+
+// finishProtoList applies the filter params to the fetched items, then
+// assembles and marshals the family *ListResponse. It is the shared tail of all
+// three proto-list factories (filter pipeline, count clamp, filter echo,
+// MarshalProtoToolResponse), so each factory body stays short and distinct (and
+// under the dupl linter's threshold). assemble builds the family list-response
+// message from the filtered items, the count, and the optional filter echo
+// (joined with the same ", " separator the Python side uses).
+func finishProtoList[T, R proto.Message](
+	request *mcp.CallToolRequest,
+	items []T,
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (*mcp.CallToolResult, error) {
+	var appliedFilters []string
 
 	for _, fp := range filterParams {
-		options = append(options, mcp.WithString(fp.paramName, mcp.Description(fp.description)))
-		filters = append(filters, filterDef[T]{paramName: fp.paramName, matchFunc: fp.matchFunc})
+		if value := request.GetString(fp.paramName, ""); value != "" {
+			items = fp.matchFunc(items, value)
+			appliedFilters = append(appliedFilters, fp.paramName+"="+value)
+		}
 	}
+
+	var count int32
+	if n := len(items); n <= math.MaxInt32 {
+		count = int32(n)
+	}
+
+	var filter *string
+
+	if len(appliedFilters) > 0 {
+		joined := strings.Join(appliedFilters, ", ")
+		filter = &joined
+	}
+
+	return MarshalProtoToolResponse(assemble(items, count, filter))
+}
+
+// newProtoListTool is the proto analog of newListTool. It builds the MCP tool
+// (environment plus the filter params) and a handler that fetches the proto
+// elements, applies the filters, and serializes a *ListResponse message via
+// MarshalProtoToolResponse so the output matches the Python serializer
+// element-for-element. assemble builds the family's list-response message from
+// the filtered items, the count, and the optional filter echo (joined with the
+// same ", " separator the Python side uses). Filter params reuse fieldFilter and
+// containsFilter, the same constructors newListTool takes.
+func newProtoListTool[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description string,
+	apiCall func(ctx context.Context, client *linode.Client) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	options := protoListFilterOptions([]mcp.ToolOption{
+		mcp.WithDescription(description),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+	}, filterParams)
 
 	tool := mcp.NewTool(toolName, options...)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleListRequest(
-			ctx, &request, cfg, apiCall, filters,
-			func(items []T, appliedFilters []string) (*mcp.CallToolResult, error) {
-				return FormatListResponse(items, appliedFilters, responseKey)
-			},
-		)
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		items, err := apiCall(ctx, client)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve items: %v", err)), nil
+		}
+
+		return finishProtoList(&request, items, filterParams, assemble)
 	}
 
 	return tool, handler
+}
+
+// protoListPageReader validates and returns the page/page_size pair from the
+// request. Each paginated family passes the same reader its non-proto handler
+// already used, so the page/page_size validation behavior (and error messages)
+// is unchanged. A non-empty string is a validation message; the caller returns
+// it as the tool error.
+type protoListPageReader func(request *mcp.CallToolRequest) (page, pageSize int, validationMessage string)
+
+// newProtoListToolPaginated is newProtoListTool for families whose input schema
+// carries page/page_size (WithNumber). It adds those two params with the exact
+// names and descriptions the family's existing factory used (so the input schema
+// stays byte-identical and tool-parity holds), reads them through readPage (the
+// same reader the non-proto handler used, preserving validation and error text),
+// and threads the validated pair into apiCall. The fetch+filter+serialize tail
+// is shared with the other proto-list factories via finishProtoList.
+func newProtoListToolPaginated[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, pageDesc, pageSizeDesc string,
+	apiCall func(ctx context.Context, client *linode.Client, page, pageSize int) ([]T, error),
+	readPage protoListPageReader,
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	options := protoListFilterOptions([]mcp.ToolOption{
+		mcp.WithDescription(description),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		mcp.WithNumber(paramPage, mcp.Description(pageDesc)),
+		mcp.WithNumber(paramPageSize, mcp.Description(pageSizeDesc)),
+	}, filterParams)
+
+	tool := mcp.NewTool(toolName, options...)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		page, pageSize, validationMessage := readPage(&request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		items, err := apiCall(ctx, client, page, pageSize)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve items: %v", err)), nil
+		}
+
+		return finishProtoList(&request, items, filterParams, assemble)
+	}
+
+	return tool, handler
+}
+
+// protoListPathID describes the Required path-id param of a sub-resource list
+// (e.g. vpc_id for vpc_subnet_list). option carries the exact schema option the
+// family's existing factory used (so the input schema is byte-identical), and
+// parse validates the raw argument the same way the existing handler did,
+// returning the same error message. Keeping both as the family's own values
+// preserves whether the id is a string or a number param.
+type protoListPathID struct {
+	option mcp.ToolOption
+	parse  func(request *mcp.CallToolRequest) (int, string)
+}
+
+// newProtoListToolSubresource is newProtoListTool for sub-resource lists keyed by
+// a Required path id (e.g. /vpcs/{vpc_id}/subnets). It adds the path-id param via
+// pathID.option (preserving the family's exact schema and string-vs-number
+// choice), validates it via pathID.parse (preserving the family's error text),
+// and threads the validated id into apiCall. The fetch+filter+serialize tail is
+// shared with the other proto-list factories via finishProtoList.
+func newProtoListToolSubresource[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description string,
+	pathID protoListPathID,
+	apiCall func(ctx context.Context, client *linode.Client, pathID int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	return buildProtoSubresourceList(cfg, toolName, description, pathID.option, pathID.parse, apiCall, filterParams, assemble)
+}
+
+// newProtoListToolSubresourcePaginated is the combination of
+// newProtoListToolSubresource and newProtoListToolPaginated: a sub-resource list
+// keyed by a Required path id (e.g. /linode/instances/{linode_id}/configs) whose
+// input schema also carries page/page_size. It adds the path-id param via
+// pathID.option (preserving the family's exact schema and string-vs-number
+// choice) and the page/page_size WithNumber params with the family's exact
+// descriptions, validates the id via pathID.parse and the pagination via readPage
+// (both preserving the family's error text), and threads the validated id, page,
+// and pageSize into apiCall. The caller's path-aware client method formats the id
+// into the endpoint exactly like the existing httpListX before adding pagination.
+// The fetch+filter+serialize tail is shared with the other proto-list factories
+// via finishProtoList.
+func newProtoListToolSubresourcePaginated[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, pageDesc, pageSizeDesc string,
+	pathID protoListPathID,
+	readPage protoListPageReader,
+	apiCall func(ctx context.Context, client *linode.Client, pathID, page, pageSize int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	return buildProtoSubresourceListPaginated(cfg, toolName, description, pageDesc, pageSizeDesc,
+		pathID.option, pathID.parse, readPage, apiCall, filterParams, assemble)
+}
+
+// buildProtoSubresourceListPaginated is the shared core of the sub-resource
+// paginated proto-list factories. It is generic over the path-id type P (int or
+// string) so both newProtoListToolSubresourcePaginated and
+// newProtoListToolSubresourceStringPaginated reuse one body: add environment +
+// the path-id option + page/page_size + filter params, validate the id via parse
+// and the pagination via readPage, fetch via apiCall, and serialize through
+// finishProtoList.
+func buildProtoSubresourceListPaginated[P comparable, T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, pageDesc, pageSizeDesc string,
+	pathOption mcp.ToolOption,
+	parse func(request *mcp.CallToolRequest) (P, string),
+	readPage protoListPageReader,
+	apiCall func(ctx context.Context, client *linode.Client, pathID P, page, pageSize int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	options := protoListFilterOptions([]mcp.ToolOption{
+		mcp.WithDescription(description),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		pathOption,
+		mcp.WithNumber(paramPage, mcp.Description(pageDesc)),
+		mcp.WithNumber(paramPageSize, mcp.Description(pageSizeDesc)),
+	}, filterParams)
+
+	tool := mcp.NewTool(toolName, options...)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		id, validationMessage := parse(&request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		page, pageSize, validationMessage := readPage(&request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		items, err := apiCall(ctx, client, id, page, pageSize)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve items: %v", err)), nil
+		}
+
+		return finishProtoList(&request, items, filterParams, assemble)
+	}
+
+	return tool, handler
+}
+
+// protoListPathIDString describes a Required string path-id of a sub-resource
+// list whose id is genuinely non-numeric (e.g. tier for lke_tier_version_list,
+// which is "standard" or "enterprise"). option carries the family's exact schema
+// option and parse validates the raw argument the same way the existing handler
+// did, returning the validated string and any error message. It is the string
+// analog of protoListPathID, used when the path-id cannot be an int.
+type protoListPathIDString struct {
+	option mcp.ToolOption
+	parse  func(request *mcp.CallToolRequest) (string, string)
+}
+
+// newProtoListToolSubresourceString is newProtoListToolSubresource for
+// sub-resource lists keyed by a Required string path-id that is not numeric
+// (e.g. /lke/tiers/{tier}/versions). It adapts the string path-id onto the shared
+// buildProtoSubresourceList core so the schema, validation, and fetch+serialize
+// tail all match the int variant; only the path-id type differs.
+func newProtoListToolSubresourceString[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description string,
+	pathID protoListPathIDString,
+	apiCall func(ctx context.Context, client *linode.Client, pathID string) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	return buildProtoSubresourceList(cfg, toolName, description, pathID.option, pathID.parse, apiCall, filterParams, assemble)
+}
+
+// newProtoListToolSubresourceStringPaginated is
+// newProtoListToolSubresourcePaginated for sub-resource lists keyed by a Required
+// string path-id that is not numeric (e.g. /images/{image_id}/sharegroups, where
+// image_id is a slug like private/12345) whose input schema also carries
+// page/page_size. It adapts the string path-id onto the shared
+// buildProtoSubresourceListPaginated core so the schema, validation, pagination,
+// and fetch+serialize tail all match the int variant; only the path-id type
+// differs.
+func newProtoListToolSubresourceStringPaginated[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, pageDesc, pageSizeDesc string,
+	pathID protoListPathIDString,
+	readPage protoListPageReader,
+	apiCall func(ctx context.Context, client *linode.Client, pathID string, page, pageSize int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	return buildProtoSubresourceListPaginated(cfg, toolName, description, pageDesc, pageSizeDesc,
+		pathID.option, pathID.parse, readPage, apiCall, filterParams, assemble)
+}
+
+// buildProtoSubresourceList is the shared core of the sub-resource (non-paginated)
+// proto-list factories. It is generic over the path-id type P (int or string) so
+// both newProtoListToolSubresource and newProtoListToolSubresourceString reuse one
+// body: add environment + the path-id option + filter params, validate the id via
+// parse, fetch via apiCall, and serialize through finishProtoList.
+func buildProtoSubresourceList[P comparable, T, R proto.Message](
+	cfg *config.Config,
+	toolName, description string,
+	pathOption mcp.ToolOption,
+	parse func(request *mcp.CallToolRequest) (P, string),
+	apiCall func(ctx context.Context, client *linode.Client, pathID P) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	options := protoListFilterOptions([]mcp.ToolOption{
+		mcp.WithDescription(description),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		pathOption,
+	}, filterParams)
+
+	tool := mcp.NewTool(toolName, options...)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		id, validationMessage := parse(&request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		items, err := apiCall(ctx, client, id)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve items: %v", err)), nil
+		}
+
+		return finishProtoList(&request, items, filterParams, assemble)
+	}
+
+	return tool, handler
+}
+
+// newProtoListToolSubresource2 is newProtoListToolSubresource for sub-resource
+// lists keyed by TWO Required path ids (e.g.
+// /linode/instances/{linode_id}/configs/{config_id}/interfaces). It adds both
+// path-id params via parent.option and child.option (each preserving its
+// family's exact schema and string-vs-number choice), validates the parent then
+// the child via their parse funcs (preserving each family's error text), and
+// threads both validated ids into apiCall. The caller's path-aware client method
+// formats both ids into the endpoint exactly like the existing httpListX. The
+// fetch+filter+serialize tail is shared with the other proto-list factories via
+// finishProtoList.
+func newProtoListToolSubresource2[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description string,
+	parent, child protoListPathID,
+	apiCall func(ctx context.Context, client *linode.Client, parentID, childID int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	options := protoListFilterOptions([]mcp.ToolOption{
+		mcp.WithDescription(description),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		parent.option,
+		child.option,
+	}, filterParams)
+
+	tool := mcp.NewTool(toolName, options...)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		parentID, childID, validationMessage := parseProtoListPathIDs2(&request, parent, child)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		items, err := apiCall(ctx, client, parentID, childID)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve items: %v", err)), nil
+		}
+
+		return finishProtoList(&request, items, filterParams, assemble)
+	}
+
+	return tool, handler
+}
+
+// newProtoListToolSubresource2Paginated is newProtoListToolSubresource2 for
+// two-path-id sub-resource lists whose input schema also carries page/page_size
+// (e.g. /nodebalancers/{nodebalancer_id}/configs/{config_id}/nodes). It adds both
+// path-id params plus the page/page_size WithNumber params with the family's
+// exact descriptions, validates both ids via their parse funcs and the
+// pagination via readPage (all preserving the family's error text), and threads
+// the parent id, child id, page, and pageSize into apiCall. The fetch+filter+
+// serialize tail is shared with the other proto-list factories via
+// finishProtoList.
+func newProtoListToolSubresource2Paginated[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, pageDesc, pageSizeDesc string,
+	parent, child protoListPathID,
+	readPage protoListPageReader,
+	apiCall func(ctx context.Context, client *linode.Client, parentID, childID, page, pageSize int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	options := protoListFilterOptions([]mcp.ToolOption{
+		mcp.WithDescription(description),
+		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		parent.option,
+		child.option,
+		mcp.WithNumber(paramPage, mcp.Description(pageDesc)),
+		mcp.WithNumber(paramPageSize, mcp.Description(pageSizeDesc)),
+	}, filterParams)
+
+	tool := mcp.NewTool(toolName, options...)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		parentID, childID, validationMessage := parseProtoListPathIDs2(&request, parent, child)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		page, pageSize, validationMessage := readPage(&request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		items, err := apiCall(ctx, client, parentID, childID, page, pageSize)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve items: %v", err)), nil
+		}
+
+		return finishProtoList(&request, items, filterParams, assemble)
+	}
+
+	return tool, handler
+}
+
+// parseProtoListPathIDs2 validates the parent then the child path-id, returning
+// both validated ids or the first non-empty validation message. Both two-path-id
+// factories share it so the parent-before-child validation order (and each
+// family's error text) is identical across the paginated and non-paginated
+// variants.
+func parseProtoListPathIDs2(request *mcp.CallToolRequest, parent, child protoListPathID) (int, int, string) {
+	parentID, validationMessage := parent.parse(request)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	childID, validationMessage := child.parse(request)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return parentID, childID, ""
 }
 
 // toolHandlerFunc is the signature for tool handler functions that receive a pointer to the request.

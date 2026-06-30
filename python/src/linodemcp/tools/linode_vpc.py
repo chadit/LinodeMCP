@@ -6,8 +6,13 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import ip_pb2, vpc_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -83,43 +88,38 @@ def create_linode_vpc_list_tool() -> tuple[Tool, Capability]:
 async def handle_linode_vpc_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
-    """Handle linode_vpc_list tool request."""
+    """Handle linode_vpc_list tool request.
+
+    Label is a case-insensitive substring match; region is a case-insensitive
+    exact match, mirroring the Go list tool's containsFilter/fieldFilter.
+    """
     label_filter = arguments.get("label", "")
     region_filter = arguments.get("region", "")
 
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        vpcs = await client.list_vpcs()
-        vpcs, applied = _filter_vpcs(vpcs, label_filter, region_filter)
-        response: dict[str, Any] = {"count": len(vpcs), "vpcs": vpcs}
-        if applied:
-            response["filter"] = ", ".join(applied)
-        return response
+    def _matches(vpc: dict[str, Any]) -> bool:
+        label = str(vpc.get("label", ""))
+        if label_filter and label_filter.lower() not in label.lower():
+            return False
+        region = str(vpc.get("region", ""))
+        return not (region_filter and region.lower() != region_filter.lower())
 
-    return await execute_tool(cfg, arguments, "list VPCs", _call)
-
-
-def _filter_vpcs(
-    vpcs: list[dict[str, Any]], label_filter: str, region_filter: str
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Filter VPCs client-side to mirror the Go list tool.
-
-    Label uses a case-insensitive substring match; region uses a
-    case-insensitive exact match. Empty filters are ignored.
-    """
     applied: list[str] = []
-
     if label_filter:
-        needle = label_filter.lower()
-        vpcs = [v for v in vpcs if needle in str(v.get("label", "")).lower()]
         applied.append(f"label={label_filter}")
-
     if region_filter:
-        vpcs = [
-            v for v in vpcs if str(v.get("region", "")).lower() == region_filter.lower()
-        ]
         applied.append(f"region={region_filter}")
 
-    return vpcs, applied
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        raw = await client.get_raw("/vpcs")
+        return serialize_list_response(
+            raw,
+            "vpcs",
+            vpc_pb2.VpcListResponse(),
+            filter_value=", ".join(applied) if applied else None,
+            item_filter=_matches,
+        )
+
+    return await execute_tool(cfg, arguments, "list VPCs", _call)
 
 
 def _vpc_subnet_linode_interface_to_dict(raw: dict[str, Any]) -> dict[str, Any]:
@@ -195,7 +195,7 @@ async def handle_linode_vpc_get(
         return error_response("vpc_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return vpc_to_response_dict(await client.get_vpc(vpc_id))
+        return serialize_api_response(await client.get_vpc(vpc_id), vpc_pb2.Vpc())
 
     return await execute_tool(cfg, arguments, "get VPC", _call)
 
@@ -267,9 +267,12 @@ async def handle_linode_ipv6_range_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        response = await client.list_ipv6_ranges(page=page, page_size=page_size)
-        ranges: list[dict[str, Any]] = response.get("data", [])
-        return {"count": len(ranges), "ipv6_ranges": ranges}
+        raw = await client.list_ipv6_ranges(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "ipv6_ranges",
+            ip_pb2.IPv6RangeListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list IPv6 ranges", _call)
 
@@ -310,9 +313,12 @@ async def handle_linode_ipv6_pool_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        response = await client.list_ipv6_pools(page=page, page_size=page_size)
-        pools: list[dict[str, Any]] = response.get("data", [])
-        return {"count": len(pools), "ipv6_pools": pools}
+        raw = await client.list_ipv6_pools(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "ipv6_pools",
+            ip_pb2.IPv6PoolListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list IPv6 pools", _call)
 
@@ -338,7 +344,9 @@ async def handle_linode_vpc_ip_all_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         ips = await client.list_vpc_ips()
-        return {"count": len(ips), "ips": ips}
+        return serialize_list_response(
+            {"data": ips}, "ips", vpc_pb2.VPCIPListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list VPC IPs", _call)
 
@@ -373,7 +381,9 @@ async def handle_linode_vpc_ip_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         ips = await client.list_vpc_ip(vpc_id)
-        return {"count": len(ips), "ips": ips}
+        return serialize_list_response(
+            {"data": ips}, "ips", vpc_pb2.VPCIPListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list VPC IPs", _call)
 
@@ -407,8 +417,12 @@ async def handle_linode_vpc_subnet_list(
         return error_response("vpc_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        subnets = await client.list_vpc_subnets(vpc_id)
-        return {"count": len(subnets), "subnets": subnets}
+        raw = await client.get_raw(f"/vpcs/{vpc_id}/subnets")
+        return serialize_list_response(
+            raw,
+            "subnets",
+            vpc_pb2.VpcSubnetListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list VPC subnets", _call)
 
@@ -459,6 +473,8 @@ async def handle_linode_vpc_subnet_get(
     vpc_id, subnet_id = ids
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return vpc_subnet_to_dict(await client.get_vpc_subnet(vpc_id, subnet_id))
+        return serialize_api_response(
+            await client.get_vpc_subnet(vpc_id, subnet_id), vpc_pb2.VpcSubnet()
+        )
 
     return await execute_tool(cfg, arguments, "get VPC subnet", _call)

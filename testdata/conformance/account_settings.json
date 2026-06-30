@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.AccountSettings",
+  "description": "Account settings: three bools, two optional strings (present here), two plain strings. All fields present.",
+  "input": {
+    "backups_enabled": true,
+    "managed": false,
+    "network_helper": true,
+    "longview_subscription": "longview-3",
+    "object_storage": "active",
+    "interfaces_for_new_linodes": "legacy_config",
+    "maintenance_policy": "linode/migrate"
+  },
+  "canonical": {
+    "backups_enabled": true,
+    "managed": false,
+    "network_helper": true,
+    "longview_subscription": "longview-3",
+    "object_storage": "active",
+    "interfaces_for_new_linodes": "legacy_config",
+    "maintenance_policy": "linode/migrate"
+  }
+}

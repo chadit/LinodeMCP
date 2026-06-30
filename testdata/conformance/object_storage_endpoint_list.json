@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageEndpointListResponse",
+  "description": "linode_object_storage_endpoint_list envelope: count and the full proto ObjectStorageEndpoint elements. s3_endpoint is optional, so an endpoint without an assigned S3 hostname omits it. The tool has no filter params, so filter is omitted.",
+  "input": {
+    "count": 2,
+    "endpoints": [
+      {
+        "region": "us-sea",
+        "endpoint_type": "E1",
+        "s3_endpoint": "us-sea-1.linodeobjects.com"
+      },
+      {
+        "region": "us-ord",
+        "endpoint_type": "E0"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "endpoints": [
+      {
+        "region": "us-sea",
+        "endpoint_type": "E1",
+        "s3_endpoint": "us-sea-1.linodeobjects.com"
+      },
+      {
+        "region": "us-ord",
+        "endpoint_type": "E0"
+      }
+    ]
+  }
+}

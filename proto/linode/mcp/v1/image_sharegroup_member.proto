@@ -15,6 +15,21 @@ message ImageShareGroupMember {
   optional string expiry = 6;
 }
 
+// ImageShareGroupMemberWriteResponse is the {message, member} envelope the
+// share group member-token update tool returns.
+message ImageShareGroupMemberWriteResponse {
+  string message = 1;
+  ImageShareGroupMember member = 2;
+}
+
+// ImageShareGroupMemberListResponse is the linode_image_sharegroup_member_list
+// envelope: count, an optional filter echo, and the membership token elements.
+message ImageShareGroupMemberListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ImageShareGroupMember image_sharegroup_members = 3;
+}
+
 // ImageShareGroupMemberTokenGetInput is the input contract for
 // linode_image_sharegroup_member_token_get.
 message ImageShareGroupMemberTokenGetInput {

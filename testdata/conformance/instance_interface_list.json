@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.InstanceInterfaceListResponse",
+  "description": "linode_instance_interface_list envelope: count and the full proto InstanceInterface elements (current Interfaces generation). The element exercises the vpc oneof arm with a nested ipv4 address, default_route, and every optional scalar present. The API wraps elements under the interfaces key, but the tool output reuses interfaces as the items key. No filter params, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "interfaces": [
+      {
+        "id": 456,
+        "vpc": {
+          "subnet_id": 12,
+          "ipv4": {
+            "addresses": [
+              {"address": "10.0.0.5", "primary": true}
+            ]
+          }
+        },
+        "default_route": {"ipv4": true, "ipv6": false},
+        "firewall_id": 99,
+        "mac_address": "22:00:AB:CD:EF:02",
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00",
+        "version": 1
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "interfaces": [
+      {
+        "id": 456,
+        "vpc": {
+          "subnet_id": 12,
+          "ipv4": {
+            "addresses": [
+              {"address": "10.0.0.5", "primary": true}
+            ]
+          }
+        },
+        "default_route": {"ipv4": true, "ipv6": false},
+        "firewall_id": 99,
+        "mac_address": "22:00:AB:CD:EF:02",
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00",
+        "version": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.DatabasePostgreSQLInstanceListResponse",
+  "description": "linode_database_postgresql_instance_list envelope (/databases/postgresql/instances): count and the full proto DatabaseInstance elements under postgresql_instances. Fields absent from the API response serialize to their proto zero value (empty string, 0, false, []) under EmitDefaultValues. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "postgresql_instances": [
+      {
+        "id": 789,
+        "label": "pg-minimal",
+        "region": "ap-south",
+        "type": "g6-standard-2",
+        "engine": "postgresql",
+        "version": "16.1"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "postgresql_instances": [
+      {
+        "id": 789,
+        "status": "",
+        "label": "pg-minimal",
+        "region": "ap-south",
+        "type": "g6-standard-2",
+        "engine": "postgresql",
+        "version": "16.1",
+        "cluster_size": 0,
+        "replication_type": "",
+        "ssl_connection": false,
+        "encrypted": false,
+        "allow_list": [],
+        "created": "",
+        "updated": ""
+      }
+    ]
+  }
+}

@@ -8334,6 +8334,36 @@ class Client:
             logger.exception("HTTP error creating firewall: %s", e)
             raise NetworkError("CreateFirewall", e) from e
 
+    async def create_firewall_raw(
+        self,
+        label: str,
+        inbound_policy: str = "ACCEPT",
+        outbound_policy: str = "ACCEPT",
+    ) -> dict[str, Any]:
+        """Create a firewall and return the raw API body.
+
+        Proto-backed write tools decode this full response into the Firewall proto
+        element, so their output matches the Go implementation's write envelope.
+        """
+        validate_label(label)
+        validate_firewall_policy(inbound_policy)
+        validate_firewall_policy(outbound_policy)
+
+        body = {
+            "label": label,
+            "rules": {
+                "inbound_policy": inbound_policy,
+                "outbound_policy": outbound_policy,
+            },
+        }
+
+        try:
+            response = await self.make_request("POST", "/networking/firewalls", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateFirewall", e) from e
+
     async def update_firewall(
         self,
         firewall_id: int,
@@ -8380,6 +8410,44 @@ class Client:
             raise NetworkError("UpdateFirewall", e) from e
         except httpx.HTTPError as e:
             logger.exception("HTTP error updating firewall: %s", e)
+            raise NetworkError("UpdateFirewall", e) from e
+
+    async def update_firewall_raw(
+        self,
+        firewall_id: int,
+        label: str | None = None,
+        status: str | None = None,
+        inbound_policy: str | None = None,
+        outbound_policy: str | None = None,
+    ) -> dict[str, Any]:
+        """Update a firewall and return the raw API body.
+
+        Proto-backed write tools decode this full response into the Firewall proto
+        element, so their output matches the Go implementation's write envelope.
+        """
+        endpoint = f"/networking/firewalls/{firewall_id}"
+        if inbound_policy:
+            validate_firewall_policy(inbound_policy)
+        if outbound_policy:
+            validate_firewall_policy(outbound_policy)
+
+        body: dict[str, Any] = {}
+        if label:
+            body["label"] = label
+        if status:
+            body["status"] = status
+        if inbound_policy or outbound_policy:
+            body["rules"] = {}
+            if inbound_policy:
+                body["rules"]["inbound_policy"] = inbound_policy
+            if outbound_policy:
+                body["rules"]["outbound_policy"] = outbound_policy
+
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
             raise NetworkError("UpdateFirewall", e) from e
 
     async def delete_firewall(self, firewall_id: int) -> None:
@@ -8486,6 +8554,31 @@ class Client:
             raise NetworkError("UpdateFirewallRules", e) from e
         except httpx.HTTPError as e:
             logger.exception("HTTP error updating firewall rules: %s", e)
+            raise NetworkError("UpdateFirewallRules", e) from e
+
+    async def update_firewall_rules_raw(
+        self,
+        firewall_id: int,
+        inbound: list[dict[str, Any]],
+        outbound: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Replace a firewall's rules and return the raw API body.
+
+        Proto-backed write tools decode this full ruleset into the FirewallRules
+        proto element, so their output matches the Go implementation's write
+        envelope. Unlike update_firewall_rules, this keeps the inbound_policy and
+        outbound_policy fields the proto element carries.
+        """
+        _validate_firewall_rules_update_request(firewall_id, inbound, outbound)
+
+        endpoint = f"/networking/firewalls/{firewall_id}/rules"
+        body: dict[str, Any] = {"inbound": inbound, "outbound": outbound}
+
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
             raise NetworkError("UpdateFirewallRules", e) from e
 
     async def create_domain(
@@ -9390,12 +9483,33 @@ class Client:
             raise NetworkError("DeleteLKEServiceToken", e) from e
 
     async def get_lke_control_plane_acl(self, cluster_id: int) -> dict[str, Any]:
-        """Get the control plane ACL for an LKE cluster."""
+        """Get the control plane ACL for an LKE cluster.
+
+        The Linode API wraps the ACL under a top-level "acl" key. Unwrap it and
+        return the bare ACL so the emitted shape matches the Go implementation
+        ({"enabled": ..., "addresses": {"ipv4": [...], "ipv6": [...]}}).
+        """
         endpoint = f"/lke/clusters/{cluster_id}/control_plane_acl"
         try:
             response = await self.make_request("GET", endpoint)
-            acl: dict[str, Any] = response.json()
-            return acl
+            payload: dict[str, Any] = response.json()
+            raw_acl = payload.get("acl", payload)
+            acl: dict[str, Any] = (
+                cast("dict[str, Any]", raw_acl) if isinstance(raw_acl, dict) else {}
+            )
+            raw_addresses = acl.get("addresses")
+            addresses: dict[str, Any] = (
+                cast("dict[str, Any]", raw_addresses)
+                if isinstance(raw_addresses, dict)
+                else {}
+            )
+            return {
+                "enabled": acl.get("enabled", False),
+                "addresses": {
+                    "ipv4": addresses.get("ipv4") or [],
+                    "ipv6": addresses.get("ipv6") or [],
+                },
+            }
         except httpx.HTTPError as e:
             raise NetworkError("GetLKEControlPlaneACL", e) from e
 
@@ -10429,6 +10543,17 @@ class Client:
 
         return response
 
+    async def get_raw(self, endpoint: str) -> Any:
+        """Fetch a GET endpoint and return its decoded JSON body.
+
+        Proto-backed read tools decode this raw response straight into the proto
+        message, so their output matches the Go implementation, which decodes the
+        same full API JSON. Bypasses the typed dataclass parsing.
+        """
+        response = await self.make_request("GET", endpoint)
+        data: Any = response.json()
+        return data
+
     async def make_file_request(
         self, method: str, endpoint: str, file_path: str
     ) -> httpx.Response:
@@ -11049,6 +11174,14 @@ class RetryableClient:
     async def __aexit__(self, *args: Any) -> None:
         """Async context manager exit."""
         await self.close()
+
+    async def get_raw(self, endpoint: str) -> Any:
+        """Fetch a GET endpoint as raw decoded JSON with retry.
+
+        Used by proto-backed read handlers to serialize via the proto contract.
+        """
+        result: Any = await self._execute_with_retry(self.client.get_raw, endpoint)
+        return result
 
     async def get_profile(self) -> Profile:
         """Get Linode user profile with retry."""
@@ -13968,6 +14101,37 @@ class RetryableClient:
         )
         return result
 
+    async def create_firewall_raw(
+        self,
+        label: str,
+        inbound_policy: str = "ACCEPT",
+        outbound_policy: str = "ACCEPT",
+    ) -> dict[str, Any]:
+        """Create firewall and return the raw API body with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_firewall_raw, label, inbound_policy, outbound_policy
+        )
+        return result
+
+    async def update_firewall_raw(
+        self,
+        firewall_id: int,
+        label: str | None = None,
+        status: str | None = None,
+        inbound_policy: str | None = None,
+        outbound_policy: str | None = None,
+    ) -> dict[str, Any]:
+        """Update firewall and return the raw API body with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_firewall_raw,
+            firewall_id,
+            label,
+            status,
+            inbound_policy,
+            outbound_policy,
+        )
+        return result
+
     async def delete_firewall(self, firewall_id: int) -> None:
         """Delete firewall with retry."""
         await self._execute_with_retry(self.client.delete_firewall, firewall_id)
@@ -13993,6 +14157,21 @@ class RetryableClient:
         """Update firewall rules with retry."""
         result: dict[str, list[dict[str, Any]]] = await self._execute_with_retry(
             self.client.update_firewall_rules,
+            firewall_id,
+            inbound,
+            outbound,
+        )
+        return result
+
+    async def update_firewall_rules_raw(
+        self,
+        firewall_id: int,
+        inbound: list[dict[str, Any]],
+        outbound: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Replace firewall rules and return the raw API body with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_firewall_rules_raw,
             firewall_id,
             inbound,
             outbound,

@@ -3,11 +3,13 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -29,23 +31,27 @@ const (
 
 // NewLinodeFirewallListTool creates a tool for listing firewalls.
 func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newListTool(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_firewall_list",
 		"Lists all Cloud Firewalls on your account. Can filter by status or label.",
-		func(ctx context.Context, client *linode.Client) ([]linode.Firewall, error) {
-			return client.ListFirewalls(ctx)
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.Firewall, error) {
+			return client.ListFirewallsProto(ctx)
 		},
-		[]listFilterParam[linode.Firewall]{
+		[]listFilterParam[*linodev1.Firewall]{
 			fieldFilter("status", "Filter by firewall status (enabled, disabled, deleted)",
-				func(f linode.Firewall) string { return f.Status }),
+				func(f *linodev1.Firewall) string { return f.GetStatus() }),
 			containsFilter("label_contains", "Filter firewalls by label containing this string (case-insensitive)",
-				func(f linode.Firewall) string { return f.Label }),
+				func(f *linodev1.Firewall) string { return f.GetLabel() }),
 		},
-		"firewalls",
+		firewallListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func firewallListResponse(items []*linodev1.Firewall, count int32, filter *string) *linodev1.FirewallListResponse {
+	return &linodev1.FirewallListResponse{Count: count, Filter: filter, Firewalls: items}
 }
 
 // NewLinodeFirewallGetTool creates a tool for retrieving a single Cloud Firewall by ID.
@@ -84,19 +90,25 @@ func handleLinodeFirewallGetRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeVLANsListTool creates a tool for listing VLANs.
 func NewLinodeVLANsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return newLinodeIPv6ListTool(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_vlan_list",
 		"Lists VLANs on the account with optional pagination.",
-		func(ctx context.Context, client *linode.Client, page, pageSize int) (*linode.PaginatedResponse[linode.VLAN], string) {
-			vlans, err := client.ListVLANs(ctx, page, pageSize)
-			if err != nil {
-				return nil, err.Error()
-			}
-
-			return vlans, ""
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.VLAN, error) {
+			return client.ListVLANsProto(ctx, page, pageSize)
 		},
+		ipv6ListPaginationFromTool,
+		nil,
+		vlanListResponse,
 	)
+
+	return tool, profiles.CapRead, handler
+}
+
+func vlanListResponse(items []*linodev1.VLAN, count int32, filter *string) *linodev1.VLANListResponse {
+	return &linodev1.VLANListResponse{Count: count, Filter: filter, Vlans: items}
 }
 
 // NewLinodeVLANDeleteTool creates a tool for deleting one VLAN.
@@ -307,22 +319,23 @@ func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.Ca
 
 	req := linode.FirewallRules{Inbound: inbound, Outbound: outbound}
 
-	rules, err := client.UpdateFirewallRules(ctx, firewallID, &req)
+	rules, err := client.UpdateFirewallRulesProto(ctx, firewallID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(formatFirewallRulesUpdateError(err)), nil
 	}
 
-	response := struct {
-		Message    string                `json:"message"`
-		FirewallID int                   `json:"firewall_id"`
-		Rules      *linode.FirewallRules `json:"rules"`
-	}{
+	var firewallID32 int32
+	if firewallID >= math.MinInt32 && firewallID <= math.MaxInt32 {
+		firewallID32 = int32(firewallID)
+	}
+
+	response := &linodev1.FirewallRulesWriteResponse{
 		Message:    fmt.Sprintf("Firewall %d rules updated successfully", firewallID),
-		FirewallID: firewallID,
+		FirewallId: firewallID32,
 		Rules:      rules,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func handleLinodeFirewallRulesUpdateDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -376,37 +389,27 @@ func firewallRuleSetFromTool(request *mcp.CallToolRequest, name string) ([]linod
 
 // NewLinodeFirewallRuleVersionsListTool creates a tool for retrieving rule-version history for a Cloud Firewall.
 func NewLinodeFirewallRuleVersionsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_firewall_rule_version_list",
 		"Retrieves the rule-version history payload for a Cloud Firewall.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
+		protoListPathID{
+			option: mcp.WithNumber(paramFirewallID, mcp.Required(),
 				mcp.Description("The ID of the firewall whose rule versions should be listed.")),
+			parse: firewallDeviceListFirewallIDFromTool,
 		},
-		handleLinodeFirewallRuleVersionsListRequest,
+		func(ctx context.Context, client *linode.Client, firewallID int) ([]*linodev1.FirewallRuleVersion, error) {
+			return client.ListFirewallRuleVersionsProto(ctx, firewallID)
+		},
+		nil,
+		firewallRuleVersionListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeFirewallRuleVersionsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	firewallID := request.GetInt(paramFirewallID, 0)
-	if firewallID <= 0 {
-		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	firewall, err := client.ListFirewallRuleVersions(ctx, firewallID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_rule_version_list: %v", err)), nil
-	}
-
-	return MarshalToolResponse(firewall)
+func firewallRuleVersionListResponse(items []*linodev1.FirewallRuleVersion, count int32, filter *string) *linodev1.FirewallRuleVersionListResponse {
+	return &linodev1.FirewallRuleVersionListResponse{Count: count, Filter: filter, FirewallRuleVersions: items}
 }
 
 // NewLinodeFirewallRuleVersionGetTool creates a tool for retrieving one Cloud Firewall rule version.
@@ -453,49 +456,59 @@ func handleLinodeFirewallRuleVersionGetRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	rule, err := client.GetFirewallRuleVersion(ctx, firewallID, version)
+	ruleVersion, err := client.GetFirewallRuleVersionProto(ctx, firewallID, version)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_rule_version_get: %v", err)), nil
 	}
 
-	return MarshalToolResponse(rule)
+	return MarshalProtoToolResponse(ruleVersion)
 }
 
 // NewLinodeFirewallDevicesListTool creates a tool for listing devices assigned to a Cloud Firewall.
 func NewLinodeFirewallDevicesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_firewall_device_list",
 		"Lists devices assigned to a Cloud Firewall.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		protoListPathID{
+			option: mcp.WithNumber(paramFirewallID, mcp.Required(),
 				mcp.Description("The ID of the firewall whose assigned devices should be listed.")),
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+			parse: firewallDeviceListFirewallIDFromTool,
 		},
-		handleLinodeFirewallDevicesListRequest,
+		firewallDeviceListPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, firewallID, page, pageSize int) ([]*linodev1.FirewallDevice, error) {
+			return client.ListFirewallDevicesProto(ctx, firewallID, page, pageSize)
+		},
+		nil,
+		firewallDeviceListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeFirewallDevicesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+// firewallDeviceListFirewallIDFromTool validates the firewall_id path param the
+// same way the non-proto handler did (a non-positive id returns
+// ErrFirewallIDPositive).
+func firewallDeviceListFirewallIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	firewallID := request.GetInt(paramFirewallID, 0)
 	if firewallID <= 0 {
-		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+		return 0, linode.ErrFirewallIDPositive.Error()
 	}
 
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+	return firewallID, ""
+}
 
-	devices, err := client.ListFirewallDevices(ctx, firewallID, request.GetInt("page", 0), request.GetInt("page_size", 0))
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_device_list: %v", err)), nil
-	}
+// firewallDeviceListPaginationFromTool reads page/page_size the same way the
+// non-proto handler did: a plain GetInt defaulting to 0, with no bounds
+// validation, so the runtime request matches the previous behavior exactly.
+func firewallDeviceListPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	return request.GetInt("page", 0), request.GetInt("page_size", 0), ""
+}
 
-	return MarshalToolResponse(devices)
+func firewallDeviceListResponse(items []*linodev1.FirewallDevice, count int32, filter *string) *linodev1.FirewallDeviceListResponse {
+	return &linodev1.FirewallDeviceListResponse{Count: count, Filter: filter, Devices: items}
 }
 
 // NewLinodeFirewallDeviceGetTool creates a tool for retrieving one device assigned to a Cloud Firewall.
@@ -741,32 +754,32 @@ func handleLinodeFirewallSettingsListRequest(ctx context.Context, request *mcp.C
 
 // NewLinodeFirewallTemplatesListTool creates a tool for listing reusable firewall templates.
 func NewLinodeFirewallTemplatesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_firewall_template_list",
 		"Lists reusable Cloud Firewall templates for VPC and public interfaces.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.FirewallTemplate, error) {
+			return client.ListFirewallTemplatesProto(ctx, page, pageSize)
 		},
-		handleLinodeFirewallTemplatesListRequest,
+		firewallTemplateListPaginationFromTool,
+		nil,
+		firewallTemplateListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeFirewallTemplatesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+// firewallTemplateListPaginationFromTool reads page/page_size the same way the
+// non-proto handler did: a plain GetInt defaulting to 0, with no bounds
+// validation, so the runtime request matches the previous behavior exactly.
+func firewallTemplateListPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	return request.GetInt("page", 0), request.GetInt("page_size", 0), ""
+}
 
-	templates, err := client.ListFirewallTemplates(ctx, request.GetInt("page", 0), request.GetInt("page_size", 0))
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_template_list: %v", err)), nil
-	}
-
-	return MarshalToolResponse(templates)
+func firewallTemplateListResponse(items []*linodev1.FirewallTemplate, count int32, filter *string) *linodev1.FirewallTemplateListResponse {
+	return &linodev1.FirewallTemplateListResponse{Count: count, Filter: filter, FirewallTemplates: items}
 }
 
 // NewLinodeFirewallTemplateGetTool creates a tool for retrieving a reusable firewall template by slug.
@@ -798,12 +811,12 @@ func handleLinodeFirewallTemplateGetRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	template, err := client.GetFirewallTemplate(ctx, slug, request.GetInt("page", 0), request.GetInt("page_size", 0))
+	template, err := client.GetFirewallTemplateProto(ctx, slug, request.GetInt("page", 0), request.GetInt("page_size", 0))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_template_get: %v", err)), nil
 	}
 
-	return MarshalToolResponse(template)
+	return MarshalProtoToolResponse(template)
 }
 
 func validateFirewallTemplateSlug(slug string) string {

@@ -3,10 +3,12 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/netip"
 	"slices"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -50,12 +52,16 @@ func handleLinodeNetworkingIPListRequest(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ips, err := client.ListNetworkingIPs(ctx, skipIPv6RDNS)
+	ips, err := client.ListNetworkingIPsProto(ctx, skipIPv6RDNS)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve networking IPs: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve items: %v", err)), nil
 	}
 
-	return MarshalToolResponse(ips)
+	return finishProtoList(request, ips, nil, networkingIPListResponse)
+}
+
+func networkingIPListResponse(items []*linodev1.IPAddress, count int32, filter *string) *linodev1.NetworkingIPListResponse {
+	return &linodev1.NetworkingIPListResponse{Count: count, Filter: filter, Ips: items}
 }
 
 // NewLinodeNetworkingIPGetTool creates a tool for retrieving one account-level IP address.
@@ -217,20 +223,15 @@ func handleLinodeNetworkingIPAllocateRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ipAddr, err := client.AllocateNetworkingIP(ctx, req)
+	ipAddr, err := client.AllocateNetworkingIPProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to allocate networking IP: %v", err)), nil
 	}
 
-	response := struct {
-		Message string            `json:"message"`
-		IP      *linode.IPAddress `json:"ip"`
-	}{
-		Message: fmt.Sprintf("IP %s allocated for Linode %d", ipAddr.Address, req.LinodeID),
-		IP:      ipAddr,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.IPAddressWriteResponse{
+		Message: fmt.Sprintf("IP %s allocated for Linode %d", ipAddr.GetAddress(), req.LinodeID),
+		Ip:      ipAddr,
+	})
 }
 
 // NewLinodeNetworkingIPAssignTool creates a tool for assigning IP addresses to Linodes.
@@ -268,8 +269,11 @@ type networkingIPWriteSpec struct {
 // runNetworkingIPWrite is the shared dry-run/confirm/execute flow for the
 // bulk networking-IP mutations. The caller parses+validates its own request
 // type and hands in the resulting validation message plus an execute closure
-// that captures the parsed request. validationMessage is checked in both the
-// dry-run and real paths so a malformed call fails the same way either way.
+// that captures the parsed request. The assign and share endpoints return an
+// opaque body, so the execute closure performs the action and the result builder
+// produces the id-echo proto response from the already-parsed request.
+// validationMessage is checked in both the dry-run and real paths so a malformed
+// call fails the same way either way.
 func runNetworkingIPWrite(
 	ctx context.Context,
 	request *mcp.CallToolRequest,
@@ -277,6 +281,7 @@ func runNetworkingIPWrite(
 	spec *networkingIPWriteSpec,
 	validationMessage string,
 	execute func(ctx context.Context, client *linode.Client) (map[string]any, error),
+	buildResponse func() proto.Message,
 ) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
 		if validationMessage != "" {
@@ -299,18 +304,14 @@ func runNetworkingIPWrite(
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	response, err := execute(ctx, client)
-	if err != nil {
+	// The assign and share endpoints return an opaque body; the helper performs
+	// the action and discards it, then builds the id-echo response from the
+	// already-parsed request.
+	if _, err := execute(ctx, client); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", spec.FailureLabel, err)), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message  string         `json:"message"`
-		Response map[string]any `json:"response"`
-	}{
-		Message:  spec.SuccessMessage,
-		Response: response,
-	})
+	return MarshalProtoToolResponse(buildResponse())
 }
 
 func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -324,6 +325,8 @@ func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.Cal
 		FailureLabel:   "Failed to assign networking IPs",
 	}, validationMessage, func(ctx context.Context, client *linode.Client) (map[string]any, error) {
 		return client.AssignNetworkingIPs(ctx, req)
+	}, func() proto.Message {
+		return networkingIPAssignResponse("Networking IP assignments updated", req)
 	})
 }
 
@@ -359,6 +362,8 @@ func handleLinodeNetworkingIPv4AssignRequest(ctx context.Context, request *mcp.C
 		FailureLabel:   "Failed to assign networking IPv4s",
 	}, validationMessage, func(ctx context.Context, client *linode.Client) (map[string]any, error) {
 		return client.AssignNetworkingIPv4s(ctx, req)
+	}, func() proto.Message {
+		return networkingIPAssignResponse("Networking IPv4 assignments updated", req)
 	})
 }
 
@@ -394,6 +399,8 @@ func handleLinodeNetworkingIPv4ShareRequest(ctx context.Context, request *mcp.Ca
 		FailureLabel:   "Failed to share networking IPs",
 	}, validationMessage, func(ctx context.Context, client *linode.Client) (map[string]any, error) {
 		return client.ShareNetworkingIPv4s(ctx, req)
+	}, func() proto.Message {
+		return networkingIPShareResponse("Networking IP sharing updated", req)
 	})
 }
 
@@ -431,7 +438,49 @@ func handleLinodeNetworkingIPShareRequest(ctx context.Context, request *mcp.Call
 		FailureLabel:   "Failed to share networking IPs",
 	}, validationMessage, func(ctx context.Context, client *linode.Client) (map[string]any, error) {
 		return client.ShareNetworkingIPs(ctx, req)
+	}, func() proto.Message {
+		return networkingIPShareResponse("Networking IP sharing updated", req)
 	})
+}
+
+// linodeIDToInt32 narrows a Linode ID to the proto int32 field, returning 0 for
+// the rare out-of-range value so the bounded conversion never overflows.
+func linodeIDToInt32(id int) int32 {
+	if id < math.MinInt32 || id > math.MaxInt32 {
+		return 0
+	}
+
+	return int32(id)
+}
+
+// networkingIPAssignResponse builds the id-echo proto for the IP assign tools
+// from the parsed request. The assign endpoint returns an opaque body, so the
+// response echoes the region and the assignment list the caller submitted.
+func networkingIPAssignResponse(message string, req linode.AssignNetworkingIPsRequest) *linodev1.NetworkingIPAssignWriteResponse {
+	assignments := make([]*linodev1.IPAssignment, 0, len(req.Assignments))
+	for _, assignment := range req.Assignments {
+		assignments = append(assignments, &linodev1.IPAssignment{
+			Address:  assignment.Address,
+			LinodeId: linodeIDToInt32(assignment.LinodeID),
+		})
+	}
+
+	return &linodev1.NetworkingIPAssignWriteResponse{
+		Message:     message,
+		Region:      req.Region,
+		Assignments: assignments,
+	}
+}
+
+// networkingIPShareResponse builds the id-echo proto for the IP share tools from
+// the parsed request. The share endpoint returns an opaque body, so the response
+// echoes the primary Linode and the shared address list the caller submitted.
+func networkingIPShareResponse(message string, req linode.ShareNetworkingIPsRequest) *linodev1.NetworkingIPShareWriteResponse {
+	return &linodev1.NetworkingIPShareWriteResponse{
+		Message:  message,
+		LinodeId: linodeIDToInt32(req.LinodeID),
+		Ips:      req.IPs,
+	}
 }
 
 func networkingIPAssignRequestFromTool(args map[string]any) (linode.AssignNetworkingIPsRequest, string) {

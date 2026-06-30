@@ -1,0 +1,54 @@
+{
+  "message": "linode.mcp.v1.AccountEvent",
+  "description": "Account event with all nullable scalars present and both entity messages populated. The entity id is a google.protobuf.Value passthrough.",
+  "input": {
+    "action": "linode_boot",
+    "created": "2024-06-01T00:00:00",
+    "duration": 12.5,
+    "entity": {
+      "id": 123,
+      "label": "web-1",
+      "type": "linode",
+      "url": "/linode/instances/123"
+    },
+    "id": 555,
+    "message": "boot completed",
+    "percent_complete": 100,
+    "rate": "1/s",
+    "secondary_entity": {
+      "id": "config-1",
+      "label": "config",
+      "type": "linode_config",
+      "url": "/linode/instances/123/configs/1"
+    },
+    "seen": true,
+    "status": "finished",
+    "time_remaining": "0s",
+    "username": "alice"
+  },
+  "canonical": {
+    "action": "linode_boot",
+    "created": "2024-06-01T00:00:00",
+    "duration": 12.5,
+    "entity": {
+      "id": 123,
+      "label": "web-1",
+      "type": "linode",
+      "url": "/linode/instances/123"
+    },
+    "id": 555,
+    "message": "boot completed",
+    "percent_complete": 100,
+    "rate": "1/s",
+    "secondary_entity": {
+      "id": "config-1",
+      "label": "config",
+      "type": "linode_config",
+      "url": "/linode/instances/123/configs/1"
+    },
+    "seen": true,
+    "status": "finished",
+    "time_remaining": "0s",
+    "username": "alice"
+  }
+}

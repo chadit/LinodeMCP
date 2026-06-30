@@ -8,6 +8,12 @@ from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    database_engine_pb2,
+    database_instance_pb2,
+    database_pb2,
+    database_ssl_pb2,
+)
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -22,6 +28,10 @@ from linodemcp.tools.helpers import (
     error_response,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -399,13 +409,18 @@ def _required_positive_int_argument(arguments: dict[str, Any], name: str) -> int
     return value
 
 
-def database_engine_to_response_dict(engine: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Managed Database engine API dict to proto-canonical form."""
-    return {
-        "id": engine.get("id") or "",
-        "engine": engine.get("engine") or "",
-        "version": engine.get("version") or "",
-    }
+def _database_action_response(message: str, instance_id: int) -> dict[str, Any]:
+    """Build the {message, instance_id} id-echo for empty-body action tools.
+
+    The credentials reset, patch, suspend, and resume endpoints return no useful
+    body, so the canonical response echoes only the confirmation message and the
+    instance ID. Routing it through the proto keeps Python byte-identical to Go's
+    MarshalProtoToolResponse output.
+    """
+    return serialize_api_response(
+        {"message": message, "instance_id": instance_id},
+        database_instance_pb2.DatabaseInstanceActionWriteResponse(),
+    )
 
 
 def create_linode_database_engine_get_tool() -> tuple[Tool, Capability]:
@@ -415,44 +430,6 @@ def create_linode_database_engine_get_tool() -> tuple[Tool, Capability]:
         description="Gets details for a Managed Databases engine.",
         inputSchema=schema("linode.mcp.v1.DatabaseEngineGetInput"),
     ), Capability.Read
-
-
-def database_type_engine_to_response_dict(engine: dict[str, Any]) -> dict[str, Any]:
-    """Shape one database type engine entry to proto-canonical form."""
-    price: dict[str, Any] = engine.get("price") or {}
-    return {
-        "quantity": engine.get("quantity", 0),
-        "price": {
-            "hourly": price.get("hourly", 0.0),
-            "monthly": price.get("monthly", 0.0),
-        },
-    }
-
-
-def database_type_to_response_dict(db_type: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Managed Database type API dict to proto-canonical form."""
-    engines: dict[str, Any] = db_type.get("engines") or {}
-    return {
-        "id": db_type.get("id", ""),
-        "label": db_type.get("label", ""),
-        "class": db_type.get("class", ""),
-        "disk": db_type.get("disk", 0),
-        "memory": db_type.get("memory", 0),
-        "vcpus": db_type.get("vcpus", 0),
-        "deprecated": db_type.get("deprecated", False),
-        "engines": {
-            "mysql": [
-                database_type_engine_to_response_dict(entry)
-                for entry in cast("list[dict[str, Any]]", engines.get("mysql") or [])
-            ],
-            "postgresql": [
-                database_type_engine_to_response_dict(entry)
-                for entry in cast(
-                    "list[dict[str, Any]]", engines.get("postgresql") or []
-                )
-            ],
-        },
-    }
 
 
 def create_linode_database_type_get_tool() -> tuple[Tool, Capability]:
@@ -1000,8 +977,9 @@ async def handle_linode_database_engine_get(
         return error_response(error or "engine_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return database_engine_to_response_dict(
-            await client.get_database_engine(engine_id)
+        return serialize_api_response(
+            await client.get_database_engine(engine_id),
+            database_engine_pb2.DatabaseEngine(),
         )
 
     return await execute_tool(
@@ -1024,8 +1002,9 @@ async def handle_linode_database_type_get(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return database_type_to_response_dict(
-            await client.get_database_type(type_id, page=page, page_size=page_size)
+        return serialize_api_response(
+            await client.get_database_type(type_id, page=page, page_size=page_size),
+            database_pb2.DatabaseType(),
         )
 
     return await execute_tool(
@@ -1117,11 +1096,6 @@ def create_linode_database_mysql_instance_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def database_ssl_to_response_dict(ssl: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Managed Database SSL API dict to proto-canonical form."""
-    return {"ca_certificate": ssl.get("ca_certificate") or ""}
-
-
 def create_linode_database_mysql_instance_ssl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_database_mysql_instance_ssl_get tool."""
     return Tool(
@@ -1140,8 +1114,9 @@ async def handle_linode_database_mysql_instance_ssl_get(
         return error_response(error or "instance_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return database_ssl_to_response_dict(
-            await client.get_database_mysql_instance_ssl(instance_id)
+        return serialize_api_response(
+            await client.get_database_mysql_instance_ssl(instance_id),
+            database_ssl_pb2.DatabaseSSL(),
         )
 
     return await execute_tool(
@@ -1358,7 +1333,18 @@ async def handle_linode_database_mysql_instance_create(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_mysql_database_instance(payload)
+        instance = await client.create_mysql_database_instance(payload)
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getters on the API body: label "", id 0.
+                "message": (
+                    f"Managed Database instance '{instance.get('label', '')}'"
+                    f" (ID: {instance.get('id', 0)}) created"
+                ),
+                "database_instance": instance,
+            },
+            database_instance_pb2.DatabaseInstanceWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create MySQL Managed Database", _call)
 
@@ -1390,7 +1376,19 @@ async def handle_linode_database_postgresql_instance_create(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_postgresql_database_instance(payload)
+        instance = await client.create_postgresql_database_instance(payload)
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getters on the API body: label "", id 0.
+                "message": (
+                    f"PostgreSQL Managed Database instance"
+                    f" '{instance.get('label', '')}'"
+                    f" (ID: {instance.get('id', 0)}) created"
+                ),
+                "database_instance": instance,
+            },
+            database_instance_pb2.DatabaseInstanceWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "create PostgreSQL Managed Database", _call
@@ -1473,8 +1471,13 @@ async def handle_linode_database_mysql_instance_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_mysql_database_instances(
+        data = await client.list_mysql_database_instances(
             page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            data,
+            "mysql_instances",
+            database_instance_pb2.DatabaseMySQLInstanceListResponse(),
         )
 
     return await execute_tool(
@@ -1510,7 +1513,10 @@ async def handle_linode_database_mysql_instance_suspend(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.suspend_mysql_database_instance(instance_id)
+        await client.suspend_mysql_database_instance(instance_id)
+        return _database_action_response(
+            f"Managed Database instance {instance_id} suspend started", instance_id
+        )
 
     return await execute_tool(cfg, arguments, "suspend MySQL Managed Database", _call)
 
@@ -1544,7 +1550,18 @@ async def handle_linode_database_mysql_instance_update(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_mysql_database_instance(instance_id, payload)
+        instance = await client.update_mysql_database_instance(instance_id, payload)
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getters on the API body: label "", id 0.
+                "message": (
+                    f"Managed Database instance '{instance.get('label', '')}'"
+                    f" (ID: {instance.get('id', 0)}) updated"
+                ),
+                "database_instance": instance,
+            },
+            database_instance_pb2.DatabaseInstanceWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"update MySQL Managed Database {instance_id}", _call
@@ -1579,7 +1596,11 @@ async def handle_linode_database_postgresql_instance_suspend(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.suspend_postgresql_database_instance(instance_id)
+        await client.suspend_postgresql_database_instance(instance_id)
+        return _database_action_response(
+            f"PostgreSQL Managed Database instance {instance_id} suspend started",
+            instance_id,
+        )
 
     return await execute_tool(
         cfg, arguments, "suspend PostgreSQL Managed Database", _call
@@ -1617,7 +1638,21 @@ async def handle_linode_database_postgresql_instance_update(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_postgresql_database_instance(instance_id, payload)
+        instance = await client.update_postgresql_database_instance(
+            instance_id, payload
+        )
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getters on the API body: label "", id 0.
+                "message": (
+                    f"PostgreSQL Managed Database instance"
+                    f" '{instance.get('label', '')}'"
+                    f" (ID: {instance.get('id', 0)}) updated"
+                ),
+                "database_instance": instance,
+            },
+            database_instance_pb2.DatabaseInstanceWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"update PostgreSQL Managed Database {instance_id}", _call
@@ -1635,8 +1670,13 @@ async def handle_linode_database_postgresql_instance_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_postgresql_database_instances(
+        data = await client.list_postgresql_database_instances(
             page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            data,
+            "postgresql_instances",
+            database_instance_pb2.DatabasePostgreSQLInstanceListResponse(),
         )
 
     return await execute_tool(
@@ -1740,7 +1780,10 @@ async def handle_linode_database_mysql_instance_patch(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.patch_mysql_database_instance(instance_id)
+        await client.patch_mysql_database_instance(instance_id)
+        return _database_action_response(
+            f"Managed Database instance {instance_id} patch started", instance_id
+        )
 
     return await execute_tool(cfg, arguments, "patch MySQL Managed Database", _call)
 
@@ -1774,7 +1817,11 @@ async def handle_linode_database_postgresql_instance_patch(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.patch_postgresql_database_instance(instance_id)
+        await client.patch_postgresql_database_instance(instance_id)
+        return _database_action_response(
+            f"PostgreSQL Managed Database instance {instance_id} patch started",
+            instance_id,
+        )
 
     return await execute_tool(
         cfg, arguments, "patch PostgreSQL Managed Database", _call
@@ -1792,7 +1839,12 @@ async def handle_linode_database_instance_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_database_instances(page=page, page_size=page_size)
+        data = await client.list_database_instances(page=page, page_size=page_size)
+        return serialize_list_response(
+            data,
+            "database_instances",
+            database_instance_pb2.DatabaseInstanceListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode database instances", _call)
 
@@ -1831,7 +1883,12 @@ async def handle_linode_database_mysql_instance_credentials_reset(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.reset_mysql_database_credentials(instance_id)
+        # The reset rotates the password, but the rotated credential never lands
+        # in the tool output: the canonical response is the id-echo only.
+        await client.reset_mysql_database_credentials(instance_id)
+        return _database_action_response(
+            "MySQL Managed Database credentials reset", instance_id
+        )
 
     return await execute_tool(
         cfg, arguments, "reset MySQL Managed Database credentials", _call
@@ -1874,7 +1931,12 @@ async def handle_linode_database_postgresql_instance_credentials_reset(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.reset_postgresql_database_credentials(instance_id)
+        # The reset rotates the password, but the rotated credential never lands
+        # in the tool output: the canonical response is the id-echo only.
+        await client.reset_postgresql_database_credentials(instance_id)
+        return _database_action_response(
+            "PostgreSQL Managed Database credentials reset", instance_id
+        )
 
     return await execute_tool(
         cfg, arguments, "reset PostgreSQL Managed Database credentials", _call
@@ -2009,7 +2071,10 @@ async def handle_linode_database_mysql_instance_resume(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.resume_mysql_database_instance(instance_id)
+        await client.resume_mysql_database_instance(instance_id)
+        return _database_action_response(
+            f"Managed Database instance {instance_id} resume started", instance_id
+        )
 
     return await execute_tool(
         cfg, arguments, f"resume MySQL Managed Database {instance_id}", _call
@@ -2043,7 +2108,11 @@ async def handle_linode_database_postgresql_instance_resume(
         return error_response("Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.resume_postgresql_database_instance(instance_id)
+        await client.resume_postgresql_database_instance(instance_id)
+        return _database_action_response(
+            f"PostgreSQL Managed Database instance {instance_id} resume started",
+            instance_id,
+        )
 
     return await execute_tool(
         cfg, arguments, f"resume PostgreSQL Managed Database {instance_id}", _call
@@ -2091,8 +2160,9 @@ async def handle_linode_database_postgresql_instance_ssl_get(
         return error_response(error or "instance_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return database_ssl_to_response_dict(
-            await client.get_database_postgresql_instance_ssl(instance_id)
+        return serialize_api_response(
+            await client.get_database_postgresql_instance_ssl(instance_id),
+            database_ssl_pb2.DatabaseSSL(),
         )
 
     return await execute_tool(
@@ -2131,15 +2201,11 @@ async def handle_linode_database_engine_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_database_engines(page=page, page_size=page_size)
-        engines = data.get("data", [])
-        return {
-            "message": "Database engines listed",
-            "count": len(engines),
-            "engines": engines,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        return serialize_list_response(
+            data,
+            "database_engines",
+            database_engine_pb2.DatabaseEngineListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list database engines", _call)
 
@@ -2156,14 +2222,10 @@ async def handle_linode_database_type_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.list_database_types(page=page, page_size=page_size)
-        database_types = data.get("data", [])
-        return {
-            "message": "Database types listed",
-            "count": len(database_types),
-            "types": database_types,
-            "page": data.get("page"),
-            "pages": data.get("pages"),
-            "results": data.get("results"),
-        }
+        return serialize_list_response(
+            data,
+            "database_types",
+            database_pb2.DatabaseTypeListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list database types", _call)

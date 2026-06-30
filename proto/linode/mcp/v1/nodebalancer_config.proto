@@ -32,6 +32,23 @@ message NodeBalancerConfig {
   NodeBalancerNodesStatus nodes_status = 17;
 }
 
+// NodeBalancerConfigListResponse is the linode_nodebalancer_config_list
+// envelope: a count, an optional filter echo, and the configs of one
+// NodeBalancer.
+message NodeBalancerConfigListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated NodeBalancerConfig configs = 3;
+}
+
+// NodeBalancerConfigWriteResponse is the {message, config} envelope the
+// NodeBalancer config write tools (create, update, rebuild) return: a
+// human-readable confirmation plus the affected config.
+message NodeBalancerConfigWriteResponse {
+  string message = 1;
+  NodeBalancerConfig config = 2;
+}
+
 // NodeBalancerConfigGetInput is the input contract for
 // linode_nodebalancer_config_get.
 message NodeBalancerConfigGetInput {

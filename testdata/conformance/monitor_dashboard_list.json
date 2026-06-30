@@ -1,0 +1,44 @@
+{
+  "message": "linode.mcp.v1.MonitorDashboardListResponse",
+  "description": "linode_monitor_dashboard_list envelope: count and the full proto MonitorDashboard elements. Each dashboard carries scalar metadata (id, label, type, service_type) plus a widgets array; the per-widget shape is modeled as google.protobuf.Struct so any widget fields round-trip verbatim without guessing. The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "dashboards": [
+      {
+        "id": 30000,
+        "label": "Resource Usage",
+        "type": "standard",
+        "service_type": "dbaas",
+        "widgets": [
+          {
+            "metric": "cpu_usage",
+            "unit": "percent",
+            "aggregate_function": "avg",
+            "chart_type": "line",
+            "size": 6
+          }
+        ]
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "dashboards": [
+      {
+        "id": 30000,
+        "label": "Resource Usage",
+        "type": "standard",
+        "service_type": "dbaas",
+        "widgets": [
+          {
+            "metric": "cpu_usage",
+            "unit": "percent",
+            "aggregate_function": "avg",
+            "chart_type": "line",
+            "size": 6
+          }
+        ]
+      }
+    ]
+  }
+}

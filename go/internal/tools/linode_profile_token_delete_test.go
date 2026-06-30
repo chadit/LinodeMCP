@@ -118,8 +118,12 @@ func TestLinodeProfileTokenDeleteToolSuccess(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Profile token revoked successfully") {
-		t.Errorf("textContent.Text does not contain %v", "Profile token revoked successfully")
+	if !strings.Contains(textContent.Text, "Profile token 12345 revoked successfully") {
+		t.Errorf("textContent.Text does not contain %v", "Profile token 12345 revoked successfully")
+	}
+
+	if !strings.Contains(textContent.Text, "\"token_id\"") {
+		t.Errorf("response %q does not echo token_id", textContent.Text)
 	}
 }
 

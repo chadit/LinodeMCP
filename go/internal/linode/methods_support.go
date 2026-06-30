@@ -31,6 +31,27 @@ func (c *Client) httpCreateSupportTicket(ctx context.Context, request *CreateSup
 	return &ticket, nil
 }
 
+// httpCreateSupportTicketProto opens a support ticket and decodes the created
+// ticket into a proto message for the proto-backed write path.
+func (c *Client) httpCreateSupportTicketProto(ctx context.Context, request *CreateSupportTicketRequest) (*linodev1.SupportTicket, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointSupportTickets, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateSupportTicket", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ticket := &linodev1.SupportTicket{}
+	if err := c.handleProtoResponse(resp, ticket); err != nil {
+		return nil, err
+	}
+
+	return ticket, nil
+}
+
 // httpGetSupportTicket retrieves one support ticket by ID.
 func (c *Client) httpGetSupportTicket(ctx context.Context, ticketID int) (SupportTicket, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -119,6 +140,29 @@ func (c *Client) httpCreateSupportTicketReply(ctx context.Context, ticketID int,
 	return &reply, nil
 }
 
+// httpCreateSupportTicketReplyProto creates a reply for a support ticket and
+// decodes the created reply into a proto message for the proto-backed write path.
+func (c *Client) httpCreateSupportTicketReplyProto(ctx context.Context, ticketID int, request *CreateSupportTicketReplyRequest) (*linodev1.SupportTicketReply, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/replies"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateSupportTicketReply", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	reply := &linodev1.SupportTicketReply{}
+	if err := c.handleProtoResponse(resp, reply); err != nil {
+		return nil, err
+	}
+
+	return reply, nil
+}
+
 // httpListSupportTickets retrieves support tickets.
 
 func (c *Client) httpListSupportTickets(ctx context.Context, page, pageSize int) (*PaginatedResponse[SupportTicket], error) {
@@ -140,6 +184,14 @@ func (c *Client) httpListSupportTickets(ctx context.Context, page, pageSize int)
 	}
 
 	return &tickets, nil
+}
+
+// httpListSupportTicketsProto retrieves support tickets as proto messages for the
+// proto-backed list path. page/page_size flow through withPaginationQuery, so the
+// request matches httpListSupportTickets.
+func (c *Client) httpListSupportTicketsProto(ctx context.Context, page, pageSize int) ([]*linodev1.SupportTicket, error) {
+	return listProtoElementsPaginated(ctx, c, "ListSupportTickets", endpointSupportTickets, page, pageSize,
+		func() *linodev1.SupportTicket { return &linodev1.SupportTicket{} })
 }
 
 // httpCloseSupportTicket closes one support ticket.
@@ -178,4 +230,15 @@ func (c *Client) httpListSupportTicketReplies(ctx context.Context, ticketID, pag
 	}
 
 	return &replies, nil
+}
+
+// httpListSupportTicketRepliesProto retrieves a support ticket's replies as proto
+// messages for the proto-backed list path. The endpoint formats the ticket id
+// exactly like httpListSupportTicketReplies, then page/page_size flow through
+// withPaginationQuery, so the request matches.
+func (c *Client) httpListSupportTicketRepliesProto(ctx context.Context, ticketID, page, pageSize int) ([]*linodev1.SupportTicketReply, error) {
+	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/replies"
+
+	return listProtoElementsPaginated(ctx, c, "ListSupportTicketReplies", endpoint, page, pageSize,
+		func() *linodev1.SupportTicketReply { return &linodev1.SupportTicketReply{} })
 }

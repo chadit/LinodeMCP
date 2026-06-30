@@ -4,8 +4,10 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import type_pb2, volume_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.proto_response import serialize_list_response
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -119,7 +121,11 @@ async def handle_linode_volume_type_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         volume_types = await client.list_volume_types()
-        return {"count": len(volume_types), "volume_types": volume_types}
+        return serialize_list_response(
+            {"data": volume_types},
+            "volume_types",
+            type_pb2.VolumeTypeListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode volume types", _call)
 
@@ -131,30 +137,27 @@ async def handle_linode_volume_list(
     region_filter: str = arguments.get("region", "")
     label_contains: str = arguments.get("label_contains", "")
 
+    def _matches(volume: dict[str, Any]) -> bool:
+        region = str(volume.get("region", ""))
+        if region_filter and region.lower() != region_filter.lower():
+            return False
+        label = str(volume.get("label", ""))
+        return not (label_contains and label_contains.lower() not in label.lower())
+
+    filters: list[str] = []
+    if region_filter:
+        filters.append(f"region={region_filter}")
+    if label_contains:
+        filters.append(f"label_contains={label_contains}")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        volumes = await client.list_volumes()
-
-        if region_filter:
-            volumes = [v for v in volumes if v.region.lower() == region_filter.lower()]
-
-        if label_contains:
-            volumes = [v for v in volumes if label_contains.lower() in v.label.lower()]
-
-        volumes_data = [volume_to_dict(v) for v in volumes]
-
-        response: dict[str, Any] = {
-            "count": len(volumes),
-            "volumes": volumes_data,
-        }
-
-        filters: list[str] = []
-        if region_filter:
-            filters.append(f"region={region_filter}")
-        if label_contains:
-            filters.append(f"label_contains={label_contains}")
-        if filters:
-            response["filter"] = ", ".join(filters)
-
-        return response
+        raw = await client.get_raw("/volumes")
+        return serialize_list_response(
+            raw,
+            "volumes",
+            volume_pb2.VolumeListResponse(),
+            filter_value=", ".join(filters) if filters else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode volumes", _call)

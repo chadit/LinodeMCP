@@ -1,0 +1,18 @@
+{
+  "message": "linode.mcp.v1.InstanceInterfaceSettings",
+  "description": "Linode instance interface settings with default_route and network_helper present.",
+  "input": {
+    "default_route": {
+      "ipv4": true,
+      "ipv6": false
+    },
+    "network_helper": true
+  },
+  "canonical": {
+    "default_route": {
+      "ipv4": true,
+      "ipv6": false
+    },
+    "network_helper": true
+  }
+}

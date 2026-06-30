@@ -173,6 +173,12 @@ func TestLinodeProfileTokenCreateToolSuccess(t *testing.T) {
 	if !strings.Contains(textContent.Text, profileTokenSecretFixture) {
 		t.Errorf("textContent.Text does not contain %v", profileTokenSecretFixture)
 	}
+
+	// The one-time token secret is returned by design and the response carries
+	// the save-the-secret warning byte-identically to the Python implementation.
+	if !strings.Contains(textContent.Text, "The token below is shown ONLY ONCE") {
+		t.Errorf("response %q does not carry the save-the-secret warning", textContent.Text)
+	}
 }
 
 func TestLinodeProfileTokenCreateToolApiErrorReturnsToolError(t *testing.T) {

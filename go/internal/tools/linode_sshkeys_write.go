@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
@@ -72,20 +73,17 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request *mcp.CallToolR
 		SSHKey: sshKey,
 	}
 
-	createdKey, err := client.CreateSSHKey(ctx, req)
+	createdKey, err := client.CreateSSHKeyProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create SSH key: %v", err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		SSHKey  *linode.SSHKey `json:"ssh_key"`
-	}{
-		Message: fmt.Sprintf("SSH key '%s' created successfully", createdKey.Label),
-		SSHKey:  createdKey,
-	}
-
-	return MarshalToolResponse(response)
+	// The ssh_key field carries the public key, which is public information and
+	// kept in full.
+	return MarshalProtoToolResponse(&linodev1.SSHKeyWriteResponse{
+		Message: fmt.Sprintf("SSH key '%s' (ID: %d) created successfully", createdKey.GetLabel(), createdKey.GetId()),
+		SshKey:  createdKey,
+	})
 }
 
 // NewLinodeSSHKeyUpdateTool creates a tool for updating an SSH key.
@@ -147,20 +145,17 @@ func handleLinodeSSHKeyUpdateRequest(ctx context.Context, request *mcp.CallToolR
 
 	req := linode.UpdateSSHKeyRequest{Label: label}
 
-	updatedKey, err := client.UpdateSSHKey(ctx, sshKeyID, req)
+	updatedKey, err := client.UpdateSSHKeyProto(ctx, sshKeyID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("SSH key %d failed to change label: %v", sshKeyID, err)), nil
 	}
 
-	response := struct {
-		Message string         `json:"message"`
-		SSHKey  *linode.SSHKey `json:"ssh_key"`
-	}{
-		Message: fmt.Sprintf("SSH key %d updated successfully", sshKeyID),
-		SSHKey:  updatedKey,
-	}
-
-	return MarshalToolResponse(response)
+	// The ssh_key field carries the public key, which is public information and
+	// kept in full.
+	return MarshalProtoToolResponse(&linodev1.SSHKeyWriteResponse{
+		Message: fmt.Sprintf("SSH key '%s' (ID: %d) updated successfully", updatedKey.GetLabel(), updatedKey.GetId()),
+		SshKey:  updatedKey,
+	})
 }
 
 // NewLinodeSSHKeyDeleteTool creates a tool for deleting an SSH key.

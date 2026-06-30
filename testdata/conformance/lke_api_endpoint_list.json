@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.LKEAPIEndpointListResponse",
+  "description": "linode_lke_api_endpoint_list envelope: count and the full proto LKEAPIEndpoint elements. The tool has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "endpoints": [
+      {"endpoint": "https://abc123.us-east.lke.example.com:443"}
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "endpoints": [
+      {"endpoint": "https://abc123.us-east.lke.example.com:443"}
+    ]
+  }
+}

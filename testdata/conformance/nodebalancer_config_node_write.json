@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerConfigNodeWriteResponse",
+  "description": "NodeBalancer config node write envelope: a confirmation message plus the full backend node element.",
+  "input": {
+    "message": "NodeBalancer node 9876 created successfully for NodeBalancer 1234 config 4567",
+    "node": {
+      "id": 9876,
+      "address": "192.168.1.10:80",
+      "label": "backend-1",
+      "status": "UP",
+      "weight": 50,
+      "mode": "accept",
+      "nodebalancer_id": 1234,
+      "config_id": 4567
+    }
+  },
+  "canonical": {
+    "message": "NodeBalancer node 9876 created successfully for NodeBalancer 1234 config 4567",
+    "node": {
+      "id": 9876,
+      "address": "192.168.1.10:80",
+      "label": "backend-1",
+      "status": "UP",
+      "weight": 50,
+      "mode": "accept",
+      "nodebalancer_id": 1234,
+      "config_id": 4567
+    }
+  }
+}

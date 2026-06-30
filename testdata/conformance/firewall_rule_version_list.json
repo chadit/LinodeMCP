@@ -1,0 +1,98 @@
+{
+  "message": "linode.mcp.v1.FirewallRuleVersionListResponse",
+  "description": "linode_firewall_rule_version_list envelope: count and the full proto FirewallRuleVersion elements for one firewall. GET /networking/firewalls/{firewallId}/history returns a paginated list of version snapshots, each a firewall-shaped object plus a top-level version that increments whenever the rules change, with the rules carried in the shared FirewallRules message. The tool keys off a required firewall_id path-id and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 2,
+    "firewall_rule_versions": [
+      {
+        "id": 123,
+        "label": "web-firewall",
+        "status": "enabled",
+        "version": 1,
+        "rules": {
+          "inbound": [],
+          "inbound_policy": "ACCEPT",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": [],
+        "created": "2025-01-01T00:00:00",
+        "updated": "2025-01-01T00:00:00"
+      },
+      {
+        "id": 123,
+        "label": "web-firewall",
+        "status": "enabled",
+        "version": 2,
+        "rules": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": {
+                "ipv4": ["0.0.0.0/0"],
+                "ipv6": []
+              },
+              "label": "allow-ssh",
+              "description": "Allow inbound SSH"
+            }
+          ],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": ["prod"],
+        "created": "2025-01-01T00:00:00",
+        "updated": "2025-01-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "firewall_rule_versions": [
+      {
+        "id": 123,
+        "label": "web-firewall",
+        "status": "enabled",
+        "version": 1,
+        "rules": {
+          "inbound": [],
+          "inbound_policy": "ACCEPT",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": [],
+        "created": "2025-01-01T00:00:00",
+        "updated": "2025-01-01T00:00:00"
+      },
+      {
+        "id": 123,
+        "label": "web-firewall",
+        "status": "enabled",
+        "version": 2,
+        "rules": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": {
+                "ipv4": ["0.0.0.0/0"],
+                "ipv6": []
+              },
+              "label": "allow-ssh",
+              "description": "Allow inbound SSH"
+            }
+          ],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": ["prod"],
+        "created": "2025-01-01T00:00:00",
+        "updated": "2025-01-02T00:00:00"
+      }
+    ]
+  }
+}

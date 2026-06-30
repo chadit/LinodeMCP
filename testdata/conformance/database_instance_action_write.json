@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.DatabaseInstanceActionWriteResponse",
+  "description": "Database instance action id-echo shared by credentials reset, patch, suspend, and resume: a confirmation message plus the affected instance id. These endpoints return no useful body, so the id echoes the request and the rotated credential never reaches the output.",
+  "input": {
+    "message": "Managed Database instance 123 patch started",
+    "instance_id": 123
+  },
+  "canonical": {
+    "message": "Managed Database instance 123 patch started",
+    "instance_id": 123
+  }
+}

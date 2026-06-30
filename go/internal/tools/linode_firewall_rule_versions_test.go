@@ -12,7 +12,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
@@ -50,15 +49,11 @@ func TestLinodeFirewallRuleVersionsListToolDefinition(t *testing.T) {
 func TestLinodeFirewallRuleVersionsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	firewall := linode.Firewall{
-		ID:     123,
-		Label:  "web-firewall",
-		Status: statusEnabled,
-		Rules: linode.FirewallRules{
-			Version:     2,
-			Fingerprint: "997dd135",
-		},
-	}
+	const page = `{"data":[` +
+		`{"id":123,"label":"web-firewall","status":"enabled","version":1,` +
+		`"rules":{"inbound_policy":"ACCEPT","outbound_policy":"ACCEPT"}},` +
+		`{"id":123,"label":"web-firewall","status":"enabled","version":2,` +
+		`"rules":{"inbound_policy":"DROP","outbound_policy":"ACCEPT"}}]}`
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -69,14 +64,10 @@ func TestLinodeFirewallRuleVersionsListToolSuccess(t *testing.T) {
 			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/networking/firewalls/123/history")
 		}
 
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(firewall); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if _, writeErr := w.Write([]byte(page)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
 	t.Cleanup(srv.Close)
@@ -104,12 +95,22 @@ func TestLinodeFirewallRuleVersionsListToolSuccess(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "web-firewall") {
-		t.Errorf("textContent.Text does not contain %v", "web-firewall")
+	var out struct {
+		Count                int `json:"count"`
+		FirewallRuleVersions []struct {
+			Version int `json:"version"`
+		} `json:"firewall_rule_versions"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
 	}
 
-	if !strings.Contains(textContent.Text, "997dd135") {
-		t.Errorf("textContent.Text does not contain %v", "997dd135")
+	if out.Count != 2 {
+		t.Errorf("count = %d, want 2", out.Count)
+	}
+
+	if len(out.FirewallRuleVersions) != 2 || out.FirewallRuleVersions[1].Version != 2 {
+		t.Errorf("firewall_rule_versions = %+v, want two snapshots ending at version 2", out.FirewallRuleVersions)
 	}
 }
 
@@ -210,8 +211,8 @@ func TestLinodeFirewallRuleVersionsListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve linode_firewall_rule_version_list") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve linode_firewall_rule_version_list")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
 	}
 }
 
@@ -252,7 +253,14 @@ func TestLinodeFirewallRuleVersionGetToolDefinition(t *testing.T) {
 func TestLinodeFirewallRuleVersionGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	firewall := linode.Firewall{ID: 123, Label: "web-firewall", Rules: linode.FirewallRules{Version: 2, Fingerprint: "997dd135", Inbound: []linode.FirewallRule{{Action: policyAccept, Protocol: "TCP", Ports: "443", Label: "allow-https"}}}}
+	// The /history/rules/{version} endpoint returns one rule-version snapshot:
+	// a firewall-shaped object with a top-level version and the full ruleset.
+	// The handler decodes it into the FirewallRuleVersion proto element, the same
+	// element the rule-version LIST path emits.
+	const ruleVersionBody = `{"id":123,"label":"web-firewall","status":"enabled","version":2,` +
+		`"created":"2025-01-01T00:00:00","updated":"2025-01-02T00:00:00","tags":[],` +
+		`"rules":{"inbound_policy":"ACCEPT","outbound_policy":"ACCEPT",` +
+		`"inbound":[{"action":"ACCEPT","protocol":"TCP","ports":"443","label":"allow-https"}]}}`
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -269,7 +277,7 @@ func TestLinodeFirewallRuleVersionGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(firewall); err != nil {
+		if _, err := w.Write([]byte(ruleVersionBody)); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -302,8 +310,8 @@ func TestLinodeFirewallRuleVersionGetToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", "web-firewall")
 	}
 
-	if !strings.Contains(textContent.Text, "997dd135") {
-		t.Errorf("textContent.Text does not contain %v", "997dd135")
+	if !strings.Contains(textContent.Text, `"version"`) {
+		t.Errorf("textContent.Text does not contain %v", `"version"`)
 	}
 
 	if !strings.Contains(textContent.Text, "allow-https") {

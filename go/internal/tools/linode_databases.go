@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -47,42 +48,52 @@ const (
 
 	dbMessagePrefixMySQL      = "Managed Database"
 	dbMessagePrefixPostgreSQL = "PostgreSQL Managed Database"
-
-	responseKeyDatabaseInstances = "database_instances"
 )
 
 // NewLinodeDatabaseEngineListTool creates a tool for listing Managed Database engines.
 func NewLinodeDatabaseEngineListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_database_engine_list",
-		mcp.WithDescription("Lists available Managed Database engines with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists available Managed Database engines with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseEngine, error) {
+			return client.ListDatabaseEnginesProto(ctx, page, pageSize)
+		},
+		databaseEnginesPaginationFromTool,
+		nil,
+		databaseEngineListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabaseEnginesListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
+func databaseEngineListResponse(items []*linodev1.DatabaseEngine, count int32, filter *string) *linodev1.DatabaseEngineListResponse {
+	return &linodev1.DatabaseEngineListResponse{Count: count, Filter: filter, DatabaseEngines: items}
+}
+
 // NewLinodeDatabaseTypeListTool creates a tool for listing Managed Database node types.
 func NewLinodeDatabaseTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_database_type_list",
-		mcp.WithDescription("Lists available Managed Database node types with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists available Managed Database node types with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseType, error) {
+			return client.ListDatabaseTypesProto(ctx, page, pageSize)
+		},
+		databaseTypesPaginationFromTool,
+		nil,
+		databaseTypeListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabaseTypesListRequest(ctx, &request, cfg)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func databaseTypeListResponse(items []*linodev1.DatabaseType, count int32, filter *string) *linodev1.DatabaseTypeListResponse {
+	return &linodev1.DatabaseTypeListResponse{Count: count, Filter: filter, DatabaseTypes: items}
 }
 
 // NewLinodeDatabaseTypeGetTool creates a tool for getting one Managed Database node type.
@@ -130,57 +141,80 @@ func NewLinodeDatabasePostgreSQLConfigGetTool(cfg *config.Config) (mcp.Tool, pro
 	return tool, profiles.CapRead, handler
 }
 
-// NewLinodeDatabaseInstanceListTool creates a tool for listing Managed Database instances.
+// NewLinodeDatabaseInstanceListTool creates a tool for listing MySQL Managed
+// Database instances. The tool name keeps its legacy
+// linode_database_mysql_instance_list value; output is the proto-canonical
+// {count, mysql_instances} envelope.
 func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_database_mysql_instance_list",
-		mcp.WithDescription("Lists Managed Database instances with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists Managed Database instances with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
+			return client.ListDatabaseInstancesProto(ctx, page, pageSize)
+		},
+		databaseInstancesPaginationFromTool,
+		nil,
+		databaseMySQLInstanceListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabaseInstancesListRequest(ctx, &request, cfg)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func databaseMySQLInstanceListResponse(items []*linodev1.DatabaseInstance, count int32, filter *string) *linodev1.DatabaseMySQLInstanceListResponse {
+	return &linodev1.DatabaseMySQLInstanceListResponse{Count: count, Filter: filter, MysqlInstances: items}
 }
 
 // NewLinodeDatabaseAllInstancesListTool creates a tool for listing Managed
 // Database instances across every engine. Unlike the MySQL and PostgreSQL
 // list tools, this one hits the cross-engine /databases/instances endpoint.
 func NewLinodeDatabaseAllInstancesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_database_instance_list",
-		mcp.WithDescription("Lists Managed Database instances across all engines with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists Managed Database instances across all engines with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
+			return client.ListAllDatabaseInstancesProto(ctx, page, pageSize)
+		},
+		databaseInstancesPaginationFromTool,
+		nil,
+		databaseInstanceListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabaseAllInstancesListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-// NewLinodeDatabasePostgreSQLInstanceListTool creates a tool for listing PostgreSQL Managed Database instances.
+func databaseInstanceListResponse(items []*linodev1.DatabaseInstance, count int32, filter *string) *linodev1.DatabaseInstanceListResponse {
+	return &linodev1.DatabaseInstanceListResponse{Count: count, Filter: filter, DatabaseInstances: items}
+}
+
+// NewLinodeDatabasePostgreSQLInstanceListTool creates a tool for listing
+// PostgreSQL Managed Database instances. Output is the proto-canonical
+// {count, postgresql_instances} envelope.
 func NewLinodeDatabasePostgreSQLInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_database_postgresql_instance_list",
-		mcp.WithDescription("Lists PostgreSQL Managed Database instances with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists PostgreSQL Managed Database instances with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
+			return client.ListDatabasePostgreSQLInstancesProto(ctx, page, pageSize)
+		},
+		databaseInstancesPaginationFromTool,
+		nil,
+		databasePostgreSQLInstanceListResponse,
 	)
 
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handleDatabasePostgreSQLInstancesListRequest(ctx, &request, cfg)
-	}
-
 	return tool, profiles.CapRead, handler
+}
+
+func databasePostgreSQLInstanceListResponse(items []*linodev1.DatabaseInstance, count int32, filter *string) *linodev1.DatabasePostgreSQLInstanceListResponse {
+	return &linodev1.DatabasePostgreSQLInstanceListResponse{Count: count, Filter: filter, PostgresqlInstances: items}
 }
 
 // NewLinodeDatabaseInstanceGetTool creates a tool for getting one MySQL Managed Database instance.
@@ -816,22 +850,17 @@ func handleDatabaseInstanceCredentialsResetRequest(ctx context.Context, request 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	credentials, err := client.ResetDatabaseInstanceCredentials(ctx, instanceID)
-	if err != nil {
+	// The reset POST rotates the password and returns the new credentials, but
+	// the canonical response is the id-echo only: the secret never lands in the
+	// tool output. Discard the returned credentials.
+	if _, err := client.ResetDatabaseInstanceCredentials(ctx, instanceID); err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to reset MySQL Managed Database credentials: %v", err)), nil
 	}
 
-	response := struct {
-		Message     string                      `json:"message"`
-		InstanceID  int                         `json:"instance_id"`
-		Credentials *linode.DatabaseCredentials `json:"credentials"`
-	}{
-		Message:     "MySQL Managed Database credentials reset",
-		InstanceID:  instanceID,
-		Credentials: credentials,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.DatabaseInstanceActionWriteResponse{
+		Message:    "MySQL Managed Database credentials reset",
+		InstanceId: linodeIDToInt32(instanceID),
+	})
 }
 
 func handleDatabasePostgreSQLInstanceCredentialsResetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -860,53 +889,10 @@ func handleDatabasePostgreSQLInstanceCredentialsResetRequest(ctx context.Context
 		return mcp.NewToolResultError(formatDatabasePostgreSQLInstanceCredentialsResetError(err)), nil
 	}
 
-	response := struct {
-		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.DatabaseInstanceActionWriteResponse{
 		Message:    "PostgreSQL Managed Database credentials reset",
-		InstanceID: instanceID,
-	}
-
-	return MarshalToolResponse(response)
-}
-
-func handleDatabaseEnginesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := databaseEnginesPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	engines, err := client.ListDatabaseEngines(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database engines: %v", err)), nil
-	}
-
-	return FormatListResponse(engines, nil, "database_engines")
-}
-
-func handleDatabaseTypesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := databaseTypesPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	types, err := client.ListDatabaseTypes(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database types: %v", err)), nil
-	}
-
-	return FormatListResponse(types, nil, "database_types")
+		InstanceId: linodeIDToInt32(instanceID),
+	})
 }
 
 func handleDatabaseTypeGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -933,63 +919,6 @@ func handleDatabaseTypeGetRequest(ctx context.Context, request *mcp.CallToolRequ
 	return MarshalProtoToolResponse(databaseType)
 }
 
-func handleDatabaseInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := databaseInstancesPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	instances, err := client.ListDatabaseInstances(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database instances: %v", err)), nil
-	}
-
-	return FormatListResponse(instances, nil, responseKeyDatabaseInstances)
-}
-
-func handleDatabaseAllInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := databaseInstancesPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	instances, err := client.ListAllDatabaseInstances(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Managed Database instances across engines: %v", err)), nil
-	}
-
-	return FormatListResponse(instances, nil, responseKeyDatabaseInstances)
-}
-
-func handleDatabasePostgreSQLInstancesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := databaseInstancesPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	instances, err := client.ListDatabasePostgreSQLInstances(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve PostgreSQL Managed Database instances: %v", err)), nil
-	}
-
-	return FormatListResponse(instances, nil, responseKeyDatabaseInstances)
-}
-
 // runDatabaseInstanceCreate validates create args, previews on dry_run
 // (nil-fetch POST, current_state null since the resource does not exist
 // yet), then gates on confirm and creates. Shared by the MySQL and
@@ -999,7 +928,7 @@ func runDatabaseInstanceCreate(
 	request *mcp.CallToolRequest,
 	cfg *config.Config,
 	toolName, instancesPath, confirmMessage, messagePrefix string,
-	create func(context.Context, *linode.Client, *linode.CreateDatabaseInstanceRequest) (*linode.DatabaseInstance, error),
+	create func(context.Context, *linode.Client, *linode.CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error),
 ) (*mcp.CallToolResult, error) {
 	req, validationMessage := databaseInstanceCreateRequestFromTool(request)
 	if validationMessage != "" {
@@ -1024,15 +953,10 @@ func runDatabaseInstanceCreate(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create %s instance: %v", messagePrefix, err)), nil
 	}
 
-	response := struct {
-		Message  string                   `json:"message"`
-		Instance *linode.DatabaseInstance `json:"database_instance"`
-	}{
-		Message:  fmt.Sprintf("%s instance '%s' (ID: %d) created", messagePrefix, instance.Label, instance.ID),
-		Instance: instance,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.DatabaseInstanceWriteResponse{
+		Message:          fmt.Sprintf("%s instance '%s' (ID: %d) created", messagePrefix, instance.GetLabel(), instance.GetId()),
+		DatabaseInstance: instance,
+	})
 }
 
 func handleDatabaseInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -1040,8 +964,8 @@ func handleDatabaseInstanceCreateRequest(ctx context.Context, request *mcp.CallT
 		"linode_database_mysql_instance_create", dbMySQLInstancesPath,
 		"This creates a billable Managed Database instance. Set confirm=true to proceed.",
 		dbMessagePrefixMySQL,
-		func(ctx context.Context, c *linode.Client, req *linode.CreateDatabaseInstanceRequest) (*linode.DatabaseInstance, error) {
-			return c.CreateDatabaseInstance(ctx, req)
+		func(ctx context.Context, c *linode.Client, req *linode.CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+			return c.CreateDatabaseInstanceProto(ctx, req)
 		})
 }
 
@@ -1050,8 +974,8 @@ func handleDatabasePostgreSQLInstanceCreateRequest(ctx context.Context, request 
 		"linode_database_postgresql_instance_create", dbPostgreSQLInstancesPath,
 		"This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed.",
 		dbMessagePrefixPostgreSQL,
-		func(ctx context.Context, c *linode.Client, req *linode.CreateDatabaseInstanceRequest) (*linode.DatabaseInstance, error) {
-			return c.CreateDatabasePostgreSQLInstance(ctx, req)
+		func(ctx context.Context, c *linode.Client, req *linode.CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+			return c.CreateDatabasePostgreSQLInstanceProto(ctx, req)
 		})
 }
 
@@ -1066,8 +990,8 @@ func handleDatabaseInstanceUpdateRequest(ctx context.Context, request *mcp.CallT
 		func(ctx context.Context, client *linode.Client, instanceID int) (any, error) {
 			return client.GetDatabaseInstance(ctx, instanceID)
 		},
-		func(ctx context.Context, client *linode.Client, instanceID int, req *linode.UpdateDatabaseInstanceRequest) (*linode.DatabaseInstance, error) {
-			return client.UpdateDatabaseInstance(ctx, instanceID, req)
+		func(ctx context.Context, client *linode.Client, instanceID int, req *linode.UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+			return client.UpdateDatabaseInstanceProto(ctx, instanceID, req)
 		},
 		dbMessagePrefixMySQL,
 		formatDatabaseInstanceUpdateError,
@@ -1085,8 +1009,8 @@ func handleDatabasePostgreSQLInstanceUpdateRequest(ctx context.Context, request 
 		func(ctx context.Context, client *linode.Client, instanceID int) (any, error) {
 			return client.GetDatabasePostgreSQLInstance(ctx, instanceID)
 		},
-		func(ctx context.Context, client *linode.Client, instanceID int, req *linode.UpdateDatabaseInstanceRequest) (*linode.DatabaseInstance, error) {
-			return client.UpdateDatabasePostgreSQLInstance(ctx, instanceID, req)
+		func(ctx context.Context, client *linode.Client, instanceID int, req *linode.UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+			return client.UpdateDatabasePostgreSQLInstanceProto(ctx, instanceID, req)
 		},
 		dbMessagePrefixPostgreSQL,
 		formatDatabasePostgreSQLInstanceUpdateError,
@@ -1099,7 +1023,7 @@ func handleDatabaseInstanceUpdateRequestWithClient(
 	cfg *config.Config,
 	toolName, instancesPath, confirmMessage string,
 	fetchState func(context.Context, *linode.Client, int) (any, error),
-	update func(context.Context, *linode.Client, int, *linode.UpdateDatabaseInstanceRequest) (*linode.DatabaseInstance, error),
+	update func(context.Context, *linode.Client, int, *linode.UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error),
 	messagePrefix string,
 	formatError func(error) string,
 ) (*mcp.CallToolResult, error) {
@@ -1140,15 +1064,10 @@ func handleDatabaseInstanceUpdateRequestWithClient(
 		return mcp.NewToolResultError(formatError(err)), nil
 	}
 
-	response := struct {
-		Message  string                   `json:"message"`
-		Instance *linode.DatabaseInstance `json:"database_instance"`
-	}{
-		Message:  fmt.Sprintf("%s instance '%s' (ID: %d) updated", messagePrefix, instance.Label, instance.ID),
-		Instance: instance,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.DatabaseInstanceWriteResponse{
+		Message:          fmt.Sprintf("%s instance '%s' (ID: %d) updated", messagePrefix, instance.GetLabel(), instance.GetId()),
+		DatabaseInstance: instance,
+	})
 }
 
 func handleDatabaseInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -1261,9 +1180,9 @@ func runDatabaseInstanceAction(ctx context.Context, request *mcp.CallToolRequest
 		return mcp.NewToolResultError(spec.FormatError(instanceID, err)), nil
 	}
 
-	return MarshalToolResponse(map[string]any{
-		responseKeyMessage:      spec.MessagePrefix + " instance " + strconv.Itoa(instanceID) + " " + spec.Verb + " started",
-		paramDatabaseInstanceID: instanceID,
+	return MarshalProtoToolResponse(&linodev1.DatabaseInstanceActionWriteResponse{
+		Message:    spec.MessagePrefix + " instance " + strconv.Itoa(instanceID) + " " + spec.Verb + " started",
+		InstanceId: linodeIDToInt32(instanceID),
 	})
 }
 

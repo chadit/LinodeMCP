@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerConfigNodeListResponse",
+  "description": "linode_nodebalancer_config_node_list envelope: count and the full proto NodeBalancerConfigNode elements (every scalar field present). Paginated two-path-id tool (nodebalancer_id + config_id), runtime never echoes a filter, so filter is omitted. Items key is nodes.",
+  "input": {
+    "count": 1,
+    "nodes": [
+      {
+        "id": 9876,
+        "address": "192.168.1.10:80",
+        "label": "backend-1",
+        "status": "UP",
+        "weight": 50,
+        "mode": "accept",
+        "nodebalancer_id": 1234,
+        "config_id": 4567
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "nodes": [
+      {
+        "id": 9876,
+        "address": "192.168.1.10:80",
+        "label": "backend-1",
+        "status": "UP",
+        "weight": 50,
+        "mode": "accept",
+        "nodebalancer_id": 1234,
+        "config_id": 4567
+      }
+    ]
+  }
+}

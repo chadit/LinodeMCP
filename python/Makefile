@@ -62,7 +62,7 @@ lint: _ensure-hooks
 	@$(RUFF) format --check src/ tests/
 	@echo "Running mypy type check..."
 	@if [ -x "$(MYPY)" ]; then \
-		$(MYPY) --ignore-missing-imports src/ tests/; \
+		$(MYPY) src/ tests/; \
 	else \
 		echo "[warn] mypy not installed, skipping type check"; \
 	fi

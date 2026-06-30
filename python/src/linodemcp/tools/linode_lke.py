@@ -3,12 +3,27 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    lke_api_endpoint_pb2,
+    lke_dashboard_pb2,
+    lke_kubeconfig_pb2,
+    lke_node_pb2,
+    lke_pb2,
+    lke_pool_pb2,
+    lke_tier_version_pb2,
+    lke_version_pb2,
+    type_pb2,
+)
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 
@@ -78,28 +93,31 @@ async def handle_linode_lke_cluster_list(
     """Handle linode_lke_cluster_list tool request."""
     label_filter = arguments.get("label", "")
 
+    def _matches(cluster: dict[str, Any]) -> bool:
+        if not label_filter:
+            return True
+        return label_filter.lower() in str(cluster.get("label", "")).lower()
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        clusters = await client.list_lke_clusters()
-        response: dict[str, Any]
-        if label_filter:
-            needle = label_filter.lower()
-            clusters = [
-                c for c in clusters if needle in str(c.get("label", "")).lower()
-            ]
-            response = {
-                "count": len(clusters),
-                "clusters": clusters,
-                "filter": f"label={label_filter}",
-            }
-        else:
-            response = {"count": len(clusters), "clusters": clusters}
-        return response
+        raw = await client.get_raw("/lke/clusters")
+        return serialize_list_response(
+            raw,
+            "clusters",
+            lke_pb2.LKEClusterListResponse(),
+            filter_value=f"label={label_filter}" if label_filter else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "list LKE clusters", _call)
 
 
 def lke_cluster_to_response_dict(cluster: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw LKE cluster API dict to proto-canonical LKECluster form."""
+    """Shape a raw LKE cluster API dict to proto-canonical LKECluster form.
+
+    Retained for the LKE cluster create/update write tools, which embed the
+    shaped cluster in their {message, cluster} envelope. The read tool itself
+    now serializes through serialize_api_response.
+    """
     control_plane: dict[str, Any] = cluster.get("control_plane") or {}
     return {
         "id": cluster.get("id", 0),
@@ -138,7 +156,9 @@ async def handle_linode_lke_cluster_get(
         return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return lke_cluster_to_response_dict(await client.get_lke_cluster(cluster_id))
+        return serialize_api_response(
+            await client.get_lke_cluster(cluster_id), lke_pb2.LKECluster()
+        )
 
     return await execute_tool(cfg, arguments, "get LKE cluster", _call)
 
@@ -173,52 +193,13 @@ async def handle_linode_lke_pool_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         pools = await client.list_lke_node_pools(cluster_id)
-        return {"count": len(pools), "pools": pools}
+        return serialize_list_response(
+            {"data": pools},
+            "pools",
+            lke_pool_pb2.LKENodePoolListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list LKE node pools", _call)
-
-
-def _lke_node_pool_disk_to_response_dict(disk: dict[str, Any]) -> dict[str, Any]:
-    """Shape a node pool ephemeral disk to proto-canonical form."""
-    return {"size": disk.get("size", 0), "type": disk.get("type", "")}
-
-
-def _lke_node_pool_autoscaler_to_response_dict(
-    autoscaler: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape a node pool autoscaler to proto-canonical form."""
-    return {
-        "enabled": autoscaler.get("enabled", False),
-        "min": autoscaler.get("min", 0),
-        "max": autoscaler.get("max", 0),
-    }
-
-
-def lke_node_pool_to_response_dict(pool: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw LKE node pool API dict to proto-canonical form.
-
-    autoscaler is a nullable message (omitted when null); disks/nodes/tags are
-    repeated (always lists). nodes reuse the LKENode shaper.
-    """
-    body: dict[str, Any] = {
-        "id": pool.get("id", 0),
-        "cluster_id": pool.get("cluster_id", 0),
-        "type": pool.get("type", ""),
-        "count": pool.get("count", 0),
-        "disks": [
-            _lke_node_pool_disk_to_response_dict(disk)
-            for disk in cast("list[dict[str, Any]]", pool.get("disks") or [])
-        ],
-        "nodes": [
-            lke_node_to_response_dict(node)
-            for node in cast("list[dict[str, Any]]", pool.get("nodes") or [])
-        ],
-        "tags": pool.get("tags") or [],
-    }
-    autoscaler = pool.get("autoscaler")
-    if autoscaler is not None:
-        body["autoscaler"] = _lke_node_pool_autoscaler_to_response_dict(autoscaler)
-    return body
 
 
 def create_linode_lke_pool_get_tool() -> tuple[Tool, Capability]:
@@ -250,20 +231,12 @@ async def handle_linode_lke_pool_get(
         return error_response("pool_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return lke_node_pool_to_response_dict(
-            await client.get_lke_node_pool(cluster_id, pool_id)
+        return serialize_api_response(
+            await client.get_lke_node_pool(cluster_id, pool_id),
+            lke_pool_pb2.LKENodePool(),
         )
 
     return await execute_tool(cfg, arguments, "get LKE node pool", _call)
-
-
-def lke_node_to_response_dict(node: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw LKE node API dict to proto-canonical form."""
-    return {
-        "id": node.get("id", ""),
-        "instance_id": node.get("instance_id", 0),
-        "status": node.get("status", ""),
-    }
 
 
 def create_linode_lke_node_get_tool() -> tuple[Tool, Capability]:
@@ -291,16 +264,12 @@ async def handle_linode_lke_node_get(
         return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return lke_node_to_response_dict(
-            await client.get_lke_node(cluster_id, str(node_id))
+        return serialize_api_response(
+            await client.get_lke_node(cluster_id, str(node_id)),
+            lke_node_pb2.LKENode(),
         )
 
     return await execute_tool(cfg, arguments, "get LKE node", _call)
-
-
-def lke_kubeconfig_to_response_dict(kubeconfig: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw LKE kubeconfig API dict to proto-canonical form."""
-    return {"kubeconfig": kubeconfig.get("kubeconfig") or ""}
 
 
 def create_linode_lke_kubeconfig_get_tool() -> tuple[Tool, Capability]:
@@ -325,16 +294,12 @@ async def handle_linode_lke_kubeconfig_get(
         return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return lke_kubeconfig_to_response_dict(
-            await client.get_lke_kubeconfig(cluster_id)
+        return serialize_api_response(
+            await client.get_lke_kubeconfig(cluster_id),
+            lke_kubeconfig_pb2.LKEKubeconfig(),
         )
 
     return await execute_tool(cfg, arguments, "get LKE kubeconfig", _call)
-
-
-def lke_dashboard_to_response_dict(dashboard: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw LKE dashboard API dict to proto-canonical form."""
-    return {"url": dashboard.get("url") or ""}
 
 
 def create_linode_lke_dashboard_get_tool() -> tuple[Tool, Capability]:
@@ -359,8 +324,9 @@ async def handle_linode_lke_dashboard_get(
         return error_response("cluster_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return lke_dashboard_to_response_dict(
-            await client.get_lke_dashboard(cluster_id)
+        return serialize_api_response(
+            await client.get_lke_dashboard(cluster_id),
+            lke_dashboard_pb2.LKEDashboard(),
         )
 
     return await execute_tool(cfg, arguments, "get LKE dashboard", _call)
@@ -396,7 +362,11 @@ async def handle_linode_lke_api_endpoint_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         endpoints = await client.list_lke_api_endpoints(cluster_id)
-        return {"count": len(endpoints), "endpoints": endpoints}
+        return serialize_list_response(
+            {"data": endpoints},
+            "endpoints",
+            lke_api_endpoint_pb2.LKEAPIEndpointListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list LKE API endpoints", _call)
 
@@ -456,14 +426,13 @@ async def handle_linode_lke_version_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         versions = await client.list_lke_versions()
-        return {"count": len(versions), "versions": versions}
+        return serialize_list_response(
+            {"data": versions},
+            "versions",
+            lke_version_pb2.LKEVersionListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list LKE versions", _call)
-
-
-def lke_version_to_response_dict(version: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw LKE version API dict to proto-canonical form."""
-    return {"id": version.get("id") or ""}
 
 
 def create_linode_lke_version_get_tool() -> tuple[Tool, Capability]:
@@ -484,7 +453,10 @@ async def handle_linode_lke_version_get(
         return error_response("version is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return lke_version_to_response_dict(await client.get_lke_version(str(version)))
+        return serialize_api_response(
+            await client.get_lke_version(str(version)),
+            lke_version_pb2.LKEVersion(),
+        )
 
     return await execute_tool(cfg, arguments, "get LKE version", _call)
 
@@ -510,7 +482,11 @@ async def handle_linode_lke_type_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         types = await client.list_lke_types()
-        return {"count": len(types), "types": types}
+        return serialize_list_response(
+            {"data": types},
+            "lke_types",
+            type_pb2.LKETypeListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list LKE types", _call)
 
@@ -541,14 +517,13 @@ async def handle_linode_lke_tier_version_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         versions = await client.list_lke_tier_versions(tier)
-        return {"count": len(versions), "tier_versions": versions}
+        return serialize_list_response(
+            {"data": versions},
+            "tier_versions",
+            lke_tier_version_pb2.LKETierVersionListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list LKE tier versions", _call)
-
-
-def lke_tier_version_to_response_dict(version: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw LKE tier version API dict to proto-canonical form."""
-    return {"id": version.get("id") or "", "tier": version.get("tier") or ""}
 
 
 def create_linode_lke_tier_version_get_tool() -> tuple[Tool, Capability]:
@@ -576,8 +551,9 @@ async def handle_linode_lke_tier_version_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return lke_tier_version_to_response_dict(
-            await client.get_lke_tier_version(tier, version)
+        return serialize_api_response(
+            await client.get_lke_tier_version(tier, version),
+            lke_tier_version_pb2.LKETierVersion(),
         )
 
     return await execute_tool(cfg, arguments, "get LKE tier version", _call)

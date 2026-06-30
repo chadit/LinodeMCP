@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.AccountLoginListResponse",
+  "description": "linode_account_login_list envelope: count and the full proto AccountLogin elements (not the Linode data/page/pages/results page). This list was the Go raw-page divergence; the proto envelope is the fix. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_logins": [
+      {
+        "datetime": "2024-06-01T12:00:00",
+        "id": 99887766,
+        "ip": "203.0.113.5",
+        "restricted": false,
+        "status": "successful",
+        "username": "admin"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_logins": [
+      {
+        "datetime": "2024-06-01T12:00:00",
+        "id": 99887766,
+        "ip": "203.0.113.5",
+        "restricted": false,
+        "status": "successful",
+        "username": "admin"
+      }
+    ]
+  }
+}

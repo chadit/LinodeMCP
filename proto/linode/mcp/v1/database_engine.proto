@@ -11,6 +11,14 @@ message DatabaseEngine {
   string version = 3;
 }
 
+// DatabaseEngineListResponse is the linode_database_engine_list envelope: count
+// and the full proto DatabaseEngine elements. Pagination does not echo a filter.
+message DatabaseEngineListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated DatabaseEngine database_engines = 3;
+}
+
 // DatabaseEngineGetInput is the input contract for linode_database_engine_get.
 message DatabaseEngineGetInput {
   // Linode environment to use (optional, defaults to "default").

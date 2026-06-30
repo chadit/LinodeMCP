@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.ImageShareGroupTokenListResponse",
+  "description": "linode_image_sharegroup_token_list envelope: count and the full proto ImageShareGroupToken elements (not the Linode data/page/pages/results page). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "image_sharegroup_tokens": [
+      {
+        "token": "tok_abcdef1234567890",
+        "token_uuid": "99998888-7777-6666-5555-444433332222",
+        "status": "active",
+        "label": "partner-token",
+        "created": "2026-01-15T10:00:00",
+        "updated": "2026-02-01T12:30:00",
+        "expiry": "2026-12-31T23:59:59",
+        "valid_for_sharegroup_uuid": "abc12345-def6-7890-abcd-ef1234567890",
+        "sharegroup_uuid": "abc12345-def6-7890-abcd-ef1234567890",
+        "sharegroup_label": "shared-images"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "image_sharegroup_tokens": [
+      {
+        "token": "tok_abcdef1234567890",
+        "token_uuid": "99998888-7777-6666-5555-444433332222",
+        "status": "active",
+        "label": "partner-token",
+        "created": "2026-01-15T10:00:00",
+        "updated": "2026-02-01T12:30:00",
+        "expiry": "2026-12-31T23:59:59",
+        "valid_for_sharegroup_uuid": "abc12345-def6-7890-abcd-ef1234567890",
+        "sharegroup_uuid": "abc12345-def6-7890-abcd-ef1234567890",
+        "sharegroup_label": "shared-images"
+      }
+    ]
+  }
+}

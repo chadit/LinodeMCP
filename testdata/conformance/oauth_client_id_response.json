@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.OAuthClientIDResponse",
+  "description": "OAuth client id-echo: a confirmation message plus the affected client id. The delete and thumbnail-update endpoints return an empty body, so the response echoes the client id.",
+  "input": {
+    "message": "OAuth client deleted successfully",
+    "client_id": "9f8e7d6c5b4a3210"
+  },
+  "canonical": {
+    "message": "OAuth client deleted successfully",
+    "client_id": "9f8e7d6c5b4a3210"
+  }
+}

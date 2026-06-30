@@ -40,10 +40,64 @@ message SupportTicket {
   string updated_by = 13;
 }
 
+// SupportTicketListResponse is the linode_support_ticket_list envelope: count
+// and the full proto SupportTicket elements. The tool paginates and has no
+// filter params, so filter is omitted.
+message SupportTicketListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated SupportTicket support_tickets = 3;
+}
+
 // SupportTicketGetInput is the input contract for linode_support_ticket_get.
 message SupportTicketGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
   // The ID of the support ticket to retrieve (required).
+  int32 ticket_id = 2;
+}
+
+// SupportTicketReply mirrors one reply from
+// GET /support/tickets/{ticket_id}/replies. All fields are present scalars.
+message SupportTicketReply {
+  string created = 1;
+  string created_by = 2;
+  string description = 3;
+  string gravatar_id = 4;
+  int32 id = 5;
+  string updated = 6;
+  string updated_by = 7;
+}
+
+// SupportTicketReplyListResponse is the linode_support_ticket_reply_list
+// envelope: count and the full proto SupportTicketReply elements. The tool
+// paginates and has no filter params, so filter is omitted.
+message SupportTicketReplyListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated SupportTicketReply support_ticket_replies = 3;
+}
+
+// SupportTicketWriteResponse is the {message, ticket} envelope the support
+// ticket create tool returns: a confirmation string plus the full SupportTicket
+// element the API returns for the opened ticket.
+message SupportTicketWriteResponse {
+  string message = 1;
+  SupportTicket ticket = 2;
+}
+
+// SupportTicketReplyWriteResponse is the {message, reply} envelope the support
+// ticket reply create tool returns: a confirmation string plus the full
+// SupportTicketReply element the API returns for the new reply.
+message SupportTicketReplyWriteResponse {
+  string message = 1;
+  SupportTicketReply reply = 2;
+}
+
+// SupportTicketIDResponse is the {message, ticket_id} id-echo the support ticket
+// attachment create and close tools return; those endpoints return no resource
+// body to echo, so the response carries the affected ticket id.
+message SupportTicketIDResponse {
+  string message = 1;
   int32 ticket_id = 2;
 }

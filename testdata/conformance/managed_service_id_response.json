@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ManagedServiceIDResponse",
+  "description": "Managed service id-echo: a confirmation message plus the service id. The delete, enable, and disable endpoints have no resource body to echo.",
+  "input": {
+    "message": "Managed service deleted successfully",
+    "service_id": 789
+  },
+  "canonical": {
+    "message": "Managed service deleted successfully",
+    "service_id": 789
+  }
+}

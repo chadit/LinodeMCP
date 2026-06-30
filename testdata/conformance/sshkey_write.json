@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.SSHKeyWriteResponse",
+  "description": "SSH key create/update envelope: a confirmation message plus the full SSHKey element. The ssh_key field carries the public key, which is public information and kept in full.",
+  "input": {
+    "message": "SSH key 'my-laptop' (ID: 42) created successfully",
+    "ssh_key": {
+      "id": 42,
+      "label": "my-laptop",
+      "ssh_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDexample user@host",
+      "created": "2026-06-30T10:30:00"
+    }
+  },
+  "canonical": {
+    "message": "SSH key 'my-laptop' (ID: 42) created successfully",
+    "ssh_key": {
+      "id": 42,
+      "label": "my-laptop",
+      "ssh_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDexample user@host",
+      "created": "2026-06-30T10:30:00"
+    }
+  }
+}

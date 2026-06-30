@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.InstanceBackupWriteResponse",
+  "description": "Instance backup create envelope: a confirmation message plus the full snapshot element, including its configs and disks.",
+  "input": {
+    "message": "Snapshot created for instance 123 (backup ID: 4001)",
+    "backup": {
+      "id": 4001,
+      "label": "pre-upgrade snapshot",
+      "status": "pending",
+      "type": "snapshot",
+      "created": "2026-06-30T12:00:00",
+      "updated": "2026-06-30T12:00:01",
+      "finished": "",
+      "region": "us-east",
+      "available": false,
+      "configs": ["My Ubuntu Config"],
+      "disks": [
+        {"label": "Ubuntu Disk", "size": 25600, "filesystem": "ext4"},
+        {"label": "512 MB Swap Image", "size": 512, "filesystem": "swap"}
+      ]
+    }
+  },
+  "canonical": {
+    "message": "Snapshot created for instance 123 (backup ID: 4001)",
+    "backup": {
+      "id": 4001,
+      "label": "pre-upgrade snapshot",
+      "status": "pending",
+      "type": "snapshot",
+      "created": "2026-06-30T12:00:00",
+      "updated": "2026-06-30T12:00:01",
+      "finished": "",
+      "region": "us-east",
+      "available": false,
+      "configs": ["My Ubuntu Config"],
+      "disks": [
+        {"label": "Ubuntu Disk", "size": 25600, "filesystem": "ext4"},
+        {"label": "512 MB Swap Image", "size": 512, "filesystem": "swap"}
+      ]
+    }
+  }
+}

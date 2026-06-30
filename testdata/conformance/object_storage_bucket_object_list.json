@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageObjectListResponse",
+  "description": "linode_object_storage_bucket_object_list envelope: a bespoke S3-style list shape carrying count, the optional prefix/delimiter filter echo, the is_truncated flag, the optional next_marker cursor, and the full proto ObjectStorageObject elements. size is int64, so protojson serializes it as a JSON string on both languages. is_prefix marks a delimiter-grouped common prefix.",
+  "input": {
+    "count": 2,
+    "filter": "prefix=images/, delimiter=/",
+    "is_truncated": true,
+    "next_marker": "images/photo2.jpg",
+    "objects": [
+      {
+        "name": "images/photo1.jpg",
+        "etag": "9b2cf535f27731c974343645a3985328",
+        "last_modified": "2024-06-01T00:00:00Z",
+        "owner": "acct-owner",
+        "size": 5242880,
+        "is_prefix": false
+      },
+      {
+        "name": "images/",
+        "is_prefix": true
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "filter": "prefix=images/, delimiter=/",
+    "is_truncated": true,
+    "next_marker": "images/photo2.jpg",
+    "objects": [
+      {
+        "name": "images/photo1.jpg",
+        "etag": "9b2cf535f27731c974343645a3985328",
+        "last_modified": "2024-06-01T00:00:00Z",
+        "owner": "acct-owner",
+        "size": "5242880",
+        "is_prefix": false
+      },
+      {
+        "name": "images/",
+        "etag": "",
+        "last_modified": "",
+        "owner": "",
+        "size": "0",
+        "is_prefix": true
+      }
+    ]
+  }
+}

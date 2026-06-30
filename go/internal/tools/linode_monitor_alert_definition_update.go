@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
@@ -76,7 +77,10 @@ func handleLinodeMonitorServiceAlertDefinitionUpdateRequest(ctx context.Context,
 		return mcp.NewToolResultError("Failed to update " + monitorServiceAlertDefinitionUpdateToolName + ": " + updateFailureMessage), nil
 	}
 
-	return MarshalToolResponse(definition)
+	return MarshalProtoToolResponse(&linodev1.MonitorAlertDefinitionWriteResponse{
+		Message:         fmt.Sprintf("Monitor alert definition %d updated", alertID),
+		AlertDefinition: definition,
+	})
 }
 
 func monitorServiceAlertDefinitionUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateAlertDefinitionRequest, string) {
@@ -197,8 +201,8 @@ func setMonitorAlertDefinitionUpdateStatus(args map[string]any, updateRequest *l
 	return true, ""
 }
 
-func updateMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client, serviceType string, alertID int, request *linode.UpdateAlertDefinitionRequest) (*linode.AlertDefinition, string) {
-	definition, err := client.UpdateMonitorServiceAlertDefinition(ctx, serviceType, alertID, request)
+func updateMonitorServiceAlertDefinition(ctx context.Context, client *linode.Client, serviceType string, alertID int, request *linode.UpdateAlertDefinitionRequest) (*linodev1.MonitorAlertDefinition, string) {
+	definition, err := client.UpdateMonitorServiceAlertDefinitionProto(ctx, serviceType, alertID, request)
 	if err != nil {
 		return nil, err.Error()
 	}

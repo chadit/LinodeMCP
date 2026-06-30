@@ -263,7 +263,7 @@ func TestLinodeImageShareGroupsByImageListToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve image share groups by image") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve image share groups by image")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }

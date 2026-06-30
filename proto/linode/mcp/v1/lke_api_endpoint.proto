@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// LKEAPIEndpoint is one API server endpoint of an LKE cluster, returned by
+// GET /lke/clusters/{cluster_id}/api-endpoints.
+message LKEAPIEndpoint {
+  string endpoint = 1;
+}
+
+// LKEAPIEndpointListResponse is the {count, filter?, endpoints} envelope the
+// linode_lke_api_endpoint_list tool returns. The tool has no filter param, so
+// filter is omitted.
+message LKEAPIEndpointListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LKEAPIEndpoint endpoints = 3;
+}

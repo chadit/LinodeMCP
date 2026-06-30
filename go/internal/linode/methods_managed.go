@@ -209,6 +209,30 @@ func (c *Client) httpUpdateManagedLinodeSettings(ctx context.Context, linodeID i
 	return &settings, nil
 }
 
+// httpUpdateManagedLinodeSettingsProto updates Managed settings for one Linode
+// and decodes the response into the proto element so the write tool emits the
+// same field set as the settings GET/LIST path.
+func (c *Client) httpUpdateManagedLinodeSettingsProto(ctx context.Context, linodeID int, req UpdateManagedLinodeSettingsRequest) (*linodev1.ManagedLinodeSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedLinodeSettings + "/" + url.PathEscape(strconv.Itoa(linodeID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateManagedLinodeSettings", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	settings := &linodev1.ManagedLinodeSettings{}
+	if err := c.handleProtoResponse(resp, settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
+}
+
 // httpGetManagedService retrieves one Managed service by ID.
 func (c *Client) httpGetManagedService(ctx context.Context, serviceID int) (*ManagedService, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -348,6 +372,38 @@ func (c *Client) httpListManagedServices(ctx context.Context, page, pageSize int
 	return &services, nil
 }
 
+// httpListManagedServicesProto retrieves Managed services as proto messages for
+// the proto-backed list path. The page/page_size pair flows through
+// withPaginationQuery, so the request matches httpListManagedServices.
+func (c *Client) httpListManagedServicesProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedService, error) {
+	return listProtoElementsPaginated(ctx, c, "ListManagedServices", endpointManagedServices, page, pageSize,
+		func() *linodev1.ManagedService { return &linodev1.ManagedService{} })
+}
+
+// httpListManagedContactsProto retrieves Managed contacts as proto messages for
+// the proto-backed list path. page/page_size flows through withPaginationQuery,
+// so the request matches httpListManagedContacts.
+func (c *Client) httpListManagedContactsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedContact, error) {
+	return listProtoElementsPaginated(ctx, c, "ListManagedContacts", endpointManagedContacts, page, pageSize,
+		func() *linodev1.ManagedContact { return &linodev1.ManagedContact{} })
+}
+
+// httpListManagedLinodeSettingsProto retrieves Managed Linode settings as proto
+// messages for the proto-backed list path. page/page_size flows through
+// withPaginationQuery, so the request matches httpListManagedLinodeSettings.
+func (c *Client) httpListManagedLinodeSettingsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedLinodeSettings, error) {
+	return listProtoElementsPaginated(ctx, c, "ListManagedLinodeSettings", endpointManagedLinodeSettings, page, pageSize,
+		func() *linodev1.ManagedLinodeSettings { return &linodev1.ManagedLinodeSettings{} })
+}
+
+// httpListManagedIssuesProto retrieves Managed issues as proto messages for the
+// proto-backed list path. page/page_size flows through withPaginationQuery, so
+// the request matches httpListManagedIssues.
+func (c *Client) httpListManagedIssuesProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedIssue, error) {
+	return listProtoElementsPaginated(ctx, c, "ListManagedIssues", endpointManagedIssues, page, pageSize,
+		func() *linodev1.ManagedIssue { return &linodev1.ManagedIssue{} })
+}
+
 // httpGetManagedIssue retrieves one Managed issue by ID.
 func (c *Client) httpGetManagedIssue(ctx context.Context, issueID int) (*ManagedIssue, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -474,4 +530,28 @@ func (c *Client) httpUpdateManagedContact(ctx context.Context, contactID int, re
 	}
 
 	return &contact, nil
+}
+
+// httpUpdateManagedContactProto updates one Managed contact and decodes the
+// response into the proto element so the write tool emits the same field set as
+// the contact GET/LIST path.
+func (c *Client) httpUpdateManagedContactProto(ctx context.Context, contactID int, req UpdateManagedContactRequest) (*linodev1.ManagedContact, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateManagedContact", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	contact := &linodev1.ManagedContact{}
+	if err := c.handleProtoResponse(resp, contact); err != nil {
+		return nil, err
+	}
+
+	return contact, nil
 }

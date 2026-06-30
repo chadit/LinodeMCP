@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.LKENode",
+  "description": "Single LKE node with all scalar fields present.",
+  "input": {
+    "id": "node-1",
+    "instance_id": 9001,
+    "status": "ready"
+  },
+  "canonical": {
+    "id": "node-1",
+    "instance_id": 9001,
+    "status": "ready"
+  }
+}

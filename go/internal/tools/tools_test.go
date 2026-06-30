@@ -1573,8 +1573,8 @@ func TestLinodeAccountMaintenanceToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_maintenance_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_maintenance_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -1783,8 +1783,8 @@ func TestLinodeMaintenancePoliciesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_maintenance_policy_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_maintenance_policy_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -2163,8 +2163,8 @@ func TestLinodeAccountNotificationsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_notification_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_notification_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -2389,8 +2389,8 @@ func TestLinodeBetasToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_beta_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_beta_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -2840,8 +2840,8 @@ func TestLinodeAccountBetasToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_beta_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_beta_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -3226,8 +3226,8 @@ func TestLinodeProfileSecurityQuestionsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_security_question_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_security_question_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -3372,8 +3372,8 @@ func TestLinodeProfileDevicesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_device_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_device_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -3492,7 +3492,7 @@ func TestLinodeProfileTFAEnableToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{keySecret: "JBSWY3DPEHPK3PXP", keyExpiry: "2026-01-01T00:00:00"}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{keySecret: "JBSWY3DPEHPK3PXP", keyExpiry: tfaConfirmExpiry}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -3517,6 +3517,12 @@ func TestLinodeProfileTFAEnableToolSuccess(t *testing.T) {
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "JBSWY3DPEHPK3PXP") {
 		t.Errorf("error text %q does not contain %q", text.Text, "JBSWY3DPEHPK3PXP")
+	}
+
+	// The one-time secret is returned by design and the response carries the
+	// save-the-secret warning byte-identically to the Python implementation.
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Save this two-factor authentication secret now") {
+		t.Errorf("response %q does not carry the save-the-secret warning", text.Text)
 	}
 }
 
@@ -4712,8 +4718,8 @@ func TestLinodeProfileAppsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_app_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_app_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -4916,8 +4922,8 @@ func TestLinodeAccountOAuthClientsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_oauth_client_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_oauth_client_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -5326,8 +5332,8 @@ func TestLinodeAccountEventsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_event_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_event_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -5533,8 +5539,8 @@ func TestLinodeAccountUsersToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_user_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_user_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -5740,8 +5746,8 @@ func TestLinodeAccountLoginsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_login_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_login_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -6367,8 +6373,8 @@ func TestLinodeAccountChildAccountsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_child_account_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_child_account_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -6501,8 +6507,12 @@ func TestLinodeProfileAppDeleteToolSuccess(t *testing.T) {
 		t.Error("result.IsError = true, want false")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Profile app access revoked successfully") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Profile app access revoked successfully")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Profile app 12345 revoked successfully") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Profile app 12345 revoked successfully")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "\"app_id\"") {
+		t.Errorf("response %q does not echo app_id", text.Text)
 	}
 }
 
@@ -6981,8 +6991,12 @@ func TestLinodeProfileDeviceRevokeToolSuccess(t *testing.T) {
 		t.Error("result.IsError = true, want false")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Profile trusted device revoked successfully") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Profile trusted device revoked successfully")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Profile trusted device 12345 revoked successfully") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Profile trusted device 12345 revoked successfully")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "\"device_id\"") {
+		t.Errorf("response %q does not echo device_id", text.Text)
 	}
 }
 
@@ -9191,8 +9205,8 @@ func TestLinodeAccountInvoiceItemsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_invoice_item_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_invoice_item_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -9413,8 +9427,8 @@ func TestLinodeAccountPaymentMethodsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_payment_method_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_payment_method_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -9761,6 +9775,19 @@ func TestLinodeAccountPaymentMethodCreateToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, paymentMethodLastFour) {
 		t.Errorf("textContent.Text does not contain %v", paymentMethodLastFour)
+	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &envelope); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+
+	if _, ok := envelope["payment_method"]; !ok {
+		t.Errorf("envelope missing payment_method key, got %v", envelope)
+	}
+
+	if _, ok := envelope["method"]; ok {
+		t.Errorf("envelope should not carry the legacy method key, got %v", envelope)
 	}
 }
 
@@ -10517,8 +10544,8 @@ func TestLinodeAccountPaymentsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_payment_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_payment_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -10940,8 +10967,8 @@ func TestLinodeAccountInvoicesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_invoice_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_invoice_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -11172,8 +11199,8 @@ func TestLinodeAccountServiceTransfersToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_service_transfer_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_service_transfer_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -13573,8 +13600,8 @@ func TestLinodeAccountAvailabilityToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_account_availability_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_account_availability_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -14048,8 +14075,8 @@ func TestLinodeRegionsListToolFilterByCountry(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 2`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 2`)
+	if got := listResponseCount(t, textContent.Text); got != 2 {
+		t.Errorf("listResponseCount = %d, want %d", got, 2)
 	}
 
 	if !strings.Contains(textContent.Text, regionUSEast) {
@@ -14148,6 +14175,14 @@ func TestLinodeTypesListToolSuccess(t *testing.T) {
 	if !strings.Contains(textContent.Text, typeG6Standard2) {
 		t.Errorf("textContent.Text does not contain %v", typeG6Standard2)
 	}
+
+	if !strings.Contains(textContent.Text, `"types"`) {
+		t.Errorf("textContent.Text does not contain the types key: %s", textContent.Text)
+	}
+
+	if count := listResponseCount(t, textContent.Text); count != 2 {
+		t.Errorf("listResponseCount = %d, want 2", count)
+	}
 }
 
 func TestLinodeTypesListToolFilterByClass(t *testing.T) {
@@ -14203,8 +14238,8 @@ func TestLinodeTypesListToolFilterByClass(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 2`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 2`)
+	if count := listResponseCount(t, textContent.Text); count != 2 {
+		t.Errorf("listResponseCount = %d, want 2", count)
 	}
 
 	if strings.Contains(textContent.Text, typeG6Nanode1) {
@@ -14302,6 +14337,14 @@ func TestLinodeVolumeTypesListToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "Block Storage") {
 		t.Errorf("textContent.Text does not contain %v", "Block Storage")
+	}
+
+	if !strings.Contains(textContent.Text, `"volume_types"`) {
+		t.Errorf("textContent.Text does not contain the volume_types key: %s", textContent.Text)
+	}
+
+	if count := listResponseCount(t, textContent.Text); count != 1 {
+		t.Errorf("listResponseCount = %d, want 1", count)
 	}
 }
 
@@ -14499,8 +14542,8 @@ func TestLinodeVolumesListToolFilterByRegion(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	if got := listResponseCount(t, textContent.Text); got != 1 {
+		t.Errorf("count = %d, want 1", got)
 	}
 
 	if !strings.Contains(textContent.Text, labelDataVol) {
@@ -14565,8 +14608,8 @@ func TestLinodeVolumesListToolFilterByLabel(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 2`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 2`)
+	if got := listResponseCount(t, textContent.Text); got != 2 {
+		t.Errorf("count = %d, want 2", got)
 	}
 
 	if !strings.Contains(textContent.Text, labelBackupVol) {
@@ -14715,8 +14758,8 @@ func TestLinodeImagesListToolFilterByPublic(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	if count := listResponseCount(t, textContent.Text); count != 1 {
+		t.Errorf("count = %d, want 1", count)
 	}
 
 	if !strings.Contains(textContent.Text, privateImage12345Fixture) {
@@ -14780,8 +14823,8 @@ func TestLinodeImagesListToolFilterByDeprecated(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	if count := listResponseCount(t, textContent.Text); count != 1 {
+		t.Errorf("count = %d, want 1", count)
 	}
 
 	if !strings.Contains(textContent.Text, "linode/ubuntu18.04") {
@@ -14905,8 +14948,8 @@ func TestLinodeImageShareGroupTokensListToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	if got := listResponseCount(t, textContent.Text); got != 1 {
+		t.Errorf("listResponseCount = %d, want 1", got)
 	}
 
 	if !strings.Contains(textContent.Text, "Backend Services - Engineering") {
@@ -14993,8 +15036,12 @@ func TestLinodeImageShareGroupTokensListToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve image share group tokens") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve image share group tokens")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
+	}
+
+	if !strings.Contains(textContent.Text, "temporary failure") {
+		t.Errorf("textContent.Text does not contain %v", "temporary failure")
 	}
 }
 
@@ -15110,8 +15157,8 @@ func TestLinodeImageShareGroupsListToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	if got := listResponseCount(t, textContent.Text); got != 1 {
+		t.Errorf("listResponseCount = %d, want 1", got)
 	}
 
 	if !strings.Contains(textContent.Text, shareGroupLabelFixture) {
@@ -15198,8 +15245,12 @@ func TestLinodeImageShareGroupsListToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve image share groups") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve image share groups")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
+	}
+
+	if !strings.Contains(textContent.Text, "temporary failure") {
+		t.Errorf("textContent.Text does not contain %v", "temporary failure")
 	}
 }
 
@@ -15212,6 +15263,24 @@ func createRequestWithArgs(t *testing.T, args map[string]any) mcp.CallToolReques
 			Arguments: args,
 		},
 	}
+}
+
+// listResponseCount parses a proto-list tool response and returns its count
+// field. Proto-backed list tools serialize through protojson, which varies the
+// whitespace after the colon between runs, so the count must be read from the
+// decoded JSON rather than matched as a raw substring.
+func listResponseCount(t *testing.T, text string) int {
+	t.Helper()
+
+	var decoded struct {
+		Count int `json:"count"`
+	}
+
+	if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+		t.Fatalf("failed to decode list response: %v", err)
+	}
+
+	return decoded.Count
 }
 
 // End-to-end verification of account cancellation.

@@ -1,0 +1,36 @@
+{
+  "message": "linode.mcp.v1.PlacementGroup",
+  "description": "A Linode placement group with members and in-progress migrations.",
+  "input": {
+    "id": 528,
+    "label": "PG_Messaging",
+    "region": "us-east",
+    "placement_group_type": "anti_affinity:local",
+    "placement_group_policy": "strict",
+    "is_compliant": true,
+    "members": [
+      {"linode_id": 123, "is_compliant": true},
+      {"linode_id": 456, "is_compliant": false}
+    ],
+    "migrations": {
+      "inbound": [{"linode_id": 789}],
+      "outbound": [{"linode_id": 321}]
+    }
+  },
+  "canonical": {
+    "id": 528,
+    "label": "PG_Messaging",
+    "region": "us-east",
+    "placement_group_type": "anti_affinity:local",
+    "placement_group_policy": "strict",
+    "is_compliant": true,
+    "members": [
+      {"linode_id": 123, "is_compliant": true},
+      {"linode_id": 456, "is_compliant": false}
+    ],
+    "migrations": {
+      "inbound": [{"linode_id": 789}],
+      "outbound": [{"linode_id": 321}]
+    }
+  }
+}

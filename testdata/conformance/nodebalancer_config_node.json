@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerConfigNode",
+  "description": "NodeBalancer config backend node with all scalar fields present.",
+  "input": {
+    "id": 9876,
+    "address": "192.168.1.10:80",
+    "label": "backend-1",
+    "status": "UP",
+    "weight": 50,
+    "mode": "accept",
+    "nodebalancer_id": 1234,
+    "config_id": 4567
+  },
+  "canonical": {
+    "id": 9876,
+    "address": "192.168.1.10:80",
+    "label": "backend-1",
+    "status": "UP",
+    "weight": 50,
+    "mode": "accept",
+    "nodebalancer_id": 1234,
+    "config_id": 4567
+  }
+}

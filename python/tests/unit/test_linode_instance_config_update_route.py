@@ -141,16 +141,33 @@ async def test_retryable_list_instance_interfaces_uses_retry() -> None:
 async def test_handle_linode_instance_interfaces_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
+    # The current-generation interfaces endpoint wraps under "interfaces", not a
+    # {data} page envelope; the handler unwraps it and emits the proto list shape.
     mock_linode_client.list_instance_interfaces.return_value = {
-        "data": [{"id": 789}],
-        "page": 1,
+        "interfaces": [
+            {
+                "id": 789,
+                "mac_address": "22:00:AB:CD:EF:01",
+                "default_route": {"ipv4": True, "ipv6": False},
+                "vpc": {
+                    "subnet_id": 555,
+                    "ipv4": {"addresses": [{"address": "10.0.0.5"}]},
+                },
+            },
+        ],
     }
 
     result = await handle_linode_instance_interface_list(
         {"linode_id": 123}, sample_config
     )
 
-    assert json.loads(result[0].text) == {"data": [{"id": 789}], "page": 1}
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    interface = body["interfaces"][0]
+    assert interface["id"] == 789
+    assert interface["mac_address"] == "22:00:AB:CD:EF:01"
+    assert interface["default_route"]["ipv4"] is True
+    assert interface["vpc"]["subnet_id"] == 555
     mock_linode_client.list_instance_interfaces.assert_awaited_once_with(123)
 
 
@@ -424,14 +441,19 @@ async def test_handle_linode_instance_interface_get_success(
 ) -> None:
     mock_linode_client.get_instance_interface.return_value = {
         "id": 789,
-        "purpose": "public",
+        "mac_address": "22:00:AB:CD:EF:02",
+        "vlan": {"vlan_label": "vlan-test", "ipam_address": "10.0.0.1/24"},
     }
 
     result = await handle_linode_instance_interface_get(
         {"linode_id": 123, "interface_id": 789}, sample_config
     )
 
-    assert json.loads(result[0].text) == {"id": 789, "purpose": "public"}
+    assert json.loads(result[0].text) == {
+        "id": 789,
+        "vlan": {"vlan_label": "vlan-test", "ipam_address": "10.0.0.1/24"},
+        "mac_address": "22:00:AB:CD:EF:02",
+    }
     mock_linode_client.get_instance_interface.assert_awaited_once_with(123, 789)
 
 
@@ -468,9 +490,9 @@ def test_create_linode_instance_interface_get_tool_schema() -> None:
 
     assert capability is Capability.Read
     assert tool.name == "linode_instance_interface_get"
-    assert tool.inputSchema["required"] == ["linode_id", "interface_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["interface_id"]["minimum"] == 1
+    assert set(tool.inputSchema["required"]) == {"linode_id", "interface_id"}
+    assert "linode_id" in tool.inputSchema["properties"]
+    assert "interface_id" in tool.inputSchema["properties"]
 
 
 def test_linode_instance_interface_get_registered_and_exported() -> None:
@@ -711,7 +733,11 @@ async def test_handle_linode_instance_config_interface_add_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {"id": 789, "purpose": "public"}
+    assert payload["message"] == (
+        "Configuration profile interface added to config 456 on instance 123"
+    )
+    assert payload["interface"]["id"] == 789
+    assert payload["interface"]["purpose"] == "public"
     mock_linode_client.add_instance_config_interface.assert_awaited_once_with(
         123,
         456,
@@ -722,6 +748,37 @@ async def test_handle_linode_instance_config_interface_add_success(
             "ip_ranges": ["10.0.0.64/26"],
         },
     )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_config_interface_add_empty_result_message(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """An empty API result still emits the {message, interface} envelope with the
+    interface zero-filled by the proto rather than dropping it for an id echo."""
+    mock_linode_client.add_instance_config_interface.return_value = {}
+
+    result = await handle_linode_instance_config_interface_add(
+        {
+            "linode_id": 123,
+            "config_id": 456,
+            "purpose": "public",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == (
+        "Configuration profile interface added to config 456 on instance 123"
+    )
+    assert payload["interface"] == {
+        "id": 0,
+        "active": False,
+        "purpose": "",
+        "primary": False,
+        "ip_ranges": [],
+    }
 
 
 @pytest.mark.asyncio
@@ -839,6 +896,49 @@ async def test_handle_config_interface_add_requires_boolean_confirm_true(
                 "confirm": True,
             },
             "ip_ranges must be an array of strings or null",
+        ),
+        (
+            {
+                "linode_id": 123,
+                "config_id": 456,
+                "purpose": "vpc",
+                "subnet_id": 101,
+                "ip_ranges": "10.0.0.1/24",
+                "confirm": True,
+            },
+            "ip_ranges must be an array of strings or null",
+        ),
+        (
+            {
+                "linode_id": 123,
+                "config_id": 456,
+                "purpose": "vlan",
+                "label": 123,
+                "confirm": True,
+            },
+            "label must be a string or null",
+        ),
+        (
+            {
+                "linode_id": 123,
+                "config_id": 456,
+                "purpose": "vpc",
+                "subnet_id": 101,
+                "ipv4": "bad",
+                "confirm": True,
+            },
+            "ipv4 must be an object or null",
+        ),
+        (
+            {
+                "linode_id": 123,
+                "config_id": 456,
+                "purpose": "vpc",
+                "subnet_id": 101,
+                "ipv6": "bad",
+                "confirm": True,
+            },
+            "ipv6 must be an object or null",
         ),
     ],
 )
@@ -1051,10 +1151,40 @@ async def test_handle_linode_instance_config_update_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {"id": 456, "label": "rescue"}
+    assert payload["message"] == (
+        "Configuration profile 'rescue' (ID: 456) updated on instance 123"
+    )
+    assert payload["config"]["id"] == 456
+    assert payload["config"]["label"] == "rescue"
     mock_linode_client.update_instance_config.assert_awaited_once_with(
         123, 456, {"devices": {"sda": {"disk_id": 789}}, "label": "rescue"}
     )
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_config_update_empty_result_message(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """An empty API result still emits {message, config}; the message falls back
+    to the proto zero-value label '' and id 0, matching Go's getters."""
+    mock_linode_client.update_instance_config.return_value = {}
+
+    result = await handle_linode_instance_config_update(
+        {
+            "linode_id": 123,
+            "config_id": 456,
+            "label": "rescue",
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    payload = json.loads(result[0].text)
+    assert payload["message"] == (
+        "Configuration profile '' (ID: 0) updated on instance 123"
+    )
+    assert payload["config"]["id"] == 0
+    assert payload["config"]["label"] == ""
 
 
 @pytest.mark.asyncio
@@ -1309,7 +1439,12 @@ async def test_handle_linode_instance_config_interfaces_order_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {"ids": [789, 790]}
+    assert payload == {
+        "message": ("Configuration profile 456 interfaces reordered on instance 123"),
+        "linode_id": 123,
+        "config_id": 456,
+        "ids": [789, 790],
+    }
     mock_linode_client.reorder_instance_config_interfaces.assert_awaited_once_with(
         123, 456, [789, 790]
     )
@@ -1826,7 +1961,10 @@ async def test_handle_linode_instance_config_interface_delete_success(
 
     body = json.loads(result[0].text)
     assert body == {
-        "message": "Linode instance config 456 interface 789 deleted from Linode 123",
+        "message": (
+            "Configuration profile interface 789 removed from config 456"
+            " on instance 123"
+        ),
         "linode_id": 123,
         "config_id": 456,
         "interface_id": 789,

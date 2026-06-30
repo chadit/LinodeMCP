@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.MonitorAlertDefinitionDeleteResponse",
+  "description": "Monitor alert-definition delete envelope: a confirmation message plus the service type and alert ID the delete acted on. The delete endpoint returns an empty body, so these id echoes confirm the target.",
+  "input": {
+    "message": "Monitor service alert definition 20000 deleted for 'dbaas'",
+    "service_type": "dbaas",
+    "alert_id": 20000
+  },
+  "canonical": {
+    "message": "Monitor service alert definition 20000 deleted for 'dbaas'",
+    "service_type": "dbaas",
+    "alert_id": 20000
+  }
+}

@@ -371,8 +371,8 @@ func TestLinodeMonitorServiceMetricDefinitionsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorServiceMetricDefinitionsToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorServiceMetricDefinitionsToolName)
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -572,8 +572,8 @@ func TestLinodeMonitorServiceAlertDefinitionsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorServiceAlertDefinitionsToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorServiceAlertDefinitionsToolName)
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -769,8 +769,8 @@ func TestLinodeMonitorServicesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorServicesToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorServicesToolName)
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -856,8 +856,15 @@ func TestLinodeMonitorServiceMetricsToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "cpu") {
-		t.Errorf("textContent.Text does not contain %v", "cpu")
+	for _, want := range []string{
+		"Monitor service metrics read for 'dbaas'",
+		"\"service_type\"",
+		"\"metrics\"",
+		managedStatsToolCPUKey,
+	} {
+		if !strings.Contains(textContent.Text, want) {
+			t.Errorf("textContent.Text does not contain %v", want)
+		}
 	}
 }
 

@@ -25,10 +25,91 @@ message AccountUser {
   optional string verified_phone_number = 9;
 }
 
+// AccountUserListResponse is the envelope linode_account_user_list returns: a
+// count, an optional echoed filter, and the full proto AccountUser elements.
+message AccountUserListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated AccountUser account_users = 3;
+}
+
 // AccountUserGetInput is the input contract for linode_account_user_get.
 message AccountUserGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
   // The account username to retrieve (required).
   string username = 2;
+}
+
+// AccountUserWriteResponse is the {message, user} envelope the account user
+// create and update tools return.
+message AccountUserWriteResponse {
+  string message = 1;
+  AccountUser user = 2;
+}
+
+// AccountUserDeleteResponse is the {message, username} id-echo envelope the
+// account user delete tool returns. The delete endpoint returns an empty body,
+// so the response echoes the username that was removed.
+message AccountUserDeleteResponse {
+  string message = 1;
+  string username = 2;
+}
+
+// AccountUserGrant is one resource grant inside an AccountUserGrants section.
+// permissions is the grant level ("read_only", "read_write", or empty when the
+// user has no access on that resource); it is a string so unknown future values
+// round-trip cleanly.
+message AccountUserGrant {
+  int32 id = 1;
+  string label = 2;
+  string permissions = 3;
+}
+
+// AccountUserGlobalGrants mirrors the account-level permission booleans inside an
+// AccountUserGrants object. account_access is a grant-level string; every other
+// field is a boolean capability flag.
+message AccountUserGlobalGrants {
+  string account_access = 1;
+  bool add_databases = 2;
+  bool add_domains = 3;
+  bool add_firewalls = 4;
+  bool add_images = 5;
+  bool add_linodes = 6;
+  bool add_longview = 7;
+  bool add_nodebalancers = 8;
+  bool add_stackscripts = 9;
+  bool add_volumes = 10;
+  bool add_vpcs = 11;
+  bool cancel_account = 12;
+  bool child_account_access = 13;
+  bool longview_subscription = 14;
+}
+
+// AccountUserGrants mirrors the full grants object for one account user. global
+// holds the account-level permissions; each per-resource field is a list of the
+// specific resources the user can access. The Linode API returns each section as
+// a typed list (never a free-form map), so the sections are modeled with typed
+// AccountUserGrant elements rather than a Struct. A null section round-trips to
+// an empty list.
+message AccountUserGrants {
+  AccountUserGlobalGrants global = 1;
+  repeated AccountUserGrant linode = 2;
+  repeated AccountUserGrant domain = 3;
+  repeated AccountUserGrant nodebalancer = 4;
+  repeated AccountUserGrant image = 5;
+  repeated AccountUserGrant longview = 6;
+  repeated AccountUserGrant stackscript = 7;
+  repeated AccountUserGrant volume = 8;
+  repeated AccountUserGrant database = 9;
+  repeated AccountUserGrant firewall = 10;
+  repeated AccountUserGrant vpc = 11;
+  repeated AccountUserGrant lkecluster = 12;
+}
+
+// AccountUserGrantsWriteResponse is the {message, grants} envelope the account
+// user grants update tool returns.
+message AccountUserGrantsWriteResponse {
+  string message = 1;
+  AccountUserGrants grants = 2;
 }

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import ip_pb2, vlan_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -20,6 +21,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
@@ -86,7 +91,11 @@ async def handle_linode_vlan_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         vlans = await client.list_vlans(page=page, page_size=page_size)
-        return {"count": len(vlans), "vlans": vlans}
+        return serialize_list_response(
+            {"data": vlans},
+            "vlans",
+            vlan_pb2.VLANListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list VLANs", _call)
 
@@ -161,7 +170,7 @@ async def _vlan_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vlan(region_id, label)
         return {
-            "message": f"VLAN {label} in region {region_id} deleted successfully",
+            "message": f"VLAN {label} deleted successfully from region {region_id}",
             "region_id": region_id,
             "label": label,
         }
@@ -223,7 +232,7 @@ async def handle_linode_vlan_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vlan(region_id, label)
         return {
-            "message": f"VLAN {label} in region {region_id} deleted successfully",
+            "message": f"VLAN {label} deleted successfully from region {region_id}",
             "region_id": region_id,
             "label": label,
         }
@@ -307,13 +316,15 @@ async def handle_linode_networking_ipv4_share(
     typed_ips, linode_id = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.share_ipv4s(typed_ips, linode_id)
-        return {
-            "message": f"IPv4 addresses shared with Linode {linode_id}",
-            "linode_id": linode_id,
-            "ips": typed_ips,
-            "result": result,
-        }
+        await client.share_ipv4s(typed_ips, linode_id)
+        return serialize_api_response(
+            {
+                "message": "Networking IP sharing updated",
+                "linode_id": linode_id,
+                "ips": typed_ips,
+            },
+            ip_pb2.NetworkingIPShareWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "share IPv4 addresses", _call)
 
@@ -397,13 +408,15 @@ async def handle_linode_networking_ip_share(
     typed_ips, linode_id = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.share_ips(typed_ips, linode_id)
-        return {
-            "message": f"IP addresses shared with Linode {linode_id}",
-            "linode_id": linode_id,
-            "ips": typed_ips,
-            "result": result,
-        }
+        await client.share_ips(typed_ips, linode_id)
+        return serialize_api_response(
+            {
+                "message": "Networking IP sharing updated",
+                "linode_id": linode_id,
+                "ips": typed_ips,
+            },
+            ip_pb2.NetworkingIPShareWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "share IP addresses", _call)
 
@@ -524,13 +537,15 @@ async def handle_linode_networking_ipv4_assign(
     region, typed_assignments = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.assign_ipv4s(region, typed_assignments)
-        return {
-            "message": f"IPv4 assignments completed in region {region}",
-            "region": region,
-            "assignments": typed_assignments,
-            "result": result,
-        }
+        await client.assign_ipv4s(region, typed_assignments)
+        return serialize_api_response(
+            {
+                "message": "Networking IPv4 assignments updated",
+                "region": region,
+                "assignments": typed_assignments,
+            },
+            ip_pb2.NetworkingIPAssignWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "assign IPv4 addresses", _call)
 
@@ -614,12 +629,14 @@ async def handle_linode_networking_ip_assign(
     region, typed_assignments = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.assign_ips(region, typed_assignments)
-        return {
-            "message": f"IP assignments completed in region {region}",
-            "region": region,
-            "assignments": typed_assignments,
-            "result": result,
-        }
+        await client.assign_ips(region, typed_assignments)
+        return serialize_api_response(
+            {
+                "message": "Networking IP assignments updated",
+                "region": region,
+                "assignments": typed_assignments,
+            },
+            ip_pb2.NetworkingIPAssignWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "assign IP addresses", _call)

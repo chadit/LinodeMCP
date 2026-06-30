@@ -1,0 +1,66 @@
+{
+  "message": "linode.mcp.v1.FirewallListResponse",
+  "description": "linode_instance_firewall_list envelope: count and the full proto Firewall elements (nested ruleset), no filter (the sub-resource list paginates and never echoes one).",
+  "input": {
+    "count": 1,
+    "firewalls": [
+      {
+        "id": 123,
+        "label": "instance-firewall",
+        "status": "enabled",
+        "rules": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": {
+                "ipv4": ["192.0.2.0/24"],
+                "ipv6": ["2001:db8::/32"]
+              },
+              "label": "allow-ssh",
+              "description": "Allow inbound SSH"
+            }
+          ],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": ["prod"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "firewalls": [
+      {
+        "id": 123,
+        "label": "instance-firewall",
+        "status": "enabled",
+        "rules": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": {
+                "ipv4": ["192.0.2.0/24"],
+                "ipv6": ["2001:db8::/32"]
+              },
+              "label": "allow-ssh",
+              "description": "Allow inbound SSH"
+            }
+          ],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
+        "tags": ["prod"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  }
+}

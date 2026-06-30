@@ -165,8 +165,8 @@ func TestLinodeSupportTicketsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_ticket_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_ticket_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -365,8 +365,8 @@ func TestLinodeSupportTicketRepliesToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_support_ticket_reply_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_support_ticket_reply_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

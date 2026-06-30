@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.ManagedIssueListResponse",
+  "description": "linode_managed_issue_list envelope: count, an optional filter echo, and the proto ManagedIssue elements with a populated nested entity message and a repeated int32 services list.",
+  "input": {
+    "count": 1,
+    "filter": "services=101",
+    "managed_issues": [
+      {
+        "id": 555,
+        "created": "2024-06-01T00:00:00",
+        "services": [101, 102],
+        "entity": {
+          "id": 12,
+          "label": "web-1",
+          "type": "linode",
+          "url": "/linode/instances/12"
+        }
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "services=101",
+    "managed_issues": [
+      {
+        "id": 555,
+        "created": "2024-06-01T00:00:00",
+        "services": [101, 102],
+        "entity": {
+          "id": 12,
+          "label": "web-1",
+          "type": "linode",
+          "url": "/linode/instances/12"
+        }
+      }
+    ]
+  }
+}

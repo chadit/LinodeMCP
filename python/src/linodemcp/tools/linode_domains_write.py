@@ -522,7 +522,7 @@ async def _domain_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain(int(domain_id))
         return {
-            "message": f"Domain {domain_id} deleted successfully",
+            "message": f"Domain {domain_id} and all its records removed successfully",
             "domain_id": domain_id,
         }
 
@@ -581,7 +581,7 @@ async def handle_linode_domain_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain(int(domain_id))
         return {
-            "message": f"Domain {domain_id} deleted successfully",
+            "message": f"Domain {domain_id} and all its records removed successfully",
             "domain_id": domain_id,
         }
 

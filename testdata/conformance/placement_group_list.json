@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.PlacementGroupListResponse",
+  "description": "linode_placement_group_list envelope: count, an optional filter echo, and the full proto PlacementGroup elements with members and migrations present.",
+  "input": {
+    "count": 1,
+    "filter": "region=us-east",
+    "placement_groups": [
+      {
+        "id": 528,
+        "label": "PG_Messaging",
+        "region": "us-east",
+        "placement_group_type": "anti_affinity:local",
+        "placement_group_policy": "strict",
+        "is_compliant": true,
+        "members": [
+          {"linode_id": 123, "is_compliant": true},
+          {"linode_id": 456, "is_compliant": false}
+        ],
+        "migrations": {
+          "inbound": [{"linode_id": 789}],
+          "outbound": [{"linode_id": 321}]
+        }
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "region=us-east",
+    "placement_groups": [
+      {
+        "id": 528,
+        "label": "PG_Messaging",
+        "region": "us-east",
+        "placement_group_type": "anti_affinity:local",
+        "placement_group_policy": "strict",
+        "is_compliant": true,
+        "members": [
+          {"linode_id": 123, "is_compliant": true},
+          {"linode_id": 456, "is_compliant": false}
+        ],
+        "migrations": {
+          "inbound": [{"linode_id": 789}],
+          "outbound": [{"linode_id": 321}]
+        }
+      }
+    ]
+  }
+}

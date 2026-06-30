@@ -516,20 +516,17 @@ func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	pool, err := client.CreateLKENodePool(ctx, clusterID, &req)
+	pool, err := client.CreateLKENodePoolProto(ctx, clusterID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create node pool in cluster %d: %v", clusterID, err)), nil
 	}
 
-	response := struct {
-		Message string              `json:"message"`
-		Pool    *linode.LKENodePool `json:"pool"`
-	}{
-		Message: fmt.Sprintf("Node pool (ID: %d) created in cluster %d with %d %s node(s)", pool.ID, clusterID, pool.Count, pool.Type),
+	response := &linodev1.LKENodePoolWriteResponse{
+		Message: fmt.Sprintf("Node pool (ID: %d) created in cluster %d with %d %s node(s)", pool.GetId(), clusterID, pool.GetCount(), pool.GetType()),
 		Pool:    pool,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeLKEPoolUpdateTool creates a tool for updating an LKE node pool.
@@ -618,20 +615,17 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	pool, err := client.UpdateLKENodePool(ctx, clusterID, poolID, req)
+	pool, err := client.UpdateLKENodePoolProto(ctx, clusterID, poolID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify node pool %d in cluster %d: %v", poolID, clusterID, err)), nil
 	}
 
-	response := struct {
-		Message string              `json:"message"`
-		Pool    *linode.LKENodePool `json:"pool"`
-	}{
+	response := &linodev1.LKENodePoolWriteResponse{
 		Message: fmt.Sprintf("Node pool %d in cluster %d modified successfully", poolID, clusterID),
 		Pool:    pool,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeLKEPoolDeleteTool creates a tool for deleting a node pool from an LKE cluster.

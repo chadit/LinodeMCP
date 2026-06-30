@@ -22,6 +22,14 @@ message ManagedService {
   string updated = 13;
 }
 
+// ManagedServiceListResponse is the {count, filter?, managed_services} envelope
+// the linode_managed_service_list tool returns.
+message ManagedServiceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ManagedService managed_services = 3;
+}
+
 // ManagedServiceGetInput is the input contract for linode_managed_service_get.
 message ManagedServiceGetInput {
   // Linode environment to use (optional, defaults to "default").
@@ -45,6 +53,14 @@ message ManagedLinodeSettings {
   string label = 2;
   string group = 3;
   ManagedLinodeSettingsSSH ssh = 4;
+}
+
+// ManagedLinodeSettingsListResponse is the {count, filter?, managed_linode_settings}
+// envelope the linode_managed_linode_settings_list tool returns.
+message ManagedLinodeSettingsListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ManagedLinodeSettings managed_linode_settings = 3;
 }
 
 // ManagedLinodeSettingsGetInput is the input contract for
@@ -74,6 +90,14 @@ message ManagedContact {
   string updated = 6;
 }
 
+// ManagedContactListResponse is the {count, filter?, managed_contacts} envelope
+// the linode_managed_contact_list tool returns.
+message ManagedContactListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ManagedContact managed_contacts = 3;
+}
+
 // ManagedContactGetInput is the input contract for linode_managed_contact_get.
 message ManagedContactGetInput {
   // Linode environment to use (optional, defaults to "default").
@@ -90,6 +114,15 @@ message ManagedCredential {
   string last_decrypted = 3;
 }
 
+// ManagedCredentialListResponse is the {count, filter?, managed_credentials}
+// envelope the linode_managed_credential_list tool returns. The secret material
+// is write-only and never present in the list body.
+message ManagedCredentialListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ManagedCredential managed_credentials = 3;
+}
+
 // ManagedCredentialGetInput is the input contract for linode_managed_credential_get.
 message ManagedCredentialGetInput {
   // Linode environment to use (optional, defaults to "default").
@@ -98,4 +131,49 @@ message ManagedCredentialGetInput {
   int32 credential_id = 2;
   // Preview the request without retrieving it (optional).
   optional bool dry_run = 3;
+}
+
+// ManagedCredentialWriteResponse is the {message, credential} envelope the
+// linode_managed_credential_update tool returns after a successful update.
+message ManagedCredentialWriteResponse {
+  string message = 1;
+  ManagedCredential credential = 2;
+}
+
+// ManagedCredentialIDResponse is the {message, credential_id} id-echo the
+// linode_managed_credential_revoke and linode_managed_credential_username_password_update
+// tools return; their endpoints have no resource body to echo.
+message ManagedCredentialIDResponse {
+  string message = 1;
+  int32 credential_id = 2;
+}
+
+// ManagedContactWriteResponse is the {message, contact} envelope the
+// linode_managed_contact_update tool returns after a successful update.
+message ManagedContactWriteResponse {
+  string message = 1;
+  ManagedContact contact = 2;
+}
+
+// ManagedContactIDResponse is the {message, contact_id} id-echo the
+// linode_managed_contact_delete tool returns; the delete endpoint has no
+// resource body to echo.
+message ManagedContactIDResponse {
+  string message = 1;
+  int32 contact_id = 2;
+}
+
+// ManagedServiceIDResponse is the {message, service_id} id-echo the
+// linode_managed_service_delete, _enable, and _disable tools return; those
+// endpoints have no resource body to echo.
+message ManagedServiceIDResponse {
+  string message = 1;
+  int32 service_id = 2;
+}
+
+// ManagedLinodeSettingsWriteResponse is the {message, settings} envelope the
+// linode_managed_linode_settings_update tool returns after a successful update.
+message ManagedLinodeSettingsWriteResponse {
+  string message = 1;
+  ManagedLinodeSettings settings = 2;
 }

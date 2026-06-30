@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.LKETierVersionListResponse",
+  "description": "linode_lke_tier_version_list envelope: count and the full proto LKETierVersion elements (id, tier) for a requested tier. The tool has no filter params, so filter is omitted.",
+  "input": {
+    "count": 2,
+    "tier_versions": [
+      {
+        "id": "1.31",
+        "tier": "standard"
+      },
+      {
+        "id": "1.30",
+        "tier": "standard"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "tier_versions": [
+      {
+        "id": "1.31",
+        "tier": "standard"
+      },
+      {
+        "id": "1.30",
+        "tier": "standard"
+      }
+    ]
+  }
+}

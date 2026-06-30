@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import region_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -55,52 +61,42 @@ def create_linode_region_list_tool() -> tuple[Tool, Capability]:
 async def handle_linode_region_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_region_list tool request."""
+    """Handle linode_region_list tool request.
+
+    Country is a case-insensitive exact match; capability is a case-insensitive
+    exact match against the region's capabilities list, mirroring the Go list
+    tool's fieldFilter/filterRegionsByCapability.
+    """
     country_filter: str = arguments.get("country", "")
     capability_filter: str = arguments.get("capability", "")
 
+    def _matches(region: dict[str, Any]) -> bool:
+        country = str(region.get("country", ""))
+        if country_filter and country.lower() != country_filter.lower():
+            return False
+        capabilities = region.get("capabilities", [])
+        return not (
+            capability_filter
+            and not any(
+                str(cap).lower() == capability_filter.lower() for cap in capabilities
+            )
+        )
+
+    applied: list[str] = []
+    if country_filter:
+        applied.append(f"country={country_filter}")
+    if capability_filter:
+        applied.append(f"capability={capability_filter}")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        regions = await client.list_regions()
-
-        if country_filter:
-            regions = [
-                r for r in regions if r.country.lower() == country_filter.lower()
-            ]
-
-        if capability_filter:
-            regions = [
-                r
-                for r in regions
-                if any(
-                    cap.lower() == capability_filter.lower() for cap in r.capabilities
-                )
-            ]
-
-        regions_data = [
-            {
-                "id": r.id,
-                "label": r.label,
-                "country": r.country,
-                "capabilities": r.capabilities,
-                "status": r.status,
-            }
-            for r in regions
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(regions),
-            "regions": regions_data,
-        }
-
-        filters: list[str] = []
-        if country_filter:
-            filters.append(f"country={country_filter}")
-        if capability_filter:
-            filters.append(f"capability={capability_filter}")
-        if filters:
-            response["filter"] = ", ".join(filters)
-
-        return response
+        raw = await client.get_raw("/regions")
+        return serialize_list_response(
+            raw,
+            "regions",
+            region_pb2.RegionListResponse(),
+            filter_value=", ".join(applied) if applied else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode regions", _call)
 
@@ -127,19 +123,8 @@ async def handle_linode_region_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        region = await client.get_region(region_id)
-        return {
-            "id": region.id,
-            "label": region.label,
-            "country": region.country,
-            "capabilities": region.capabilities,
-            "status": region.status,
-            "resolvers": {
-                "ipv4": region.resolvers.ipv4,
-                "ipv6": region.resolvers.ipv6,
-            },
-            "site_type": region.site_type,
-        }
+        raw = await client.get_raw(f"/regions/{quote(region_id, safe='')}")
+        return serialize_api_response(raw, region_pb2.Region())
 
     return await execute_tool(cfg, arguments, f"retrieve region {region_id}", _call)
 
@@ -170,10 +155,11 @@ async def handle_linode_region_availability_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         availability = await client.list_regions_availability()
-        return {
-            "count": len(availability),
-            "availability": availability,
-        }
+        return serialize_list_response(
+            {"data": availability},
+            "region_availabilities",
+            region_pb2.RegionAvailabilityListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve regions availability", _call)
 

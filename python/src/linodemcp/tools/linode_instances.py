@@ -6,11 +6,15 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    firewall_pb2,
+    instance_pb2,
+    nodebalancer_pb2,
+)
 from linodemcp.linode import (
     LINODE_STATS_MAX_MONTH,
     LINODE_STATS_MAX_YEAR,
     LINODE_STATS_MIN_YEAR,
-    instance_to_response_dict,
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -22,6 +26,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 
@@ -267,34 +275,6 @@ def create_linode_instance_config_interface_delete_tool() -> tuple[Tool, Capabil
     ), Capability.Destroy
 
 
-def _config_interface_ipv4_to_response_dict(ipv4: dict[str, Any]) -> dict[str, Any]:
-    """Shape a config interface ipv4. nat_1_1/vpc nullable, omitted when null."""
-    body: dict[str, Any] = {}
-    if ipv4.get("nat_1_1") is not None:
-        body["nat_1_1"] = ipv4["nat_1_1"]
-    if ipv4.get("vpc") is not None:
-        body["vpc"] = ipv4["vpc"]
-    return body
-
-
-def config_interface_to_response_dict(interface: dict[str, Any]) -> dict[str, Any]:
-    """Shape one config interface to proto-canonical form."""
-    body: dict[str, Any] = {
-        "id": interface.get("id", 0),
-        "active": bool(interface.get("active")),
-        "purpose": interface.get("purpose", ""),
-        "primary": bool(interface.get("primary")),
-        "ip_ranges": interface.get("ip_ranges") or [],
-    }
-    for key in ("label", "ipam_address", "subnet_id", "vpc_id"):
-        if interface.get(key) is not None:
-            body[key] = interface[key]
-    ipv4: dict[str, Any] | None = interface.get("ipv4")
-    if ipv4 is not None:
-        body["ipv4"] = _config_interface_ipv4_to_response_dict(ipv4)
-    return body
-
-
 def create_linode_instance_config_interface_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_config_interface_get tool."""
     return Tool(
@@ -357,34 +337,6 @@ def create_linode_instance_interface_list_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def _interface_default_route_to_response_dict(
-    default_route: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape an interface default route. ipv4/ipv6 omitted when unset."""
-    body: dict[str, Any] = {}
-    if default_route.get("ipv4") is not None:
-        body["ipv4"] = default_route["ipv4"]
-    if default_route.get("ipv6") is not None:
-        body["ipv6"] = default_route["ipv6"]
-    return body
-
-
-def instance_interface_settings_to_response_dict(
-    settings: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape raw instance interface settings to proto-canonical form.
-
-    default_route is omitted when null; network_helper is omitted when null.
-    """
-    body: dict[str, Any] = {}
-    default_route = settings.get("default_route")
-    if default_route is not None:
-        body["default_route"] = _interface_default_route_to_response_dict(default_route)
-    if settings.get("network_helper") is not None:
-        body["network_helper"] = settings["network_helper"]
-    return body
-
-
 def create_linode_instance_interface_settings_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_interface_settings_get tool."""
     return Tool(
@@ -435,23 +387,7 @@ def create_linode_instance_interface_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_interface_get",
         description="Gets an interface for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "interface_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance interface (required)",
-                },
-            },
-            "required": ["linode_id", "interface_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceGetInput"),
     ), Capability.Read
 
 
@@ -492,7 +428,12 @@ async def handle_linode_instance_interface_firewall_list(
         return error_response("interface_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_instance_interface_firewalls(linode_id, interface_id)
+        raw = await client.list_instance_interface_firewalls(linode_id, interface_id)
+        return serialize_list_response(
+            raw,
+            "firewalls",
+            firewall_pb2.FirewallListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance interface firewalls", _call
@@ -1134,8 +1075,8 @@ async def handle_linode_instance_config_delete(
         await client.delete_instance_config(linode_id, config_id)
         return {
             "message": (
-                f"Configuration profile {config_id} deleted from Linode instance "
-                f"{linode_id}"
+                f"Configuration profile {config_id} deleted from instance "
+                f"{linode_id} successfully"
             ),
             "linode_id": linode_id,
             "config_id": config_id,
@@ -1204,8 +1145,8 @@ async def handle_linode_instance_config_interface_delete(
         )
         return {
             "message": (
-                f"Linode instance config {config_id} interface {interface_id} "
-                f"deleted from Linode {linode_id}"
+                f"Configuration profile interface {interface_id} removed from "
+                f"config {config_id} on instance {linode_id}"
             ),
             "linode_id": linode_id,
             "config_id": config_id,
@@ -1232,10 +1173,11 @@ async def handle_linode_instance_config_interface_get(
         return error_response("interface_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return config_interface_to_response_dict(
+        return serialize_api_response(
             await client.get_instance_config_interface(
                 linode_id, config_id, interface_id
-            )
+            ),
+            instance_pb2.ConfigInterfaceResponse(),
         )
 
     return await execute_tool(
@@ -1295,7 +1237,15 @@ async def handle_linode_instance_interface_list(
         return error_response("linode_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_instance_interfaces(linode_id)
+        # The current-generation interfaces endpoint wraps the list under
+        # "interfaces", not a {data} page envelope; rewrap it for the helper.
+        raw = await client.list_instance_interfaces(linode_id)
+        items: list[Any] = raw.get("interfaces") or []
+        return serialize_list_response(
+            {"data": items},
+            "interfaces",
+            instance_pb2.InstanceInterfaceListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance interfaces", _call
@@ -1311,8 +1261,9 @@ async def handle_linode_instance_interface_settings_get(
         return error_response("linode_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return instance_interface_settings_to_response_dict(
-            await client.get_instance_interface_settings(linode_id)
+        return serialize_api_response(
+            await client.get_instance_interface_settings(linode_id),
+            instance_pb2.InstanceInterfaceSettings(),
         )
 
     return await execute_tool(
@@ -1359,7 +1310,10 @@ async def handle_linode_instance_interface_get(
         return error_response("interface_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_instance_interface(linode_id, interface_id)
+        return serialize_api_response(
+            await client.get_instance_interface(linode_id, interface_id),
+            instance_pb2.InstanceInterface(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance interface", _call
@@ -1378,7 +1332,15 @@ async def handle_linode_instance_config_interface_list(
         return error_response("config_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_instance_config_interfaces(linode_id, config_id)
+        # The config-interface endpoint returns either a bare array or a {data}
+        # page envelope; normalize both to {data: items} for the helper.
+        raw = await client.list_instance_config_interfaces(linode_id, config_id)
+        items = raw if isinstance(raw, list) else raw.get("data", [])
+        return serialize_list_response(
+            {"data": items},
+            "interfaces",
+            instance_pb2.ConfigInterfaceListResponse(),
+        )
 
     return await execute_tool(
         cfg,
@@ -1403,8 +1365,13 @@ async def handle_linode_instance_interface_history_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_instance_interface_history(
+        raw = await client.list_instance_interface_history(
             linode_id, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "interface_history",
+            instance_pb2.InstanceInterfaceHistoryListResponse(),
         )
 
     return await execute_tool(
@@ -1484,17 +1451,16 @@ async def handle_linode_instance_config_interface_update(
         result = await client.update_instance_config_interface(
             linode_id, config_id, interface_id, fields
         )
-        if result:
-            return result
-        return {
-            "message": (
-                f"Linode instance config interface {interface_id} update requested "
-                f"for config {config_id} on Linode {linode_id}"
-            ),
-            "linode_id": linode_id,
-            "config_id": config_id,
-            "interface_id": interface_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Configuration profile interface {interface_id} updated"
+                    f" on config {config_id} for instance {linode_id}"
+                ),
+                "interface": result,
+            },
+            instance_pb2.ConfigInterfaceWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "update Linode instance config interface", _call
@@ -1513,23 +1479,20 @@ async def handle_linode_instance_list(
     status_filter = arguments.get("status", "")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        instances = await client.list_instances()
-
-        if status_filter:
-            instances = [
-                inst
-                for inst in instances
-                if inst.status.lower() == status_filter.lower()
-            ]
-
-        instances_data = [instance_to_response_dict(inst) for inst in instances]
-
-        response: dict[str, Any] = {"count": len(instances)}
-        if status_filter:
-            response["filter"] = f"status={status_filter}"
-        response["instances"] = instances_data
-
-        return response
+        raw = await client.get_raw("/linode/instances")
+        if not status_filter:
+            return serialize_list_response(
+                raw, "instances", instance_pb2.InstanceListResponse()
+            )
+        return serialize_list_response(
+            raw,
+            "instances",
+            instance_pb2.InstanceListResponse(),
+            filter_value=f"status={status_filter}",
+            item_filter=lambda inst: (
+                str(inst.get("status", "")).lower() == status_filter.lower()
+            ),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode instances", _call)
 
@@ -1559,7 +1522,12 @@ async def handle_linode_instance_nodebalancer_list(
         return error_response("linode_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_instance_nodebalancers(linode_id)
+        raw = await client.list_instance_nodebalancers(linode_id)
+        return serialize_list_response(
+            raw,
+            "nodebalancers",
+            nodebalancer_pb2.NodeBalancerListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance NodeBalancers", _call
@@ -1624,8 +1592,13 @@ async def handle_linode_instance_config_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_instance_configs(
+        raw = await client.list_instance_configs(
             linode_id, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "configs",
+            instance_pb2.InstanceConfigListResponse(),
         )
 
     return await execute_tool(
@@ -1667,15 +1640,11 @@ async def handle_linode_instance_config_interface_reorder(
         return error_response("confirm must be true")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.reorder_instance_config_interfaces(
-            linode_id, config_id, ids
-        )
-        if result:
-            return result
+        await client.reorder_instance_config_interfaces(linode_id, config_id, ids)
         return {
             "message": (
-                f"Linode instance config {config_id} interface reorder requested "
-                f"for Linode {linode_id}"
+                f"Configuration profile {config_id} interfaces reordered on "
+                f"instance {linode_id}"
             ),
             "linode_id": linode_id,
             "config_id": config_id,
@@ -1722,16 +1691,16 @@ async def handle_linode_instance_config_interface_add(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.add_instance_config_interface(linode_id, config_id, body)
-        if result:
-            return result
-        return {
-            "message": (
-                f"Linode instance config interface add requested for "
-                f"config {config_id} on Linode {linode_id}"
-            ),
-            "linode_id": linode_id,
-            "config_id": config_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Configuration profile interface added to"
+                    f" config {config_id} on instance {linode_id}"
+                ),
+                "interface": result,
+            },
+            instance_pb2.ConfigInterfaceWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "add Linode instance config interface", _call
@@ -1789,15 +1758,17 @@ async def handle_linode_instance_config_update(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_instance_config(linode_id, config_id, fields)
-        if result:
-            return result
-        return {
-            "message": (
-                f"Linode instance config {config_id} update requested "
-                f"for Linode {linode_id}"
-            ),
-            "linode_id": linode_id,
-            "config_id": config_id,
-        }
+        return serialize_api_response(
+            {
+                # Match Go's zero-value getters on an empty API body: label "",
+                # id 0, so both languages emit the same message string.
+                "message": (
+                    f"Configuration profile '{result.get('label', '')}'"
+                    f" (ID: {result.get('id', 0)}) updated on instance {linode_id}"
+                ),
+                "config": result,
+            },
+            instance_pb2.InstanceConfigWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode instance config", _call)

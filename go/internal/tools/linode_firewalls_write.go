@@ -7,6 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
@@ -90,20 +91,17 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToo
 		},
 	}
 
-	firewall, err := client.CreateFirewall(ctx, req)
+	firewall, err := client.CreateFirewallProto(ctx, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create firewall: %v", err)), nil
 	}
 
-	response := struct {
-		Message  string           `json:"message"`
-		Firewall *linode.Firewall `json:"firewall"`
-	}{
-		Message:  fmt.Sprintf("Firewall '%s' (ID: %d) created successfully", firewall.Label, firewall.ID),
+	response := &linodev1.FirewallWriteResponse{
+		Message:  fmt.Sprintf("Firewall '%s' (ID: %d) created successfully", firewall.GetLabel(), firewall.GetId()),
 		Firewall: firewall,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeFirewallUpdateTool creates a tool for updating a firewall.
@@ -195,20 +193,17 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 		}
 	}
 
-	firewall, err := client.UpdateFirewall(ctx, firewallID, req)
+	firewall, err := client.UpdateFirewallProto(ctx, firewallID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify firewall %d: %v", firewallID, err)), nil
 	}
 
-	response := struct {
-		Message  string           `json:"message"`
-		Firewall *linode.Firewall `json:"firewall"`
-	}{
+	response := &linodev1.FirewallWriteResponse{
 		Message:  fmt.Sprintf("Firewall %d modified successfully", firewallID),
 		Firewall: firewall,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeFirewallDeleteTool creates a tool for deleting a firewall.

@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.ManagedService",
+  "description": "Managed service with all fields present: int32 id/timeout, the optional strings body/notes/region present, and a repeated int32 credentials list.",
+  "input": {
+    "id": 4567,
+    "label": "web monitor",
+    "service_type": "url",
+    "status": "ok",
+    "address": "https://example.com/health",
+    "body": "200 OK",
+    "consultation_group": "ops",
+    "created": "2024-06-01T00:00:00",
+    "credentials": [11, 12],
+    "notes": "primary monitor",
+    "region": "us-east",
+    "timeout": 30,
+    "updated": "2024-06-02T00:00:00"
+  },
+  "canonical": {
+    "id": 4567,
+    "label": "web monitor",
+    "service_type": "url",
+    "status": "ok",
+    "address": "https://example.com/health",
+    "body": "200 OK",
+    "consultation_group": "ops",
+    "created": "2024-06-01T00:00:00",
+    "credentials": [11, 12],
+    "notes": "primary monitor",
+    "region": "us-east",
+    "timeout": 30,
+    "updated": "2024-06-02T00:00:00"
+  }
+}

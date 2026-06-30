@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -51,72 +52,65 @@ const (
 
 // NewLinodeNodeBalancerTypesTool creates a tool for listing available NodeBalancer types.
 func NewLinodeNodeBalancerTypesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_nodebalancer_type_list",
 		"Lists available NodeBalancer types.",
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.LinodeType, error) {
+			return client.ListNodeBalancerTypesProto(ctx)
+		},
 		nil,
-		handleLinodeNodeBalancerTypesRequest,
+		nodeBalancerTypeListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeNodeBalancerTypesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	types, listFailureMessage := listNodeBalancerTypes(ctx, client)
-	if listFailureMessage != "" {
-		return mcp.NewToolResultError("Failed to retrieve linode_nodebalancer_type_list: " + listFailureMessage), nil
-	}
-
-	return MarshalToolResponse(types)
-}
-
-func listNodeBalancerTypes(ctx context.Context, client *linode.Client) (*linode.PaginatedResponse[linode.NodeBalancerType], string) {
-	types, err := client.ListNodeBalancerTypes(ctx)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	return types, ""
+func nodeBalancerTypeListResponse(items []*linodev1.LinodeType, count int32, filter *string) *linodev1.NodeBalancerTypeListResponse {
+	return &linodev1.NodeBalancerTypeListResponse{Count: count, Filter: filter, NodebalancerTypes: items}
 }
 
 // NewLinodeNodeBalancerListTool creates a tool for listing NodeBalancers.
 func NewLinodeNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newListTool(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_nodebalancer_list",
 		"Lists all NodeBalancers on your account. Can filter by region or label.",
-		func(ctx context.Context, client *linode.Client) ([]linode.NodeBalancer, error) {
-			return client.ListNodeBalancers(ctx)
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.NodeBalancer, error) {
+			return client.ListNodeBalancersProto(ctx)
 		},
-		[]listFilterParam[linode.NodeBalancer]{
+		[]listFilterParam[*linodev1.NodeBalancer]{
 			fieldFilter("region", "Filter by region ID (e.g., us-east, eu-west)",
-				func(n linode.NodeBalancer) string { return n.Region }),
+				func(n *linodev1.NodeBalancer) string { return n.GetRegion() }),
 			containsFilter("label_contains", "Filter NodeBalancers by label containing this string (case-insensitive)",
-				func(n linode.NodeBalancer) string { return n.Label }),
+				func(n *linodev1.NodeBalancer) string { return n.GetLabel() }),
 		},
-		"nodebalancers",
+		nodeBalancerListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
+func nodeBalancerListResponse(items []*linodev1.NodeBalancer, count int32, filter *string) *linodev1.NodeBalancerListResponse {
+	return &linodev1.NodeBalancerListResponse{Count: count, Filter: filter, Nodebalancers: items}
+}
+
 // NewLinodeInstanceNodeBalancerListTool creates a tool for listing NodeBalancers assigned to a Linode instance.
 func NewLinodeInstanceNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_instance_nodebalancer_list",
 		"Lists NodeBalancers assigned to a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
+		protoListPathID{
+			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
+			parse: instanceConfigLinodeIDFromTool,
 		},
-		handleLinodeInstanceNodeBalancerListRequest,
+		func(ctx context.Context, client *linode.Client, linodeID int) ([]*linodev1.NodeBalancer, error) {
+			return client.ListInstanceNodeBalancersProto(ctx, linodeID)
+		},
+		nil,
+		nodeBalancerListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -124,17 +118,23 @@ func NewLinodeInstanceNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profil
 
 // NewLinodeNodeBalancerFirewallListTool creates a tool for listing Cloud Firewalls assigned to a NodeBalancer.
 func NewLinodeNodeBalancerFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_nodebalancer_firewall_list",
 		"Lists Cloud Firewalls assigned to a specific NodeBalancer by its ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+		"Page number to retrieve",
+		"Number of results per page, from 25 through 500",
+		protoListPathID{
+			option: mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose Cloud Firewalls should be listed")),
-			mcp.WithNumber("page", mcp.Description("Page number to retrieve")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page, from 25 through 500")),
+			parse: nodeBalancerIDFromTool,
 		},
-		handleLinodeNodeBalancerFirewallListRequest,
+		nodeBalancerListPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, nodeBalancerID, page, pageSize int) ([]*linodev1.Firewall, error) {
+			return client.ListNodeBalancerFirewallsProto(ctx, nodeBalancerID, page, pageSize)
+		},
+		nil,
+		instanceFirewallListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
@@ -165,58 +165,91 @@ func NewLinodeNodeBalancerFirewallUpdateTool(cfg *config.Config) (mcp.Tool, prof
 
 // NewLinodeNodeBalancerVPCListTool creates a tool for listing VPC configurations on a NodeBalancer.
 func NewLinodeNodeBalancerVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_nodebalancer_vpc_config_list",
 		"Lists VPC configurations for a specific NodeBalancer by its ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+		"Page number to retrieve",
+		"Number of results per page, from 25 through 500",
+		protoListPathID{
+			option: mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose VPC configurations should be listed")),
-			mcp.WithNumber("page", mcp.Description("Page number to retrieve")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page, from 25 through 500")),
+			parse: nodeBalancerIDFromTool,
 		},
-		handleLinodeNodeBalancerVPCListRequest,
+		nodeBalancerListPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, nodeBalancerID, page, pageSize int) ([]*linodev1.NodeBalancerVPCConfig, error) {
+			return client.ListNodeBalancerVPCsProto(ctx, nodeBalancerID, page, pageSize)
+		},
+		nil,
+		nodeBalancerVPCConfigListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func nodeBalancerVPCConfigListResponse(items []*linodev1.NodeBalancerVPCConfig, count int32, filter *string) *linodev1.NodeBalancerVPCConfigListResponse {
+	return &linodev1.NodeBalancerVPCConfigListResponse{Count: count, Filter: filter, VpcConfigs: items}
 }
 
 // NewLinodeNodeBalancerConfigListTool creates a tool for listing configs on a NodeBalancer.
 func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_nodebalancer_config_list",
 		"Lists configs for a specific NodeBalancer by its ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+		"Page number to retrieve",
+		"Number of results per page, from 25 through 500",
+		protoListPathID{
+			option: mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose configs should be listed")),
-			mcp.WithNumber("page", mcp.Description("Page number to retrieve")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page, from 25 through 500")),
+			parse: nodeBalancerIDFromTool,
 		},
-		handleLinodeNodeBalancerConfigListRequest,
+		nodeBalancerListPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, nodeBalancerID, page, pageSize int) ([]*linodev1.NodeBalancerConfig, error) {
+			return client.ListNodeBalancerConfigsProto(ctx, nodeBalancerID, page, pageSize)
+		},
+		nil,
+		nodeBalancerConfigListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
+func nodeBalancerConfigListResponse(items []*linodev1.NodeBalancerConfig, count int32, filter *string) *linodev1.NodeBalancerConfigListResponse {
+	return &linodev1.NodeBalancerConfigListResponse{Count: count, Filter: filter, Configs: items}
+}
+
 // NewLinodeNodeBalancerConfigNodesListTool creates a tool for listing nodes on a NodeBalancer config.
 func NewLinodeNodeBalancerConfigNodesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolSubresource2Paginated(
 		cfg,
 		"linode_nodebalancer_config_node_list",
 		"Lists backend nodes for a specific NodeBalancer config.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
+		"Page number to retrieve",
+		"Number of results per page, from 25 through 500",
+		protoListPathID{
+			option: mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose config nodes should be listed")),
-			mcp.WithNumber(nodeBalancerKeyConfigID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config whose nodes should be listed")),
-			mcp.WithNumber("page", mcp.Description("Page number to retrieve")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page, from 25 through 500")),
+			parse: nodeBalancerIDFromTool,
 		},
-		handleLinodeNodeBalancerConfigNodesListRequest,
+		protoListPathID{
+			option: mcp.WithNumber(nodeBalancerKeyConfigID, mcp.Required(),
+				mcp.Description("The ID of the NodeBalancer config whose nodes should be listed")),
+			parse: nodeBalancerConfigIDFromTool,
+		},
+		nodeBalancerListPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, nodeBalancerID, configID, page, pageSize int) ([]*linodev1.NodeBalancerConfigNode, error) {
+			return client.ListNodeBalancerConfigNodesProto(ctx, nodeBalancerID, configID, page, pageSize)
+		},
+		nil,
+		nodeBalancerConfigNodeListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func nodeBalancerConfigNodeListResponse(items []*linodev1.NodeBalancerConfigNode, count int32, filter *string) *linodev1.NodeBalancerConfigNodeListResponse {
+	return &linodev1.NodeBalancerConfigNodeListResponse{Count: count, Filter: filter, Nodes: items}
 }
 
 // NewLinodeNodeBalancerConfigGetTool creates a tool for getting one config on a NodeBalancer.
@@ -487,65 +520,6 @@ func NewLinodeNodeBalancerGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 	return tool, profiles.CapRead, handler
 }
 
-func handleLinodeInstanceNodeBalancerListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, validationMessage := instanceConfigLinodeIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	nodeBalancers, err := client.ListInstanceNodeBalancers(ctx, linodeID)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list NodeBalancers for instance %d: %v", linodeID, err)), nil
-	}
-
-	response := struct {
-		Count         int                   `json:"count"`
-		NodeBalancers []linode.NodeBalancer `json:"nodebalancers"`
-	}{
-		Count:         len(nodeBalancers),
-		NodeBalancers: nodeBalancers,
-	}
-
-	return MarshalToolResponse(response)
-}
-
-func handleLinodeNodeBalancerFirewallListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := nodeBalancerListPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	firewalls, err := client.ListNodeBalancerFirewalls(ctx, nodeBalancerID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list firewalls for NodeBalancer %d: %v", nodeBalancerID, err)), nil
-	}
-
-	response := struct {
-		Count     int               `json:"count"`
-		Firewalls []linode.Firewall `json:"firewalls"`
-	}{
-		Count:     len(firewalls),
-		Firewalls: firewalls,
-	}
-
-	return MarshalToolResponse(response)
-}
-
 func handleLinodeNodeBalancerFirewallUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
 	if validationMessage != "" {
@@ -603,37 +577,6 @@ func formatNodeBalancerFirewallsUpdateError(nodeBalancerID int, err error) strin
 	return "Failed to update firewall assignments for NodeBalancer " + strconv.Itoa(nodeBalancerID) + ": " + err.Error()
 }
 
-func handleLinodeNodeBalancerVPCListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", nodeBalancerConfigNodesPageSizeMin, nodeBalancerConfigNodesPageSizeMax)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	vpcs, err := client.ListNodeBalancerVPCs(ctx, nodeBalancerID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list VPC configurations for NodeBalancer %d: %v", nodeBalancerID, err)), nil
-	}
-
-	return MarshalToolResponse(vpcs)
-}
-
 func handleLinodeNodeBalancerConfigRebuildRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
 	if validationMessage != "" {
@@ -664,20 +607,17 @@ func handleLinodeNodeBalancerConfigRebuildRequest(ctx context.Context, request *
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	nodeBalancerConfig, err := client.RebuildNodeBalancerConfig(ctx, nodeBalancerID, configID)
+	nodeBalancerConfig, err := client.RebuildNodeBalancerConfigProto(ctx, nodeBalancerID, configID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to rebuild config %d for NodeBalancer %d: %v", configID, nodeBalancerID, err)), nil
 	}
 
-	response := struct {
-		Message string                     `json:"message"`
-		Config  *linode.NodeBalancerConfig `json:"config"`
-	}{
+	response := &linodev1.NodeBalancerConfigWriteResponse{
 		Message: fmt.Sprintf("Rebuilt config %d for NodeBalancer %d successfully", configID, nodeBalancerID),
 		Config:  nodeBalancerConfig,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func handleLinodeNodeBalancerVPCConfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -702,72 +642,6 @@ func handleLinodeNodeBalancerVPCConfigGetRequest(ctx context.Context, request *m
 	}
 
 	return MarshalProtoToolResponse(vpcConfig)
-}
-
-func handleLinodeNodeBalancerConfigListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, pageSize, validationMessage := nodeBalancerListPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	configs, err := client.ListNodeBalancerConfigs(ctx, nodeBalancerID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list configs for NodeBalancer %d: %v", nodeBalancerID, err)), nil
-	}
-
-	response := struct {
-		Count   int                         `json:"count"`
-		Configs []linode.NodeBalancerConfig `json:"configs"`
-	}{
-		Count:   len(configs),
-		Configs: configs,
-	}
-
-	return MarshalToolResponse(response)
-}
-
-func handleLinodeNodeBalancerConfigNodesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	nodeBalancerID, validationMessage := nodeBalancerIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	configID, validationMessage := nodeBalancerConfigIDFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	page, validationMessage := optionalPaginationInt(request.GetArguments(), "page", 1, 0)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(request.GetArguments(), "page_size", nodeBalancerConfigNodesPageSizeMin, nodeBalancerConfigNodesPageSizeMax)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	nodes, err := client.ListNodeBalancerConfigNodes(ctx, nodeBalancerID, configID, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to list nodes for NodeBalancer %d config %d: %v", nodeBalancerID, configID, err)), nil
-	}
-
-	return MarshalToolResponse(nodes)
 }
 
 func handleLinodeNodeBalancerConfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -868,19 +742,16 @@ func handleLinodeNodeBalancerNodeUpdateRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(updateFailureMessage), nil
 	}
 
-	if node == nil || node.ID == 0 {
+	if node == nil || node.GetId() == 0 {
 		return mcp.NewToolResultError("Failed to update node " + strconv.Itoa(nodeID) + " for NodeBalancer " + strconv.Itoa(nodeBalancerID) + " config " + strconv.Itoa(configID) + ": empty response"), nil
 	}
 
-	response := struct {
-		Message string                   `json:"message"`
-		Node    *linode.NodeBalancerNode `json:"node"`
-	}{
-		Message: fmt.Sprintf("NodeBalancer node %d updated successfully for NodeBalancer %d config %d", node.ID, nodeBalancerID, configID),
+	response := &linodev1.NodeBalancerConfigNodeWriteResponse{
+		Message: fmt.Sprintf("NodeBalancer node %d updated successfully for NodeBalancer %d config %d", node.GetId(), nodeBalancerID, configID),
 		Node:    node,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func handleLinodeNodeBalancerConfigUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -921,15 +792,12 @@ func handleLinodeNodeBalancerConfigUpdateRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError("Failed to update config " + strconv.Itoa(configID) + " for NodeBalancer " + strconv.Itoa(nodeBalancerID) + ": empty response"), nil
 	}
 
-	response := struct {
-		Message string                     `json:"message"`
-		Config  *linode.NodeBalancerConfig `json:"config"`
-	}{
-		Message: fmt.Sprintf("NodeBalancer config %d updated successfully for NodeBalancer %d", nodeBalancerConfig.ID, nodeBalancerID),
+	response := &linodev1.NodeBalancerConfigWriteResponse{
+		Message: fmt.Sprintf("NodeBalancer config %d updated successfully for NodeBalancer %d", nodeBalancerConfig.GetId(), nodeBalancerID),
 		Config:  nodeBalancerConfig,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func listNodeBalancerConfigs(ctx context.Context, client *linode.Client, nodeBalancerID int) ([]linode.NodeBalancerConfig, string) {
@@ -971,8 +839,8 @@ func handleLinodeNodeBalancerConfigUpdateDryRun(ctx context.Context, request *mc
 	)
 }
 
-func updateNodeBalancerConfig(ctx context.Context, client *linode.Client, nodeBalancerID, configID int, req *linode.UpdateNodeBalancerConfigRequest) (*linode.NodeBalancerConfig, string) {
-	nodeBalancerConfig, err := client.UpdateNodeBalancerConfig(ctx, nodeBalancerID, configID, req)
+func updateNodeBalancerConfig(ctx context.Context, client *linode.Client, nodeBalancerID, configID int, req *linode.UpdateNodeBalancerConfigRequest) (*linodev1.NodeBalancerConfig, string) {
+	nodeBalancerConfig, err := client.UpdateNodeBalancerConfigProto(ctx, nodeBalancerID, configID, req)
 	if err != nil {
 		return nil, "Failed to update config " + strconv.Itoa(configID) + " for NodeBalancer " + strconv.Itoa(nodeBalancerID) + ": " + err.Error()
 	}
@@ -980,8 +848,8 @@ func updateNodeBalancerConfig(ctx context.Context, client *linode.Client, nodeBa
 	return nodeBalancerConfig, ""
 }
 
-func updateNodeBalancerNode(ctx context.Context, client *linode.Client, nodeBalancerID, configID, nodeID int, req *linode.UpdateNodeBalancerNodeRequest) (*linode.NodeBalancerNode, string) {
-	node, err := client.UpdateNodeBalancerNode(ctx, nodeBalancerID, configID, nodeID, req)
+func updateNodeBalancerNode(ctx context.Context, client *linode.Client, nodeBalancerID, configID, nodeID int, req *linode.UpdateNodeBalancerNodeRequest) (*linodev1.NodeBalancerConfigNode, string) {
+	node, err := client.UpdateNodeBalancerNodeProto(ctx, nodeBalancerID, configID, nodeID, req)
 	if err != nil {
 		return nil, "Failed to update node " + strconv.Itoa(nodeID) + " for NodeBalancer " + strconv.Itoa(nodeBalancerID) + " config " + strconv.Itoa(configID) + ": " + err.Error()
 	}
@@ -1013,7 +881,7 @@ func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	nodeBalancerConfig, err := client.CreateNodeBalancerConfig(ctx, nodeBalancerID, &req)
+	nodeBalancerConfig, err := client.CreateNodeBalancerConfigProto(ctx, nodeBalancerID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create config for NodeBalancer %d: %v", nodeBalancerID, err)), nil
 	}
@@ -1022,15 +890,12 @@ func handleLinodeNodeBalancerConfigCreateRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create config for NodeBalancer %d: empty response", nodeBalancerID)), nil
 	}
 
-	response := struct {
-		Message string                     `json:"message"`
-		Config  *linode.NodeBalancerConfig `json:"config"`
-	}{
-		Message: fmt.Sprintf("NodeBalancer config %d created successfully for NodeBalancer %d", nodeBalancerConfig.ID, nodeBalancerID),
+	response := &linodev1.NodeBalancerConfigWriteResponse{
+		Message: fmt.Sprintf("NodeBalancer config %d created successfully for NodeBalancer %d", nodeBalancerConfig.GetId(), nodeBalancerID),
 		Config:  nodeBalancerConfig,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func handleLinodeNodeBalancerConfigCreateDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config, nodeBalancerID int) (*mcp.CallToolResult, error) {
@@ -1349,7 +1214,7 @@ func handleLinodeNodeBalancerNodeCreateRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	node, err := client.CreateNodeBalancerNode(ctx, nodeBalancerID, configID, &req)
+	node, err := client.CreateNodeBalancerNodeProto(ctx, nodeBalancerID, configID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create node for NodeBalancer %d config %d: %v", nodeBalancerID, configID, err)), nil
 	}
@@ -1358,15 +1223,12 @@ func handleLinodeNodeBalancerNodeCreateRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create node for NodeBalancer %d config %d: empty response", nodeBalancerID, configID)), nil
 	}
 
-	response := struct {
-		Message string                   `json:"message"`
-		Node    *linode.NodeBalancerNode `json:"node"`
-	}{
-		Message: fmt.Sprintf("NodeBalancer node %d created successfully for NodeBalancer %d config %d", node.ID, nodeBalancerID, configID),
+	response := &linodev1.NodeBalancerConfigNodeWriteResponse{
+		Message: fmt.Sprintf("NodeBalancer node %d created successfully for NodeBalancer %d config %d", node.GetId(), nodeBalancerID, configID),
 		Node:    node,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func handleLinodeNodeBalancerNodeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

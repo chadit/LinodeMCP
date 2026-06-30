@@ -1,0 +1,36 @@
+{
+  "message": "linode.mcp.v1.AccountInvoiceItemListResponse",
+  "description": "linode_account_invoice_item_list envelope: count and the full proto AccountInvoiceItem elements. amount, tax, total, and unit_price are doubles; quantity is an int. The tool is a sub-resource list keyed by invoice_id and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_invoice_items": [
+      {
+        "amount": 20.2,
+        "from": "2024-01-01T00:00:00",
+        "label": "Linode 2GB",
+        "quantity": 730,
+        "tax": 1.25,
+        "to": "2024-01-31T23:59:59",
+        "total": 21.45,
+        "type": "hourly",
+        "unit_price": 0.0277
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_invoice_items": [
+      {
+        "amount": 20.2,
+        "from": "2024-01-01T00:00:00",
+        "label": "Linode 2GB",
+        "quantity": 730,
+        "tax": 1.25,
+        "to": "2024-01-31T23:59:59",
+        "total": 21.45,
+        "type": "hourly",
+        "unit_price": 0.0277
+      }
+    ]
+  }
+}

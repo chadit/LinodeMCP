@@ -121,6 +121,65 @@ func TestLinodeProfileTokensToolSuccess(t *testing.T) {
 	}
 }
 
+func TestLinodeProfileTokensToolDropsSecret(t *testing.T) {
+	t.Parallel()
+
+	const tokenSecret = "abcdef0123456789-this-secret-must-not-leak"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// The Linode list endpoint returns a token value; the metadata-only
+		// proto element has no token field, so the DiscardUnknown decode must
+		// drop it before the tool ever serializes a response.
+		if err := json.NewEncoder(w).Encode(linode.PaginatedResponse[linode.ProfileToken]{
+			Data: []linode.ProfileToken{{
+				keyID: float64(67890), keyLabel: profileTokenLabel, keyToken: tokenSecret,
+			}},
+			Page: 1, Pages: 1, Results: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {
+				Label:  envLabelDefault,
+				Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest},
+			},
+		},
+	}
+	_, _, handler := tools.NewLinodeProfileTokensTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if strings.Contains(textContent.Text, tokenSecret) {
+		t.Errorf("output leaked the token secret %q: %s", tokenSecret, textContent.Text)
+	}
+
+	if !strings.Contains(textContent.Text, profileTokenLabel) {
+		t.Errorf("textContent.Text does not contain %v", profileTokenLabel)
+	}
+}
+
 func TestLinodeProfileTokensToolInvalidPagination(t *testing.T) {
 	t.Parallel()
 
@@ -211,8 +270,12 @@ func TestLinodeProfileTokensToolUpstreamError(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_profile_token_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_profile_token_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
+	}
+
+	if !strings.Contains(textContent.Text, errForbidden) {
+		t.Errorf("textContent.Text does not contain %v", errForbidden)
 	}
 }
 

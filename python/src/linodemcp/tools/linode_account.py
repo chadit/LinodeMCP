@@ -10,6 +10,20 @@ from urllib.parse import quote
 from mcp.types import TextContent, Tool
 
 from linodemcp.config import Config
+from linodemcp.genpb.linode.mcp.v1 import (
+    account_availability_pb2,
+    account_beta_program_pb2,
+    account_event_pb2,
+    account_pb2,
+    account_service_transfer_pb2,
+    account_user_pb2,
+    beta_program_pb2,
+    common_pb2,
+    managed_issue_pb2,
+    managed_pb2,
+    support_ticket_pb2,
+    tag_pb2,
+)
 from linodemcp.linode import RetryableClient
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -27,6 +41,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+)
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -302,8 +320,9 @@ async def handle_linode_account_get(
     """
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        account = await client.get_account()
-        return account_to_response_dict(account)
+        return serialize_api_response(
+            await client.get_raw("/account"), account_pb2.Account()
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode account", _call)
 
@@ -382,7 +401,10 @@ async def handle_linode_account_user_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         user = await client.create_account_user(username, email, restricted)
-        return {"message": "Account user created successfully", "user": user}
+        return serialize_api_response(
+            {"message": "Account user created successfully", "user": user},
+            account_user_pb2.AccountUserWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create Linode account user", _call)
 
@@ -478,7 +500,10 @@ async def handle_linode_account_user_grants_update(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_account_user_grants(username, grants)
-        return {"message": "Account user grants updated successfully", "grants": result}
+        return serialize_api_response(
+            {"message": "Account user grants updated successfully", "grants": result},
+            account_user_pb2.AccountUserGrantsWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"update Linode account user grants for {username}", _call
@@ -503,7 +528,9 @@ async def handle_linode_account_agreement_list(
     """Handle linode_account_agreement_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_agreements()
+        return serialize_api_response(
+            await client.get_account_agreements(), account_pb2.AccountAgreements()
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account agreements", _call)
 
@@ -544,7 +571,12 @@ async def handle_linode_account_login_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_logins(page=page, page_size=page_size)
+        raw = await client.list_account_logins(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_logins",
+            account_pb2.AccountLoginListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account logins", _call)
 
@@ -585,28 +617,14 @@ async def handle_linode_account_user_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_users(page=page, page_size=page_size)
+        raw = await client.list_account_users(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_users",
+            account_user_pb2.AccountUserListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account users", _call)
-
-
-def account_settings_to_response_dict(settings: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw account settings API dict to proto-canonical form.
-
-    longview_subscription and object_storage are omitted when null.
-    """
-    body: dict[str, Any] = {
-        "backups_enabled": settings.get("backups_enabled", False),
-        "managed": settings.get("managed", False),
-        "network_helper": settings.get("network_helper", False),
-    }
-    if settings.get("longview_subscription") is not None:
-        body["longview_subscription"] = settings["longview_subscription"]
-    if settings.get("object_storage") is not None:
-        body["object_storage"] = settings["object_storage"]
-    body["interfaces_for_new_linodes"] = settings.get("interfaces_for_new_linodes", "")
-    body["maintenance_policy"] = settings.get("maintenance_policy", "")
-    return body
 
 
 def create_linode_account_settings_get_tool() -> tuple[Tool, Capability]:
@@ -624,7 +642,9 @@ async def handle_linode_account_settings_get(
     """Handle linode_account_settings_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_settings_to_response_dict(await client.get_account_settings())
+        return serialize_api_response(
+            await client.get_account_settings(), account_pb2.AccountSettings()
+        )
 
     return await execute_tool(cfg, arguments, "get Linode account settings", _call)
 
@@ -674,34 +694,13 @@ async def handle_linode_account_settings_managed_enable(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.enable_account_managed()
+        await client.enable_account_managed()
+        return serialize_api_response(
+            {"message": "Linode Managed enabled successfully"},
+            common_pb2.MessageResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "enable Linode Managed", _call)
-
-
-def _account_region_transfer_to_dict(region: dict[str, Any]) -> dict[str, Any]:
-    """Shape a per-region transfer entry to proto-canonical form."""
-    return {
-        "id": region.get("id", ""),
-        "billable": region.get("billable", 0),
-        "quota": region.get("quota", 0),
-        "used": region.get("used", 0),
-    }
-
-
-def account_transfer_to_response_dict(transfer: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw account transfer API dict to proto-canonical AccountTransfer form."""
-    return {
-        "billable": transfer.get("billable", 0),
-        "quota": transfer.get("quota", 0),
-        "used": transfer.get("used", 0),
-        "region_transfers": [
-            _account_region_transfer_to_dict(r)
-            for r in cast(
-                "list[dict[str, Any]]", transfer.get("region_transfers") or []
-            )
-        ],
-    }
 
 
 def create_linode_account_transfer_get_tool() -> tuple[Tool, Capability]:
@@ -719,7 +718,9 @@ async def handle_linode_account_transfer_get(
     """Handle linode_account_transfer_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_transfer_to_response_dict(await client.get_account_transfer())
+        return serialize_api_response(
+            await client.get_account_transfer(), account_pb2.AccountTransfer()
+        )
 
     return await execute_tool(cfg, arguments, "get Linode account transfer", _call)
 
@@ -760,7 +761,12 @@ async def handle_linode_account_maintenance_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_maintenance(page=page, page_size=page_size)
+        raw = await client.list_account_maintenance(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_maintenances",
+            account_pb2.AccountMaintenanceListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account maintenance", _call)
 
@@ -801,7 +807,12 @@ async def handle_linode_maintenance_policy_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_maintenance_policies(page=page, page_size=page_size)
+        raw = await client.list_maintenance_policies(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "maintenance_policies",
+            account_pb2.MaintenancePolicyListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode maintenance policies", _call)
 
@@ -842,7 +853,12 @@ async def handle_linode_account_oauth_client_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_oauth_clients(page=page, page_size=page_size)
+        raw = await client.list_account_oauth_clients(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_oauth_clients",
+            account_pb2.OAuthClientListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list Linode account OAuth clients", _call
@@ -1044,13 +1060,14 @@ async def handle_linode_account_oauth_client_thumbnail_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        oauth_client = await client.update_account_oauth_client_thumbnail(
-            client_id, thumbnail_png
+        await client.update_account_oauth_client_thumbnail(client_id, thumbnail_png)
+        return serialize_api_response(
+            {
+                "message": "OAuth client thumbnail updated successfully",
+                "client_id": client_id,
+            },
+            account_pb2.OAuthClientIDResponse(),
         )
-        return {
-            "message": "OAuth client thumbnail updated successfully",
-            "client": oauth_client,
-        }
 
     return await execute_tool(
         cfg, arguments, "update Linode account OAuth client thumbnail", _call
@@ -1093,7 +1110,12 @@ async def handle_linode_account_event_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_events(page=page, page_size=page_size)
+        raw = await client.list_account_events(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_events",
+            account_event_pb2.AccountEventListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account events", _call)
 
@@ -1134,7 +1156,12 @@ async def handle_linode_account_invoice_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_invoices(page=page, page_size=page_size)
+        raw = await client.list_account_invoices(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_invoices",
+            account_pb2.AccountInvoiceListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account invoices", _call)
 
@@ -1175,7 +1202,12 @@ async def handle_linode_account_payment_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_payments(page=page, page_size=page_size)
+        raw = await client.list_account_payments(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_payments",
+            account_pb2.AccountPaymentListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account payments", _call)
 
@@ -1216,7 +1248,12 @@ async def handle_linode_account_payment_method_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_payment_methods(page=page, page_size=page_size)
+        raw = await client.list_account_payment_methods(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_payment_methods",
+            account_pb2.AccountPaymentMethodListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list Linode account payment methods", _call
@@ -1312,9 +1349,16 @@ async def handle_linode_account_payment_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_account_payment(
+        payment = await client.create_account_payment(
             str(request_body["usd"]),
             payment_method_id=request_body.get("payment_method_id"),
+        )
+        return serialize_api_response(
+            {
+                "message": "Account payment created successfully",
+                "payment": payment,
+            },
+            account_pb2.AccountPaymentWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "create Linode account payment", _call)
@@ -1470,11 +1514,14 @@ async def handle_linode_account_payment_method_delete(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.delete_account_payment_method(payment_method_id)
-        return {
-            "message": "Payment method deleted successfully",
-            "result": result,
-        }
+        await client.delete_account_payment_method(payment_method_id)
+        return serialize_api_response(
+            {
+                "message": "Payment method deleted successfully",
+                "payment_method_id": payment_method_id,
+            },
+            account_pb2.AccountPaymentMethodIDResponse(),
+        )
 
     return await execute_tool(
         cfg,
@@ -1520,7 +1567,12 @@ async def handle_linode_account_notification_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_notifications(page=page, page_size=page_size)
+        raw = await client.list_account_notifications(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_notifications",
+            account_pb2.AccountNotificationListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list Linode account notifications", _call
@@ -1577,52 +1629,18 @@ async def handle_linode_account_invoice_item_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_invoice_items(
+        raw = await client.list_account_invoice_items(
             invoice_id, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "account_invoice_items",
+            account_pb2.AccountInvoiceItemListResponse(),
         )
 
     return await execute_tool(
         cfg, arguments, "list Linode account invoice items", _call
     )
-
-
-def _account_event_entity_to_response_dict(entity: dict[str, Any]) -> dict[str, Any]:
-    """Shape an account event entity. id is a passthrough (int or string)."""
-    return {
-        "id": entity.get("id"),
-        "label": entity.get("label", ""),
-        "type": entity.get("type", ""),
-        "url": entity.get("url", ""),
-    }
-
-
-def account_event_to_response_dict(event: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw account event API dict to proto-canonical form.
-
-    duration, percent_complete, rate, and time_remaining are omitted when null;
-    entity and secondary_entity are omitted when null.
-    """
-    result: dict[str, Any] = {
-        "action": event.get("action", ""),
-        "created": event.get("created", ""),
-        "id": event.get("id", 0),
-        "message": event.get("message", ""),
-        "seen": event.get("seen", False),
-        "status": event.get("status", ""),
-        "username": event.get("username", ""),
-    }
-    for key in ("duration", "percent_complete", "rate", "time_remaining"):
-        if event.get(key) is not None:
-            result[key] = event[key]
-    entity = event.get("entity")
-    if entity is not None:
-        result["entity"] = _account_event_entity_to_response_dict(entity)
-    secondary_entity = event.get("secondary_entity")
-    if secondary_entity is not None:
-        result["secondary_entity"] = _account_event_entity_to_response_dict(
-            secondary_entity
-        )
-    return result
 
 
 def create_linode_account_event_get_tool() -> tuple[Tool, Capability]:
@@ -1643,7 +1661,10 @@ async def handle_linode_account_event_get(
         return error_response("event_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_event_to_response_dict(await client.get_account_event(event_id))
+        return serialize_api_response(
+            await client.get_account_event(event_id),
+            account_event_pb2.AccountEvent(),
+        )
 
     return await execute_tool(cfg, arguments, "get Linode account event", _call)
 
@@ -1715,7 +1736,14 @@ async def handle_linode_account_event_seen(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.mark_account_event_seen(event_id)
+        await client.mark_account_event_seen(event_id)
+        return serialize_api_response(
+            {
+                "message": "Account event marked as seen successfully",
+                "event_id": event_id,
+            },
+            account_pb2.AccountEventSeenResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "mark Linode account event seen", _call)
 
@@ -1995,7 +2023,14 @@ async def handle_linode_account_oauth_client_delete(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.delete_account_oauth_client(client_id)
+        await client.delete_account_oauth_client(client_id)
+        return serialize_api_response(
+            {
+                "message": "OAuth client deleted successfully",
+                "client_id": client_id,
+            },
+            account_pb2.OAuthClientIDResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"delete Linode account OAuth client {client_id}", _call
@@ -2037,7 +2072,18 @@ async def handle_linode_account_oauth_client_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_account_oauth_client(label, redirect_uri)
+        oauth_client = await client.create_account_oauth_client(label, redirect_uri)
+        return serialize_api_response(
+            {
+                "message": "OAuth client created successfully",
+                "warning": (
+                    "IMPORTANT: The secret below is shown ONLY ONCE. Save it now"
+                    " - it cannot be retrieved later."
+                ),
+                "client": oauth_client,
+            },
+            account_pb2.OAuthClientCreateWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"create Linode account OAuth client {label}", _call
@@ -2140,10 +2186,17 @@ async def handle_linode_account_payment_method_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_account_payment_method(
+        method = await client.create_account_payment_method(
             str(request_body["type"]),
             cast("dict[str, Any]", request_body["data"]),
             bool(request_body["is_default"]),
+        )
+        return serialize_api_response(
+            {
+                "message": "Payment method created successfully",
+                "payment_method": method,
+            },
+            account_pb2.AccountPaymentMethodWriteResponse(),
         )
 
     return await execute_tool(
@@ -2212,7 +2265,14 @@ async def handle_linode_account_promo_credit_add(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.add_account_promo_credit(promo_code)
+        await client.add_account_promo_credit(promo_code)
+        return serialize_api_response(
+            {
+                "message": "Account promo credit applied successfully",
+                "promo_code": promo_code,
+            },
+            account_pb2.AccountPromoResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "add Linode account promo credit", _call)
 
@@ -2676,10 +2736,13 @@ async def handle_linode_account_user_update(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_account_user(current_username, **update_fields)
-        return {
-            "message": "Account user updated successfully",
-            "user": result,
-        }
+        return serialize_api_response(
+            {
+                "message": "Account user updated successfully",
+                "user": result,
+            },
+            account_user_pb2.AccountUserWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode account user", _call)
 
@@ -2710,23 +2773,6 @@ def _optional_int_argument(
     return value
 
 
-def account_beta_program_to_response_dict(beta: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw enrolled account Beta program API dict to proto-canonical form.
-
-    description and ended are nullable and omitted when null.
-    """
-    body: dict[str, Any] = {
-        "enrolled": beta.get("enrolled") or "",
-        "id": beta.get("id") or "",
-        "label": beta.get("label") or "",
-        "started": beta.get("started") or "",
-    }
-    for key in ("description", "ended"):
-        if beta.get(key) is not None:
-            body[key] = beta[key]
-    return body
-
-
 def create_linode_account_beta_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_beta_get tool."""
     return Tool(
@@ -2753,8 +2799,9 @@ async def handle_linode_account_beta_get(
         return error_response("beta_id must not contain '/', '?', or '..'")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_beta_program_to_response_dict(
-            await client.get_account_beta(beta_id)
+        return serialize_api_response(
+            await client.get_account_beta(beta_id),
+            account_beta_program_pb2.AccountBetaProgram(),
         )
 
     return await execute_tool(
@@ -2862,39 +2909,18 @@ async def handle_linode_account_service_transfer_accept(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.accept_account_service_transfer(token)
+        await client.accept_account_service_transfer(token)
+        return serialize_api_response(
+            {
+                "message": "Account service transfer accepted successfully",
+                "token": token,
+            },
+            account_pb2.AccountServiceTransferActionResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"accept Linode account service transfer {token}", _call
     )
-
-
-def _account_entity_transfer_entities_to_response_dict(
-    entities: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape account service transfer entities to proto-canonical form."""
-    return {"linodes": entities.get("linodes") or []}
-
-
-def account_entity_transfer_to_response_dict(
-    transfer: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape a raw account service transfer API dict to proto-canonical form.
-
-    entities is omitted when null, matching the proto message presence.
-    """
-    body: dict[str, Any] = {
-        "created": transfer.get("created") or "",
-        "expiry": transfer.get("expiry") or "",
-        "is_sender": bool(transfer.get("is_sender")),
-        "status": transfer.get("status") or "",
-        "token": transfer.get("token") or "",
-        "updated": transfer.get("updated") or "",
-    }
-    entities = transfer.get("entities")
-    if entities is not None:
-        body["entities"] = _account_entity_transfer_entities_to_response_dict(entities)
-    return body
 
 
 def create_linode_account_service_transfer_get_tool() -> tuple[Tool, Capability]:
@@ -2915,8 +2941,9 @@ async def handle_linode_account_service_transfer_get(
         return error_response(message or "token is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_entity_transfer_to_response_dict(
-            await client.get_account_service_transfer(token)
+        return serialize_api_response(
+            await client.get_account_service_transfer(token),
+            account_service_transfer_pb2.AccountEntityTransfer(),
         )
 
     return await execute_tool(
@@ -2979,29 +3006,18 @@ async def handle_linode_account_service_transfer_delete(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.delete_account_service_transfer(token)
-        return {
-            "message": "Service transfer canceled successfully",
-            "result": result,
-        }
+        await client.delete_account_service_transfer(token)
+        return serialize_api_response(
+            {
+                "message": "Account service transfer canceled successfully",
+                "token": token,
+            },
+            account_pb2.AccountServiceTransferActionResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"cancel Linode account service transfer {token}", _call
     )
-
-
-def account_oauth_client_to_response_dict(
-    oauth_client: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape a raw OAuth client API dict to proto-canonical form."""
-    return {
-        "id": oauth_client.get("id", ""),
-        "label": oauth_client.get("label", ""),
-        "public": oauth_client.get("public", False),
-        "redirect_uri": oauth_client.get("redirect_uri", ""),
-        "status": oauth_client.get("status", ""),
-        "thumbnail_url": oauth_client.get("thumbnail_url", ""),
-    }
 
 
 def create_linode_account_oauth_client_get_tool() -> tuple[Tool, Capability]:
@@ -3022,8 +3038,8 @@ async def handle_linode_account_oauth_client_get(
         return error_response(error or "client_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_oauth_client_to_response_dict(
-            await client.get_account_oauth_client(client_id)
+        return serialize_api_response(
+            await client.get_account_oauth_client(client_id), account_pb2.OAuthClient()
         )
 
     return await execute_tool(
@@ -3107,7 +3123,19 @@ async def handle_linode_account_oauth_client_secret_reset(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.reset_account_oauth_client_secret(client_id)
+        secret = await client.reset_account_oauth_client_secret(client_id)
+        return serialize_api_response(
+            {
+                "message": "OAuth client secret reset successfully",
+                "warning": (
+                    "IMPORTANT: The new secret below is shown ONLY ONCE. Save it"
+                    " now - it cannot be retrieved later."
+                ),
+                "client_id": client_id,
+                "secret": secret,
+            },
+            account_pb2.OAuthClientSecretResetWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"reset Linode account OAuth client secret {client_id}", _call
@@ -3152,16 +3180,6 @@ async def handle_linode_account_oauth_client_thumbnail_get(
     )
 
 
-def account_invoice_to_response_dict(invoice: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw account invoice API dict to proto-canonical form."""
-    return {
-        "id": invoice.get("id", 0),
-        "date": invoice.get("date", ""),
-        "label": invoice.get("label", ""),
-        "total": invoice.get("total", 0.0),
-    }
-
-
 def create_linode_account_invoice_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_invoice_get tool."""
     return Tool(
@@ -3184,22 +3202,14 @@ async def handle_linode_account_invoice_get(
         return error_response("invoice_id must be at least 1")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_invoice_to_response_dict(
-            await client.get_account_invoice(raw_invoice_id)
+        return serialize_api_response(
+            await client.get_account_invoice(raw_invoice_id),
+            account_pb2.AccountInvoice(),
         )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account invoice {raw_invoice_id}", _call
     )
-
-
-def account_payment_to_response_dict(payment: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw account payment API dict to proto-canonical form."""
-    return {
-        "id": payment.get("id", 0),
-        "date": payment.get("date", ""),
-        "usd": payment.get("usd", 0.0),
-    }
 
 
 def create_linode_account_payment_get_tool() -> tuple[Tool, Capability]:
@@ -3224,8 +3234,9 @@ async def handle_linode_account_payment_get(
         return error_response("payment_id must be at least 1")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_payment_to_response_dict(
-            await client.get_account_payment(raw_payment_id)
+        return serialize_api_response(
+            await client.get_account_payment(raw_payment_id),
+            account_pb2.AccountPayment(),
         )
 
     return await execute_tool(
@@ -3341,11 +3352,14 @@ async def handle_linode_account_payment_method_make_default(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.make_account_payment_method_default(raw_payment_method_id)
-        return {
-            "message": "Default payment method updated successfully",
-            "payment_method": result,
-        }
+        await client.make_account_payment_method_default(raw_payment_method_id)
+        return serialize_api_response(
+            {
+                "message": "Payment method set as default successfully",
+                "payment_method_id": raw_payment_method_id,
+            },
+            account_pb2.AccountPaymentMethodIDResponse(),
+        )
 
     return await execute_tool(
         cfg,
@@ -3353,18 +3367,6 @@ async def handle_linode_account_payment_method_make_default(
         f"set Linode account payment method {raw_payment_method_id} as default",
         _call,
     )
-
-
-def account_login_to_response_dict(login: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw account login API dict to proto-canonical form."""
-    return {
-        "datetime": login.get("datetime", ""),
-        "id": login.get("id", 0),
-        "ip": login.get("ip", ""),
-        "restricted": login.get("restricted", False),
-        "status": login.get("status", ""),
-        "username": login.get("username", ""),
-    }
 
 
 def create_linode_account_login_get_tool() -> tuple[Tool, Capability]:
@@ -3389,8 +3391,8 @@ async def handle_linode_account_login_get(
         return error_response("login_id must be at least 1")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_login_to_response_dict(
-            await client.get_account_login(raw_login_id)
+        return serialize_api_response(
+            await client.get_account_login(raw_login_id), account_pb2.AccountLogin()
         )
 
     return await execute_tool(
@@ -3474,48 +3476,18 @@ async def handle_linode_account_user_delete(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.delete_account_user(username)
-        return {
-            "message": "Account user deleted successfully",
-            "result": result,
-        }
+        await client.delete_account_user(username)
+        return serialize_api_response(
+            {
+                "message": "Account user deleted successfully",
+                "username": username,
+            },
+            account_user_pb2.AccountUserDeleteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"delete Linode account user {username}", _call
     )
-
-
-def _account_user_last_login_to_response_dict(
-    last_login: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape an account user last login to proto-canonical form."""
-    return {
-        "login_datetime": last_login.get("login_datetime") or "",
-        "status": last_login.get("status") or "",
-    }
-
-
-def account_user_to_response_dict(user: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw account user API dict to proto-canonical form.
-
-    last_login is omitted when null; password_created and verified_phone_number
-    are omitted when null; ssh_keys is always a list.
-    """
-    body: dict[str, Any] = {
-        "email": user.get("email") or "",
-        "restricted": bool(user.get("restricted")),
-        "ssh_keys": user.get("ssh_keys") or [],
-        "tfa_enabled": bool(user.get("tfa_enabled")),
-        "user_type": user.get("user_type") or "",
-        "username": user.get("username") or "",
-    }
-    last_login = user.get("last_login")
-    if last_login is not None:
-        body["last_login"] = _account_user_last_login_to_response_dict(last_login)
-    for key in ("password_created", "verified_phone_number"):
-        if user.get(key) is not None:
-            body[key] = user[key]
-    return body
 
 
 def create_linode_account_user_get_tool() -> tuple[Tool, Capability]:
@@ -3546,7 +3518,9 @@ async def handle_linode_account_user_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_user_to_response_dict(await client.get_account_user(username))
+        return serialize_api_response(
+            await client.get_account_user(username), account_user_pb2.AccountUser()
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode account user {username}", _call
@@ -3635,20 +3609,14 @@ async def handle_linode_account_availability_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_availability(page=page, page_size=page_size)
+        raw = await client.list_account_availability(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_availabilities",
+            account_availability_pb2.AccountAvailabilityListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account availability", _call)
-
-
-def account_availability_to_response_dict(
-    availability: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape a raw account availability API dict to proto-canonical form."""
-    return {
-        "available": availability.get("available") or [],
-        "region": availability.get("region") or "",
-        "unavailable": availability.get("unavailable") or [],
-    }
 
 
 def create_linode_account_availability_get_tool() -> tuple[Tool, Capability]:
@@ -3682,8 +3650,9 @@ async def handle_linode_account_availability_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return account_availability_to_response_dict(
-            await client.get_account_availability(region_id)
+        return serialize_api_response(
+            await client.get_account_availability(region_id),
+            account_availability_pb2.AccountAvailability(),
         )
 
     return await execute_tool(
@@ -3727,7 +3696,12 @@ async def handle_linode_account_beta_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_betas(page=page, page_size=page_size)
+        raw = await client.list_account_betas(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_betas",
+            account_beta_program_pb2.AccountBetaProgramListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode account betas", _call)
 
@@ -3768,7 +3742,12 @@ async def handle_linode_beta_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_betas(page=page, page_size=page_size)
+        raw = await client.list_betas(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "betas",
+            beta_program_pb2.BetaProgramListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode beta programs", _call)
 
@@ -3809,7 +3788,12 @@ async def handle_linode_account_child_account_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_child_accounts(page=page, page_size=page_size)
+        raw = await client.list_account_child_accounts(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "account_child_accounts",
+            account_pb2.ChildAccountListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list Linode account child accounts", _call
@@ -3852,8 +3836,13 @@ async def handle_linode_account_service_transfer_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_account_service_transfers(
+        raw = await client.list_account_service_transfers(
             page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "account_service_transfers",
+            account_service_transfer_pb2.AccountServiceTransferListResponse(),
         )
 
     return await execute_tool(
@@ -3977,7 +3966,8 @@ async def handle_linode_tag_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_tags(page=page, page_size=page_size)
+        raw = await client.list_tags(page=page, page_size=page_size)
+        return serialize_list_response(raw, "tags", tag_pb2.TagListResponse())
 
     return await execute_tool(cfg, arguments, "list Linode account tags", _call)
 
@@ -4027,8 +4017,11 @@ async def handle_linode_tag_object_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_tagged_objects(
+        raw = await client.list_tagged_objects(
             tag_label, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw, "tagged_objects", tag_pb2.TaggedObjectListResponse()
         )
 
     return await execute_tool(cfg, arguments, "list tagged objects", _call)
@@ -4187,9 +4180,12 @@ async def _account_tag_delete_two_stage(
     async def _ts_fetch(client: RetryableClient) -> Any:
         return await client.list_tagged_objects(tag_label)
 
-    async def _ts_call(client: RetryableClient) -> dict[str, str]:
+    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_tag(tag_label)
-        return {"message": f"Tag '{tag_label}' deleted successfully"}
+        return serialize_api_response(
+            {"message": f"Tag '{tag_label}' deleted successfully"},
+            common_pb2.MessageResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -4229,9 +4225,12 @@ async def handle_linode_tag_delete(
     if not arguments.get("confirm"):
         return error_response("This deletes a tag. Set confirm=true to proceed.")
 
-    async def _call(client: RetryableClient) -> dict[str, str]:
+    async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_tag(tag_label)
-        return {"message": f"Tag '{tag_label}' deleted successfully"}
+        return serialize_api_response(
+            {"message": f"Tag '{tag_label}' deleted successfully"},
+            common_pb2.MessageResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete Linode tag", _call)
 
@@ -4392,18 +4391,12 @@ async def handle_linode_support_ticket_create(
         ticket = await client.create_support_ticket(
             summary, description, **ticket_fields
         )
-        return {"message": "Support ticket opened successfully", "ticket": ticket}
+        return serialize_api_response(
+            {"message": "Support ticket opened successfully", "ticket": ticket},
+            support_ticket_pb2.SupportTicketWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "open Linode support ticket", _call)
-
-
-def managed_credential_to_response_dict(credential: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Managed credential API dict to proto-canonical form."""
-    return {
-        "id": credential.get("id", 0),
-        "label": credential.get("label", ""),
-        "last_decrypted": credential.get("last_decrypted", ""),
-    }
 
 
 def create_linode_managed_credential_get_tool() -> tuple[Tool, Capability]:
@@ -4443,8 +4436,9 @@ async def handle_linode_managed_credential_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return managed_credential_to_response_dict(
-            await client.get_managed_credential(validated_credential_id)
+        return serialize_api_response(
+            await client.get_managed_credential(validated_credential_id),
+            managed_pb2.ManagedCredential(),
         )
 
     return await execute_tool(cfg, arguments, "get Linode Managed credential", _call)
@@ -4486,7 +4480,10 @@ async def handle_linode_managed_contact_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_managed_contacts(page=page, page_size=page_size)
+        raw = await client.list_managed_contacts(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw, "managed_contacts", managed_pb2.ManagedContactListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list Linode Managed contacts", _call)
 
@@ -4527,7 +4524,10 @@ async def handle_linode_managed_issue_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_managed_issues(page=page, page_size=page_size)
+        raw = await client.list_managed_issues(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw, "managed_issues", managed_issue_pb2.ManagedIssueListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list Linode Managed issues", _call)
 
@@ -4568,7 +4568,10 @@ async def handle_linode_managed_credential_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_managed_credentials(page=page, page_size=page_size)
+        raw = await client.list_managed_credentials(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw, "managed_credentials", managed_pb2.ManagedCredentialListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list Linode Managed credentials", _call)
 
@@ -4652,10 +4655,17 @@ async def handle_linode_managed_credential_username_password_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_managed_credential_username_password(
+        await client.update_managed_credential_username_password(
             credential_id,
             password=body["password"],
             username=body.get("username"),
+        )
+        return serialize_api_response(
+            {
+                "message": f"Managed credential {credential_id} updated successfully",
+                "credential_id": credential_id,
+            },
+            managed_pb2.ManagedCredentialIDResponse(),
         )
 
     return await execute_tool(cfg, arguments, "update Linode Managed credential", _call)
@@ -4720,7 +4730,14 @@ async def handle_linode_managed_credential_revoke(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.revoke_managed_credential(credential_id)
+        await client.revoke_managed_credential(credential_id)
+        return serialize_api_response(
+            {
+                "message": f"Managed credential {credential_id} revoked successfully",
+                "credential_id": credential_id,
+            },
+            managed_pb2.ManagedCredentialIDResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "revoke Managed credential", _call)
 
@@ -4891,10 +4908,16 @@ async def handle_linode_managed_linode_settings_update(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_managed_linode_settings(linode_id, ssh=ssh)
-        return {
-            "message": "Managed Linode settings updated successfully",
-            "settings": result,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Managed Linode settings for Linode {linode_id} "
+                    "updated successfully"
+                ),
+                "settings": result,
+            },
+            managed_pb2.ManagedLinodeSettingsWriteResponse(),
+        )
 
     return await execute_tool(
         cfg,
@@ -5092,9 +5115,16 @@ async def handle_linode_managed_credential_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_managed_credential(
+        credential = await client.update_managed_credential(
             credential_id,
             label=body["label"],
+        )
+        return serialize_api_response(
+            {
+                "message": f"Managed credential {credential_id} updated successfully",
+                "credential": credential,
+            },
+            managed_pb2.ManagedCredentialWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "update Linode Managed credential", _call)
@@ -5302,11 +5332,14 @@ async def handle_linode_managed_service_enable(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.enable_managed_service(service_id)
-        return {
-            "message": "Managed service monitor enabled successfully",
-            "result": result,
-        }
+        await client.enable_managed_service(service_id)
+        return serialize_api_response(
+            {
+                "message": "Managed service enabled successfully",
+                "service_id": service_id,
+            },
+            managed_pb2.ManagedServiceIDResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "enable Managed service monitor", _call)
 
@@ -5367,39 +5400,16 @@ async def handle_linode_managed_service_delete(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.delete_managed_service(service_id)
-        return {
-            "message": "Managed service monitor deleted successfully",
-            "result": result,
-        }
+        await client.delete_managed_service(service_id)
+        return serialize_api_response(
+            {
+                "message": "Managed service deleted successfully",
+                "service_id": service_id,
+            },
+            managed_pb2.ManagedServiceIDResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete Managed service monitor", _call)
-
-
-def managed_service_to_response_dict(svc: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Managed service API dict to proto-canonical form.
-
-    body, notes, and region are omitted when null; credentials is always a list.
-    """
-    result: dict[str, Any] = {
-        "id": svc.get("id", 0),
-        "label": svc.get("label", ""),
-        "service_type": svc.get("service_type", ""),
-        "status": svc.get("status", ""),
-        "address": svc.get("address", ""),
-    }
-    if svc.get("body") is not None:
-        result["body"] = svc["body"]
-    result["consultation_group"] = svc.get("consultation_group", "")
-    result["created"] = svc.get("created", "")
-    result["credentials"] = svc.get("credentials") or []
-    if svc.get("notes") is not None:
-        result["notes"] = svc["notes"]
-    if svc.get("region") is not None:
-        result["region"] = svc["region"]
-    result["timeout"] = svc.get("timeout", 0)
-    result["updated"] = svc.get("updated", "")
-    return result
 
 
 def create_linode_managed_service_get_tool() -> tuple[Tool, Capability]:
@@ -5425,8 +5435,9 @@ async def handle_linode_managed_service_get(
     validated_service_id = service_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return managed_service_to_response_dict(
-            await client.get_managed_service(validated_service_id)
+        return serialize_api_response(
+            await client.get_managed_service(validated_service_id),
+            managed_pb2.ManagedService(),
         )
 
     return await execute_tool(
@@ -5490,8 +5501,14 @@ async def handle_linode_managed_service_disable(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.disable_managed_service(service_id)
-        return {"message": "Managed service disabled successfully", "result": result}
+        await client.disable_managed_service(service_id)
+        return serialize_api_response(
+            {
+                "message": "Managed service disabled successfully",
+                "service_id": service_id,
+            },
+            managed_pb2.ManagedServiceIDResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "disable Managed service monitor", _call)
 
@@ -5627,8 +5644,14 @@ async def handle_linode_managed_contact_delete(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.delete_managed_contact(contact_id)
-        return {"message": "Managed contact deleted successfully", "result": result}
+        await client.delete_managed_contact(contact_id)
+        return serialize_api_response(
+            {
+                "message": "Managed contact deleted successfully",
+                "contact_id": contact_id,
+            },
+            managed_pb2.ManagedContactIDResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete Managed contact", _call)
 
@@ -5817,7 +5840,14 @@ async def handle_linode_managed_contact_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_managed_contact(contact_id, **body)
+        contact = await client.update_managed_contact(contact_id, **body)
+        return serialize_api_response(
+            {
+                "message": f"Managed contact {contact_id} updated successfully",
+                "contact": contact,
+            },
+            managed_pb2.ManagedContactWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode Managed contact", _call)
 
@@ -6078,7 +6108,12 @@ async def handle_linode_managed_linode_settings_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_managed_linode_settings(page=page, page_size=page_size)
+        raw = await client.list_managed_linode_settings(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "managed_linode_settings",
+            managed_pb2.ManagedLinodeSettingsListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list Linode Managed Linode settings", _call
@@ -6108,30 +6143,6 @@ async def handle_linode_managed_stats_get(
     return await execute_tool(cfg, arguments, "list Linode Managed statistics", _call)
 
 
-def managed_linode_settings_to_response_dict(
-    settings: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape a raw Managed Linode settings API dict to proto-canonical form.
-
-    ssh.port and ssh.user are omitted when null.
-    """
-    ssh: dict[str, Any] = settings.get("ssh") or {}
-    ssh_out: dict[str, Any] = {
-        "access": ssh.get("access", False),
-        "ip": ssh.get("ip", ""),
-    }
-    if ssh.get("port") is not None:
-        ssh_out["port"] = ssh["port"]
-    if ssh.get("user") is not None:
-        ssh_out["user"] = ssh["user"]
-    return {
-        "id": settings.get("id", 0),
-        "label": settings.get("label", ""),
-        "group": settings.get("group", ""),
-        "ssh": ssh_out,
-    }
-
-
 def create_linode_managed_linode_settings_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_linode_settings_get tool."""
     return Tool(
@@ -6150,8 +6161,9 @@ async def handle_linode_managed_linode_settings_get(
         return error_response("linode_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return managed_linode_settings_to_response_dict(
-            await client.get_managed_linode_settings(linode_id)
+        return serialize_api_response(
+            await client.get_managed_linode_settings(linode_id),
+            managed_pb2.ManagedLinodeSettings(),
         )
 
     return await execute_tool(cfg, arguments, "get Linode Managed settings", _call)
@@ -6193,30 +6205,12 @@ async def handle_linode_managed_service_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_managed_services(page=page, page_size=page_size)
+        raw = await client.list_managed_services(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw, "managed_services", managed_pb2.ManagedServiceListResponse()
+        )
 
     return await execute_tool(cfg, arguments, "list Linode Managed services", _call)
-
-
-def _managed_issue_entity_to_response_dict(entity: dict[str, Any]) -> dict[str, Any]:
-    """Shape a managed issue entity to proto-canonical form."""
-    return {
-        "id": entity.get("id", 0),
-        "label": entity.get("label", ""),
-        "type": entity.get("type", ""),
-        "url": entity.get("url", ""),
-    }
-
-
-def managed_issue_to_response_dict(issue: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw managed issue API dict to proto-canonical form."""
-    entity: dict[str, Any] = issue.get("entity") or {}
-    return {
-        "id": issue.get("id", 0),
-        "created": issue.get("created", ""),
-        "services": issue.get("services") or [],
-        "entity": _managed_issue_entity_to_response_dict(entity),
-    }
 
 
 def create_linode_managed_issue_get_tool() -> tuple[Tool, Capability]:
@@ -6238,35 +6232,12 @@ async def handle_linode_managed_issue_get(
     validated_issue_id = issue_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return managed_issue_to_response_dict(
-            await client.get_managed_issue(validated_issue_id)
+        return serialize_api_response(
+            await client.get_managed_issue(validated_issue_id),
+            managed_issue_pb2.ManagedIssue(),
         )
 
     return await execute_tool(cfg, arguments, "get Linode Managed issue", _call)
-
-
-def managed_contact_to_response_dict(contact: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Managed contact API dict to proto-canonical form.
-
-    group is omitted when null; phone.primary and phone.secondary are omitted when
-    null.
-    """
-    phone: dict[str, Any] = contact.get("phone") or {}
-    phone_out: dict[str, Any] = {}
-    if phone.get("primary") is not None:
-        phone_out["primary"] = phone["primary"]
-    if phone.get("secondary") is not None:
-        phone_out["secondary"] = phone["secondary"]
-    result: dict[str, Any] = {
-        "id": contact.get("id", 0),
-        "name": contact.get("name", ""),
-        "email": contact.get("email", ""),
-    }
-    if contact.get("group") is not None:
-        result["group"] = contact["group"]
-    result["phone"] = phone_out
-    result["updated"] = contact.get("updated", "")
-    return result
 
 
 def create_linode_managed_contact_get_tool() -> tuple[Tool, Capability]:
@@ -6292,8 +6263,9 @@ async def handle_linode_managed_contact_get(
     validated_contact_id = contact_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return managed_contact_to_response_dict(
-            await client.get_managed_contact(validated_contact_id)
+        return serialize_api_response(
+            await client.get_managed_contact(validated_contact_id),
+            managed_pb2.ManagedContact(),
         )
 
     return await execute_tool(cfg, arguments, "get Linode Managed contact", _call)
@@ -6335,56 +6307,14 @@ async def handle_linode_support_ticket_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_support_tickets(page=page, page_size=page_size)
+        raw = await client.list_support_tickets(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "support_tickets",
+            support_ticket_pb2.SupportTicketListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode support tickets", _call)
-
-
-def support_ticket_attachment_to_response_dict(
-    attachment: dict[str, Any],
-) -> dict[str, Any]:
-    """Shape one support ticket attachment to proto-canonical form."""
-    return {
-        "filename": attachment.get("filename", ""),
-        "id": attachment.get("id", 0),
-        "size": attachment.get("size", 0),
-    }
-
-
-def support_ticket_to_response_dict(ticket: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw support ticket API dict to proto-canonical form.
-
-    closed and entity are omitted when null; attachments is always a list.
-    """
-    result: dict[str, Any] = {
-        "attachments": [
-            support_ticket_attachment_to_response_dict(attachment)
-            for attachment in cast(
-                "list[dict[str, Any]]", ticket.get("attachments") or []
-            )
-        ],
-        "closable": ticket.get("closable", False),
-    }
-    if ticket.get("closed") is not None:
-        result["closed"] = ticket["closed"]
-    result["description"] = ticket.get("description", "")
-    entity = ticket.get("entity")
-    if entity is not None:
-        result["entity"] = {
-            "id": entity.get("id"),
-            "label": entity.get("label", ""),
-            "type": entity.get("type", ""),
-            "url": entity.get("url", ""),
-        }
-    result["gravatar_id"] = ticket.get("gravatar_id", "")
-    result["id"] = ticket.get("id", 0)
-    result["opened"] = ticket.get("opened", "")
-    result["opened_by"] = ticket.get("opened_by", "")
-    result["status"] = ticket.get("status", "")
-    result["summary"] = ticket.get("summary", "")
-    result["updated"] = ticket.get("updated", "")
-    result["updated_by"] = ticket.get("updated_by", "")
-    return result
 
 
 def create_linode_support_ticket_get_tool() -> tuple[Tool, Capability]:
@@ -6405,8 +6335,9 @@ async def handle_linode_support_ticket_get(
         return error_response("ticket_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return support_ticket_to_response_dict(
-            await client.get_support_ticket(ticket_id)
+        return serialize_api_response(
+            await client.get_support_ticket(ticket_id),
+            support_ticket_pb2.SupportTicket(),
         )
 
     return await execute_tool(cfg, arguments, "get Linode support ticket", _call)
@@ -6458,8 +6389,13 @@ async def handle_linode_support_ticket_reply_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_support_ticket_replies(
+        raw = await client.list_support_ticket_replies(
             ticket_id, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw,
+            "support_ticket_replies",
+            support_ticket_pb2.SupportTicketReplyListResponse(),
         )
 
     return await execute_tool(
@@ -6529,11 +6465,13 @@ async def handle_linode_support_ticket_close(
     ticket_id = ticket
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        closed_ticket = await client.close_support_ticket(ticket_id)
-        return {
-            "message": "Support ticket closed successfully",
-            "ticket": closed_ticket,
-        }
+        # The close endpoint returns no useful resource body, so the response
+        # echoes the affected ticket id.
+        await client.close_support_ticket(ticket_id)
+        return serialize_api_response(
+            {"message": "Support ticket closed successfully", "ticket_id": ticket_id},
+            support_ticket_pb2.SupportTicketIDResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "close Linode support ticket", _call)
 
@@ -6611,7 +6549,10 @@ async def handle_linode_support_ticket_reply_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         reply = await client.create_support_ticket_reply(ticket_id, description.strip())
-        return {"message": "Support ticket reply created successfully", "reply": reply}
+        return serialize_api_response(
+            {"message": "Support ticket reply created successfully", "reply": reply},
+            support_ticket_pb2.SupportTicketReplyWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "create Linode support ticket reply", _call
@@ -6693,11 +6634,16 @@ async def handle_linode_support_ticket_attachment_create(
     file_path = parsed_file
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        attachment = await client.create_support_ticket_attachment(ticket_id, file_path)
-        return {
-            "message": "Support ticket attachment created successfully",
-            "attachment": attachment,
-        }
+        # The attachment endpoint returns no useful resource body, so the
+        # response echoes the affected ticket id.
+        await client.create_support_ticket_attachment(ticket_id, file_path)
+        return serialize_api_response(
+            {
+                "message": "Support ticket attachment created successfully",
+                "ticket_id": ticket_id,
+            },
+            support_ticket_pb2.SupportTicketIDResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "create Linode support ticket attachment", _call

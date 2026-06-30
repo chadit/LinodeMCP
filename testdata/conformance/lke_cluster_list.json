@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.LKEClusterListResponse",
+  "description": "linode_lke_cluster_list envelope: count, an optional filter echo, and the full proto LKECluster elements with a repeated tags list and the nested control_plane message present.",
+  "input": {
+    "count": 1,
+    "filter": "label=prod",
+    "clusters": [
+      {
+        "id": 12345,
+        "label": "prod-cluster",
+        "region": "us-east",
+        "k8s_version": "1.29",
+        "status": "ready",
+        "tags": ["prod", "team-a"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00",
+        "control_plane": {"high_availability": true}
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "label=prod",
+    "clusters": [
+      {
+        "id": 12345,
+        "label": "prod-cluster",
+        "region": "us-east",
+        "k8s_version": "1.29",
+        "status": "ready",
+        "tags": ["prod", "team-a"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00",
+        "control_plane": {"high_availability": true}
+      }
+    ]
+  }
+}

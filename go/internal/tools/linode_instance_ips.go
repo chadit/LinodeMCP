@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -41,12 +42,12 @@ func handleInstanceIPsListRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ips, err := client.ListInstanceIPs(ctx, linodeID)
+	ips, err := client.ListInstanceIPsProto(ctx, linodeID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list IPs for instance %d: %v", linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(ips)
+	return MarshalProtoToolResponse(ips)
 }
 
 // NewLinodeInstanceIPGetTool creates a tool for retrieving a specific IP address for a Linode instance.
@@ -152,20 +153,15 @@ func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ipAddr, err := client.AllocateInstanceIP(ctx, linodeID, req)
+	ipAddr, err := client.AllocateInstanceIPProto(ctx, linodeID, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to allocate IP for instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message string            `json:"message"`
-		IP      *linode.IPAddress `json:"ip"`
-	}{
-		Message: fmt.Sprintf("IP %s allocated for instance %d", ipAddr.Address, linodeID),
-		IP:      ipAddr,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.IPAddressWriteResponse{
+		Message: fmt.Sprintf("IP %s allocated for instance %d", ipAddr.GetAddress(), linodeID),
+		Ip:      ipAddr,
+	})
 }
 
 // NewLinodeInstanceIPUpdateRDNSTool creates a tool for updating the RDNS on a Linode instance IP address.
@@ -245,17 +241,14 @@ func handleInstanceIPUpdateRDNSRequest(ctx context.Context, request *mcp.CallToo
 
 	req := linode.UpdateIPRDNSRequest{RDNS: &rdns}
 
-	ipAddr, err := client.UpdateInstanceIP(ctx, linodeID, address, req)
+	ipAddr, err := client.UpdateInstanceIPProto(ctx, linodeID, address, req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to assign RDNS for IP %s on instance %d: %v", address, linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message string            `json:"message"`
-		IP      *linode.IPAddress `json:"ip"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.IPAddressWriteResponse{
 		Message: fmt.Sprintf("RDNS for IP %s updated on instance %d", address, linodeID),
-		IP:      ipAddr,
+		Ip:      ipAddr,
 	})
 }
 

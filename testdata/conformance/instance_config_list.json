@@ -1,0 +1,70 @@
+{
+  "message": "linode.mcp.v1.InstanceConfigListResponse",
+  "description": "linode_instance_config_list envelope: count, an optional filter echo, and the full proto InstanceConfig elements with a devices map, helpers, and a nested interface present.",
+  "input": {
+    "count": 1,
+    "filter": "label=boot-config",
+    "configs": [
+      {
+        "id": 77,
+        "label": "boot-config",
+        "kernel": "linode/latest-64bit",
+        "comments": "primary boot config",
+        "memory_limit": 2048,
+        "root_device": "/dev/sda",
+        "run_level": "default",
+        "virt_mode": "paravirt",
+        "devices": {
+          "sda": {"disk_id": 100}
+        },
+        "helpers": {
+          "network": true
+        },
+        "interfaces": [
+          {
+            "id": 50,
+            "active": true,
+            "purpose": "public",
+            "primary": true,
+            "ip_ranges": []
+          }
+        ],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "label=boot-config",
+    "configs": [
+      {
+        "id": 77,
+        "label": "boot-config",
+        "kernel": "linode/latest-64bit",
+        "comments": "primary boot config",
+        "memory_limit": 2048,
+        "root_device": "/dev/sda",
+        "run_level": "default",
+        "virt_mode": "paravirt",
+        "devices": {
+          "sda": {"disk_id": 100}
+        },
+        "helpers": {
+          "network": true
+        },
+        "interfaces": [
+          {
+            "id": 50,
+            "active": true,
+            "purpose": "public",
+            "primary": true,
+            "ip_ranges": []
+          }
+        ],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  }
+}

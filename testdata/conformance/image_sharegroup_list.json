@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.ImageShareGroupListResponse",
+  "description": "linode_image_sharegroup_list envelope: count and the full proto ImageShareGroup elements (not the Linode data/page/pages/results page). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "image_sharegroups": [
+      {
+        "id": 4242,
+        "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+        "label": "shared-images",
+        "description": "Images shared with the partner account",
+        "is_suspended": false,
+        "created": "2026-01-15T10:00:00",
+        "updated": "2026-02-01T12:30:00",
+        "expiry": "2026-12-31T23:59:59",
+        "images_count": 7,
+        "members_count": 3
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "image_sharegroups": [
+      {
+        "id": 4242,
+        "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+        "label": "shared-images",
+        "description": "Images shared with the partner account",
+        "is_suspended": false,
+        "created": "2026-01-15T10:00:00",
+        "updated": "2026-02-01T12:30:00",
+        "expiry": "2026-12-31T23:59:59",
+        "images_count": 7,
+        "members_count": 3
+      }
+    ]
+  }
+}

@@ -14,11 +14,19 @@ from mcp.types import ListToolsRequest, ListToolsResult
 
 from linodemcp.audit import CapturingSink, Mode
 from linodemcp.config import BuiltinOverride, UserProfileConfig
+from linodemcp.genpb.linode.mcp.v1 import (
+    account_pb2,
+    account_user_pb2,
+    common_pb2,
+    database_instance_pb2,
+    managed_pb2,
+    monitor_pb2,
+    support_ticket_pb2,
+)
 from linodemcp.linode import (
     Client,
     DomainZoneFile,
     NetworkError,
-    Profile,
     RetryableClient,
 )
 from linodemcp.profiles import (
@@ -28,6 +36,23 @@ from linodemcp.profiles import (
 )
 from linodemcp.server import Server, get_tool_registry
 from linodemcp.tools import handle_hello, handle_version
+from linodemcp.tools.proto_response import serialize_api_response
+
+
+def _database_instance_write_envelope(
+    message: str, instance: dict[str, Any]
+) -> dict[str, Any]:
+    """Build the canonical {message, database_instance} write envelope.
+
+    The database_instance is the full proto element with zero-filled defaults, so
+    this routes the raw fields through the same serializer the handler uses rather
+    than hand-transcribing every zero value.
+    """
+    return serialize_api_response(
+        {"message": message, "database_instance": instance},
+        database_instance_pb2.DatabaseInstanceWriteResponse(),
+    )
+
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -153,19 +178,9 @@ async def test_config_handler_profile_dispatch(
     """Config-based handler for linode_profile_get calls the client and returns data."""
     from linodemcp.tools import handle_linode_profile_get
 
-    mock_profile = Profile(
-        username=sample_profile_data["username"],
-        email=sample_profile_data["email"],
-        timezone=sample_profile_data["timezone"],
-        email_notifications=sample_profile_data["email_notifications"],
-        restricted=sample_profile_data["restricted"],
-        two_factor_auth=sample_profile_data["two_factor_auth"],
-        uid=sample_profile_data["uid"],
-    )
-
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_profile.return_value = mock_profile
+        mock_client.get_raw.return_value = sample_profile_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -175,6 +190,7 @@ async def test_config_handler_profile_dispatch(
         assert len(result) == 1
         assert "testuser" in result[0].text
         assert "test@example.com" in result[0].text
+        mock_client.get_raw.assert_awaited_once_with("/profile")
 
 
 async def test_all_listed_tools_have_handlers(
@@ -292,7 +308,11 @@ async def test_longview_subscriptions_list_dispatches_from_registry(
             "linode_longview_subscription_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["longview_subscriptions"][0]["id"] == "longview-3"
+    assert body["longview_subscriptions"][0]["label"] == "Longview Pro"
+    assert "filter" not in body
     mock_client.list_longview_subscriptions.assert_awaited_once_with(
         page=2, page_size=25
     )
@@ -561,7 +581,17 @@ async def test_network_transfer_prices_handler_returns_client_response(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_network_transfer_prices.return_value = {
-            "data": [{"id": "transfer"}]
+            "data": [
+                {
+                    "id": "transfer",
+                    "label": "Network Transfer",
+                    "price": {"hourly": 0.01, "monthly": 0.0},
+                    "region_prices": [
+                        {"id": "id-cgk", "hourly": 0.015, "monthly": 0.0}
+                    ],
+                    "transfer": 0,
+                }
+            ]
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -571,7 +601,18 @@ async def test_network_transfer_prices_handler_returns_client_response(
         result = await srv.dispatch("linode_network_transfer_price_list", {})
 
     mock_client.get_network_transfer_prices.assert_awaited_once_with()
-    assert json.loads(result[0].text) == {"data": [{"id": "transfer"}]}
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "network_transfer_prices": [
+            {
+                "id": "transfer",
+                "label": "Network Transfer",
+                "price": {"hourly": 0.01, "monthly": 0.0},
+                "region_prices": [{"id": "id-cgk", "hourly": 0.015, "monthly": 0.0}],
+                "transfer": 0,
+            }
+        ],
+    }
 
 
 async def test_network_transfer_prices_handler_returns_error_response_on_client_failure(
@@ -1151,7 +1192,17 @@ async def test_firewall_templates_list_handler_returns_templates(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.list_firewall_templates.return_value = {
-            "data": [{"slug": "allow-http", "label": "Allow HTTP"}],
+            "data": [
+                {
+                    "slug": "vpc",
+                    "rules": {
+                        "inbound": [],
+                        "inbound_policy": "DROP",
+                        "outbound": [],
+                        "outbound_policy": "ACCEPT",
+                    },
+                }
+            ],
             "page": 2,
             "pages": 3,
             "results": 1,
@@ -1166,7 +1217,9 @@ async def test_firewall_templates_list_handler_returns_templates(
 
     assert len(result) == 1
     payload = json.loads(result[0].text)
-    assert payload["data"][0]["slug"] == "allow-http"
+    assert payload["count"] == 1
+    assert payload["firewall_templates"][0]["slug"] == "vpc"
+    assert payload["firewall_templates"][0]["rules"]["inbound_policy"] == "DROP"
     mock_client.list_firewall_templates.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -1448,9 +1501,16 @@ async def test_account_agreements_list_tool_is_exported_and_registered(
 async def test_account_agreements_list_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
-    """Account agreements list is callable through server dispatch."""
+    """Account agreements list dispatches and emits the proto-canonical flags.
+
+    The endpoint returns a flat object of bool acknowledgment flags. The proto
+    output emits every flag (implicit-presence scalars, false included), so the
+    eu_model=false the API omitted comes back explicit.
+    """
     response_data: dict[str, object] = {
-        "data": [{"id": "eu_model", "label": "EU Model Contract"}]
+        "billing_agreement": True,
+        "master_service_agreement": True,
+        "privacy_policy": True,
     }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -1463,7 +1523,12 @@ async def test_account_agreements_list_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_agreement_list", {})
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "billing_agreement": True,
+        "eu_model": False,
+        "master_service_agreement": True,
+        "privacy_policy": True,
+    }
     mock_client.get_account_agreements.assert_awaited_once_with()
 
 
@@ -1503,7 +1568,10 @@ async def test_account_logins_list_dispatches_from_registry(
             "linode_account_login_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["account_logins"][0]["id"] == 123
+    assert body["account_logins"][0]["ip"] == "192.0.2.10"
     mock_client.list_account_logins.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -1595,9 +1663,11 @@ async def test_databases_engines_list_dispatches_from_registry(
         )
 
     payload = json.loads(result[0].text)
-    assert payload["engines"] == response_data["data"]
     assert payload["count"] == 1
-    assert payload["page"] == 1
+    assert payload["database_engines"] == [
+        {"id": "mysql", "engine": "", "version": "8.0.26"}
+    ]
+    assert "page" not in payload
     mock_client.list_database_engines.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -1683,7 +1753,10 @@ async def test_account_users_list_dispatches_from_registry(
             "linode_account_user_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["account_users"][0]["username"] == "alice"
+    assert body["account_users"][0]["email"] == "alice@example.com"
     mock_client.list_account_users.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -1789,7 +1862,7 @@ async def test_account_user_delete_dispatches_from_registry(
     payload = json.loads(result[0].text)
     assert payload == {
         "message": "Account user deleted successfully",
-        "result": response_data,
+        "username": "alice",
     }
     mock_client.delete_account_user.assert_awaited_once_with("alice")
 
@@ -2005,7 +2078,11 @@ async def test_account_settings_managed_enable_dispatches_from_registry(
             "linode_account_settings_managed_enable", {"confirm": True}
         )
 
-    assert json.loads(result[0].text) == response_data
+    expected = serialize_api_response(
+        {"message": "Linode Managed enabled successfully"},
+        common_pb2.MessageResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.enable_account_managed.assert_awaited_once_with()
 
 
@@ -2119,7 +2196,11 @@ async def test_account_maintenance_list_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_maintenance_list", {})
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["account_maintenances"][0]["status"] == "pending"
+    assert payload["account_maintenances"][0]["entity"]["id"] == 123
+    assert "page" not in payload
     mock_client.list_account_maintenance.assert_awaited_once_with(
         page=None, page_size=None
     )
@@ -2156,7 +2237,10 @@ async def test_maintenance_policies_list_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_maintenance_policy_list", {})
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["maintenance_policies"][0]["slug"] == "linode/migrate"
+    assert "data" not in payload
     mock_client.list_maintenance_policies.assert_awaited_once_with(
         page=None, page_size=None
     )
@@ -2198,7 +2282,11 @@ async def test_account_oauth_clients_list_dispatches_from_registry(
             "linode_account_oauth_client_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["account_oauth_clients"][0]["id"] == "client-1"
+    assert body["account_oauth_clients"][0]["label"] == "Example client"
+    assert "filter" not in body
     mock_client.list_account_oauth_clients.assert_awaited_once_with(
         page=2, page_size=25
     )
@@ -2460,7 +2548,7 @@ async def test_account_oauth_client_thumbnail_update_dispatches_from_registry(
 
     assert json.loads(result[0].text) == {
         "message": "OAuth client thumbnail updated successfully",
-        "client": response_data,
+        "client_id": "client-1",
     }
     mock_client.update_account_oauth_client_thumbnail.assert_awaited_once_with(
         "client-1", b"\x89PNG\r\n\x1a\n"
@@ -2588,7 +2676,11 @@ async def test_account_events_list_dispatches_from_registry(
             "linode_account_event_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["account_events"][0]["id"] == 123
+    assert body["account_events"][0]["action"] == "linode_create"
+    assert body["account_events"][0]["status"] == "finished"
     mock_client.list_account_events.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -2628,7 +2720,10 @@ async def test_account_invoices_list_dispatches_from_registry(
             "linode_account_invoice_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["account_invoices"][0]["id"] == 123
+    assert body["account_invoices"][0]["label"] == "Invoice #123"
     mock_client.list_account_invoices.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -2677,7 +2772,10 @@ async def test_account_payments_list_dispatches_from_registry(
             "linode_account_payment_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["account_payments"][0]["id"] == 123
+    assert body["account_payments"][0]["date"] == "2024-01-02T03:04:05"
     mock_client.list_account_payments.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -2786,7 +2884,12 @@ async def test_account_payment_methods_list_dispatches_from_registry(
             "linode_account_payment_method_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["account_payment_methods"][0]["id"] == 123
+    assert payload["account_payment_methods"][0]["type"] == "credit_card"
+    assert payload["account_payment_methods"][0]["is_default"] is True
+    assert "page" not in payload
     mock_client.list_account_payment_methods.assert_awaited_once_with(
         page=2, page_size=25
     )
@@ -2914,7 +3017,12 @@ async def test_account_notifications_list_dispatches_from_registry(
             "linode_account_notification_list", {"page": 2, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    element = payload["account_notifications"][0]
+    assert element["type"] == "ticket_important"
+    assert element["message"] == "Ticket updated"
+    assert "page" not in payload
     mock_client.list_account_notifications.assert_awaited_once_with(
         page=2, page_size=25
     )
@@ -3081,7 +3189,11 @@ async def test_account_invoice_items_list_dispatches_from_registry(
             {"invoice_id": 123, "page": 2, "page_size": 25},
         )
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["account_invoice_items"][0]["label"] == "Compute Instance"
+    assert payload["account_invoice_items"][0]["amount"] == 12.34
+    assert "page" not in payload
     mock_client.list_account_invoice_items.assert_awaited_once_with(
         123, page=2, page_size=25
     )
@@ -3208,7 +3320,11 @@ async def test_account_event_seen_dispatches_from_registry(
             "linode_account_event_seen", {"event_id": 123, "confirm": True}
         )
 
-    assert json.loads(result[0].text) == response_data
+    expected = serialize_api_response(
+        {"message": "Account event marked as seen successfully", "event_id": 123},
+        account_pb2.AccountEventSeenResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.mark_account_event_seen.assert_awaited_once_with(123)
 
 
@@ -3228,7 +3344,11 @@ async def test_account_event_seen_handler_calls_retryable_wrapper(
             "linode_account_event_seen", {"event_id": 123, "confirm": True}
         )
 
-    assert json.loads(result[0].text) == response_data
+    expected = serialize_api_response(
+        {"message": "Account event marked as seen successfully", "event_id": 123},
+        account_pb2.AccountEventSeenResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_mark_seen.assert_awaited_once_with(123)
 
 
@@ -3864,7 +3984,10 @@ async def test_database_postgresql_instance_patch_dispatches_from_registry(
             {"instance_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "PostgreSQL Managed Database instance 123 patch started",
+        "instance_id": 123,
+    }
     mock_client.patch_postgresql_database_instance.assert_awaited_once_with(123)
 
 
@@ -4933,7 +5056,14 @@ async def test_account_service_transfer_accept_dispatches_from_registry(
             {"token": "transfer-token", "confirm": True, "confirmed_dry_run": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    expected = serialize_api_response(
+        {
+            "message": "Account service transfer accepted successfully",
+            "token": "transfer-token",
+        },
+        account_pb2.AccountServiceTransferActionResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.accept_account_service_transfer.assert_awaited_once_with(
         "transfer-token"
     )
@@ -5134,10 +5264,14 @@ async def test_account_service_transfer_delete_dispatches_from_registry(
             {"token": "transfer-token", "confirm": True, "confirmed_dry_run": True},
         )
 
-    assert json.loads(result[0].text) == {
-        "message": "Service transfer canceled successfully",
-        "result": response_data,
-    }
+    expected = serialize_api_response(
+        {
+            "message": "Account service transfer canceled successfully",
+            "token": "transfer-token",
+        },
+        account_pb2.AccountServiceTransferActionResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.delete_account_service_transfer.assert_awaited_once_with(
         "transfer-token"
     )
@@ -5489,7 +5623,8 @@ async def test_account_payment_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """Account payment get is callable through server dispatch."""
-    response_data: dict[str, object] = {"id": 123, "usd": "10.00"}
+    # usd is a proto double, emitted as a JSON number to match the Go output.
+    response_data: dict[str, object] = {"id": 123, "usd": 10.5}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -5503,7 +5638,7 @@ async def test_account_payment_get_dispatches_from_registry(
 
     body = json.loads(result[0].text)
     assert body["id"] == 123
-    assert body["usd"] == "10.00"
+    assert body["usd"] == 10.5
     assert body["date"] == ""
     mock_client.get_account_payment.assert_awaited_once_with(123)
 
@@ -5655,10 +5790,14 @@ async def test_account_payment_method_make_default_dispatches_from_registry(
             {"payment_method_id": 123, "confirm": True, "confirmed_dry_run": True},
         )
 
-    assert json.loads(result[0].text) == {
-        "message": "Default payment method updated successfully",
-        "payment_method": response_data,
-    }
+    expected = serialize_api_response(
+        {
+            "message": "Payment method set as default successfully",
+            "payment_method_id": 123,
+        },
+        account_pb2.AccountPaymentMethodIDResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.make_account_payment_method_default.assert_awaited_once_with(123)
 
 
@@ -6181,8 +6320,20 @@ async def test_account_user_grants_update_dispatches_from_registry(
         )
 
     payload = json.loads(result[0].text)
-    assert payload["message"] == "Account user grants updated successfully"
-    assert payload["grants"] == response_data
+    # The grants update envelope emits the full AccountUserGrants element with
+    # zero-filled defaults (empty sections become []); build the expectation
+    # through the same serializer the handler uses.
+    expected = serialize_api_response(
+        {
+            "message": "Account user grants updated successfully",
+            "grants": response_data,
+        },
+        account_user_pb2.AccountUserGrantsWriteResponse(),
+    )
+    assert payload == expected
+    assert payload["grants"]["linode"] == [
+        {"id": 123, "label": "", "permissions": "read_write"}
+    ]
     mock_client.update_account_user_grants.assert_awaited_once_with(
         "alice-dev",
         {
@@ -6216,7 +6367,17 @@ async def test_account_user_grants_update_passes_lkecluster_grants(
         )
 
     payload = json.loads(result[0].text)
-    assert payload["grants"] == response_data
+    expected = serialize_api_response(
+        {
+            "message": "Account user grants updated successfully",
+            "grants": response_data,
+        },
+        account_user_pb2.AccountUserGrantsWriteResponse(),
+    )
+    assert payload == expected
+    assert payload["grants"]["lkecluster"] == [
+        {"id": 555, "label": "", "permissions": "read_write"}
+    ]
     mock_client.update_account_user_grants.assert_awaited_once_with(
         "alice-dev",
         {"lkecluster": [{"id": 555, "permissions": "read_write"}]},
@@ -6577,7 +6738,13 @@ async def test_account_availability_list_dispatches_from_registry(
 ) -> None:
     """Account availability list is callable through server dispatch."""
     response_data = {
-        "data": [{"service": "Linodes", "available": True}],
+        "data": [
+            {
+                "region": "us-east",
+                "available": ["Linodes", "NodeBalancers"],
+                "unavailable": ["Kubernetes"],
+            }
+        ],
         "page": 1,
         "pages": 1,
         "results": 1,
@@ -6593,7 +6760,13 @@ async def test_account_availability_list_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_availability_list", {})
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["account_availabilities"][0]["region"] == "us-east"
+    assert body["account_availabilities"][0]["available"] == [
+        "Linodes",
+        "NodeBalancers",
+    ]
     mock_client.list_account_availability.assert_awaited_once_with(
         page=None, page_size=None
     )
@@ -6655,7 +6828,10 @@ async def test_account_betas_list_dispatches_from_registry(
             "linode_account_beta_list", {"page": 1, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 0
+    assert body["account_betas"] == []
+    assert "filter" not in body
     mock_client.list_account_betas.assert_awaited_once_with(page=1, page_size=25)
 
 
@@ -6717,7 +6893,9 @@ async def test_database_cluster_create_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_database_mysql_instance_create", arguments)
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == _database_instance_write_envelope(
+        "Managed Database instance 'primary-db' (ID: 123) created", response_data
+    )
     mock_client.create_mysql_database_instance.assert_awaited_once_with(
         expected_payload
     )
@@ -7066,7 +7244,10 @@ async def test_database_postgresql_instance_create_dispatches_from_registry(
             "linode_database_postgresql_instance_create", arguments
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == _database_instance_write_envelope(
+        "PostgreSQL Managed Database instance 'primary-pg' (ID: 321) created",
+        response_data,
+    )
     mock_client.create_postgresql_database_instance.assert_awaited_once_with(
         expected_payload
     )
@@ -7337,7 +7518,13 @@ async def test_database_postgresql_credentials_reset_dispatches_from_registry(
             {"instance_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    # The rotated credential never reaches the output: the canonical response is
+    # the id-echo only.
+    assert json.loads(result[0].text) == {
+        "message": "PostgreSQL Managed Database credentials reset",
+        "instance_id": 123,
+    }
+    assert "secret" not in result[0].text
     mock_client.reset_postgresql_database_credentials.assert_awaited_once_with(123)
 
 
@@ -7454,7 +7641,13 @@ async def test_database_mysql_credentials_reset_dispatches_from_registry(
             {"instance_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    # The rotated credential never reaches the output: the canonical response is
+    # the id-echo only.
+    assert json.loads(result[0].text) == {
+        "message": "MySQL Managed Database credentials reset",
+        "instance_id": 123,
+    }
+    assert "secret" not in result[0].text
     mock_client.reset_mysql_database_credentials.assert_awaited_once_with(123)
 
 
@@ -7832,7 +8025,10 @@ async def test_database_mysql_instance_resume_dispatches_from_registry(
             {"instance_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed Database instance 123 resume started",
+        "instance_id": 123,
+    }
     mock_client.resume_mysql_database_instance.assert_awaited_once_with(123)
 
 
@@ -7938,7 +8134,10 @@ async def test_database_postgresql_instance_resume_dispatches_from_registry(
             {"instance_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "PostgreSQL Managed Database instance 123 resume started",
+        "instance_id": 123,
+    }
     mock_client.resume_postgresql_database_instance.assert_awaited_once_with(123)
 
 
@@ -8090,7 +8289,10 @@ async def test_database_mysql_instance_suspend_dispatches_from_registry(
             {"instance_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed Database instance 123 suspend started",
+        "instance_id": 123,
+    }
     mock_client.suspend_mysql_database_instance.assert_awaited_once_with(123)
 
 
@@ -8198,7 +8400,10 @@ async def test_database_postgresql_instance_suspend_dispatches_from_registry(
             {"instance_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "PostgreSQL Managed Database instance 123 suspend started",
+        "instance_id": 123,
+    }
     mock_client.suspend_postgresql_database_instance.assert_awaited_once_with(123)
 
 
@@ -8385,7 +8590,9 @@ async def test_database_mysql_instance_update_dispatches_from_registry(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_database_mysql_instance_update", arguments)
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == _database_instance_write_envelope(
+        "Managed Database instance 'primary-db' (ID: 123) updated", response_data
+    )
     mock_client.update_mysql_database_instance.assert_awaited_once_with(
         123, expected_payload
     )
@@ -8666,7 +8873,10 @@ async def test_database_postgresql_instance_update_dispatches_from_registry(
             "linode_database_postgresql_instance_update", arguments
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == _database_instance_write_envelope(
+        "PostgreSQL Managed Database instance 'pg-primary' (ID: 321) updated",
+        response_data,
+    )
     mock_client.update_postgresql_database_instance.assert_awaited_once_with(
         321, expected_payload
     )
@@ -8857,7 +9067,10 @@ async def test_database_mysql_instance_patch_dispatches_from_registry(
             {"instance_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed Database instance 123 patch started",
+        "instance_id": 123,
+    }
     mock_client.patch_mysql_database_instance.assert_awaited_once_with(123)
 
 
@@ -8944,7 +9157,7 @@ async def test_database_mysql_instances_list_tool_is_exported_and_registered(
 async def test_database_mysql_instances_list_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
-    """MySQL Managed Database list is callable through server dispatch."""
+    """MySQL Managed Database list dispatches and emits the proto envelope."""
     response_data = {
         "data": [{"id": 123, "label": "primary-db"}],
         "page": 1,
@@ -8964,7 +9177,27 @@ async def test_database_mysql_instances_list_dispatches_from_registry(
             "linode_database_mysql_instance_list", {"page": 1, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "mysql_instances": [
+            {
+                "id": 123,
+                "status": "",
+                "label": "primary-db",
+                "region": "",
+                "type": "",
+                "engine": "",
+                "version": "",
+                "cluster_size": 0,
+                "replication_type": "",
+                "ssl_connection": False,
+                "encrypted": False,
+                "allow_list": [],
+                "created": "",
+                "updated": "",
+            }
+        ],
+    }
     mock_client.list_mysql_database_instances.assert_awaited_once_with(
         page=1, page_size=25
     )
@@ -9093,7 +9326,7 @@ async def test_database_postgresql_instances_list_tool_is_exported_and_registere
 async def test_database_postgresql_instances_list_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
-    """PostgreSQL Managed Database list is callable through server dispatch."""
+    """PostgreSQL Managed Database list dispatches and emits the proto envelope."""
     response_data = {
         "data": [{"id": 456, "label": "pg-db"}],
         "page": 1,
@@ -9114,7 +9347,27 @@ async def test_database_postgresql_instances_list_dispatches_from_registry(
             {"page": 1, "page_size": 25},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "postgresql_instances": [
+            {
+                "id": 456,
+                "status": "",
+                "label": "pg-db",
+                "region": "",
+                "type": "",
+                "engine": "",
+                "version": "",
+                "cluster_size": 0,
+                "replication_type": "",
+                "ssl_connection": False,
+                "encrypted": False,
+                "allow_list": [],
+                "created": "",
+                "updated": "",
+            }
+        ],
+    }
     mock_client.list_postgresql_database_instances.assert_awaited_once_with(
         page=1, page_size=25
     )
@@ -9188,7 +9441,7 @@ async def test_database_instances_list_tool_is_exported_and_registered(
 async def test_database_instances_list_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
-    """Managed Database list is callable through server dispatch."""
+    """Managed Database list dispatches and emits the proto envelope."""
     response_data = {
         "data": [{"id": 123, "label": "primary-db"}],
         "page": 1,
@@ -9208,8 +9461,249 @@ async def test_database_instances_list_dispatches_from_registry(
             "linode_database_instance_list", {"page": 1, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "database_instances": [
+            {
+                "id": 123,
+                "status": "",
+                "label": "primary-db",
+                "region": "",
+                "type": "",
+                "engine": "",
+                "version": "",
+                "cluster_size": 0,
+                "replication_type": "",
+                "ssl_connection": False,
+                "encrypted": False,
+                "allow_list": [],
+                "created": "",
+                "updated": "",
+            }
+        ],
+    }
     mock_client.list_database_instances.assert_awaited_once_with(page=1, page_size=25)
+
+
+async def test_database_mysql_instances_list_serializes_full_element(
+    sample_config: Config,
+) -> None:
+    """A fully-populated MySQL element round-trips every proto field."""
+    response_data = {
+        "data": [
+            {
+                "id": 321,
+                "status": "active",
+                "label": "primary-db",
+                "region": "us-east",
+                "type": "g6-dedicated-2",
+                "engine": "mysql",
+                "version": "8.0.30",
+                "cluster_size": 3,
+                "replication_type": "semi_synch",
+                "ssl_connection": True,
+                "encrypted": True,
+                "allow_list": ["203.0.113.5/32", "198.51.100.0/24"],
+                "created": "2026-03-01T00:00:00",
+                "updated": "2026-03-02T00:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_mysql_database_instances.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_list", {"page": 1, "page_size": 25}
+        )
+
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "mysql_instances": [
+            {
+                "id": 321,
+                "status": "active",
+                "label": "primary-db",
+                "region": "us-east",
+                "type": "g6-dedicated-2",
+                "engine": "mysql",
+                "version": "8.0.30",
+                "cluster_size": 3,
+                "replication_type": "semi_synch",
+                "ssl_connection": True,
+                "encrypted": True,
+                "allow_list": ["203.0.113.5/32", "198.51.100.0/24"],
+                "created": "2026-03-01T00:00:00",
+                "updated": "2026-03-02T00:00:00",
+            }
+        ],
+    }
+
+
+async def test_database_postgresql_instances_list_serializes_full_element(
+    sample_config: Config,
+) -> None:
+    """A fully-populated PostgreSQL element round-trips every proto field."""
+    response_data = {
+        "data": [
+            {
+                "id": 654,
+                "status": "provisioning",
+                "label": "analytics-pg",
+                "region": "eu-west",
+                "type": "g6-standard-4",
+                "engine": "postgresql",
+                "version": "16.1",
+                "cluster_size": 2,
+                "replication_type": "asynch",
+                "ssl_connection": True,
+                "encrypted": False,
+                "allow_list": ["192.0.2.10/32"],
+                "created": "2026-04-01T00:00:00",
+                "updated": "2026-04-01T06:00:00",
+            }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_postgresql_database_instances.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_list", {"page": 1, "page_size": 25}
+        )
+
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "postgresql_instances": [
+            {
+                "id": 654,
+                "status": "provisioning",
+                "label": "analytics-pg",
+                "region": "eu-west",
+                "type": "g6-standard-4",
+                "engine": "postgresql",
+                "version": "16.1",
+                "cluster_size": 2,
+                "replication_type": "asynch",
+                "ssl_connection": True,
+                "encrypted": False,
+                "allow_list": ["192.0.2.10/32"],
+                "created": "2026-04-01T00:00:00",
+                "updated": "2026-04-01T06:00:00",
+            }
+        ],
+    }
+
+
+async def test_database_instances_list_empty_page_serializes_empty_envelope(
+    sample_config: Config,
+) -> None:
+    """An empty cross-engine page serializes to count 0 with an empty list."""
+    response_data: dict[str, Any] = {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.list_database_instances.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch(
+            "linode_database_instance_list", {"page": 1, "page_size": 25}
+        )
+
+    assert json.loads(result[0].text) == {"count": 0, "database_instances": []}
+
+
+@pytest.mark.parametrize(
+    ("label_value", "expected_error"),
+    [
+        (123, "label must be a string"),
+        ("   ", "label is required"),
+    ],
+)
+async def test_database_mysql_instance_create_rejects_bad_required_field(
+    sample_config: Config, label_value: object, expected_error: str
+) -> None:
+    """Create validates required fields as non-empty strings before any call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_create",
+            {
+                "label": label_value,
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "confirm": True,
+            },
+        )
+
+    assert expected_error in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_database_mysql_instance_create_rejects_non_list_allow_list(
+    sample_config: Config,
+) -> None:
+    """Create rejects an allow_list that is not an array."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_create",
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "allow_list": "203.0.113.5/32",
+                "confirm": True,
+            },
+        )
+
+    assert "allow_list must be an array of non-empty strings" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_database_mysql_instance_update_rejects_non_list_allow_list(
+    sample_config: Config,
+) -> None:
+    """Update rejects an allow_list that is not an array."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_mysql_instance_update",
+            {
+                "instance_id": 123,
+                "allow_list": "203.0.113.5/32",
+                "confirm": True,
+            },
+        )
+
+    assert "allow_list must be an array of non-empty strings" in result[0].text
+    mock_client_class.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -9304,7 +9798,12 @@ async def test_betas_list_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_beta_list", {"page": 1, "page_size": 25})
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["count"] == 1
+    assert body["betas"][0]["id"] == "VPC"
+    assert body["betas"][0]["label"] == "VPC Beta"
+    assert body["betas"][0]["greenlight_only"] is False
+    assert "filter" not in body
     mock_client.list_betas.assert_awaited_once_with(page=1, page_size=25)
 
 
@@ -9407,7 +9906,14 @@ async def test_account_child_accounts_list_dispatches_from_registry(
             "linode_account_child_account_list", {"page": 1, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert (
+        payload["account_child_accounts"][0]["euuid"]
+        == "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
+    )
+    assert payload["account_child_accounts"][0]["company"] == "Example Child"
+    assert "page" not in payload
     mock_client.list_account_child_accounts.assert_awaited_once_with(
         page=1, page_size=25
     )
@@ -9507,7 +10013,12 @@ async def test_account_service_transfers_list_dispatches_from_registry(
             "linode_account_service_transfer_list", {"page": 1, "page_size": 25}
         )
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    element = payload["account_service_transfers"][0]
+    assert element["token"] == "service-token-example"
+    assert element["status"] == "pending"
+    assert "page" not in payload
     mock_client.list_account_service_transfers.assert_awaited_once_with(
         page=1, page_size=25
     )
@@ -9778,10 +10289,11 @@ async def test_account_support_ticket_create_dispatches_from_registry(
             },
         )
 
-    assert json.loads(result[0].text) == {
-        "message": "Support ticket opened successfully",
-        "ticket": response_data,
-    }
+    expected = serialize_api_response(
+        {"message": "Support ticket opened successfully", "ticket": response_data},
+        support_ticket_pb2.SupportTicketWriteResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.create_support_ticket.assert_awaited_once()
 
 
@@ -9839,7 +10351,12 @@ async def test_managed_contacts_list_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "managed_contacts": [
+            {"id": 1, "name": "Primary", "email": "ops@example.com", "updated": ""}
+        ],
+    }
     mock_client.list_managed_contacts.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -9929,9 +10446,13 @@ async def test_managed_linode_settings_update_dispatches_from_registry(
             {"linode_id": 123, "ssh": {"access": False}, "confirm": True},
         )
 
-    payload = json.loads(result[0].text)
-    assert payload["message"] == "Managed Linode settings updated successfully"
-    assert payload["settings"] == response_data
+    assert json.loads(result[0].text) == serialize_api_response(
+        {
+            "message": "Managed Linode settings for Linode 123 updated successfully",
+            "settings": response_data,
+        },
+        managed_pb2.ManagedLinodeSettingsWriteResponse(),
+    )
     mock_client.update_managed_linode_settings.assert_awaited_once_with(
         123, ssh={"access": False}
     )
@@ -10085,7 +10606,10 @@ async def test_managed_linode_settings_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "managed_linode_settings": [{"id": 123, "label": "web-1", "group": ""}],
+    }
     mock_client.list_managed_linode_settings.assert_awaited_once_with(
         page=2, page_size=25
     )
@@ -10172,7 +10696,17 @@ async def test_managed_issues_list_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "managed_issues": [
+            {
+                "id": 1,
+                "created": "",
+                "services": [],
+                "entity": {"id": 0, "label": "web-1", "type": "", "url": ""},
+            }
+        ],
+    }
     mock_client.list_managed_issues.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -10477,7 +11011,13 @@ async def test_managed_credential_update_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == serialize_api_response(
+        {
+            "message": "Managed credential 42 updated successfully",
+            "credential": response_data,
+        },
+        managed_pb2.ManagedCredentialWriteResponse(),
+    )
     mock_client.update_managed_credential.assert_awaited_once_with(
         42, label="prod-root"
     )
@@ -10639,7 +11179,10 @@ async def test_credential_username_password_update_dispatches(
             },
         )
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed credential 91 updated successfully",
+        "credential_id": 91,
+    }
     mock_update.assert_awaited_once_with(91, password="s3cret", username="root")
 
 
@@ -10748,11 +11291,9 @@ async def test_managed_credential_revoke_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """Managed credential revoke is callable through server dispatch."""
-    response_data: dict[str, object] = {"message": "Credential revoked"}
-
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.revoke_managed_credential.return_value = response_data
+        mock_client.revoke_managed_credential.return_value = {}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -10764,7 +11305,10 @@ async def test_managed_credential_revoke_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed credential 91 revoked successfully",
+        "credential_id": 91,
+    }
     mock_client.revoke_managed_credential.assert_awaited_once_with(91)
 
 
@@ -11153,8 +11697,8 @@ async def test_managed_service_delete_dispatches_from_registry(
 
     assert len(result) == 1
     assert json.loads(result[0].text) == {
-        "message": "Managed service monitor deleted successfully",
-        "result": response_data,
+        "message": "Managed service deleted successfully",
+        "service_id": 9944,
     }
     mock_client.delete_managed_service.assert_awaited_once_with(9944)
 
@@ -11414,7 +11958,7 @@ async def test_managed_service_disable_dispatches_from_registry(
     assert len(result) == 1
     assert json.loads(result[0].text) == {
         "message": "Managed service disabled successfully",
-        "result": response_data,
+        "service_id": 9944,
     }
     mock_client.disable_managed_service.assert_awaited_once_with(9944)
 
@@ -11528,7 +12072,7 @@ async def test_managed_contact_delete_dispatches_from_registry(
     assert len(result) == 1
     assert json.loads(result[0].text) == {
         "message": "Managed contact deleted successfully",
-        "result": response_data,
+        "contact_id": 123,
     }
     mock_client.delete_managed_contact.assert_awaited_once_with(123)
 
@@ -11574,7 +12118,13 @@ async def test_managed_contacts_update_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == serialize_api_response(
+        {
+            "message": "Managed contact 174 updated successfully",
+            "contact": response_data,
+        },
+        managed_pb2.ManagedContactWriteResponse(),
+    )
     mock_client.update_managed_contact.assert_awaited_once_with(
         174, email="ops@example.com"
     )
@@ -11682,7 +12232,10 @@ async def test_managed_credentials_list_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "managed_credentials": [{"id": 1, "label": "credential", "last_decrypted": ""}],
+    }
     mock_client.list_managed_credentials.assert_awaited_once_with(page=2, page_size=25)
 
 
@@ -11889,7 +12442,23 @@ async def test_managed_services_list_dispatches_from_registry(
         result = await srv.dispatch("linode_managed_service_list", {})
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "managed_services": [
+            {
+                "id": 123,
+                "label": "",
+                "service_type": "",
+                "status": "",
+                "address": "",
+                "consultation_group": "",
+                "created": "",
+                "credentials": [],
+                "timeout": 0,
+                "updated": "",
+            }
+        ],
+    }
     mock_client.list_managed_services.assert_awaited_once_with(
         page=None, page_size=None
     )
@@ -11928,7 +12497,9 @@ async def test_managed_issue_get_dispatches_from_registry(
     data = json.loads(result[0].text)
     assert data["id"] == 77
     assert data["services"] == []
-    assert "entity" in data
+    # entity is a proto message field, omitted when the API does not send it
+    # (message presence), matching the Go output.
+    assert "entity" not in data
     mock_client.get_managed_issue.assert_awaited_once_with(77)
 
 
@@ -11949,7 +12520,11 @@ async def test_managed_contact_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """Managed contact get is callable through server dispatch."""
-    response_data: dict[str, object] = {"id": 42, "name": "Primary on-call"}
+    response_data: dict[str, object] = {
+        "id": 42,
+        "name": "Primary on-call",
+        "phone": {},
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -11998,7 +12573,9 @@ async def test_account_support_tickets_list_dispatches_from_registry(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_support_ticket_list", {})
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["support_tickets"][0]["id"] == 789
     mock_client.list_support_tickets.assert_awaited_once_with(page=None, page_size=None)
 
 
@@ -12058,7 +12635,10 @@ async def test_account_support_ticket_replies_list_dispatches_from_registry(
             "linode_support_ticket_reply_list", {"ticket_id": 123}
         )
 
-    assert json.loads(result[0].text) == response_data
+    payload = json.loads(result[0].text)
+    assert payload["count"] == 1
+    assert payload["support_ticket_replies"][0]["id"] == 456
+    assert "page" not in payload
     mock_client.list_support_ticket_replies.assert_awaited_once_with(
         123, page=None, page_size=None
     )
@@ -12663,8 +13243,15 @@ async def test_account_oauth_client_create_dispatches_from_registry(
         )
 
     payload = json.loads(result[0].text)
-    assert payload["label"] == "demo-client"
-    assert payload["secret"] == "shown-once"
+    assert payload["message"] == "OAuth client created successfully"
+    # Security affordance: the one-time secret and the save-it warning must reach
+    # the caller. This tool exists to return the secret, so it is not redacted.
+    assert payload["warning"] == (
+        "IMPORTANT: The secret below is shown ONLY ONCE. Save it now"
+        " - it cannot be retrieved later."
+    )
+    assert payload["client"]["label"] == "demo-client"
+    assert payload["client"]["secret"] == "shown-once"
     mock_client.create_account_oauth_client.assert_awaited_once_with(
         "demo-client", "https://example.com/cb"
     )
@@ -12813,9 +13400,14 @@ async def test_account_payment_create_dispatches_from_registry(
             {"payment_method_id": 123, "usd": "25.00", "confirm": True},
         )
 
-    payload = json.loads(result[0].text)
-    assert payload["payment_method_id"] == 123
-    assert payload["usd"] == "25.00"
+    expected = serialize_api_response(
+        {
+            "message": "Account payment created successfully",
+            "payment": {"id": 456, "payment_method_id": 123, "usd": "25.00"},
+        },
+        account_pb2.AccountPaymentWriteResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.create_account_payment.assert_awaited_once_with(
         "25.00", payment_method_id=123
     )
@@ -12841,8 +13433,14 @@ async def test_account_payment_create_omits_default_payment_method(
             {"usd": "25.00", "confirm": True},
         )
 
-    payload = json.loads(result[0].text)
-    assert payload["usd"] == "25.00"
+    expected = serialize_api_response(
+        {
+            "message": "Account payment created successfully",
+            "payment": {"id": 456, "usd": "25.00"},
+        },
+        account_pb2.AccountPaymentWriteResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.create_account_payment.assert_awaited_once_with(
         "25.00", payment_method_id=None
     )
@@ -13163,9 +13761,18 @@ async def test_account_payment_method_create_dispatches_from_registry(
             },
         )
 
-    payload = json.loads(result[0].text)
-    assert payload["type"] == "credit_card"
-    assert payload["is_default"] is True
+    expected = serialize_api_response(
+        {
+            "message": "Payment method created successfully",
+            "payment_method": {
+                "id": 123,
+                "type": "credit_card",
+                "is_default": True,
+            },
+        },
+        account_pb2.AccountPaymentMethodWriteResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.create_account_payment_method.assert_awaited_once_with(
         "credit_card", {"nonce": "payment-token"}, True
     )
@@ -13328,8 +13935,14 @@ async def test_account_promo_credit_add_dispatches_from_registry(
             {"promo_code": "PROMO123", "confirm": True},
         )
 
-    payload = json.loads(result[0].text)
-    assert payload["summary"] == "$100 credit"
+    expected = serialize_api_response(
+        {
+            "message": "Account promo credit applied successfully",
+            "promo_code": "PROMO123",
+        },
+        account_pb2.AccountPromoResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.add_account_promo_credit.assert_awaited_once_with("PROMO123")
 
 
@@ -13466,7 +14079,10 @@ async def test_account_oauth_client_delete_dispatches_from_registry(
             {"client_id": "client-123", "confirm": True, "confirmed_dry_run": True},
         )
 
-    assert json.loads(result[0].text) == {"id": "client-123", "deleted": True}
+    assert json.loads(result[0].text) == {
+        "message": "OAuth client deleted successfully",
+        "client_id": "client-123",
+    }
     mock_client.delete_account_oauth_client.assert_awaited_once_with("client-123")
 
 
@@ -13614,7 +14230,23 @@ async def test_account_oauth_client_reset_secret_dispatches_from_registry(
         )
 
     payload = json.loads(result[0].text)
-    assert payload["secret"] == "shown-once"
+    expected = serialize_api_response(
+        {
+            "message": "OAuth client secret reset successfully",
+            "warning": (
+                "IMPORTANT: The new secret below is shown ONLY ONCE. Save it"
+                " now - it cannot be retrieved later."
+            ),
+            "client_id": "client-123",
+            "secret": {"id": "client-123", "secret": "shown-once"},
+        },
+        account_pb2.OAuthClientSecretResetWriteResponse(),
+    )
+    assert payload == expected
+    # Security affordance: the new one-time secret and warning must reach the
+    # caller. This tool exists to return the secret, so it is not redacted.
+    assert payload["secret"]["secret"] == "shown-once"
+    assert payload["warning"].startswith("IMPORTANT:")
     mock_client.reset_account_oauth_client_secret.assert_awaited_once_with("client-123")
 
 
@@ -13876,10 +14508,11 @@ async def test_account_support_ticket_close_dispatches_from_registry(
             {"ticket_id": 123, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == {
-        "message": "Support ticket closed successfully",
-        "ticket": response_data,
-    }
+    expected = serialize_api_response(
+        {"message": "Support ticket closed successfully", "ticket_id": 123},
+        support_ticket_pb2.SupportTicketIDResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.close_support_ticket.assert_awaited_once_with(123)
 
 
@@ -13929,10 +14562,14 @@ async def test_account_support_ticket_attachment_create_dispatches_from_registry
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == {
-        "message": "Support ticket attachment created successfully",
-        "attachment": response_data,
-    }
+    expected = serialize_api_response(
+        {
+            "message": "Support ticket attachment created successfully",
+            "ticket_id": 123,
+        },
+        support_ticket_pb2.SupportTicketIDResponse(),
+    )
+    assert json.loads(result[0].text) == expected
     mock_client.create_support_ticket_attachment.assert_awaited_once_with(
         123, "/Users/e/a.txt"
     )
@@ -14196,7 +14833,9 @@ async def test_linode_images_sharegroup_image_delete_dispatches_from_registry(
             },
         )
 
-    assert json.loads(result[0].text) == {"message": "Shared image access revoked"}
+    assert json.loads(result[0].text) == {
+        "message": "Shared image 456 removed from image share group 123 successfully"
+    }
     mock_client.delete_image_sharegroup_image.assert_awaited_once_with("123", "456")
 
 
@@ -14327,7 +14966,9 @@ async def test_linode_images_sharegroup_delete_dispatches_from_registry(
             },
         )
 
-    assert json.loads(result[0].text) == {"message": "Image share group deleted"}
+    assert json.loads(result[0].text) == {
+        "message": "Image share group 3 removed successfully"
+    }
     mock_client.delete_image_sharegroup.assert_awaited_once_with("3")
 
 
@@ -14572,7 +15213,7 @@ async def test_linode_images_sharegroup_images_add_dispatches_from_registry(
 ) -> None:
     """Image share group add-images dispatches through the registered tool."""
     images = [{"id": "private/ubuntu"}]
-    response_data = {"images": images}
+    response_data = {"id": "private/ubuntu", "label": "Ubuntu"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -14592,8 +15233,25 @@ async def test_linode_images_sharegroup_images_add_dispatches_from_registry(
         )
 
     assert json.loads(result[0].text) == {
-        "message": "Images added to image share group",
-        "result": response_data,
+        "message": (
+            "Added image set to image share group 3; "
+            "last returned image: 'private/ubuntu'"
+        ),
+        "image": {
+            "id": "private/ubuntu",
+            "label": "Ubuntu",
+            "description": "",
+            "type": "",
+            "vendor": "",
+            "status": "",
+            "created": "",
+            "created_by": "",
+            "capabilities": [],
+            "tags": [],
+            "size": 0,
+            "is_public": False,
+            "deprecated": False,
+        },
     }
     mock_client.add_image_sharegroup_images.assert_awaited_once_with("3", images)
 
@@ -14684,7 +15342,7 @@ async def test_linode_images_sharegroup_update_dispatches_from_registry(
 ) -> None:
     """Image share group update dispatches through the registered tool."""
     response_data = {
-        "id": "11111111-1111-4111-8111-111111111111",
+        "id": 3,
         "label": "partner-group",
         "description": "Shared images",
     }
@@ -14708,8 +15366,17 @@ async def test_linode_images_sharegroup_update_dispatches_from_registry(
         )
 
     assert json.loads(result[0].text) == {
-        "message": "Image share group updated",
-        "sharegroup": response_data,
+        "message": "Image share group 'partner-group' (3) updated successfully",
+        "sharegroup": {
+            "id": 3,
+            "uuid": "",
+            "label": "partner-group",
+            "description": "Shared images",
+            "is_suspended": False,
+            "created": "",
+            "images_count": 0,
+            "members_count": 0,
+        },
     }
     mock_client.update_image_sharegroup.assert_awaited_once_with(
         "3",
@@ -14723,7 +15390,7 @@ async def test_linode_images_sharegroup_update_dispatches_description_only(
 ) -> None:
     """Image share group update accepts description-only updates."""
     response_data = {
-        "id": "11111111-1111-4111-8111-111111111111",
+        "id": 3,
         "description": "Shared images",
     }
 
@@ -14745,8 +15412,17 @@ async def test_linode_images_sharegroup_update_dispatches_description_only(
         )
 
     assert json.loads(result[0].text) == {
-        "message": "Image share group updated",
-        "sharegroup": response_data,
+        "message": "Image share group '' (3) updated successfully",
+        "sharegroup": {
+            "id": 3,
+            "uuid": "",
+            "label": "",
+            "description": "Shared images",
+            "is_suspended": False,
+            "created": "",
+            "images_count": 0,
+            "members_count": 0,
+        },
     }
     mock_client.update_image_sharegroup.assert_awaited_once_with(
         "3",
@@ -15874,8 +16550,18 @@ async def test_monitor_service_alert_definition_create_dispatches_from_registry(
         )
 
     result_json = json.loads(result[0].text)
-    assert result_json["service_type"] == "linode"
-    assert result_json["alert_definition"] == response_data
+    # The create envelope drops the top-level service_type echo and emits the
+    # full MonitorAlertDefinition element with zero-filled defaults; build the
+    # expectation through the same serializer the handler uses.
+    expected = serialize_api_response(
+        {
+            "message": "Monitor service alert definition created for 'linode'",
+            "alert_definition": response_data,
+        },
+        monitor_pb2.MonitorAlertDefinitionWriteResponse(),
+    )
+    assert result_json == expected
+    assert "service_type" not in result_json
     mock_client.create_monitor_service_alert_definition.assert_awaited_once_with(
         "linode",
         label="CPU high",
@@ -16046,8 +16732,9 @@ async def test_monitor_alert_channels_list_dispatches_from_registry(
         result = await srv.dispatch("linode_monitor_alert_channel_list", {})
 
     result_json = json.loads(result[0].text)
-    assert result_json["alert_channels"] == response_data["data"]
     assert result_json["count"] == 1
+    assert result_json["alert_channels"][0]["id"] == 10000
+    assert result_json["alert_channels"][0]["label"] == "Email Ops"
     mock_client.list_monitor_alert_channels.assert_awaited_once_with(
         page=None, page_size=None
     )
@@ -16093,8 +16780,9 @@ async def test_monitor_alert_definitions_list_dispatches_from_registry(
         result = await srv.dispatch("linode_monitor_alert_definition_list", {})
 
     result_json = json.loads(result[0].text)
-    assert result_json["alert_definitions"] == response_data["data"]
     assert result_json["count"] == 1
+    assert result_json["alert_definitions"][0]["id"] == 123
+    assert result_json["alert_definitions"][0]["label"] == "CPU Usage"
     mock_client.list_monitor_alert_definitions.assert_awaited_once_with(
         page=None, page_size=None
     )
@@ -16153,8 +16841,20 @@ async def test_monitor_service_alert_definitions_list_dispatches_from_registry(
         )
 
     result_json = json.loads(result[0].text)
-    assert result_json["service_type"] == "linode"
-    assert result_json["alert_definitions"] == response_data
+    assert result_json["count"] == 1
+    assert result_json["alert_definitions"] == [
+        {
+            "id": 123,
+            "label": "CPU Usage",
+            "type": "",
+            "service_type": "",
+            "description": "",
+            "severity": 0,
+            "status": "",
+            "channel_ids": [],
+            "entity_ids": [],
+        }
+    ]
     mock_client.list_monitor_service_alert_definitions.assert_awaited_once_with(
         "linode"
     )
@@ -16219,8 +16919,10 @@ async def test_monitor_dashboards_list_dispatches_from_registry(
         result = await srv.dispatch("linode_monitor_dashboard_list", {})
 
     result_json = json.loads(result[0].text)
-    assert result_json["dashboards"] == response_data["data"]
     assert result_json["count"] == 1
+    assert result_json["dashboards"][0]["id"] == 1
+    assert result_json["dashboards"][0]["label"] == "Resource Usage"
+    assert result_json["dashboards"][0]["widgets"] == []
     mock_client.list_monitor_dashboards.assert_awaited_once_with(
         page=None, page_size=None
     )
@@ -16343,8 +17045,10 @@ async def test_monitor_service_metric_definitions_list_dispatches_from_registry(
         )
 
     result_json = json.loads(result[0].text)
-    assert result_json["service_type"] == "linode"
-    assert result_json["metric_definitions"] == response_data
+    assert result_json["count"] == 1
+    assert result_json["metric_definitions"] == [
+        {"label": "CPU Usage", "metric": "cpu_usage", "metric_type": ""}
+    ]
     mock_client.list_monitor_service_metric_definitions.assert_awaited_once_with(
         "linode"
     )
@@ -17101,7 +17805,8 @@ async def test_networking_ip_allocate_dispatches_happy_path(
         12345, ip_type="ipv4", public=True
     )
     result_json = json.loads(result[0].text)
-    assert result_json["address"] == "198.51.100.10"
+    assert result_json["ip"]["address"] == "198.51.100.10"
+    assert "allocated" in result_json["message"]
 
 
 @pytest.mark.parametrize(
@@ -18196,10 +18901,14 @@ async def test_longview_plan_update_tool_is_exported_registered_and_categorized(
 async def test_longview_plan_update_handler_returns_client_response(
     sample_config: Config,
 ) -> None:
-    """Longview plan update handler returns the client response."""
+    """Longview plan update handler returns the {message, plan} proto envelope."""
     mock_client = AsyncMock()
     mock_client.update_longview_plan = AsyncMock(
-        return_value={"longview_subscription": "longview-10"}
+        return_value={
+            "id": "longview-10",
+            "label": "Longview Pro 10 pack",
+            "clients_included": 10,
+        }
     )
     mock_client.__aenter__.return_value = mock_client
     mock_client.__aexit__.return_value = None
@@ -18213,7 +18922,14 @@ async def test_longview_plan_update_handler_returns_client_response(
             {"longview_subscription": "longview-10", "confirm": True},
         )
 
-    assert json.loads(result[0].text) == {"longview_subscription": "longview-10"}
+    assert json.loads(result[0].text) == {
+        "message": "Longview plan updated successfully",
+        "plan": {
+            "id": "longview-10",
+            "label": "Longview Pro 10 pack",
+            "clients_included": 10,
+        },
+    }
     mock_client.update_longview_plan.assert_awaited_once_with("longview-10")
 
 

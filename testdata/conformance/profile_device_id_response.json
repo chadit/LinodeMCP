@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ProfileDeviceIDResponse",
+  "description": "Profile device id-echo: a confirmation message plus the device id. The revoke endpoint has no resource body to echo.",
+  "input": {
+    "message": "Profile trusted device 444 revoked successfully",
+    "device_id": 444
+  },
+  "canonical": {
+    "message": "Profile trusted device 444 revoked successfully",
+    "device_id": 444
+  }
+}

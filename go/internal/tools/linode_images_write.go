@@ -138,22 +138,18 @@ func handleLinodeImageUploadRequest(ctx context.Context, request *mcp.CallToolRe
 		Tags:        tags,
 	}
 
-	upload, err := client.UploadImage(ctx, &req)
+	image, uploadTo, err := client.UploadImageProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to upload image: %v", err)), nil
 	}
 
-	response := struct {
-		Message  string                      `json:"message"`
-		UploadTo string                      `json:"upload_to"`
-		Image    *linode.UploadImageResponse `json:"upload"`
-	}{
-		Message:  fmt.Sprintf("Image upload '%s' (%s) created successfully", upload.Image.Label, upload.Image.ID),
-		UploadTo: upload.UploadTo,
-		Image:    upload,
+	response := &linodev1.ImageUploadWriteResponse{
+		Message:  fmt.Sprintf("Image upload '%s' (%s) created successfully", image.GetLabel(), image.GetId()),
+		UploadTo: uploadTo,
+		Image:    image,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image upload response: %v", err)), nil
 	}
@@ -449,20 +445,17 @@ func handleLinodeImageShareGroupCreateRequest(ctx context.Context, request *mcp.
 		Images:      images,
 	}
 
-	created, err := client.CreateImageShareGroup(ctx, &req)
+	created, err := client.CreateImageShareGroupProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create image share group: %v", err)), nil
 	}
 
-	response := struct {
-		Message    string                  `json:"message"`
-		ShareGroup *linode.ImageShareGroup `json:"share_group"`
-	}{
-		Message:    fmt.Sprintf("Image share group '%s' (%d) created successfully", created.Label, created.ID),
-		ShareGroup: created,
+	response := &linodev1.ImageShareGroupWriteResponse{
+		Message:    fmt.Sprintf("Image share group '%s' (%d) created successfully", created.GetLabel(), created.GetId()),
+		Sharegroup: created,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group response: %v", err)), nil
 	}
@@ -531,20 +524,17 @@ func handleLinodeImageShareGroupImagesAddRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	image, err := client.AddImageShareGroupImages(ctx, shareGroupID, &linode.AddImageShareGroupImagesRequest{Images: images})
+	image, err := client.AddImageShareGroupImagesProto(ctx, shareGroupID, &linode.AddImageShareGroupImagesRequest{Images: images})
 	if err != nil {
 		return mcp.NewToolResultError(formatImageShareGroupImagesAddError(err)), nil
 	}
 
-	response := struct {
-		Message string        `json:"message"`
-		Image   *linode.Image `json:"image"`
-	}{
-		Message: fmt.Sprintf("Added image set to image share group %d; last returned image: '%s'", shareGroupID, image.ID),
+	response := &linodev1.ImageWriteResponse{
+		Message: fmt.Sprintf("Added image set to image share group %d; last returned image: '%s'", shareGroupID, image.GetId()),
 		Image:   image,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group image response: %v", err)), nil
 	}
@@ -648,20 +638,17 @@ func handleLinodeImageShareGroupImageUpdateRequest(ctx context.Context, request 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updated, err := client.UpdateImageShareGroupImage(ctx, shareGroupID, imageID, req)
+	updated, err := client.UpdateImageShareGroupImageProto(ctx, shareGroupID, imageID, req)
 	if err != nil {
 		return mcp.NewToolResultError(formatImageShareGroupImageUpdateError(err)), nil
 	}
 
-	response := struct {
-		Message string        `json:"message"`
-		Image   *linode.Image `json:"image"`
-	}{
-		Message: fmt.Sprintf("Shared image '%s' in image share group %d updated successfully", updated.ID, shareGroupID),
+	response := &linodev1.ImageWriteResponse{
+		Message: fmt.Sprintf("Shared image '%s' in image share group %d updated successfully", updated.GetId(), shareGroupID),
 		Image:   updated,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format shared image response: %v", err)), nil
 	}
@@ -782,20 +769,17 @@ func handleLinodeImageShareGroupMembersAddRequest(ctx context.Context, request *
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	shareGroup, err := client.AddImageShareGroupMembers(ctx, shareGroupID, req)
+	shareGroup, err := client.AddImageShareGroupMembersProto(ctx, shareGroupID, req)
 	if err != nil {
 		return mcp.NewToolResultError(formatImageShareGroupMembersAddError(err)), nil
 	}
 
-	response := struct {
-		Message    string                  `json:"message"`
-		ShareGroup *linode.ImageShareGroup `json:"share_group"`
-	}{
+	response := &linodev1.ImageShareGroupWriteResponse{
 		Message:    fmt.Sprintf("Added members to image share group %d", shareGroupID),
-		ShareGroup: shareGroup,
+		Sharegroup: shareGroup,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group member response: %v", err)), nil
 	}
@@ -940,20 +924,17 @@ func handleLinodeImageShareGroupUpdateRequest(ctx context.Context, request *mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updated, err := client.UpdateImageShareGroup(ctx, shareGroupID, req)
+	updated, err := client.UpdateImageShareGroupProto(ctx, shareGroupID, req)
 	if err != nil {
 		return mcp.NewToolResultError(formatImageShareGroupUpdateError(err)), nil
 	}
 
-	response := struct {
-		Message    string                  `json:"message"`
-		ShareGroup *linode.ImageShareGroup `json:"share_group"`
-	}{
-		Message:    fmt.Sprintf("Image share group '%s' (%d) updated successfully", updated.Label, updated.ID),
-		ShareGroup: updated,
+	response := &linodev1.ImageShareGroupWriteResponse{
+		Message:    fmt.Sprintf("Image share group '%s' (%d) updated successfully", updated.GetLabel(), updated.GetId()),
+		Sharegroup: updated,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group response: %v", err)), nil
 	}
@@ -1136,20 +1117,17 @@ func handleLinodeImageShareGroupTokenUpdateRequest(ctx context.Context, request 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updated, err := client.UpdateImageShareGroupToken(ctx, tokenUUID, &linode.UpdateImageShareGroupTokenRequest{Label: label})
+	updated, err := client.UpdateImageShareGroupTokenProto(ctx, tokenUUID, &linode.UpdateImageShareGroupTokenRequest{Label: label})
 	if err != nil {
 		return mcp.NewToolResultError(formatImageShareGroupTokenUpdateError(err)), nil
 	}
 
-	response := struct {
-		Message string                       `json:"message"`
-		Token   *linode.ImageShareGroupToken `json:"token"`
-	}{
-		Message: fmt.Sprintf("Image share group token '%s' updated successfully", updated.TokenUUID),
+	response := &linodev1.ImageShareGroupTokenWriteResponse{
+		Message: fmt.Sprintf("Image share group token '%s' updated successfully", updated.GetTokenUuid()),
 		Token:   updated,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group token response: %v", err)), nil
 	}
@@ -1214,20 +1192,17 @@ func handleLinodeImageShareGroupMemberUpdateRequest(ctx context.Context, request
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	member, err := client.UpdateImageShareGroupMember(ctx, shareGroupID, tokenUUID, &linode.UpdateImageShareGroupMemberRequest{Label: label})
+	member, err := client.UpdateImageShareGroupMemberProto(ctx, shareGroupID, tokenUUID, &linode.UpdateImageShareGroupMemberRequest{Label: label})
 	if err != nil {
 		return mcp.NewToolResultError(formatImageShareGroupMemberUpdateError(err)), nil
 	}
 
-	response := struct {
-		Message string                        `json:"message"`
-		Member  *linode.ImageShareGroupMember `json:"member"`
-	}{
-		Message: fmt.Sprintf("Image share group member token '%s' updated successfully", member.TokenUUID),
+	response := &linodev1.ImageShareGroupMemberWriteResponse{
+		Message: fmt.Sprintf("Image share group member token '%s' updated successfully", member.GetTokenUuid()),
 		Member:  member,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group member token response: %v", err)), nil
 	}
@@ -1272,20 +1247,17 @@ func handleLinodeImageShareGroupTokenCreateRequest(ctx context.Context, request 
 		ValidForShareGroupUUID: shareGroupUUID,
 	}
 
-	created, err := client.CreateImageShareGroupToken(ctx, &req)
+	created, err := client.CreateImageShareGroupTokenProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create image share group token: %v", err)), nil
 	}
 
-	response := struct {
-		Message string                       `json:"message"`
-		Token   *linode.ImageShareGroupToken `json:"token"`
-	}{
-		Message: fmt.Sprintf("Image share group token '%s' created successfully", created.TokenUUID),
+	response := &linodev1.ImageShareGroupTokenWriteResponse{
+		Message: fmt.Sprintf("Image share group token '%s' created successfully", created.GetTokenUuid()),
 		Token:   created,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image share group token response: %v", err)), nil
 	}
@@ -1333,20 +1305,17 @@ func handleLinodeImageReplicateRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	image, err := client.ReplicateImage(ctx, imageID, &linode.ReplicateImageRequest{Regions: regions})
+	image, err := client.ReplicateImageProto(ctx, imageID, &linode.ReplicateImageRequest{Regions: regions})
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to replicate image: %v", err)), nil
 	}
 
-	response := struct {
-		Message string        `json:"message"`
-		Image   *linode.Image `json:"image"`
-	}{
-		Message: fmt.Sprintf("Image '%s' replicated successfully", image.ID),
+	response := &linodev1.ImageWriteResponse{
+		Message: fmt.Sprintf("Image '%s' replicated successfully", image.GetId()),
 		Image:   image,
 	}
 
-	result, err := MarshalToolResponse(response)
+	result, err := MarshalProtoToolResponse(response)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to format image replication response: %v", err)), nil
 	}

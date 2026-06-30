@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.BetaProgramListResponse",
+  "description": "linode_beta_list envelope: count and the full proto BetaProgram elements (not the Linode data/page/pages/results page). The optional ended is omitted on the element (explicit presence), and pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "betas": [
+      {
+        "class": "closed",
+        "description": "Limited beta",
+        "greenlight_only": false,
+        "id": "example-beta",
+        "label": "Example Beta",
+        "more_info": "https://example.com/beta",
+        "started": "2024-01-01T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "betas": [
+      {
+        "class": "closed",
+        "description": "Limited beta",
+        "greenlight_only": false,
+        "id": "example-beta",
+        "label": "Example Beta",
+        "more_info": "https://example.com/beta",
+        "started": "2024-01-01T00:00:00"
+      }
+    ]
+  }
+}

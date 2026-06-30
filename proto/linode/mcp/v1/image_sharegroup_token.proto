@@ -19,6 +19,21 @@ message ImageShareGroupToken {
   string sharegroup_label = 10;
 }
 
+// ImageShareGroupTokenWriteResponse is the {message, token} envelope the share
+// group token create/update tools return.
+message ImageShareGroupTokenWriteResponse {
+  string message = 1;
+  ImageShareGroupToken token = 2;
+}
+
+// ImageShareGroupTokenListResponse is the linode_image_sharegroup_token_list
+// envelope: count, an optional filter echo, and the share group token elements.
+message ImageShareGroupTokenListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ImageShareGroupToken image_sharegroup_tokens = 3;
+}
+
 // ImageShareGroupTokenGetInput is the input contract for
 // linode_image_sharegroup_token_get.
 message ImageShareGroupTokenGetInput {

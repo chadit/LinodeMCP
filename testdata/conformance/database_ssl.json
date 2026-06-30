@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.DatabaseSSL",
+  "description": "Managed Database SSL CA certificate, single string field.",
+  "input": {
+    "ca_certificate": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
+  },
+  "canonical": {
+    "ca_certificate": "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t"
+  }
+}

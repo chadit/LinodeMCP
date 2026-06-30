@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageQuotaListResponse",
+  "description": "linode_object_storage_quota_list envelope: count and the full proto ObjectStorageQuota elements. The tool has no filter params, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "quotas": [
+      {
+        "quota_id": "obj-objects-us-sea-1.linodeobjects.com",
+        "quota_name": "Number of Objects",
+        "endpoint_type": "E1",
+        "s3_endpoint": "us-sea-1.linodeobjects.com",
+        "description": "Maximum number of objects this endpoint can store",
+        "quota_limit": 1000000000,
+        "resource_metric": "object"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "quotas": [
+      {
+        "quota_id": "obj-objects-us-sea-1.linodeobjects.com",
+        "quota_name": "Number of Objects",
+        "endpoint_type": "E1",
+        "s3_endpoint": "us-sea-1.linodeobjects.com",
+        "description": "Maximum number of objects this endpoint can store",
+        "quota_limit": "1000000000",
+        "resource_metric": "object"
+      }
+    ]
+  }
+}

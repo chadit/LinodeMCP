@@ -6,8 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import type_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.proto_response import serialize_list_response
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -50,37 +52,29 @@ def create_linode_type_list_tool() -> tuple[Tool, Capability]:
 async def handle_linode_type_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
-    """Handle linode_type_list tool request."""
+    """Handle linode_type_list tool request.
+
+    Class is a case-insensitive exact match against the type's class field,
+    mirroring the Go list tool's fieldFilter. The output is the proto-canonical
+    InstanceType envelope: every type element carries the full field set, so the
+    raw API page flows through serialize_list_response unmodified.
+    """
     class_filter: str = arguments.get("class", "")
 
+    def _matches(type_: dict[str, Any]) -> bool:
+        if not class_filter:
+            return True
+        return str(type_.get("class", "")).lower() == class_filter.lower()
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        types = await client.list_types()
-
-        if class_filter:
-            types = [t for t in types if t.class_.lower() == class_filter.lower()]
-
-        types_data = [
-            {
-                "id": t.id,
-                "label": t.label,
-                "class": t.class_,
-                "disk": t.disk,
-                "memory": t.memory,
-                "vcpus": t.vcpus,
-                "price": {"hourly": t.price.hourly, "monthly": t.price.monthly},
-            }
-            for t in types
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(types),
-            "types": types_data,
-        }
-
-        if class_filter:
-            response["filter"] = f"class={class_filter}"
-
-        return response
+        raw = await client.get_raw("/linode/types")
+        return serialize_list_response(
+            raw,
+            "types",
+            type_pb2.InstanceTypeListResponse(),
+            filter_value=f"class={class_filter}" if class_filter else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode types", _call)
 

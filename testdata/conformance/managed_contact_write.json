@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.ManagedContactWriteResponse",
+  "description": "Managed contact update envelope: a confirmation message plus the full contact element with the optional group and nested phone present.",
+  "input": {
+    "message": "Managed contact 555 updated successfully",
+    "contact": {
+      "id": 555,
+      "name": "Alice Admin",
+      "email": "alice@example.com",
+      "group": "prod",
+      "phone": {
+        "primary": "555-0100",
+        "secondary": "555-0101"
+      },
+      "updated": "2024-06-01T00:00:00"
+    }
+  },
+  "canonical": {
+    "message": "Managed contact 555 updated successfully",
+    "contact": {
+      "id": 555,
+      "name": "Alice Admin",
+      "email": "alice@example.com",
+      "group": "prod",
+      "phone": {
+        "primary": "555-0100",
+        "secondary": "555-0101"
+      },
+      "updated": "2024-06-01T00:00:00"
+    }
+  }
+}

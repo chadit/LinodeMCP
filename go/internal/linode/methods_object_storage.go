@@ -2,6 +2,7 @@ package linode
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -38,6 +39,14 @@ func (c *Client) httpListObjectStorageBuckets(ctx context.Context) ([]ObjectStor
 	}
 
 	return response.Data, nil
+}
+
+// httpListObjectStorageBucketsProto retrieves all Object Storage buckets as
+// proto messages for the proto-backed list path. The endpoint returns a
+// {data, page, ...} page envelope, so listProtoElements reads the data field.
+func (c *Client) httpListObjectStorageBucketsProto(ctx context.Context) ([]*linodev1.ObjectStorageBucket, error) {
+	return listProtoElements(ctx, c, "ListObjectStorageBuckets", endpointObjBuckets,
+		func() *linodev1.ObjectStorageBucket { return &linodev1.ObjectStorageBucket{} })
 }
 
 // ListObjectStorageBucketsByRegion retrieves Object Storage buckets in a region.
@@ -108,9 +117,22 @@ func (c *Client) httpGetObjectStorageBucketProto(ctx context.Context, region, la
 	return bucket, nil
 }
 
-// ListObjectStorageBucketContents lists objects in a bucket.
-// Returns objects, isTruncated flag, and nextMarker for pagination.
-func (c *Client) httpListObjectStorageBucketContents(ctx context.Context, region, label string, params map[string]string) ([]ObjectStorageObject, bool, string, error) {
+// ObjectStorageBucketContentsPage is the decoded body of the S3-style
+// object-list endpoint: the proto object elements plus the S3 pagination
+// metadata (is_truncated and next_marker) the standard {data,page,...} envelope
+// does not carry.
+type ObjectStorageBucketContentsPage struct {
+	Objects     []*linodev1.ObjectStorageObject
+	IsTruncated bool
+	NextMarker  string
+}
+
+// httpListObjectStorageBucketContentsProto lists objects in a bucket as proto
+// messages for the proto-backed list path. The endpoint returns a bespoke
+// {data:[...], is_truncated, next_marker} body (not the standard page envelope),
+// so this decodes the data[] elements with protojson and returns the truncation
+// metadata alongside them.
+func (c *Client) httpListObjectStorageBucketContentsProto(ctx context.Context, region, label string, params map[string]string) (*ObjectStorageBucketContentsPage, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -127,22 +149,32 @@ func (c *Client) httpListObjectStorageBucketContents(ctx context.Context, region
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, false, "", &NetworkError{Operation: "ListObjectStorageBucketContents", Err: err}
+		return nil, &NetworkError{Operation: "ListObjectStorageBucketContents", Err: err}
 	}
 
 	defer drainClose(resp)
 
-	var response struct {
-		Data        []ObjectStorageObject `json:"data"`
-		IsTruncated bool                  `json:"is_truncated"`
-		NextMarker  string                `json:"next_marker"`
+	var envelope struct {
+		Data        []json.RawMessage `json:"data"`
+		IsTruncated bool              `json:"is_truncated"`
+		NextMarker  string            `json:"next_marker"`
 	}
 
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, false, "", err
+	if err := c.handleResponse(resp, &envelope); err != nil {
+		return nil, err
 	}
 
-	return response.Data, response.IsTruncated, response.NextMarker, nil
+	objects, err := decodeRawProtoItems(envelope.Data, "ListObjectStorageBucketContents",
+		func() *linodev1.ObjectStorageObject { return &linodev1.ObjectStorageObject{} })
+	if err != nil {
+		return nil, err
+	}
+
+	return &ObjectStorageBucketContentsPage{
+		Objects:     objects,
+		IsTruncated: envelope.IsTruncated,
+		NextMarker:  envelope.NextMarker,
+	}, nil
 }
 
 // ListObjectStorageEndpoints retrieves Object Storage endpoints.
@@ -164,6 +196,22 @@ func (c *Client) httpListObjectStorageEndpoints(ctx context.Context) ([]ObjectSt
 	}
 
 	return response.Data, nil
+}
+
+// httpListObjectStorageEndpointsProto retrieves Object Storage endpoints as proto
+// ObjectStorageEndpoint messages for the proto-backed list path.
+func (c *Client) httpListObjectStorageEndpointsProto(ctx context.Context) ([]*linodev1.ObjectStorageEndpoint, error) {
+	return listProtoElements(ctx, c, "ListObjectStorageEndpoints", endpointObjEndpoints,
+		func() *linodev1.ObjectStorageEndpoint { return &linodev1.ObjectStorageEndpoint{} })
+}
+
+// httpListObjectStorageTypesProto retrieves Object Storage types and pricing as
+// proto LinodeType messages for the proto-backed list path. The element shares
+// the LinodeType shape (id, label, price, region_prices[], transfer), so
+// region_prices decodes as a repeated message, not a string.
+func (c *Client) httpListObjectStorageTypesProto(ctx context.Context) ([]*linodev1.LinodeType, error) {
+	return listProtoElements(ctx, c, "ListObjectStorageTypes", endpointObjTypes,
+		func() *linodev1.LinodeType { return &linodev1.LinodeType{} })
 }
 
 // ListObjectStorageTypes retrieves Object Storage types and pricing.
@@ -208,6 +256,13 @@ func (c *Client) httpListObjectStorageQuotas(ctx context.Context) ([]ObjectStora
 	return response.Data, nil
 }
 
+// httpListObjectStorageQuotasProto retrieves Object Storage quotas as proto
+// ObjectStorageQuota messages for the proto-backed list path.
+func (c *Client) httpListObjectStorageQuotasProto(ctx context.Context) ([]*linodev1.ObjectStorageQuota, error) {
+	return listProtoElements(ctx, c, "ListObjectStorageQuotas", endpointObjQuotas,
+		func() *linodev1.ObjectStorageQuota { return &linodev1.ObjectStorageQuota{} })
+}
+
 // ListObjectStorageKeys retrieves all Object Storage access keys.
 func (c *Client) httpListObjectStorageKeys(ctx context.Context) ([]ObjectStorageKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -227,6 +282,16 @@ func (c *Client) httpListObjectStorageKeys(ctx context.Context) ([]ObjectStorage
 	}
 
 	return response.Data, nil
+}
+
+// httpListObjectStorageKeysProto retrieves Object Storage keys as proto messages
+// for the proto-backed list path. The endpoint returns a {data, page, ...} page
+// envelope, so listProtoElements reads the data field. The list endpoint returns
+// keys without secret material, so each element's secret_key decodes to its empty
+// default.
+func (c *Client) httpListObjectStorageKeysProto(ctx context.Context) ([]*linodev1.ObjectStorageKey, error) {
+	return listProtoElements(ctx, c, "ListObjectStorageKeys", endpointObjKeys,
+		func() *linodev1.ObjectStorageKey { return &linodev1.ObjectStorageKey{} })
 }
 
 // GetObjectStorageKey retrieves a specific Object Storage access key by ID.

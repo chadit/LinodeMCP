@@ -116,7 +116,7 @@ _CASES = [
         "get_instance",
         {"id": 123, "status": "running", "updated": "2026-01-01T00:00:00"},
         "cancel_instance_backups",
-        "cancelled",
+        "canceled",
         id="instance_backups_cancel",
     ),
     pytest.param(

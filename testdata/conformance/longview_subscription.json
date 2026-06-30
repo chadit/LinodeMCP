@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.LongviewSubscription",
+  "description": "Longview subscription with nested Price message and all scalar fields present.",
+  "input": {
+    "clients_included": 10,
+    "id": "longview-10",
+    "label": "Longview Pro 10 pack",
+    "price": {
+      "hourly": 0.06,
+      "monthly": 40.0
+    }
+  },
+  "canonical": {
+    "clients_included": 10,
+    "id": "longview-10",
+    "label": "Longview Pro 10 pack",
+    "price": {
+      "hourly": 0.06,
+      "monthly": 40.0
+    }
+  }
+}

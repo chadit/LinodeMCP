@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.MonitorService",
+  "description": "Monitor service: label plus service_type string scalars.",
+  "input": {
+    "label": "Databases",
+    "service_type": "dbaas"
+  },
+  "canonical": {
+    "label": "Databases",
+    "service_type": "dbaas"
+  }
+}

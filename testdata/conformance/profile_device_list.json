@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.TrustedDeviceListResponse",
+  "description": "linode_profile_device_list envelope: count and the full proto TrustedDevice elements (not the Linode data/page/pages/results page). expiry is a present timestamp here, gating the optional-string path. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "profile_devices": [
+      {
+        "id": 12345,
+        "created": "2024-05-01T00:01:01",
+        "expiry": "2024-08-01T00:01:01",
+        "last_authenticated": "2024-06-01T00:01:01",
+        "last_remote_addr": "192.0.2.1",
+        "user_agent": "Mozilla/5.0"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "profile_devices": [
+      {
+        "id": 12345,
+        "created": "2024-05-01T00:01:01",
+        "expiry": "2024-08-01T00:01:01",
+        "last_authenticated": "2024-06-01T00:01:01",
+        "last_remote_addr": "192.0.2.1",
+        "user_agent": "Mozilla/5.0"
+      }
+    ]
+  }
+}

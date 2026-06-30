@@ -1,0 +1,68 @@
+{
+  "message": "linode.mcp.v1.MonitorServiceAlertDefinitionListResponse",
+  "description": "linode_monitor_service_alert_definition_list envelope: count and the full proto MonitorAlertDefinition elements for one service type. It reuses the MonitorAlertDefinition element (criteria, rule_criteria, trigger_conditions are google.protobuf.Struct; channel_ids and entity_ids are repeated) but is a distinct list-response message from the top-level linode_monitor_alert_definition_list. The tool keys off a required service_type path-id and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "alert_definitions": [
+      {
+        "id": 30000,
+        "label": "Memory Pressure",
+        "type": "alerts-definitions",
+        "service_type": "dbaas",
+        "description": "Memory usage above threshold",
+        "severity": 1,
+        "status": "enabled",
+        "criteria": {
+          "threshold": 80,
+          "operator": "gte"
+        },
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "memory_usage",
+              "aggregate_function": "avg"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "evaluation_period_seconds": 300,
+          "polling_interval_seconds": 60
+        },
+        "channel_ids": [20000],
+        "entity_ids": ["789"]
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "alert_definitions": [
+      {
+        "id": 30000,
+        "label": "Memory Pressure",
+        "type": "alerts-definitions",
+        "service_type": "dbaas",
+        "description": "Memory usage above threshold",
+        "severity": 1,
+        "status": "enabled",
+        "criteria": {
+          "threshold": 80,
+          "operator": "gte"
+        },
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "memory_usage",
+              "aggregate_function": "avg"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "evaluation_period_seconds": 300,
+          "polling_interval_seconds": 60
+        },
+        "channel_ids": [20000],
+        "entity_ids": ["789"]
+      }
+    ]
+  }
+}

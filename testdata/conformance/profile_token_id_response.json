@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ProfileTokenIDResponse",
+  "description": "Profile token id-echo: a confirmation message plus the token id. The revoke endpoint has no resource body to echo.",
+  "input": {
+    "message": "Profile token 9001 revoked successfully",
+    "token_id": 9001
+  },
+  "canonical": {
+    "message": "Profile token 9001 revoked successfully",
+    "token_id": 9001
+  }
+}

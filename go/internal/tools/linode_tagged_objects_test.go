@@ -66,7 +66,11 @@ func TestLinodeTaggedObjectsToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	objects := linode.PaginatedResponse[linode.TaggedObject]{
-		Data:    []linode.TaggedObject{{keyBetaID: float64(123), keyLabel: taggedObjectLabelFixture, keyType: monitorAlertDefinitionToolServiceType}},
+		Data: []linode.TaggedObject{{
+			keyType:  monitorAlertDefinitionToolServiceType,
+			keyLabel: taggedObjectLabelFixture,
+			keyData:  map[string]any{keyBetaID: float64(123), keyLabel: taggedObjectLabelFixture},
+		}},
 		Page:    2,
 		Pages:   3,
 		Results: 75,
@@ -173,8 +177,8 @@ func TestLinodeTaggedObjectsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_tag_object_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_tag_object_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

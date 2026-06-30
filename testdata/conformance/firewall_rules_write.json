@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.FirewallRulesWriteResponse",
+  "description": "Firewall rules update write envelope: a confirmation message, the firewall id, and the full replaced ruleset.",
+  "input": {
+    "message": "Firewall 123 rules updated successfully",
+    "firewall_id": 123,
+    "rules": {
+      "inbound": [
+        {
+          "action": "ACCEPT",
+          "protocol": "TCP",
+          "ports": "443",
+          "addresses": {
+            "ipv4": ["0.0.0.0/0"],
+            "ipv6": ["::/0"]
+          },
+          "label": "allow-https",
+          "description": "Allow inbound HTTPS"
+        }
+      ],
+      "inbound_policy": "DROP",
+      "outbound": [],
+      "outbound_policy": "ACCEPT"
+    }
+  },
+  "canonical": {
+    "message": "Firewall 123 rules updated successfully",
+    "firewall_id": 123,
+    "rules": {
+      "inbound": [
+        {
+          "action": "ACCEPT",
+          "protocol": "TCP",
+          "ports": "443",
+          "addresses": {
+            "ipv4": ["0.0.0.0/0"],
+            "ipv6": ["::/0"]
+          },
+          "label": "allow-https",
+          "description": "Allow inbound HTTPS"
+        }
+      ],
+      "inbound_policy": "DROP",
+      "outbound": [],
+      "outbound_policy": "ACCEPT"
+    }
+  }
+}

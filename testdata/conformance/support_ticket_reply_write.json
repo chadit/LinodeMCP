@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.SupportTicketReplyWriteResponse",
+  "description": "Support ticket reply create envelope: a confirmation message plus the full SupportTicketReply element the API returns for the new reply.",
+  "input": {
+    "message": "Support ticket reply created successfully",
+    "reply": {
+      "created": "2026-06-30T11:00:00",
+      "created_by": "alice",
+      "description": "Thanks for the update.",
+      "gravatar_id": "abc123",
+      "id": 7788,
+      "updated": "2026-06-30T11:00:00",
+      "updated_by": "alice"
+    }
+  },
+  "canonical": {
+    "message": "Support ticket reply created successfully",
+    "reply": {
+      "created": "2026-06-30T11:00:00",
+      "created_by": "alice",
+      "description": "Thanks for the update.",
+      "gravatar_id": "abc123",
+      "id": 7788,
+      "updated": "2026-06-30T11:00:00",
+      "updated_by": "alice"
+    }
+  }
+}

@@ -16,6 +16,14 @@ message Kernel {
   string built = 8;
 }
 
+// KernelListResponse is the envelope linode_kernel_list returns: a count, an
+// optional echoed filter, and the full proto Kernel elements.
+message KernelListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Kernel kernels = 3;
+}
+
 // KernelGetInput is the input contract for linode_kernel_get.
 message KernelGetInput {
   // Linode environment to use (optional, defaults to "default").

@@ -188,7 +188,11 @@ func TestLinodeInstanceNodeBalancersListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list NodeBalancers for instance 123") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list NodeBalancers for instance 123")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
 	}
 }

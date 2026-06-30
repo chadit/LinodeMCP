@@ -329,8 +329,8 @@ func TestLinodeInstanceConfigsListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list configuration profiles for instance 123") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list configuration profiles for instance 123")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
 	}
 }
 
@@ -739,8 +739,8 @@ func TestLinodeInstanceConfigInterfacesListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list interfaces for config 456 on instance 123") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list interfaces for config 456 on instance 123")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
 	}
 }
 
@@ -2694,6 +2694,22 @@ func TestLinodeInstanceDiskResizeToolSuccessfulResize(t *testing.T) {
 	if !strings.Contains(textContent.Text, "65536") {
 		t.Errorf("textContent.Text does not contain %v", "65536")
 	}
+
+	// The id-echo proto carries new_size_mb (the canonical field name),
+	// linode_id, and disk_id; it must not leak the legacy "size" key.
+	var resize struct {
+		LinodeID  int `json:"linode_id"`
+		DiskID    int `json:"disk_id"`
+		NewSizeMB int `json:"new_size_mb"`
+	}
+
+	if err := json.Unmarshal([]byte(textContent.Text), &resize); err != nil {
+		t.Fatalf("unmarshal resize body: %v", err)
+	}
+
+	if resize.LinodeID != 123 || resize.DiskID != 10 || resize.NewSizeMB != 65536 {
+		t.Errorf("resize id-echo = %+v, want {123 10 65536}", resize)
+	}
 }
 
 // TestLinodeInstanceIPsListTool verifies the instance IPs list tool
@@ -4632,7 +4648,11 @@ func TestLinodeInstanceVolumesListToolClientError(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to list volumes for instance 123") {
-		t.Errorf("error text %q does not contain %q", text.Text, "Failed to list volumes for instance 123")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "Failed to retrieve items") {
+		t.Errorf("error text %q does not contain %q", text.Text, "Failed to retrieve items")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
+		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
 	}
 }

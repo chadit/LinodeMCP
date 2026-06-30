@@ -5,6 +5,7 @@ from typing import Any, cast
 from mcp.types import TextContent, Tool
 
 from linodemcp.config import Config
+from linodemcp.genpb.linode.mcp.v1 import account_pb2, common_pb2, profile_pb2
 from linodemcp.linode import RetryableClient, build_profile_security_questions_body
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -18,6 +19,10 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 PROFILE_TOKEN_LABEL_MAX_LENGTH = 100
@@ -30,20 +35,6 @@ def _redact_profile_token(token: dict[str, Any]) -> dict[str, Any]:
         key: value
         for key, value in token.items()
         if key.lower() not in PROFILE_TOKEN_SECRET_FIELDS
-    }
-
-
-def profile_to_response_dict(profile: Any) -> dict[str, Any]:
-    """Shape a Profile dataclass to proto-canonical Profile form."""
-    return {
-        "username": profile.username,
-        "email": profile.email,
-        "timezone": profile.timezone,
-        "uid": profile.uid,
-        "email_notifications": profile.email_notifications,
-        "restricted": profile.restricted,
-        "two_factor_auth": profile.two_factor_auth,
-        "scopes": profile.scopes,
     }
 
 
@@ -67,8 +58,9 @@ async def handle_linode_profile_get(
     """
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        profile = await client.get_profile()
-        return profile_to_response_dict(profile)
+        return serialize_api_response(
+            await client.get_raw("/profile"), profile_pb2.Profile()
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)
 
@@ -220,14 +212,19 @@ async def handle_linode_profile_tfa_enable(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         secret = await client.create_profile_tfa_secret()
-        return {
-            **secret,
-            "warning": (
-                "IMPORTANT: Save this two-factor authentication secret now. "
-                "It must be confirmed before two-factor authentication is "
-                "enabled."
-            ),
-        }
+        # The one-time secret is returned to the user by design (it must be
+        # confirmed to activate two-factor auth), so it is not output-redacted.
+        return serialize_api_response(
+            {
+                **secret,
+                "warning": (
+                    "IMPORTANT: Save this two-factor authentication secret now. "
+                    "It must be confirmed before two-factor authentication is "
+                    "enabled."
+                ),
+            },
+            profile_pb2.ProfileTfaEnableResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "generate profile two-factor authentication secret", _call
@@ -278,7 +275,14 @@ async def handle_linode_profile_tfa_disable(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.disable_profile_tfa()
+        # The disable endpoint returns no useful resource body, so the response
+        # is a bare confirmation message.
+        await client.disable_profile_tfa()
+        message = "Profile two-factor authentication disabled successfully"
+        return serialize_api_response(
+            {"message": message},
+            common_pb2.MessageResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "disable profile two-factor authentication", _call
@@ -575,7 +579,15 @@ async def handle_linode_profile_security_question_list(
     """Handle linode_profile_security_question_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_profile_security_questions()
+        # The endpoint wraps its elements under "security_questions", not a
+        # {data} page envelope; unwrap and rewrap for the list helper.
+        raw = await client.list_profile_security_questions()
+        items: list[Any] = raw.get("security_questions") or []
+        return serialize_list_response(
+            {"data": items},
+            "security_questions",
+            profile_pb2.SecurityQuestionListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list Linode profile security questions", _call
@@ -761,13 +773,18 @@ async def handle_linode_profile_token_create(
             label=label.strip() if isinstance(label, str) else None,
             scopes=scopes.strip() if isinstance(scopes, str) else None,
         )
-        return {
-            "warning": (
-                "IMPORTANT: The token below is shown ONLY ONCE. "
-                "Save it now - it cannot be retrieved later."
-            ),
-            "token": token,
-        }
+        # The one-time token secret is returned to the user by design (it is
+        # shown only at creation), so it is not output-redacted.
+        return serialize_api_response(
+            {
+                "warning": (
+                    "IMPORTANT: The token below is shown ONLY ONCE. "
+                    "Save it now - it cannot be retrieved later."
+                ),
+                "token": token,
+            },
+            profile_pb2.ProfileTokenCreateResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create Linode profile token", _call)
 
@@ -809,7 +826,14 @@ async def handle_linode_profile_token_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         tokens = await client.list_profile_tokens(page=page, page_size=page_size)
-        return {"tokens": [_redact_profile_token(token) for token in tokens]}
+        # The proto PersonalAccessToken models no secret field, so any token
+        # value the API returns is dropped on serialize: the list metadata-only
+        # output never leaks a token secret.
+        return serialize_list_response(
+            {"data": tokens},
+            "profile_tokens",
+            profile_pb2.PersonalAccessTokenListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode profile tokens", _call)
 
@@ -885,9 +909,12 @@ async def handle_linode_profile_login_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return {
-            "logins": await client.list_profile_logins(page=page, page_size=page_size)
-        }
+        logins = await client.list_profile_logins(page=page, page_size=page_size)
+        return serialize_list_response(
+            {"data": logins},
+            "profile_logins",
+            account_pb2.ProfileLoginListResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "list Linode profile logins", _call)
 
@@ -928,25 +955,16 @@ async def handle_linode_profile_device_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return {
-            "devices": await client.list_profile_devices(page=page, page_size=page_size)
-        }
+        devices = await client.list_profile_devices(page=page, page_size=page_size)
+        return serialize_list_response(
+            {"data": devices},
+            "profile_devices",
+            profile_pb2.TrustedDeviceListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list Linode profile trusted devices", _call
     )
-
-
-def profile_login_to_response_dict(login: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw profile login API dict to proto-canonical AccountLogin form."""
-    return {
-        "datetime": login.get("datetime", ""),
-        "id": login.get("id", 0),
-        "ip": login.get("ip", ""),
-        "restricted": login.get("restricted", False),
-        "status": login.get("status", ""),
-        "username": login.get("username", ""),
-    }
 
 
 def create_linode_profile_login_get_tool() -> tuple[Tool, Capability]:
@@ -967,7 +985,9 @@ async def handle_linode_profile_login_get(
         return error_response("login_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return profile_login_to_response_dict(await client.get_profile_login(login_id))
+        return serialize_api_response(
+            await client.get_profile_login(login_id), account_pb2.AccountLogin()
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode profile login", _call)
 
@@ -1052,7 +1072,11 @@ async def handle_linode_profile_token_update(
     label_value = cast("str", label)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_profile_token(token_id, label=label_value)
+        token = await client.update_profile_token(token_id, label=label_value)
+        return serialize_api_response(
+            {"message": "Profile token updated successfully", "token": token},
+            profile_pb2.PersonalAccessTokenWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode profile token", _call)
 
@@ -1108,21 +1132,16 @@ async def handle_linode_profile_app_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.list_profile_apps(page=page, page_size=page_size)
+        raw = await client.list_profile_apps(page=page, page_size=page_size)
+        return serialize_list_response(
+            raw,
+            "profile_apps",
+            profile_pb2.ProfileAppListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "list Linode profile OAuth app authorizations", _call
     )
-
-
-def profile_app_to_response_dict(app: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw profile OAuth app dict to proto-canonical form."""
-    return {
-        "id": app.get("id", 0),
-        "label": app.get("label", ""),
-        "scopes": app.get("scopes", ""),
-        "website": app.get("website", ""),
-    }
 
 
 def create_linode_profile_app_get_tool() -> tuple[Tool, Capability]:
@@ -1145,7 +1164,9 @@ async def handle_linode_profile_app_get(
         return error_response("app_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return profile_app_to_response_dict(await client.get_profile_app(app_id))
+        return serialize_api_response(
+            await client.get_profile_app(app_id), profile_pb2.ProfileApp()
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode profile OAuth app authorization", _call
@@ -1206,9 +1227,15 @@ async def handle_linode_profile_app_delete(
             "This revokes profile OAuth app access. Set confirm=true to proceed."
         )
 
-    async def _call(client: RetryableClient) -> dict[str, str]:
+    async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_profile_app(app_id)
-        return {"message": f"Profile app {app_id} revoked successfully"}
+        return serialize_api_response(
+            {
+                "message": f"Profile app {app_id} revoked successfully",
+                "app_id": app_id,
+            },
+            profile_pb2.ProfileAppIDResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "revoke Linode profile OAuth app access", _call
@@ -1305,9 +1332,13 @@ async def handle_linode_profile_device_revoke(
             "This revokes a trusted profile device. Set confirm=true to proceed."
         )
 
-    async def _call(client: RetryableClient) -> dict[str, str]:
+    async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_profile_device(device_id)
-        return {"message": f"Profile trusted device {device_id} revoked successfully"}
+        message = f"Profile trusted device {device_id} revoked successfully"
+        return serialize_api_response(
+            {"message": message, "device_id": device_id},
+            profile_pb2.ProfileDeviceIDResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "revoke Linode profile trusted device", _call

@@ -36,38 +36,25 @@ const (
 
 // NewLinodePlacementGroupListTool creates a tool for listing placement groups.
 func NewLinodePlacementGroupListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool, handler := newProtoListToolPaginated(
+		cfg,
 		"linode_placement_group_list",
-		mcp.WithDescription("Lists placement groups for the authenticated account with optional pagination."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-		mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Lists placement groups for the authenticated account with optional pagination.",
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.PlacementGroup, error) {
+			return client.ListPlacementGroupsProto(ctx, page, pageSize)
+		},
+		placementGroupsPaginationFromTool,
+		nil,
+		placementGroupListResponse,
 	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handlePlacementGroupsListRequest(ctx, &request, cfg)
-	}
 
 	return tool, profiles.CapRead, handler
 }
 
-func handlePlacementGroupsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := placementGroupsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, prepareFailure := prepareClient(request, cfg)
-	if prepareFailure != nil {
-		return mcp.NewToolResultError(prepareFailure.Error()), nil
-	}
-
-	placementGroups, err := client.ListPlacementGroups(ctx, page, pageSize)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve placement groups: %v", err)), nil
-	}
-
-	return FormatListResponse(placementGroups.Data, nil, "placement_groups")
+func placementGroupListResponse(items []*linodev1.PlacementGroup, count int32, filter *string) *linodev1.PlacementGroupListResponse {
+	return &linodev1.PlacementGroupListResponse{Count: count, Filter: filter, PlacementGroups: items}
 }
 
 // NewLinodePlacementGroupUpdateTool creates a tool for updating a placement group label.

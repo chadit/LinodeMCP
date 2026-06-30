@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import instance_pb2
 from linodemcp.linode import APIError, NetworkError, instance_to_response_dict
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -20,6 +21,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -351,12 +353,19 @@ async def _instance_rebuild_two_stage(
         return await client.get_instance(linode_id)
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
-        return await client.rebuild_instance(
+        instance = await client.rebuild_instance(
             linode_id,
             image=image,
             root_pass=root_pass,
             authorized_keys=arguments.get("authorized_keys"),
             authorized_users=arguments.get("authorized_users"),
+        )
+        return serialize_api_response(
+            {
+                "message": f"Instance {linode_id} rebuilt with image {image}",
+                "instance": instance,
+            },
+            instance_pb2.InstanceWriteResponse(),
         )
 
     async def _ts_walk(client: RetryableClient, state: Any) -> DryRunDetails:
@@ -422,13 +431,20 @@ async def handle_linode_instance_rebuild(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        return await client.rebuild_instance(
+        instance = await client.rebuild_instance(
             iid,
             image=image,
             root_pass=root_pass,
             authorized_keys=arguments.get("authorized_keys"),
             authorized_users=arguments.get("authorized_users"),
             booted=booted,
+        )
+        return serialize_api_response(
+            {
+                "message": f"Instance {iid} rebuilt with image {image}",
+                "instance": instance,
+            },
+            instance_pb2.InstanceWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "rebuild instance", _call)
@@ -510,7 +526,7 @@ async def handle_linode_instance_rescue(
     ) -> dict[str, Any]:
         await client.rescue_instance(iid, devices=arguments.get("devices"))
         return {
-            "message": (f"Rescue mode initiated for instance {iid}"),
+            "message": (f"Instance {iid} is booting into rescue mode"),
             "linode_id": iid,
         }
 
@@ -580,7 +596,7 @@ async def _instance_password_reset_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.reset_instance_password(iid, root_pass)
         return {
-            "message": f"Password reset for instance {iid}",
+            "message": f"Root password reset for instance {iid}",
             "linode_id": iid,
         }
 
@@ -643,7 +659,7 @@ async def handle_linode_instance_password_reset(
     ) -> dict[str, Any]:
         await client.reset_instance_password(iid, root_pass)
         return {
-            "message": (f"Password reset for instance {iid}"),
+            "message": (f"Root password reset for instance {iid}"),
             "linode_id": iid,
         }
 

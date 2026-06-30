@@ -8,6 +8,11 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import (
+    bucket_access_pb2,
+    bucket_ssl_pb2,
+    object_acl_pb2,
+)
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DRY_RUN_PROP,
@@ -27,6 +32,7 @@ from linodemcp.tools.linode_object_storage import (
     object_storage_bucket_to_response_dict,
     object_storage_key_to_response_dict,
 )
+from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
@@ -117,7 +123,7 @@ async def handle_linode_object_storage_cancel(
         result = await client.cancel_object_storage()
         if result:
             return result
-        return {"message": "Object Storage cancellation requested"}
+        return {"message": "Object Storage cancellation requested successfully"}
 
     return await execute_tool(cfg, arguments, "cancel Object Storage", _call)
 
@@ -367,7 +373,7 @@ async def handle_linode_object_storage_bucket_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_object_storage_bucket(region, label)
         return {
-            "message": (f"Bucket '{label}' in {region} deleted successfully"),
+            "message": (f"Bucket '{label}' in {region} removed successfully"),
             "region": region,
             "label": label,
         }
@@ -502,7 +508,8 @@ async def handle_linode_object_storage_bucket_access_update(
         )
         response: dict[str, Any] = {
             "message": (
-                f"Access settings for bucket '{label}' in {region} updated successfully"
+                f"Access settings for bucket '{label}' in {region}"
+                " modified successfully"
             ),
             "region": region,
             "label": label,
@@ -603,20 +610,28 @@ async def handle_linode_object_storage_bucket_access_allow(
         return _error_response(validation_err)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        access = await client.allow_object_storage_bucket_access(
+        await client.allow_object_storage_bucket_access(
             region=region,
             label=label,
             acl=acl,
             cors_enabled=cors_enabled,
         )
-        return {
-            "message": (
-                f"Access allowed for bucket '{label}' in {region} successfully"
-            ),
-            "region": region,
-            "label": label,
-            "access": access,
-        }
+        # The allow endpoint returns no body, so the access element is built
+        # from the request args (acl + cors_enabled). Go builds the same
+        # element so the output matches.
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Access settings for bucket '{label}' in {region} "
+                    "applied successfully"
+                ),
+                "access": {
+                    "acl": acl or "",
+                    "cors_enabled": bool(cors_enabled),
+                },
+            },
+            bucket_access_pb2.ObjectStorageBucketAccessWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "allow bucket access", _call)
 
@@ -958,7 +973,7 @@ async def handle_linode_object_storage_key_update(
             bucket_access=bucket_access,
         )
         return {
-            "message": (f"Access key {key_id} updated successfully"),
+            "message": (f"Access key {key_id} modified successfully"),
             "key_id": key_id,
         }
 
@@ -1160,14 +1175,6 @@ async def handle_linode_object_storage_presigned_url_create(
     return await execute_tool(cfg, arguments, "generate presigned URL", _call)
 
 
-def object_acl_to_response_dict(acl: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw object ACL API dict to proto-canonical form."""
-    return {
-        "acl": acl.get("acl") or "",
-        "acl_xml": acl.get("acl_xml") or "",
-    }
-
-
 def create_linode_object_storage_object_acl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_object_acl_get tool."""
     return Tool(
@@ -1196,8 +1203,9 @@ async def handle_linode_object_storage_object_acl_get(
         return _error_response("name (object key) is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return object_acl_to_response_dict(
-            await client.get_object_acl(region, label, name)
+        return serialize_api_response(
+            await client.get_object_acl(region, label, name),
+            object_acl_pb2.ObjectACL(),
         )
 
     return await execute_tool(cfg, arguments, "retrieve object ACL", _call)
@@ -1334,11 +1342,6 @@ async def handle_linode_object_storage_object_acl_update(
     return await execute_tool(cfg, arguments, "update object ACL", _call)
 
 
-def bucket_ssl_to_response_dict(ssl: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw bucket SSL API dict to proto-canonical form."""
-    return {"ssl": bool(ssl.get("ssl"))}
-
-
 def create_linode_object_storage_ssl_get_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_ssl_get tool."""
     return Tool(
@@ -1364,7 +1367,10 @@ async def handle_linode_object_storage_ssl_get(
         return _error_response("label is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return bucket_ssl_to_response_dict(await client.get_bucket_ssl(region, label))
+        return serialize_api_response(
+            await client.get_bucket_ssl(region, label),
+            bucket_ssl_pb2.BucketSSL(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve SSL status", _call)
 
@@ -1481,7 +1487,7 @@ async def handle_linode_object_storage_ssl_upload(
         result = await client.upload_bucket_ssl(region, label, certificate, private_key)
         return {
             "message": (
-                f"SSL certificate uploaded for bucket '{label}' in region '{region}'"
+                f"SSL certificate uploaded to bucket '{label}' in region '{region}'"
             ),
             "region": region,
             "bucket": label,

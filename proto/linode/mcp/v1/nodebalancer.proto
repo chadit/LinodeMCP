@@ -26,6 +26,15 @@ message NodeBalancer {
   string updated = 11;
 }
 
+// NodeBalancerListResponse mirrors the linode_nodebalancer_list wrapper: a
+// count, an optional filter echo, and the NodeBalancers. This is the project's
+// own envelope, not the Linode {data,page,pages,results} list shape.
+message NodeBalancerListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated NodeBalancer nodebalancers = 3;
+}
+
 // NodeBalancerWriteResponse is the {message, nodebalancer} envelope the
 // NodeBalancer create/update tools return.
 message NodeBalancerWriteResponse {

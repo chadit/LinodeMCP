@@ -185,8 +185,8 @@ func TestLinodePlacementGroupListToolClientError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve placement groups") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve placement groups")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }
 

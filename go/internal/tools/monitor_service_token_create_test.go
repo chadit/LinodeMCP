@@ -96,7 +96,10 @@ func TestLinodeMonitorServiceTokenCreateToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{keyToken: "monitor-token"}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyToken:  "monitor-token",
+			keyExpiry: tfaConfirmExpiry,
+		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -127,6 +130,10 @@ func TestLinodeMonitorServiceTokenCreateToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "monitor-token") {
 		t.Errorf("textContent.Text does not contain %v", "monitor-token")
+	}
+
+	if !strings.Contains(textContent.Text, tfaConfirmExpiry) {
+		t.Errorf("textContent.Text does not contain expiry %v", tfaConfirmExpiry)
 	}
 }
 

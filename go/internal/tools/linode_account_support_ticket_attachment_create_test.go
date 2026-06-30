@@ -187,8 +187,14 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, supportTicketAttachmentFilename) {
-		t.Errorf("textContent.Text does not contain %v", supportTicketAttachmentFilename)
+	if !strings.Contains(textContent.Text, "Support ticket attachment created successfully") {
+		t.Errorf("textContent.Text does not contain the confirmation message: %v", textContent.Text)
+	}
+
+	// The attachment endpoint returns no useful resource body, so the response
+	// echoes the ticket id rather than the attachment.
+	if !strings.Contains(textContent.Text, "\"ticket_id\"") || !strings.Contains(textContent.Text, "123") {
+		t.Errorf("response %q does not echo ticket_id 123", textContent.Text)
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
@@ -278,7 +279,18 @@ func executeDestroy(
 		return mcp.NewToolResultError(fmt.Sprintf("%s failed: %v", action.ToolName, execErr)), nil
 	}
 
-	return MarshalToolResponse(action.Success())
+	return marshalDestroySuccess(action.Success())
+}
+
+// marshalDestroySuccess serializes a destroy Success body. A proto.Message goes
+// through the proto-canonical marshaller so its output matches the Python side;
+// everything else falls back to plain JSON for the legacy id-echo maps.
+func marshalDestroySuccess(success any) (*mcp.CallToolResult, error) {
+	if msg, ok := success.(proto.Message); ok {
+		return MarshalProtoToolResponse(msg)
+	}
+
+	return MarshalToolResponse(success)
 }
 
 // stateHash returns a stable hash of the resource state with the named cosmetic

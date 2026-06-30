@@ -94,6 +94,17 @@ message InstanceInterface {
   optional int32 version = 10;
 }
 
+// InstanceInterfaceListResponse is the {count, filter?, interfaces} envelope the
+// linode_instance_interface_list tool returns. The current Interfaces generation
+// endpoint wraps elements under the "interfaces" key (not "data"), so the Go
+// fetcher reads that key, but the tool output reuses "interfaces" as the items
+// key on both sides.
+message InstanceInterfaceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated InstanceInterface interfaces = 3;
+}
+
 // Interface sub-configs under the current Interfaces generation. Exactly one of
 // public, vpc, or vlan is set on an InstanceInterface.
 
@@ -154,6 +165,17 @@ message InstanceInterfaceSettingsGetInput {
   int32 linode_id = 2;
 }
 
+// InstanceInterfaceGetInput is the input contract for
+// linode_instance_interface_get.
+message InstanceInterfaceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the Linode interface (required).
+  int32 interface_id = 3;
+}
+
 // ===== Instance config profiles (GET /linode/instances/{id}/configs) =====
 
 message ConfigDevice {
@@ -187,6 +209,16 @@ message ConfigInterfaceResponse {
   repeated string ip_ranges = 10;
 }
 
+// ConfigInterfaceListResponse is the linode_instance_config_interface_list
+// envelope: a count, an optional filter echo, and the legacy config-profile
+// network interfaces of one configuration profile. This is the project's own
+// {count, interfaces} envelope, not the Linode page list shape.
+message ConfigInterfaceListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ConfigInterfaceResponse interfaces = 3;
+}
+
 message InstanceConfig {
   int32 id = 1;
   string label = 2;
@@ -203,6 +235,15 @@ message InstanceConfig {
   string updated = 13;
 }
 
+// InstanceConfigListResponse mirrors the linode_instance_config_list wrapper: a
+// count, an optional filter echo, and the configuration profiles. This is the
+// project's own envelope, not the Linode {data,page,pages,results} list shape.
+message InstanceConfigListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated InstanceConfig configs = 3;
+}
+
 // ===== Instance disks (GET /linode/instances/{id}/disks) =====
 
 message InstanceDisk {
@@ -213,6 +254,15 @@ message InstanceDisk {
   string filesystem = 5;
   string created = 6;
   string updated = 7;
+}
+
+// InstanceDiskListResponse mirrors the linode_instance_disk_list wrapper: a
+// count, an optional filter echo, and the disks. This is the project's own
+// envelope, not the Linode {data,page,pages,results} list shape.
+message InstanceDiskListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated InstanceDisk disks = 3;
 }
 
 // ===== Instance backups (GET /linode/instances/{id}/backups) =====
@@ -282,6 +332,15 @@ message InstanceInterfaceHistory {
   google.protobuf.Struct interface_data = 6;
 }
 
+// InstanceInterfaceHistoryListResponse is the
+// linode_instance_interface_history_list envelope: a count, an optional filter
+// echo, and the historical interface versions of one Linode instance.
+message InstanceInterfaceHistoryListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated InstanceInterfaceHistory interface_history = 3;
+}
+
 // InstanceListResponse mirrors the linode_instance_list wrapper: a count, an
 // optional filter echo, and the instances. This is the project's own envelope,
 // not the Linode {data,page,pages,results} list shape.
@@ -292,11 +351,69 @@ message InstanceListResponse {
 }
 
 // InstanceWriteResponse is the {message, instance} envelope the instance write
-// tools (create, update, clone) return: a human-readable confirmation plus the
-// affected instance.
+// tools (create, update, clone, rebuild) return: a human-readable confirmation
+// plus the affected instance.
 message InstanceWriteResponse {
   string message = 1;
   Instance instance = 2;
+}
+
+// InstanceConfigWriteResponse is the {message, config} envelope the config-profile
+// write tools (create, update) return: a confirmation plus the affected profile.
+message InstanceConfigWriteResponse {
+  string message = 1;
+  InstanceConfig config = 2;
+}
+
+// ConfigInterfaceWriteResponse is the {message, interface} envelope the
+// config-profile interface write tools (add, update) return: a confirmation plus
+// the affected legacy config-profile network interface.
+message ConfigInterfaceWriteResponse {
+  string message = 1;
+  ConfigInterfaceResponse interface = 2;
+}
+
+// InstanceDiskWriteResponse is the {message, disk} envelope the instance disk
+// write tools (create, update, clone) return: a confirmation plus the disk.
+message InstanceDiskWriteResponse {
+  string message = 1;
+  InstanceDisk disk = 2;
+}
+
+// InstanceBackupWriteResponse is the {message, backup} envelope
+// linode_instance_backup_create returns: a confirmation plus the new snapshot.
+message InstanceBackupWriteResponse {
+  string message = 1;
+  InstanceBackup backup = 2;
+}
+
+// InstanceDiskResizeWriteResponse is the {message, ids} echo
+// linode_instance_disk_resize returns. The resize endpoint returns no resource
+// body, so these echo the request: the target Linode, the disk, and its new size.
+message InstanceDiskResizeWriteResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  int32 disk_id = 3;
+  int32 new_size_mb = 4;
+}
+
+// InstanceBackupRestoreWriteResponse is the {message, ids} echo
+// linode_instance_backup_restore returns. The restore endpoint returns no
+// resource body, so these echo the request: the backup, the target Linode, and
+// whether the target was overwritten.
+message InstanceBackupRestoreWriteResponse {
+  string message = 1;
+  int32 backup_id = 2;
+  int32 target_linode_id = 3;
+  bool overwrite = 4;
+}
+
+// InstanceActionWriteResponse is the {message, linode_id} echo the instance
+// action tools whose endpoints return no resource body (mutate, firewall apply)
+// return: a confirmation plus the affected Linode id.
+message InstanceActionWriteResponse {
+  string message = 1;
+  int32 linode_id = 2;
 }
 
 // InstanceGetInput is the input contract for linode_instance_get. The generated

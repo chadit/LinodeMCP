@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.PersonalAccessTokenListResponse",
+  "description": "linode_profile_token_list envelope: count and the metadata-only proto PersonalAccessToken elements (not the Linode data/page/pages/results page). The element models no secret field at all, so the list cannot leak a token secret (the runtime DiscardUnknown decode drops the API's token value; TestLinodeProfileTokensToolDropsSecret exercises that path). expiry is a present timestamp, gating the optional-string path. Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "profile_tokens": [
+      {
+        "id": 67890,
+        "label": "ci-token",
+        "scopes": "linodes:read_write account:read_only",
+        "created": "2024-05-01T00:01:01",
+        "expiry": "2024-06-01T00:01:01"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "profile_tokens": [
+      {
+        "id": 67890,
+        "label": "ci-token",
+        "scopes": "linodes:read_write account:read_only",
+        "created": "2024-05-01T00:01:01",
+        "expiry": "2024-06-01T00:01:01"
+      }
+    ]
+  }
+}

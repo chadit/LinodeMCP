@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -110,8 +111,8 @@ func TestLinodeObjectStorageBucketsListToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", tcBackups)
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 2`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 2`)
+	if got := listResponseCount(t, textContent.Text); got != 2 {
+		t.Errorf("listResponseCount = %d, want %d", got, 2)
 	}
 }
 
@@ -431,13 +432,51 @@ func TestLinodeObjectStorageBucketContentsToolDefinition(t *testing.T) {
 	}
 }
 
+// objectStorageContentsBody builds the bespoke {data, is_truncated, next_marker}
+// body the S3-style object-list endpoint returns. size is a JSON number on the
+// wire; the proto int64 field serializes it back out as a JSON string.
+func objectStorageContentsBody(objects string, isTruncated bool, nextMarker string) string {
+	return `{"data":[` + objects + `],"is_truncated":` + strconv.FormatBool(isTruncated) +
+		`,"next_marker":"` + nextMarker + `"}`
+}
+
+func decodeObjectListOutput(t *testing.T, text string) struct {
+	Count       int    `json:"count"`
+	Filter      string `json:"filter"`
+	IsTruncated bool   `json:"is_truncated"`
+	NextMarker  string `json:"next_marker"`
+	Objects     []struct {
+		Name string `json:"name"`
+		Size string `json:"size"`
+	} `json:"objects"`
+} {
+	t.Helper()
+
+	var out struct {
+		Count       int    `json:"count"`
+		Filter      string `json:"filter"`
+		IsTruncated bool   `json:"is_truncated"`
+		NextMarker  string `json:"next_marker"`
+		Objects     []struct {
+			Name string `json:"name"`
+			Size string `json:"size"`
+		} `json:"objects"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+
+	return out
+}
+
 func TestLinodeObjectStorageBucketContentsToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	objects := []linode.ObjectStorageObject{
-		{Name: "file1.txt", Size: 1024, LastModified: "2024-01-15T10:00:00Z"},
-		{Name: "file2.jpg", Size: 2048, LastModified: "2024-01-16T10:00:00Z"},
-	}
+	body := objectStorageContentsBody(
+		`{"name":"file1.txt","size":1024,"last_modified":"2024-01-15T10:00:00Z"},`+
+			`{"name":"file2.jpg","size":2048,"last_modified":"2024-01-16T10:00:00Z"}`,
+		false, "",
+	)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/object-storage/buckets/us-east-1/my-bucket/object-list" {
@@ -446,12 +485,8 @@ func TestLinodeObjectStorageBucketContentsToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData:        objects,
-			keyIsTruncated: false,
-			keyNextMarker:  "",
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if _, writeErr := w.Write([]byte(body)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
 	defer srv.Close()
@@ -483,25 +518,29 @@ func TestLinodeObjectStorageBucketContentsToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "file1.txt") {
-		t.Errorf("textContent.Text does not contain %v", "file1.txt")
+	out := decodeObjectListOutput(t, textContent.Text)
+
+	if out.Count != 2 || len(out.Objects) != 2 {
+		t.Fatalf("count/objects = %d/%d, want 2/2", out.Count, len(out.Objects))
 	}
 
-	if !strings.Contains(textContent.Text, "file2.jpg") {
-		t.Errorf("textContent.Text does not contain %v", "file2.jpg")
+	if out.Objects[0].Name != "file1.txt" || out.Objects[1].Name != "file2.jpg" {
+		t.Errorf("objects = %v, want file1.txt + file2.jpg", out.Objects)
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 2`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 2`)
+	if out.Objects[0].Size != "1024" {
+		t.Errorf("objects[0].size = %q, want \"1024\" (int64 -> JSON string)", out.Objects[0].Size)
+	}
+
+	if out.IsTruncated {
+		t.Error("is_truncated = true, want false")
 	}
 }
 
 func TestLinodeObjectStorageBucketContentsToolWithPrefix(t *testing.T) {
 	t.Parallel()
 
-	objects := []linode.ObjectStorageObject{
-		{Name: "images/photo1.jpg", Size: 2048},
-	}
+	body := objectStorageContentsBody(`{"name":"images/photo1.jpg","size":2048}`, false, "")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("prefix") != "images/" {
@@ -510,12 +549,8 @@ func TestLinodeObjectStorageBucketContentsToolWithPrefix(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData:        objects,
-			keyIsTruncated: false,
-			keyNextMarker:  "",
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if _, writeErr := w.Write([]byte(body)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
 	defer srv.Close()
@@ -551,31 +586,27 @@ func TestLinodeObjectStorageBucketContentsToolWithPrefix(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "images/photo1.jpg") {
-		t.Errorf("textContent.Text does not contain %v", "images/photo1.jpg")
+	out := decodeObjectListOutput(t, textContent.Text)
+
+	if len(out.Objects) != 1 || out.Objects[0].Name != "images/photo1.jpg" {
+		t.Errorf("objects = %v, want one object images/photo1.jpg", out.Objects)
 	}
 
-	if !strings.Contains(textContent.Text, "prefix=images/") {
-		t.Errorf("textContent.Text does not contain %v", "prefix=images/")
+	if out.Filter != "prefix=images/" {
+		t.Errorf("filter = %q, want prefix=images/", out.Filter)
 	}
 }
 
 func TestLinodeObjectStorageBucketContentsToolTruncated(t *testing.T) {
 	t.Parallel()
 
-	objects := []linode.ObjectStorageObject{
-		{Name: "file1.txt", Size: 1024},
-	}
+	body := objectStorageContentsBody(`{"name":"file1.txt","size":1024}`, true, "file2.txt")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData:        objects,
-			keyIsTruncated: true,
-			keyNextMarker:  "file2.txt",
-		}); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if _, writeErr := w.Write([]byte(body)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
 	defer srv.Close()
@@ -607,12 +638,14 @@ func TestLinodeObjectStorageBucketContentsToolTruncated(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"is_truncated": true`) {
-		t.Errorf("textContent.Text does not contain %v", `"is_truncated": true`)
+	out := decodeObjectListOutput(t, textContent.Text)
+
+	if !out.IsTruncated {
+		t.Error("is_truncated = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "file2.txt") {
-		t.Errorf("textContent.Text does not contain %v", "file2.txt")
+	if out.NextMarker != "file2.txt" {
+		t.Errorf("next_marker = %q, want file2.txt", out.NextMarker)
 	}
 }
 
@@ -727,12 +760,12 @@ func TestLinodeObjectStorageEndpointsListToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", s3Endpoint)
 	}
 
-	if !strings.Contains(textContent.Text, `"endpoint_type": "E0"`) {
-		t.Errorf("textContent.Text does not contain %v", `"endpoint_type": "E0"`)
+	if !strings.Contains(textContent.Text, `"endpoint_type"`) || !strings.Contains(textContent.Text, `"E0"`) {
+		t.Errorf("textContent.Text does not contain endpoint_type E0: %v", textContent.Text)
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	if got := listResponseCount(t, textContent.Text); got != 1 {
+		t.Errorf("listResponseCount = %d, want 1", got)
 	}
 }
 
@@ -779,8 +812,8 @@ func TestLinodeObjectStorageEndpointsListToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve Object Storage endpoints") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve Object Storage endpoints")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }
 
@@ -888,8 +921,8 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 			t.Errorf("textContent.Text does not contain %v", "objectstorage")
 		}
 
-		if !strings.Contains(textContent.Text, `"count": 1`) {
-			t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+		if got := listResponseCount(t, textContent.Text); got != 1 {
+			t.Errorf("listResponseCount = %d, want 1", got)
 		}
 	})
 
@@ -918,6 +951,72 @@ func TestLinodeObjectStorageTypeListTool(t *testing.T) {
 			t.Error("result.IsError = false, want true")
 		}
 	})
+}
+
+// TestLinodeObjectStorageTypeListDecodesRegionPrices verifies the element
+// struct decodes region_prices as an array of {id, hourly, monthly} objects.
+// A string-typed region_prices field would silently drop the data.
+func TestLinodeObjectStorageTypeListDecodesRegionPrices(t *testing.T) {
+	t.Parallel()
+
+	types := []linode.ObjectStorageType{
+		{
+			ID:       "objectstorage",
+			Label:    "Object Storage",
+			Transfer: 1000,
+			Price:    linode.Price{Hourly: 0.0107, Monthly: 5.0},
+			RegionPrices: []linode.ObjectStorageRegionPrice{
+				{ID: placementGroupCreateRegion, Hourly: 0.0107, Monthly: 5.0},
+			},
+		},
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/object-storage/types" {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, "/object-storage/types")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    types,
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeObjectStorageTypeListTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if !strings.Contains(textContent.Text, `"region_prices"`) {
+		t.Errorf("textContent.Text does not contain region_prices array")
+	}
+
+	if !strings.Contains(textContent.Text, placementGroupCreateRegion) {
+		t.Errorf("textContent.Text does not contain region price id %v", placementGroupCreateRegion)
+	}
 }
 
 // End-to-end verification of object storage quota listing.
@@ -1018,8 +1117,8 @@ func TestLinodeObjectStorageQuotasListToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", quotaID)
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	if got := listResponseCount(t, textContent.Text); got != 1 {
+		t.Errorf("listResponseCount = %d, want 1", got)
 	}
 }
 
@@ -1071,8 +1170,8 @@ func TestLinodeObjectStorageQuotasListToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve Object Storage quotas") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve Object Storage quotas")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 }
 
@@ -1186,8 +1285,8 @@ func TestLinodeObjectStorageKeysListTool(t *testing.T) {
 			t.Errorf("textContent.Text does not contain %v", keyNameTest)
 		}
 
-		if !strings.Contains(textContent.Text, `"count": 1`) {
-			t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+		if count := listResponseCount(t, textContent.Text); count != 1 {
+			t.Errorf("count = %d, want 1", count)
 		}
 	})
 

@@ -300,12 +300,27 @@ func TestLinodeMonitorDashboardsToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, monitorDashboardToolLabel) {
-		t.Errorf("textContent.Text does not contain %v", monitorDashboardToolLabel)
+	var out struct {
+		Count      int `json:"count"`
+		Dashboards []struct {
+			Label   string           `json:"label"`
+			Widgets []map[string]any `json:"widgets"`
+		} `json:"dashboards"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
 	}
 
-	if !strings.Contains(textContent.Text, monitorDashboardToolWidget) {
-		t.Errorf("textContent.Text does not contain %v", monitorDashboardToolWidget)
+	if out.Count != 1 || len(out.Dashboards) != 1 {
+		t.Fatalf("count/dashboards = %d/%d, want 1/1", out.Count, len(out.Dashboards))
+	}
+
+	if out.Dashboards[0].Label != monitorDashboardToolLabel {
+		t.Errorf("dashboards[0].label = %v, want %v", out.Dashboards[0].Label, monitorDashboardToolLabel)
+	}
+
+	if len(out.Dashboards[0].Widgets) != 1 || out.Dashboards[0].Widgets[0][keyLabel] != monitorDashboardToolWidget {
+		t.Errorf("dashboards[0].widgets = %v, want one widget labeled %v", out.Dashboards[0].Widgets, monitorDashboardToolWidget)
 	}
 }
 
@@ -353,8 +368,8 @@ func TestLinodeMonitorDashboardsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve "+monitorDashboardsToolName) {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve "+monitorDashboardsToolName)
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {

@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.AccountInvoice",
+  "description": "Account invoice: int32 id, string date, string label, double total (emitted as a JSON number). All fields present.",
+  "input": {
+    "id": 789,
+    "date": "2024-06-01T00:00:00",
+    "label": "Invoice 789",
+    "total": 25.5
+  },
+  "canonical": {
+    "id": 789,
+    "date": "2024-06-01T00:00:00",
+    "label": "Invoice 789",
+    "total": 25.5
+  }
+}

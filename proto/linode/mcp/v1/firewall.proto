@@ -41,6 +41,74 @@ message Firewall {
   string updated = 7;
 }
 
+// FirewallListResponse mirrors the linode_firewall_list wrapper: a count, an
+// optional filter echo, and the firewalls. This is the project's own envelope,
+// not the Linode {data,page,pages,results} list shape.
+message FirewallListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Firewall firewalls = 3;
+}
+
+// FirewallWriteResponse is the linode_firewall_create / linode_firewall_update
+// write envelope: a confirmation message plus the full Firewall element.
+message FirewallWriteResponse {
+  string message = 1;
+  Firewall firewall = 2;
+}
+
+// FirewallRulesWriteResponse is the linode_firewall_rules_update write envelope:
+// a confirmation message, the firewall id the rules belong to, and the full
+// replaced ruleset.
+message FirewallRulesWriteResponse {
+  string message = 1;
+  int32 firewall_id = 2;
+  FirewallRules rules = 3;
+}
+
+// FirewallTemplate mirrors a reusable Cloud Firewall rule template: a slug and
+// the inbound/outbound ruleset it applies. It reuses the shared FirewallRules
+// message so the rules shape stays identical to a live firewall's rules.
+message FirewallTemplate {
+  string slug = 1;
+  FirewallRules rules = 2;
+}
+
+// FirewallTemplateListResponse is the linode_firewall_template_list envelope:
+// count and the full proto FirewallTemplate elements. The tool paginates and has
+// no filter param, so filter is omitted.
+message FirewallTemplateListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated FirewallTemplate firewall_templates = 3;
+}
+
+// FirewallRuleVersion is one snapshot in a Cloud Firewall's rule-version
+// history. GET /networking/firewalls/{firewallId}/history returns a paginated
+// list of these, each a firewall-shaped object plus a top-level version that
+// increments whenever the rules change. It reuses the shared FirewallRules
+// message so the rules shape stays identical to a live firewall's rules.
+message FirewallRuleVersion {
+  int32 id = 1;
+  string label = 2;
+  string status = 3;
+  int32 version = 4;
+  FirewallRules rules = 5;
+  repeated string tags = 6;
+  string created = 7;
+  string updated = 8;
+}
+
+// FirewallRuleVersionListResponse is the linode_firewall_rule_version_list
+// envelope: count and the full proto FirewallRuleVersion elements for one
+// firewall. The tool keys off a required firewall_id path-id and has no filter
+// param, so filter is omitted.
+message FirewallRuleVersionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated FirewallRuleVersion firewall_rule_versions = 3;
+}
+
 // FirewallGetInput is the input contract for linode_firewall_get.
 message FirewallGetInput {
   // Linode environment to use (optional, defaults to "default").

@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.Image",
+  "description": "A Linode image with all fields present, including optional expiry and eol and repeated capabilities and tags.",
+  "input": {
+    "id": "private/12345",
+    "label": "my-custom-image",
+    "description": "Image captured from a production disk",
+    "type": "manual",
+    "vendor": "Debian",
+    "status": "available",
+    "created": "2024-01-15T10:30:00",
+    "created_by": "exampleuser",
+    "expiry": "2025-01-15T10:30:00",
+    "eol": "2026-07-01T04:00:00",
+    "capabilities": ["cloud-init", "distributed-sites"],
+    "tags": ["production", "web"],
+    "size": 2500,
+    "is_public": false,
+    "deprecated": false
+  },
+  "canonical": {
+    "id": "private/12345",
+    "label": "my-custom-image",
+    "description": "Image captured from a production disk",
+    "type": "manual",
+    "vendor": "Debian",
+    "status": "available",
+    "created": "2024-01-15T10:30:00",
+    "created_by": "exampleuser",
+    "expiry": "2025-01-15T10:30:00",
+    "eol": "2026-07-01T04:00:00",
+    "capabilities": ["cloud-init", "distributed-sites"],
+    "tags": ["production", "web"],
+    "size": 2500,
+    "is_public": false,
+    "deprecated": false
+  }
+}

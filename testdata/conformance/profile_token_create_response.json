@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.ProfileTokenCreateResponse",
+  "description": "Profile token create envelope: the save-the-secret warning plus the created token element carrying the one-time secret token value. The secret is returned to the user by design (it is shown only at creation); it is not output-redacted.",
+  "input": {
+    "warning": "IMPORTANT: The token below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+    "token": {
+      "id": 9001,
+      "label": "ci-deploy",
+      "scopes": "linodes:read_write",
+      "created": "2026-06-30T12:00:00",
+      "expiry": "2027-06-30T12:00:00",
+      "token": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+    }
+  },
+  "canonical": {
+    "warning": "IMPORTANT: The token below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+    "token": {
+      "id": 9001,
+      "label": "ci-deploy",
+      "scopes": "linodes:read_write",
+      "created": "2026-06-30T12:00:00",
+      "expiry": "2027-06-30T12:00:00",
+      "token": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+    }
+  }
+}

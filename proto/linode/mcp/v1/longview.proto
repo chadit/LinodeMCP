@@ -20,6 +20,60 @@ message LongviewClient {
   string updated = 5;
 }
 
+// LongviewClientListResponse is the {count, filter?, longview_clients} envelope
+// the linode_longview_client_list tool returns.
+message LongviewClientListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LongviewClient longview_clients = 3;
+}
+
+// LongviewClientWriteResponse is the {message, longview_client} envelope the
+// Longview client update tool returns: a confirmation string plus the full
+// metadata LongviewClient element (no install secret, unlike the create flow).
+message LongviewClientWriteResponse {
+  string message = 1;
+  LongviewClient longview_client = 2;
+}
+
+// CreatedLongviewClient is the response from creating a Longview client. Unlike
+// the metadata LongviewClient element, it carries the one-time install secret
+// (api_key + install_code) the user needs to configure the Longview agent. The
+// secret is returned to the user by design; it is not output-redacted.
+message CreatedLongviewClient {
+  string api_key = 1;
+  LongviewApps apps = 2;
+  string created = 3;
+  int32 id = 4;
+  string install_code = 5;
+  string label = 6;
+  string updated = 7;
+}
+
+// LongviewClientCreateWriteResponse is the {message, warning, longview_client}
+// envelope the Longview client create tool returns. The warning reminds the user
+// to save the one-time install secret carried on longview_client.
+message LongviewClientCreateWriteResponse {
+  string message = 1;
+  string warning = 2;
+  CreatedLongviewClient longview_client = 3;
+}
+
+// LongviewSubscriptionWriteResponse is the {message, plan} envelope the Longview
+// plan update tool returns.
+message LongviewSubscriptionWriteResponse {
+  string message = 1;
+  LongviewSubscription plan = 2;
+}
+
+// LongviewClientIDResponse is the {message, client_id} id-echo the Longview
+// client delete tool returns; the delete endpoint returns no resource body to
+// echo.
+message LongviewClientIDResponse {
+  string message = 1;
+  int32 client_id = 2;
+}
+
 // LongviewClientGetInput is the input contract for linode_longview_client_get.
 message LongviewClientGetInput {
   // Linode environment to use (optional, defaults to "default").
@@ -42,6 +96,15 @@ message LongviewSubscription {
   Price price = 4;
 }
 
+// LongviewSubscriptionListResponse is the {count, filter?,
+// longview_subscriptions} envelope the linode_longview_subscription_list tool
+// returns.
+message LongviewSubscriptionListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LongviewSubscription longview_subscriptions = 3;
+}
+
 // LongviewSubscriptionGetInput is the input contract for
 // linode_longview_subscription_get.
 message LongviewSubscriptionGetInput {
@@ -49,4 +112,23 @@ message LongviewSubscriptionGetInput {
   optional string environment = 1;
   // The Longview subscription ID to retrieve (required).
   string subscription_id = 2;
+}
+
+// LongviewType mirrors a Linode Longview subscription type (/longview/types). It
+// carries the same shape as LongviewSubscription, but the non-instance LinodeType
+// pricing element does not fit (Longview types have clients_included and no
+// region_prices/transfer), so it gets its own element message.
+message LongviewType {
+  int32 clients_included = 1;
+  string id = 2;
+  string label = 3;
+  Price price = 4;
+}
+
+// LongviewTypeListResponse is the {count, filter?, types} envelope the
+// linode_longview_type_list tool returns.
+message LongviewTypeListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated LongviewType types = 3;
 }

@@ -1,0 +1,44 @@
+{
+  "message": "linode.mcp.v1.MonitorServiceDashboardListResponse",
+  "description": "linode_monitor_service_dashboard_list envelope: count and the full proto MonitorDashboard elements for one service type. It reuses the MonitorDashboard element (widgets modeled as google.protobuf.Struct) but is a distinct list-response message from the top-level linode_monitor_dashboard_list. The tool keys off a required service_type path-id and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "dashboards": [
+      {
+        "id": 30001,
+        "label": "Database Health",
+        "type": "standard",
+        "service_type": "dbaas",
+        "widgets": [
+          {
+            "metric": "memory_usage",
+            "unit": "bytes",
+            "aggregate_function": "max",
+            "chart_type": "area",
+            "color": "blue"
+          }
+        ]
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "dashboards": [
+      {
+        "id": 30001,
+        "label": "Database Health",
+        "type": "standard",
+        "service_type": "dbaas",
+        "widgets": [
+          {
+            "metric": "memory_usage",
+            "unit": "bytes",
+            "aggregate_function": "max",
+            "chart_type": "area",
+            "color": "blue"
+          }
+        ]
+      }
+    ]
+  }
+}

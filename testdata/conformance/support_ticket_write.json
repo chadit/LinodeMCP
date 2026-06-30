@@ -1,0 +1,36 @@
+{
+  "message": "linode.mcp.v1.SupportTicketWriteResponse",
+  "description": "Support ticket create envelope: a confirmation message plus the full SupportTicket element the API returns for the opened ticket.",
+  "input": {
+    "message": "Support ticket opened successfully",
+    "ticket": {
+      "attachments": [],
+      "closable": true,
+      "description": "disk full on web-1",
+      "gravatar_id": "abc123",
+      "id": 555,
+      "opened": "2026-06-30T00:00:00",
+      "opened_by": "alice",
+      "status": "open",
+      "summary": "disk full",
+      "updated": "2026-06-30T00:00:00",
+      "updated_by": "alice"
+    }
+  },
+  "canonical": {
+    "message": "Support ticket opened successfully",
+    "ticket": {
+      "attachments": [],
+      "closable": true,
+      "description": "disk full on web-1",
+      "gravatar_id": "abc123",
+      "id": 555,
+      "opened": "2026-06-30T00:00:00",
+      "opened_by": "alice",
+      "status": "open",
+      "summary": "disk full",
+      "updated": "2026-06-30T00:00:00",
+      "updated_by": "alice"
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerConfig",
+  "description": "NodeBalancer config with all scalar fields and the nested nodes_status message present.",
+  "input": {
+    "id": 4567,
+    "port": 80,
+    "protocol": "http",
+    "algorithm": "roundrobin",
+    "stickiness": "table",
+    "check": "connection",
+    "check_interval": 5,
+    "check_timeout": 3,
+    "check_attempts": 2,
+    "check_path": "/health",
+    "check_body": "alive",
+    "check_passive": true,
+    "cipher_suite": "recommended",
+    "ssl_commonname": "example.com",
+    "ssl_fingerprint": "00:11:22:33",
+    "nodebalancer_id": 1234,
+    "nodes_status": {
+      "up": 3,
+      "down": 1
+    }
+  },
+  "canonical": {
+    "id": 4567,
+    "port": 80,
+    "protocol": "http",
+    "algorithm": "roundrobin",
+    "stickiness": "table",
+    "check": "connection",
+    "check_interval": 5,
+    "check_timeout": 3,
+    "check_attempts": 2,
+    "check_path": "/health",
+    "check_body": "alive",
+    "check_passive": true,
+    "cipher_suite": "recommended",
+    "ssl_commonname": "example.com",
+    "ssl_fingerprint": "00:11:22:33",
+    "nodebalancer_id": 1234,
+    "nodes_status": {
+      "up": 3,
+      "down": 1
+    }
+  }
+}

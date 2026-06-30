@@ -6,8 +6,10 @@ import (
 	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
@@ -151,34 +153,48 @@ func NewLinodeManagedContactDeleteTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 // NewLinodeManagedContactsTool creates a tool for listing Managed contacts.
 func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_managed_contact_list",
 		"Lists contacts configured for Linode Managed service alerts.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedContact, error) {
+			return client.ListManagedContactsProto(ctx, page, pageSize)
 		},
-		handleLinodeManagedContactsRequest,
+		managedContactsPaginationFromTool,
+		nil,
+		managedContactListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
+func managedContactListResponse(items []*linodev1.ManagedContact, count int32, filter *string) *linodev1.ManagedContactListResponse {
+	return &linodev1.ManagedContactListResponse{Count: count, Filter: filter, ManagedContacts: items}
+}
+
 // NewLinodeManagedLinodeSettingsTool creates a tool for listing Managed Linode settings.
 func NewLinodeManagedLinodeSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_managed_linode_settings_list",
 		"Lists Managed service settings for Linodes on the account.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedLinodeSettings, error) {
+			return client.ListManagedLinodeSettingsProto(ctx, page, pageSize)
 		},
-		handleLinodeManagedLinodeSettingsRequest,
+		managedLinodeSettingsPaginationFromTool,
+		nil,
+		managedLinodeSettingsListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func managedLinodeSettingsListResponse(items []*linodev1.ManagedLinodeSettings, count int32, filter *string) *linodev1.ManagedLinodeSettingsListResponse {
+	return &linodev1.ManagedLinodeSettingsListResponse{Count: count, Filter: filter, ManagedLinodeSettings: items}
 }
 
 // NewLinodeManagedStatsTool creates a tool for retrieving Managed statistics.
@@ -307,18 +323,25 @@ func NewLinodeManagedServiceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 // NewLinodeManagedServicesTool creates a tool for listing Managed services.
 func NewLinodeManagedServicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_managed_service_list",
 		"Lists services monitored by Linode Managed.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedService, error) {
+			return client.ListManagedServicesProto(ctx, page, pageSize)
 		},
-		handleLinodeManagedServicesRequest,
+		managedServicesPaginationFromTool,
+		nil,
+		managedServiceListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func managedServiceListResponse(items []*linodev1.ManagedService, count int32, filter *string) *linodev1.ManagedServiceListResponse {
+	return &linodev1.ManagedServiceListResponse{Count: count, Filter: filter, ManagedServices: items}
 }
 
 // NewLinodeManagedIssueGetTool creates a tool for retrieving one Managed issue.
@@ -338,18 +361,25 @@ func NewLinodeManagedIssueGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 
 // NewLinodeManagedIssuesTool creates a tool for listing Managed issues.
 func NewLinodeManagedIssuesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
+	tool, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_managed_issue_list",
 		"Lists recent and ongoing issues detected by Linode Managed service monitors.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
+		"Page of results to return (optional, minimum 1).",
+		"Number of results per page (optional, 25-500).",
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedIssue, error) {
+			return client.ListManagedIssuesProto(ctx, page, pageSize)
 		},
-		handleLinodeManagedIssuesRequest,
+		managedIssuesPaginationFromTool,
+		nil,
+		managedIssueListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func managedIssueListResponse(items []*linodev1.ManagedIssue, count int32, filter *string) *linodev1.ManagedIssueListResponse {
+	return &linodev1.ManagedIssueListResponse{Count: count, Filter: filter, ManagedIssues: items}
 }
 
 // NewLinodeManagedContactUpdateTool creates a tool for updating a Managed contact.
@@ -443,7 +473,8 @@ func runManagedResourceDelete(
 	ctx context.Context,
 	request *mcp.CallToolRequest,
 	cfg *config.Config,
-	toolName, path, confirmMessage, successText string,
+	toolName, path, confirmMessage string,
+	successResponse proto.Message,
 	fetchState func(context.Context, *linode.Client) (any, error),
 	execute func(context.Context, *linode.Client) error,
 ) (*mcp.CallToolResult, error) {
@@ -466,7 +497,7 @@ func runManagedResourceDelete(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to %s %s: %v", "delete", toolName, err)), nil
 	}
 
-	return mcp.NewToolResultText(successText), nil
+	return MarshalProtoToolResponse(successResponse)
 }
 
 func handleLinodeManagedContactDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -479,7 +510,10 @@ func handleLinodeManagedContactDeleteRequest(ctx context.Context, request *mcp.C
 		"linode_managed_contact_delete",
 		fmt.Sprintf(managedContactsPath+"/%d", contactID),
 		"This deletes a Managed contact. Set confirm=true to proceed.",
-		"Managed contact deleted successfully",
+		&linodev1.ManagedContactIDResponse{
+			Message:   "Managed contact deleted successfully",
+			ContactId: linodeIDToInt32(contactID),
+		},
 		func(ctx context.Context, c *linode.Client) (any, error) {
 			return c.GetManagedContact(ctx, contactID)
 		},
@@ -520,25 +554,6 @@ func managedContactIDFromToolWithMissingMessage(request *mcp.CallToolRequest, mi
 	}
 }
 
-func handleLinodeManagedContactsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := managedContactsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	contacts, listFailure := client.ListManagedContacts(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(contacts)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_contact_list: " + listFailure.Error()), nil
-}
-
 func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
 	args := request.GetArguments()
 
@@ -553,25 +568,6 @@ func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 	}
 
 	return page, pageSize, ""
-}
-
-func handleLinodeManagedLinodeSettingsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := managedLinodeSettingsPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	settings, listFailure := client.ListManagedLinodeSettings(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(settings)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_linode_settings_list: " + listFailure.Error()), nil
 }
 
 func managedLinodeSettingsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -632,15 +628,12 @@ func handleLinodeManagedLinodeSettingsUpdateRequest(ctx context.Context, request
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	settings, updateFailure := client.UpdateManagedLinodeSettings(ctx, linodeID, *updateReq)
+	settings, updateFailure := client.UpdateManagedLinodeSettingsProto(ctx, linodeID, *updateReq)
 	if updateFailure != nil {
 		return mcp.NewToolResultError(managedLinodeSettingsUpdateFailureMessage(linodeID, updateFailure)), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message  string                        `json:"message"`
-		Settings *linode.ManagedLinodeSettings `json:"settings"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.ManagedLinodeSettingsWriteResponse{
 		Message:  fmt.Sprintf("Managed Linode settings for Linode %d updated successfully", linodeID),
 		Settings: settings,
 	})
@@ -825,7 +818,10 @@ func handleLinodeManagedServiceDeleteRequest(ctx context.Context, request *mcp.C
 		"linode_managed_service_delete",
 		fmt.Sprintf(managedServicesPath+"/%d", serviceID),
 		"This deletes a Managed service monitor. Set confirm=true to proceed.",
-		"Managed service deleted successfully",
+		&linodev1.ManagedServiceIDResponse{
+			Message:   "Managed service deleted successfully",
+			ServiceId: linodeIDToInt32(serviceID),
+		},
 		func(ctx context.Context, c *linode.Client) (any, error) {
 			return c.GetManagedService(ctx, serviceID)
 		},
@@ -846,7 +842,7 @@ func runManagedServiceAction(
 	ctx context.Context,
 	request *mcp.CallToolRequest,
 	cfg *config.Config,
-	toolName, verb, confirmMessage, successText, failureVerb string,
+	toolName, verb, confirmMessage, successMessage, failureVerb string,
 	execute func(context.Context, *linode.Client, int) error,
 ) (*mcp.CallToolResult, error) {
 	serviceID, validationMessage := managedServiceIDFromTool(request)
@@ -875,7 +871,10 @@ func runManagedServiceAction(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to %s %s: %v", failureVerb, toolName, err)), nil
 	}
 
-	return mcp.NewToolResultText(successText), nil
+	return MarshalProtoToolResponse(&linodev1.ManagedServiceIDResponse{
+		Message:   successMessage,
+		ServiceId: linodeIDToInt32(serviceID),
+	})
 }
 
 func handleLinodeManagedServiceDisableRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -1043,25 +1042,6 @@ func managedServiceOptionalStringWithCount(request *mcp.CallToolRequest, name st
 	return ""
 }
 
-func handleLinodeManagedServicesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := managedServicesPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	services, listFailure := client.ListManagedServices(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(services)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_service_list: " + listFailure.Error()), nil
-}
-
 func managedServicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
 	args := request.GetArguments()
 
@@ -1119,25 +1099,6 @@ func managedIssueIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	default:
 		return 0, errManagedIssueGetIDPositive
 	}
-}
-
-func handleLinodeManagedIssuesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	page, pageSize, validationMessage := managedIssuesPaginationFromTool(request)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
-	}
-
-	client, err := prepareClient(request, cfg)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	issues, listFailure := client.ListManagedIssues(ctx, page, pageSize)
-	if listFailure == nil {
-		return MarshalToolResponse(issues)
-	}
-
-	return mcp.NewToolResultError("Failed to retrieve linode_managed_issue_list: " + listFailure.Error()), nil
 }
 
 func managedIssuesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -1308,15 +1269,12 @@ func handleLinodeManagedContactUpdateRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	contact, updateFailure := client.UpdateManagedContact(ctx, contactID, *updateReq)
+	contact, updateFailure := client.UpdateManagedContactProto(ctx, contactID, *updateReq)
 	if updateFailure != nil {
 		return mcp.NewToolResultError(managedContactUpdateFailureMessage(contactID, updateFailure)), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message string                 `json:"message"`
-		Contact *linode.ManagedContact `json:"contact"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.ManagedContactWriteResponse{
 		Message: fmt.Sprintf("Managed contact %d updated successfully", contactID),
 		Contact: contact,
 	})

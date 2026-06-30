@@ -1,0 +1,46 @@
+{
+  "message": "linode.mcp.v1.DomainRecordListResponse",
+  "description": "linode_domain_record_list envelope: count, the filter echo (type + name_contains), and the full proto DomainRecord elements with every scalar field present.",
+  "input": {
+    "count": 1,
+    "filter": "type=SRV, name_contains=sip",
+    "records": [
+      {
+        "id": 987654,
+        "type": "SRV",
+        "name": "_sip._tcp",
+        "target": "sip.example.com",
+        "priority": 10,
+        "weight": 5,
+        "port": 5060,
+        "service": "_sip",
+        "protocol": "_tcp",
+        "ttl_sec": 3600,
+        "tag": "issue",
+        "created": "2026-01-02T03:04:05",
+        "updated": "2026-01-03T04:05:06"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "filter": "type=SRV, name_contains=sip",
+    "records": [
+      {
+        "id": 987654,
+        "type": "SRV",
+        "name": "_sip._tcp",
+        "target": "sip.example.com",
+        "priority": 10,
+        "weight": 5,
+        "port": 5060,
+        "service": "_sip",
+        "protocol": "_tcp",
+        "ttl_sec": 3600,
+        "tag": "issue",
+        "created": "2026-01-02T03:04:05",
+        "updated": "2026-01-03T04:05:06"
+      }
+    ]
+  }
+}

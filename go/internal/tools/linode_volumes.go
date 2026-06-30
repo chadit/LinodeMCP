@@ -51,37 +51,45 @@ func handleLinodeVolumeGetRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeVolumeListTool creates a tool for listing Linode block storage volumes.
 func NewLinodeVolumeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newListTool(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_volume_list",
 		"Lists all block storage volumes for the authenticated user with optional filtering by region or label",
-		func(ctx context.Context, client *linode.Client) ([]linode.Volume, error) {
-			return client.ListVolumes(ctx)
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.Volume, error) {
+			return client.ListVolumesProto(ctx)
 		},
-		[]listFilterParam[linode.Volume]{
+		[]listFilterParam[*linodev1.Volume]{
 			fieldFilter("region", "Filter volumes by region (e.g., 'us-east', 'eu-west')",
-				func(vol linode.Volume) string { return vol.Region }),
+				func(vol *linodev1.Volume) string { return vol.GetRegion() }),
 			containsFilter("label_contains", "Filter volumes where label contains this string (case-insensitive)",
-				func(vol linode.Volume) string { return vol.Label }),
+				func(vol *linodev1.Volume) string { return vol.GetLabel() }),
 		},
-		"volumes",
+		volumeListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
 }
 
+func volumeListResponse(items []*linodev1.Volume, count int32, filter *string) *linodev1.VolumeListResponse {
+	return &linodev1.VolumeListResponse{Count: count, Filter: filter, Volumes: items}
+}
+
 // NewLinodeVolumeTypeListTool creates a tool for listing Linode block storage volume types.
 func NewLinodeVolumeTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newListTool(
+	tool, handler := newProtoListTool(
 		cfg,
 		"linode_volume_type_list",
 		"Lists available Linode block storage volume types and pricing",
-		func(ctx context.Context, client *linode.Client) ([]linode.VolumeType, error) {
-			return client.ListVolumeTypes(ctx)
+		func(ctx context.Context, client *linode.Client) ([]*linodev1.LinodeType, error) {
+			return client.ListVolumeTypesProto(ctx)
 		},
-		[]listFilterParam[linode.VolumeType]{},
-		"volume_types",
+		nil,
+		volumeTypeListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
+}
+
+func volumeTypeListResponse(items []*linodev1.LinodeType, count int32, filter *string) *linodev1.VolumeTypeListResponse {
+	return &linodev1.VolumeTypeListResponse{Count: count, Filter: filter, VolumeTypes: items}
 }

@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.AccountInvoiceListResponse",
+  "description": "linode_account_invoice_list envelope: count and the full proto AccountInvoice elements (total is a double, emitted as a JSON number). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_invoices": [
+      {
+        "id": 789,
+        "date": "2024-06-01T00:00:00",
+        "label": "Invoice 789",
+        "total": 25.5
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_invoices": [
+      {
+        "id": 789,
+        "date": "2024-06-01T00:00:00",
+        "label": "Invoice 789",
+        "total": 25.5
+      }
+    ]
+  }
+}

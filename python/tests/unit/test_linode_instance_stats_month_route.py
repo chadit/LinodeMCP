@@ -168,6 +168,10 @@ async def test_handle_linode_instance_stats_month_get_success(
         ({"linode_id": 123, "year": 2024, "month": "/"}, "month"),
         ({"linode_id": 123, "year": 2024, "month": "?"}, "month"),
         ({"linode_id": 123, "year": 2024, "month": ".."}, "month"),
+        # Omitted year/month parse to None, so the explicit None guards reject
+        # them rather than the value validators.
+        ({"linode_id": 123, "month": 7}, "year must be an integer"),
+        ({"linode_id": 123, "year": 2024}, "month must be an integer"),
     ],
 )
 async def test_handle_linode_instance_stats_month_get_rejects_invalid_path_params(

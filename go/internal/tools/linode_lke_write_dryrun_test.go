@@ -597,12 +597,15 @@ func TestLinodeLKEACLUpdateToolDryRun(t *testing.T) {
 	t.Run("preview without updating", func(t *testing.T) {
 		t.Parallel()
 
-		cfg, methods := dryRunGetStateServer(t, lkeACLGetPath, linode.LKEControlPlaneACL{Enabled: true})
+		// The Linode API wraps the GET-state ACL under a top-level "acl" key.
+		cfg, methods := dryRunGetStateServer(t, lkeACLGetPath, map[string]any{
+			keyACL: linode.LKEControlPlaneACL{Enabled: true},
+		})
 		_, _, handler := tools.NewLinodeLKEACLUpdateTool(cfg)
 
 		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyClusterID: float64(123),
-			"acl":        map[string]any{statusEnabled: true},
+			keyACL:       map[string]any{statusEnabled: true},
 			keyDryRun:    true,
 		}))
 		if err != nil {

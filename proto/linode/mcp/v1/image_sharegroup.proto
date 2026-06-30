@@ -19,6 +19,21 @@ message ImageShareGroup {
   int32 members_count = 10;
 }
 
+// ImageShareGroupWriteResponse is the {message, sharegroup} envelope the share
+// group create/update and member-add tools return.
+message ImageShareGroupWriteResponse {
+  string message = 1;
+  ImageShareGroup sharegroup = 2;
+}
+
+// ImageShareGroupListResponse is the linode_image_sharegroup_list envelope:
+// count, an optional filter echo, and the share group elements.
+message ImageShareGroupListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ImageShareGroup image_sharegroups = 3;
+}
+
 // ImageShareGroupGetInput is the input contract for linode_image_sharegroup_get.
 message ImageShareGroupGetInput {
   // Linode environment to use (optional, defaults to "default").

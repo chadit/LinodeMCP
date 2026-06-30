@@ -160,8 +160,8 @@ func TestLinodeLongviewClientsToolApiError(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "Failed to retrieve linode_longview_client_list") {
-		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve linode_longview_client_list")
+	if !strings.Contains(textContent.Text, "Failed to retrieve items") {
+		t.Errorf("textContent.Text does not contain %v", "Failed to retrieve items")
 	}
 
 	if !strings.Contains(textContent.Text, errForbidden) {
@@ -332,6 +332,23 @@ func TestLinodeLongviewClientUpdateToolSuccess(t *testing.T) {
 
 	if strings.Contains(textContent.Text, "longview-install-code-secret") {
 		t.Errorf("textContent.Text should not contain %v", "longview-install-code-secret")
+	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &envelope); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+
+	if envelope["message"] != "Longview client updated successfully" {
+		t.Errorf("message = %v, want %v", envelope["message"], "Longview client updated successfully")
+	}
+
+	if _, ok := envelope["longview_client"]; !ok {
+		t.Errorf("envelope missing longview_client key, got %v", envelope)
+	}
+
+	if _, ok := envelope["client"]; ok {
+		t.Errorf("envelope should not carry the legacy client key, got %v", envelope)
 	}
 }
 

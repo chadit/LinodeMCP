@@ -1,0 +1,34 @@
+{
+  "message": "linode.mcp.v1.DomainRecord",
+  "description": "A Linode DNS record within a domain with all scalar fields present.",
+  "input": {
+    "id": 987654,
+    "type": "SRV",
+    "name": "_sip._tcp",
+    "target": "sip.example.com",
+    "priority": 10,
+    "weight": 5,
+    "port": 5060,
+    "service": "_sip",
+    "protocol": "_tcp",
+    "ttl_sec": 3600,
+    "tag": "issue",
+    "created": "2026-01-02T03:04:05",
+    "updated": "2026-01-03T04:05:06"
+  },
+  "canonical": {
+    "id": 987654,
+    "type": "SRV",
+    "name": "_sip._tcp",
+    "target": "sip.example.com",
+    "priority": 10,
+    "weight": 5,
+    "port": 5060,
+    "service": "_sip",
+    "protocol": "_tcp",
+    "ttl_sec": 3600,
+    "tag": "issue",
+    "created": "2026-01-02T03:04:05",
+    "updated": "2026-01-03T04:05:06"
+  }
+}

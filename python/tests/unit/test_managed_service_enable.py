@@ -56,7 +56,10 @@ async def test_handle_linode_managed_service_enable(sample_config: Config) -> No
             sample_config,
         )
 
-    assert "Managed service monitor enabled successfully" in _response_text(result)
+    assert json.loads(_response_text(result)) == {
+        "message": "Managed service enabled successfully",
+        "service_id": 429,
+    }
     mock_client.enable_managed_service.assert_awaited_once_with(429)
 
 

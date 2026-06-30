@@ -244,12 +244,20 @@ func TestLinodeManagedCredentialUsernamePasswordUpdateToolSuccess(t *testing.T) 
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, managedCredentialUsernamePasswordToolLabel) {
-		t.Errorf("textContent.Text does not contain %v", managedCredentialUsernamePasswordToolLabel)
+	var got map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &got); err != nil {
+		t.Fatalf("unexpected error decoding response: %v", err)
 	}
 
-	if !strings.Contains(textContent.Text, managedCredentialUsernamePasswordToolTime) {
-		t.Errorf("textContent.Text does not contain %v", managedCredentialUsernamePasswordToolTime)
+	wantMessage := "Managed credential 9991 updated successfully"
+	if got["message"] != wantMessage {
+		t.Errorf("got[message] = %v, want %v", got["message"], wantMessage)
+	}
+
+	// The id-echo carries the credential id; the credential metadata (label,
+	// last_decrypted) and the secret are intentionally not echoed.
+	if got["credential_id"] != float64(9991) {
+		t.Errorf("got[credential_id] = %v, want %v", got["credential_id"], 9991)
 	}
 
 	if strings.Contains(textContent.Text, managedCredentialUsernamePasswordToolPassword) {

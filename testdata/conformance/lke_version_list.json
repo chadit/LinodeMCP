@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.LKEVersionListResponse",
+  "description": "linode_lke_version_list envelope: count and the full proto LKEVersion elements. The tool has no filter params, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "versions": [
+      {
+        "id": "1.29"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "versions": [
+      {
+        "id": "1.29"
+      }
+    ]
+  }
+}

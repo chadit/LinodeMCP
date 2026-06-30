@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.DatabaseInstanceWriteResponse",
+  "description": "Database instance write envelope (MySQL and PostgreSQL create, update): a confirmation message plus the full DatabaseInstance element decoded from the API body.",
+  "input": {
+    "message": "Managed Database instance 'primary-db' (ID: 123) created",
+    "database_instance": {
+      "id": 123,
+      "status": "provisioning",
+      "label": "primary-db",
+      "region": "us-east",
+      "type": "g6-dedicated-2",
+      "engine": "mysql",
+      "version": "8.0.26",
+      "cluster_size": 3,
+      "replication_type": "semi_synch",
+      "ssl_connection": true,
+      "encrypted": true,
+      "allow_list": ["203.0.113.1/32", "198.51.100.0/24"],
+      "created": "2026-06-30T12:00:00",
+      "updated": "2026-06-30T12:05:00"
+    }
+  },
+  "canonical": {
+    "message": "Managed Database instance 'primary-db' (ID: 123) created",
+    "database_instance": {
+      "id": 123,
+      "status": "provisioning",
+      "label": "primary-db",
+      "region": "us-east",
+      "type": "g6-dedicated-2",
+      "engine": "mysql",
+      "version": "8.0.26",
+      "cluster_size": 3,
+      "replication_type": "semi_synch",
+      "ssl_connection": true,
+      "encrypted": true,
+      "allow_list": ["203.0.113.1/32", "198.51.100.0/24"],
+      "created": "2026-06-30T12:00:00",
+      "updated": "2026-06-30T12:05:00"
+    }
+  }
+}

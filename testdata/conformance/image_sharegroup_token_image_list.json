@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.ImageListResponse",
+  "description": "linode_image_sharegroup_token_image_list envelope: count and the full proto Image elements under the images key. Go previously emitted a FormatListResponse of raw structs and Python over-wrapped {message,count,images,page,...}; the proto envelope is the fix. This token-scoped list paginates and never echoes a filter.",
+  "input": {
+    "count": 1,
+    "images": [
+      {
+        "id": "private/67890",
+        "label": "token-visible-image",
+        "description": "Image visible through a share group token",
+        "type": "manual",
+        "vendor": "Ubuntu",
+        "status": "available",
+        "created": "2024-02-20T08:00:00",
+        "created_by": "owneruser",
+        "expiry": "2025-02-20T08:00:00",
+        "eol": "2026-08-01T04:00:00",
+        "capabilities": ["distributed-sites"],
+        "tags": ["partner"],
+        "size": 3100,
+        "is_public": false,
+        "deprecated": false
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "images": [
+      {
+        "id": "private/67890",
+        "label": "token-visible-image",
+        "description": "Image visible through a share group token",
+        "type": "manual",
+        "vendor": "Ubuntu",
+        "status": "available",
+        "created": "2024-02-20T08:00:00",
+        "created_by": "owneruser",
+        "expiry": "2025-02-20T08:00:00",
+        "eol": "2026-08-01T04:00:00",
+        "capabilities": ["distributed-sites"],
+        "tags": ["partner"],
+        "size": 3100,
+        "is_public": false,
+        "deprecated": false
+      }
+    ]
+  }
+}

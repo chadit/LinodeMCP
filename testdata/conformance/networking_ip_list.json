@@ -1,0 +1,36 @@
+{
+  "message": "linode.mcp.v1.NetworkingIPListResponse",
+  "description": "linode_networking_ip_list envelope: count and the full proto IPAddress elements. The tool has no page/page_size or filter param (only skip_ipv6_rdns), so filter is omitted. vpc_nat_1_1 is an optional string omitted when unset.",
+  "input": {
+    "count": 1,
+    "ips": [
+      {
+        "address": "203.0.113.5",
+        "gateway": "203.0.113.1",
+        "subnet_mask": "255.255.255.0",
+        "prefix": 24,
+        "type": "ipv4",
+        "public": true,
+        "rdns": "li1-5.members.linode.com",
+        "linode_id": 123,
+        "region": "us-east"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "ips": [
+      {
+        "address": "203.0.113.5",
+        "gateway": "203.0.113.1",
+        "subnet_mask": "255.255.255.0",
+        "prefix": 24,
+        "type": "ipv4",
+        "public": true,
+        "rdns": "li1-5.members.linode.com",
+        "linode_id": 123,
+        "region": "us-east"
+      }
+    ]
+  }
+}

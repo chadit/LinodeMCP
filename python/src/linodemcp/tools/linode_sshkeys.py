@@ -4,26 +4,18 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import sshkey_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import (
-    SSH_KEY_TRUNCATE_LIMIT,
-    execute_tool,
+from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-    from linodemcp.linode import RetryableClient, SSHKey
-
-
-def ssh_key_to_response_dict(key: SSHKey) -> dict[str, Any]:
-    """Shape an SSH key dataclass to proto-canonical form."""
-    return {
-        "id": key.id,
-        "label": key.label,
-        "ssh_key": key.ssh_key,
-        "created": key.created,
-    }
+    from linodemcp.linode import RetryableClient
 
 
 def create_linode_sshkey_get_tool() -> tuple[Tool, Capability]:
@@ -45,8 +37,8 @@ async def handle_linode_sshkey_get(
         return [TextContent(type="text", text="Error: ssh_key_id is required")]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        key = await client.get_ssh_key(int(ssh_key_id))
-        return ssh_key_to_response_dict(key)
+        raw = await client.get_raw(f"/profile/sshkeys/{int(ssh_key_id)}")
+        return serialize_api_response(raw, sshkey_pb2.SSHKey())
 
     return await execute_tool(cfg, arguments, "retrieve SSH key", _call)
 
@@ -86,37 +78,20 @@ async def handle_linode_sshkey_list(
     """Handle linode_sshkey_list tool request."""
     label_contains = arguments.get("label_contains", "")
 
+    def _matches(key: dict[str, Any]) -> bool:
+        label = str(key.get("label", ""))
+        return not label_contains or label_contains.lower() in label.lower()
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        keys = await client.list_ssh_keys()
-
-        if label_contains:
-            keys = [k for k in keys if label_contains.lower() in k.label.lower()]
-
-        keys_data = [
-            {
-                "id": k.id,
-                "label": k.label,
-                "ssh_key": truncate_string(k.ssh_key, SSH_KEY_TRUNCATE_LIMIT),
-                "created": k.created,
-            }
-            for k in keys
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(keys),
-            "ssh_keys": keys_data,
-        }
-
-        if label_contains:
-            response["filter"] = f"label_contains={label_contains}"
-
-        return response
+        raw = await client.get_raw("/profile/sshkeys")
+        return serialize_list_response(
+            raw,
+            "ssh_keys",
+            sshkey_pb2.SSHKeyListResponse(),
+            filter_value=(
+                f"label_contains={label_contains}" if label_contains else None
+            ),
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve SSH keys", _call)
-
-
-def truncate_string(value: str, limit: int) -> str:
-    """Truncate a string with ellipsis if it exceeds the limit."""
-    if len(value) > limit:
-        return value[:limit] + "..."
-    return value

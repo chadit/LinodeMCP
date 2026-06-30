@@ -25,6 +25,15 @@ message Domain {
   string group = 16;
 }
 
+// DomainListResponse mirrors the linode_domain_list wrapper: a count, an
+// optional filter echo, and the domains. This is the project's own envelope,
+// not the Linode {data,page,pages,results} list shape.
+message DomainListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated Domain domains = 3;
+}
+
 // DomainWriteResponse is the {message, domain} envelope the domain create/update
 // tools return.
 message DomainWriteResponse {
@@ -55,6 +64,15 @@ message DomainRecord {
   string tag = 11;
   string created = 12;
   string updated = 13;
+}
+
+// DomainRecordListResponse is the linode_domain_record_list envelope: a count,
+// an optional filter echo (type and name_contains), and the DNS records of one
+// domain.
+message DomainRecordListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated DomainRecord records = 3;
 }
 
 // DomainRecordWriteResponse is the {message, record} envelope the domain record

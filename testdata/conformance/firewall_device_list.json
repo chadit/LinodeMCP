@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.FirewallDeviceListResponse",
+  "description": "linode_firewall_device_list envelope: count and the full proto FirewallDevice elements (nested entity with recursive parent_entity). Paginated tool, runtime never echoes a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "devices": [
+      {
+        "id": 123,
+        "entity": {
+          "id": 456,
+          "label": "my-linode",
+          "type": "linode",
+          "url": "/v4/linode/instances/456",
+          "parent_entity": {
+            "id": 789,
+            "label": "parent-resource",
+            "type": "nodebalancer",
+            "url": "/v4/nodebalancers/789"
+          }
+        },
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "devices": [
+      {
+        "id": 123,
+        "entity": {
+          "id": 456,
+          "label": "my-linode",
+          "type": "linode",
+          "url": "/v4/linode/instances/456",
+          "parent_entity": {
+            "id": 789,
+            "label": "parent-resource",
+            "type": "nodebalancer",
+            "url": "/v4/nodebalancers/789"
+          }
+        },
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00"
+      }
+    ]
+  }
+}

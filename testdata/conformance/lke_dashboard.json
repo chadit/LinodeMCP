@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.LKEDashboard",
+  "description": "Kubernetes dashboard URL single-field message.",
+  "input": {
+    "url": "https://dashboard.lke12345.linodelke.net"
+  },
+  "canonical": {
+    "url": "https://dashboard.lke12345.linodelke.net"
+  }
+}

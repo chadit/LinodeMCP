@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.FirewallDevice",
+  "description": "A device attached to a Cloud Firewall, with a nested entity and recursive parent_entity.",
+  "input": {
+    "id": 123,
+    "entity": {
+      "id": 456,
+      "label": "my-linode",
+      "type": "linode",
+      "url": "/v4/linode/instances/456",
+      "parent_entity": {
+        "id": 789,
+        "label": "parent-resource",
+        "type": "nodebalancer",
+        "url": "/v4/nodebalancers/789"
+      }
+    },
+    "created": "2024-01-01T00:00:00",
+    "updated": "2024-01-02T00:00:00"
+  },
+  "canonical": {
+    "id": 123,
+    "entity": {
+      "id": 456,
+      "label": "my-linode",
+      "type": "linode",
+      "url": "/v4/linode/instances/456",
+      "parent_entity": {
+        "id": 789,
+        "label": "parent-resource",
+        "type": "nodebalancer",
+        "url": "/v4/nodebalancers/789"
+      }
+    },
+    "created": "2024-01-01T00:00:00",
+    "updated": "2024-01-02T00:00:00"
+  }
+}

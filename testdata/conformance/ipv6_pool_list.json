@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.IPv6PoolListResponse",
+  "description": "linode_ipv6_pool_list envelope: count and the full proto IPv6Pool elements (range, region, prefix). The tool paginates and has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "ipv6_pools": [
+      {
+        "range": "2600:3c03::02:5000:0000:0000:0000",
+        "region": "us-east",
+        "prefix": 64
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "ipv6_pools": [
+      {
+        "range": "2600:3c03::02:5000:0000:0000:0000",
+        "region": "us-east",
+        "prefix": 64
+      }
+    ]
+  }
+}

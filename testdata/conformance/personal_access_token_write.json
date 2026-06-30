@@ -1,0 +1,24 @@
+{
+  "message": "linode.mcp.v1.PersonalAccessTokenWriteResponse",
+  "description": "Profile token update envelope: a confirmation message plus the full PersonalAccessToken metadata element (no secret, an update never returns the token value).",
+  "input": {
+    "message": "Profile token updated successfully",
+    "token": {
+      "id": 9001,
+      "label": "ci-deploy-renamed",
+      "scopes": "linodes:read_write",
+      "created": "2026-06-30T12:00:00",
+      "expiry": "2027-06-30T12:00:00"
+    }
+  },
+  "canonical": {
+    "message": "Profile token updated successfully",
+    "token": {
+      "id": 9001,
+      "label": "ci-deploy-renamed",
+      "scopes": "linodes:read_write",
+      "created": "2026-06-30T12:00:00",
+      "expiry": "2027-06-30T12:00:00"
+    }
+  }
+}

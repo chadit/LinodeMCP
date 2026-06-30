@@ -1,0 +1,46 @@
+{
+  "message": "linode.mcp.v1.NetworkTransferPriceListResponse",
+  "description": "linode_network_transfer_price_list envelope: count and the full proto LinodeType elements (id, label, price, region_prices[], transfer). The /network-transfer/prices element shares the LinodeType shape, so it reuses that message. The tool has no filter param, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "network_transfer_prices": [
+      {
+        "id": "distributed_network_transfer",
+        "label": "Distributed Network Transfer",
+        "price": {
+          "hourly": 0.01,
+          "monthly": 0.0
+        },
+        "region_prices": [
+          {
+            "id": "id-cgk",
+            "hourly": 0.015,
+            "monthly": 0.0
+          }
+        ],
+        "transfer": 0
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "network_transfer_prices": [
+      {
+        "id": "distributed_network_transfer",
+        "label": "Distributed Network Transfer",
+        "price": {
+          "hourly": 0.01,
+          "monthly": 0.0
+        },
+        "region_prices": [
+          {
+            "id": "id-cgk",
+            "hourly": 0.015,
+            "monthly": 0.0
+          }
+        ],
+        "transfer": 0
+      }
+    ]
+  }
+}

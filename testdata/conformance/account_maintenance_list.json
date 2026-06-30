@@ -1,0 +1,38 @@
+{
+  "message": "linode.mcp.v1.AccountMaintenanceListResponse",
+  "description": "linode_account_maintenance_list envelope: count and the full proto AccountMaintenance elements (not the Linode data/page/pages/results page). Pagination does not echo a filter, so filter is omitted.",
+  "input": {
+    "count": 1,
+    "account_maintenances": [
+      {
+        "entity": {
+          "id": 123,
+          "label": "web-1",
+          "type": "linode",
+          "url": "/linode/instances/123"
+        },
+        "reason": "Scheduled migration",
+        "status": "pending",
+        "type": "reboot",
+        "when": "2026-06-01T00:00:00"
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "account_maintenances": [
+      {
+        "entity": {
+          "id": 123,
+          "label": "web-1",
+          "type": "linode",
+          "url": "/linode/instances/123"
+        },
+        "reason": "Scheduled migration",
+        "status": "pending",
+        "type": "reboot",
+        "when": "2026-06-01T00:00:00"
+      }
+    ]
+  }
+}

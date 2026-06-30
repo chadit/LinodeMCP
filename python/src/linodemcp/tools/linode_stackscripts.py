@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import stackscript_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     DESCRIPTION_TRUNCATE_LIMIT,
@@ -19,13 +21,17 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
-    from linodemcp.linode import UDF, RetryableClient, StackScript
+    from linodemcp.linode import RetryableClient
 
 
 def create_linode_stackscript_list_tool() -> tuple[Tool, Capability]:
@@ -75,89 +81,37 @@ async def handle_linode_stackscript_list(
     mine_filter = arguments.get("mine", "")
     label_contains = arguments.get("label_contains", "")
 
+    def _matches(script: dict[str, Any]) -> bool:
+        if is_public_filter and bool(script.get("is_public", False)) != (
+            is_public_filter.lower() == "true"
+        ):
+            return False
+        if mine_filter and bool(script.get("mine", False)) != (
+            mine_filter.lower() == "true"
+        ):
+            return False
+        label = str(script.get("label", ""))
+        return not (label_contains and label_contains.lower() not in label.lower())
+
+    filters: list[str] = []
+    if is_public_filter:
+        filters.append(f"is_public={is_public_filter}")
+    if mine_filter:
+        filters.append(f"mine={mine_filter}")
+    if label_contains:
+        filters.append(f"label_contains={label_contains}")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        scripts = await client.list_stackscripts()
-
-        if is_public_filter:
-            want_public = is_public_filter.lower() == "true"
-            scripts = [s for s in scripts if s.is_public == want_public]
-
-        if mine_filter:
-            want_mine = mine_filter.lower() == "true"
-            scripts = [s for s in scripts if s.mine == want_mine]
-
-        if label_contains:
-            scripts = [s for s in scripts if label_contains.lower() in s.label.lower()]
-
-        scripts_data = [
-            {
-                "id": s.id,
-                "label": s.label,
-                "username": s.username,
-                "description": truncate_string(
-                    s.description, DESCRIPTION_TRUNCATE_LIMIT
-                ),
-                "is_public": s.is_public,
-                "mine": s.mine,
-                "deployments_total": s.deployments_total,
-                "deployments_active": s.deployments_active,
-                "created": s.created,
-                "updated": s.updated,
-            }
-            for s in scripts
-        ]
-
-        response: dict[str, Any] = {
-            "count": len(scripts),
-            "stackscripts": scripts_data,
-        }
-
-        filters: list[str] = []
-        if is_public_filter:
-            filters.append(f"is_public={is_public_filter}")
-        if mine_filter:
-            filters.append(f"mine={mine_filter}")
-        if label_contains:
-            filters.append(f"label_contains={label_contains}")
-        if filters:
-            response["filter"] = ", ".join(filters)
-
-        return response
+        raw = await client.get_raw("/linode/stackscripts")
+        return serialize_list_response(
+            raw,
+            "stackscripts",
+            stackscript_pb2.StackScriptListResponse(),
+            filter_value=", ".join(filters) if filters else None,
+            item_filter=_matches,
+        )
 
     return await execute_tool(cfg, arguments, "retrieve StackScripts", _call)
-
-
-def udf_to_response_dict(udf: UDF) -> dict[str, Any]:
-    """Shape a StackScript user-defined field to proto-canonical form."""
-    return {
-        "label": udf.label,
-        "name": udf.name,
-        "example": udf.example,
-        "oneof": udf.oneof,
-        "default": udf.default,
-    }
-
-
-def stackscript_to_response_dict(stackscript: StackScript) -> dict[str, Any]:
-    """Shape a StackScript dataclass to proto-canonical form."""
-    return {
-        "username": stackscript.username,
-        "user_gravatar_id": stackscript.user_gravatar_id,
-        "label": stackscript.label,
-        "description": stackscript.description,
-        "images": stackscript.images,
-        "created": stackscript.created,
-        "updated": stackscript.updated,
-        "script": stackscript.script,
-        "user_defined_fields": [
-            udf_to_response_dict(udf) for udf in stackscript.user_defined_fields
-        ],
-        "id": stackscript.id,
-        "deployments_total": stackscript.deployments_total,
-        "deployments_active": stackscript.deployments_active,
-        "is_public": stackscript.is_public,
-        "mine": stackscript.mine,
-    }
 
 
 def create_linode_stackscript_get_tool() -> tuple[Tool, Capability]:
@@ -190,9 +144,12 @@ async def handle_linode_stackscript_get(
     if stackscript_id is None:
         return error_response("stackscript_id must be a positive integer")
 
+    encoded_stackscript_id = quote(str(stackscript_id), safe="")
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return stackscript_to_response_dict(
-            await client.get_stackscript(stackscript_id)
+        return serialize_api_response(
+            await client.get_raw(f"/linode/stackscripts/{encoded_stackscript_id}"),
+            stackscript_pb2.StackScript(),
         )
 
     return await execute_tool(

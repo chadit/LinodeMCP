@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.IPAddressWriteResponse",
+  "description": "IP address write envelope: a confirmation message plus the full IP address element the networking and instance IP allocate/update tools return.",
+  "input": {
+    "message": "IP 192.0.2.50 allocated for Linode 5567",
+    "ip": {
+      "address": "192.0.2.50",
+      "gateway": "192.0.2.1",
+      "subnet_mask": "255.255.255.0",
+      "prefix": 24,
+      "type": "ipv4",
+      "public": true,
+      "rdns": "host.example.com",
+      "linode_id": 5567,
+      "region": "us-east"
+    }
+  },
+  "canonical": {
+    "message": "IP 192.0.2.50 allocated for Linode 5567",
+    "ip": {
+      "address": "192.0.2.50",
+      "gateway": "192.0.2.1",
+      "subnet_mask": "255.255.255.0",
+      "prefix": 24,
+      "type": "ipv4",
+      "public": true,
+      "rdns": "host.example.com",
+      "linode_id": 5567,
+      "region": "us-east"
+    }
+  }
+}

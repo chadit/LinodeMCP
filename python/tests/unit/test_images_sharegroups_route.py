@@ -329,7 +329,17 @@ async def test_handle_linode_image_sharegroups_by_image_list_success(
 ) -> None:
     """Handler returns share groups for an image."""
     mock_linode_client.list_image_sharegroups_by_image.return_value = {
-        "data": [{"id": "share-1", "label": "shared images"}],
+        "data": [
+            {
+                "id": 4242,
+                "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+                "label": "shared images",
+                "is_suspended": False,
+                "created": "2026-01-15T10:00:00",
+                "images_count": 7,
+                "members_count": 3,
+            }
+        ],
         "page": 1,
         "pages": 1,
         "results": 1,
@@ -341,13 +351,18 @@ async def test_handle_linode_image_sharegroups_by_image_list_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share groups listed for image",
         "count": 1,
-        "image_id": "private/12345",
-        "sharegroups": [{"id": "share-1", "label": "shared images"}],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
+        "image_sharegroups": [
+            {
+                "id": 4242,
+                "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+                "label": "shared images",
+                "is_suspended": False,
+                "created": "2026-01-15T10:00:00",
+                "images_count": 7,
+                "members_count": 3,
+            }
+        ],
     }
     mock_linode_client.list_image_sharegroups_by_image.assert_awaited_once_with(
         "private/12345", page=None, page_size=None
@@ -373,6 +388,27 @@ async def test_handle_linode_image_sharegroups_by_image_list_rejects_bad_image_i
     """Handler rejects malformed image IDs before client calls."""
     result = await handle_linode_image_sharegroup_by_image_list(
         {"image_id": image_id}, sample_config
+    )
+
+    assert result[0].text.startswith("Error: ")
+    mock_linode_client.list_image_sharegroups_by_image.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"image_id": "private/12345", "page": 0},
+        {"image_id": "private/12345", "page_size": 24},
+        {"image_id": "private/12345", "page_size": 501},
+    ],
+)
+async def test_handle_linode_image_sharegroups_by_image_list_rejects_invalid_pagination(
+    arguments: dict[str, Any], sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """Handler rejects out-of-range pagination after a valid image ID."""
+    result = await handle_linode_image_sharegroup_by_image_list(
+        arguments, sample_config
     )
 
     assert result[0].text.startswith("Error: ")
@@ -412,9 +448,19 @@ def test_create_linode_images_sharegroups_list_tool_schema() -> None:
 async def test_handle_linode_images_sharegroups_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Handler returns image share groups and pagination metadata."""
+    """Handler returns image share groups in the proto list envelope."""
     mock_linode_client.list_image_sharegroups.return_value = {
-        "data": [{"id": "share-1", "label": "shared images"}],
+        "data": [
+            {
+                "id": 4242,
+                "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+                "label": "shared-images",
+                "is_suspended": False,
+                "created": "2026-01-15T10:00:00",
+                "images_count": 7,
+                "members_count": 3,
+            }
+        ],
         "page": 2,
         "pages": 3,
         "results": 7,
@@ -426,12 +472,18 @@ async def test_handle_linode_images_sharegroups_list_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share groups listed",
         "count": 1,
-        "sharegroups": [{"id": "share-1", "label": "shared images"}],
-        "page": 2,
-        "pages": 3,
-        "results": 7,
+        "image_sharegroups": [
+            {
+                "id": 4242,
+                "uuid": "abc12345-def6-7890-abcd-ef1234567890",
+                "label": "shared-images",
+                "is_suspended": False,
+                "created": "2026-01-15T10:00:00",
+                "images_count": 7,
+                "members_count": 3,
+            }
+        ],
     }
     mock_linode_client.list_image_sharegroups.assert_awaited_once_with(
         page=2, page_size=50
@@ -571,6 +623,77 @@ async def test_retryable_client_create_image_sharegroup_does_not_retry() -> None
     )
 
 
+@pytest.mark.asyncio
+async def test_retryable_client_update_image_sharegroup_delegates_once() -> None:
+    """Mutating image share group update delegates once without retry replay."""
+    retryable = _CapturingRetryableClient()
+    mock_update = AsyncMock(return_value={"id": 7, "label": "renamed"})
+    cast("Any", retryable.client).update_image_sharegroup = mock_update
+
+    try:
+        result = await retryable.update_image_sharegroup("7", label="renamed")
+    finally:
+        await retryable.close()
+
+    assert result == {"id": 7, "label": "renamed"}
+    assert retryable.calls == []
+    mock_update.assert_awaited_once_with("7", label="renamed", description=None)
+
+
+@pytest.mark.asyncio
+async def test_retryable_client_update_image_sharegroup_requires_a_field() -> None:
+    """Update without label or description raises before the client call."""
+    retryable = _CapturingRetryableClient()
+    mock_update = AsyncMock()
+    cast("Any", retryable.client).update_image_sharegroup = mock_update
+
+    try:
+        with pytest.raises(ValueError, match="at least one of label or description"):
+            await retryable.update_image_sharegroup("7")
+    finally:
+        await retryable.close()
+
+    mock_update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_client_update_image_sharegroup_maps_http_error() -> None:
+    """Low-level client maps HTTP failures on update to a NetworkError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("temporary", request=request)
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="UpdateImageSharegroup"):
+            await client.update_image_sharegroup("7", label="renamed")
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_retryable_create_image_sharegroup_token_delegates_once() -> None:
+    """Mutating token create delegates once without retry replay."""
+    retryable = _CapturingRetryableClient()
+    mock_create = AsyncMock(return_value={"token_uuid": "tok-1"})
+    cast("Any", retryable.client).create_image_sharegroup_token = mock_create
+
+    try:
+        result = await retryable.create_image_sharegroup_token(
+            valid_for_sharegroup_uuid="sg-1", label="partner"
+        )
+    finally:
+        await retryable.close()
+
+    assert result == {"token_uuid": "tok-1"}
+    assert retryable.calls == []
+    mock_create.assert_awaited_once_with(
+        valid_for_sharegroup_uuid="sg-1", label="partner"
+    )
+
+
 def test_create_linode_image_sharegroup_create_tool_schema() -> None:
     """Create tool schema exposes label, images, confirm, and dry_run."""
     tool, capability = create_linode_image_sharegroup_create_tool()
@@ -608,8 +731,16 @@ async def test_handle_linode_image_sharegroup_create_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group 'shared images' created",
-        "sharegroup": {"id": 1, "label": "shared images", "images_count": 1},
+        "message": "Image share group 'shared images' (1) created successfully",
+        "sharegroup": {
+            "id": 1,
+            "uuid": "",
+            "label": "shared images",
+            "is_suspended": False,
+            "created": "",
+            "images_count": 1,
+            "members_count": 0,
+        },
     }
     mock_linode_client.create_image_sharegroup.assert_awaited_once_with(
         label="shared images",
@@ -1217,12 +1348,24 @@ async def test_handle_linode_images_sharegroups_token_sharegroup_images_list_suc
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group images retrieved",
         "count": 1,
-        "images": [{"id": "private/ubuntu", "label": "Private Ubuntu"}],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
+        "images": [
+            {
+                "id": "private/ubuntu",
+                "label": "Private Ubuntu",
+                "description": "",
+                "type": "",
+                "vendor": "",
+                "status": "",
+                "created": "",
+                "created_by": "",
+                "capabilities": [],
+                "tags": [],
+                "size": 0,
+                "is_public": False,
+                "deprecated": False,
+            }
+        ],
     }
     mock_linode_client.list_image_sharegroup_images_by_token.assert_awaited_once_with(
         token_uuid, page=None, page_size=None
@@ -1396,10 +1539,17 @@ def test_create_linode_images_sharegroup_members_list_tool_schema() -> None:
 async def test_handle_linode_images_sharegroup_members_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Handler returns members associated with a share group."""
+    """Handler returns members in the proto list envelope."""
     sharegroup_id = 3
     mock_linode_client.list_image_sharegroup_members.return_value = {
-        "data": [{"username": "alice", "status": "accepted"}],
+        "data": [
+            {
+                "token_uuid": "11112222-3333-4444-5555-666677778888",
+                "status": "active",
+                "label": "partner-account",
+                "created": "2026-01-15T10:00:00",
+            }
+        ],
         "page": 1,
         "pages": 1,
         "results": 1,
@@ -1411,12 +1561,15 @@ async def test_handle_linode_images_sharegroup_members_list_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group members retrieved",
         "count": 1,
-        "members": [{"username": "alice", "status": "accepted"}],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
+        "image_sharegroup_members": [
+            {
+                "token_uuid": "11112222-3333-4444-5555-666677778888",
+                "status": "active",
+                "label": "partner-account",
+                "created": "2026-01-15T10:00:00",
+            }
+        ],
     }
     mock_linode_client.list_image_sharegroup_members.assert_awaited_once_with(
         str(sharegroup_id), page=None, page_size=None
@@ -1427,7 +1580,7 @@ async def test_handle_linode_images_sharegroup_members_list_success(
 async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pagination(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Handler supplies stable pagination defaults for sparse API responses."""
+    """Handler returns an empty proto envelope for sparse API responses."""
     sharegroup_id = 3
     mock_linode_client.list_image_sharegroup_members.return_value = {}
 
@@ -1437,12 +1590,8 @@ async def test_handle_linode_images_sharegroup_members_list_defaults_missing_pag
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group members retrieved",
         "count": 0,
-        "members": [],
-        "page": 1,
-        "pages": 1,
-        "results": 0,
+        "image_sharegroup_members": [],
     }
     mock_linode_client.list_image_sharegroup_members.assert_awaited_once_with(
         str(sharegroup_id), page=None, page_size=None
@@ -1892,11 +2041,14 @@ async def test_handle_linode_images_sharegroup_member_token_update_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group member token updated",
-        "token": {
-            "id": "member-token-record-1",
+        "message": (
+            f"Image share group member token '{token_uuid}' updated successfully"
+        ),
+        "member": {
             "token_uuid": token_uuid,
+            "status": "",
             "label": "renamed-member",
+            "created": "",
         },
     }
     mock_linode_client.update_image_sharegroup_member_token.assert_awaited_once_with(
@@ -2197,7 +2349,10 @@ async def test_handle_linode_images_sharegroup_member_token_delete_success(
     )
 
     assert json.loads(result[0].text) == {
-        "message": "Image share group member token revoked"
+        "message": (
+            f"Image share group member token {token_uuid} "
+            f"revoked from share group {sharegroup_id} successfully"
+        )
     }
     mock_linode_client.delete_image_sharegroup_member_token.assert_awaited_once_with(
         str(sharegroup_id), token_uuid
@@ -2517,7 +2672,9 @@ async def test_handle_linode_images_sharegroup_image_delete_success(
         sample_config,
     )
 
-    assert json.loads(result[0].text) == {"message": "Shared image access revoked"}
+    assert json.loads(result[0].text) == {
+        "message": "Shared image 456 removed from image share group 123 successfully"
+    }
     mock_linode_client.delete_image_sharegroup_image.assert_awaited_once_with(
         "123", "456"
     )
@@ -2774,7 +2931,10 @@ async def test_handle_linode_images_sharegroup_images_add_success(
     """Handler adds images to a share group."""
     sharegroup_id = 3
     images = [{"id": "private/ubuntu", "label": "Private Ubuntu"}]
-    mock_linode_client.add_image_sharegroup_images.return_value = {"images": images}
+    mock_linode_client.add_image_sharegroup_images.return_value = {
+        "id": "private/ubuntu",
+        "label": "Private Ubuntu",
+    }
 
     result = await handle_linode_image_sharegroup_image_add(
         {"sharegroup_id": sharegroup_id, "images": images, "confirm": True},
@@ -2783,8 +2943,25 @@ async def test_handle_linode_images_sharegroup_images_add_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Images added to image share group",
-        "result": {"images": images},
+        "message": (
+            "Added image set to image share group 3; "
+            "last returned image: 'private/ubuntu'"
+        ),
+        "image": {
+            "id": "private/ubuntu",
+            "label": "Private Ubuntu",
+            "description": "",
+            "type": "",
+            "vendor": "",
+            "status": "",
+            "created": "",
+            "created_by": "",
+            "capabilities": [],
+            "tags": [],
+            "size": 0,
+            "is_public": False,
+            "deprecated": False,
+        },
     }
     mock_linode_client.add_image_sharegroup_images.assert_awaited_once_with(
         str(sharegroup_id), images
@@ -3064,7 +3241,9 @@ async def test_handle_linode_images_sharegroup_members_add_success(
     """Handler adds members to a share group."""
     sharegroup_id = 3
     mock_linode_client.add_members_to_image_sharegroup.return_value = {
-        "member": {"label": "team-a"}
+        "id": 3,
+        "label": "team pool",
+        "members_count": 2,
     }
 
     result = await handle_linode_image_sharegroup_member_add(
@@ -3079,8 +3258,16 @@ async def test_handle_linode_images_sharegroup_members_add_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Members added to image share group",
-        "result": {"member": {"label": "team-a"}},
+        "message": "Added members to image share group 3",
+        "sharegroup": {
+            "id": 3,
+            "uuid": "",
+            "label": "team pool",
+            "is_suspended": False,
+            "created": "",
+            "images_count": 0,
+            "members_count": 2,
+        },
     }
     mock_linode_client.add_members_to_image_sharegroup.assert_awaited_once_with(
         str(sharegroup_id), label="team-a", token="share-token"
@@ -3258,16 +3445,109 @@ async def test_handle_linode_images_sharegroup_images_list_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group images retrieved",
         "count": 1,
-        "images": [{"id": "private/ubuntu", "label": "Private Ubuntu"}],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
+        "images": [
+            {
+                "id": "private/ubuntu",
+                "label": "Private Ubuntu",
+                "description": "",
+                "type": "",
+                "vendor": "",
+                "status": "",
+                "created": "",
+                "created_by": "",
+                "capabilities": [],
+                "tags": [],
+                "size": 0,
+                "is_public": False,
+                "deprecated": False,
+            }
+        ],
     }
     mock_linode_client.list_image_sharegroup_images.assert_awaited_once_with(
         str(sharegroup_id), page=None, page_size=None
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("pagination", "message"),
+    [
+        ({"page": 0}, "page must be an integer at least 1"),
+        ({"page": "2"}, "page must be an integer at least 1"),
+        ({"page_size": 24}, "page_size must be an integer between 25 and 500"),
+        ({"page_size": 501}, "page_size must be an integer between 25 and 500"),
+    ],
+)
+async def test_handle_linode_images_sharegroup_images_list_rejects_bad_pagination(
+    pagination: dict[str, Any],
+    message: str,
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    """Invalid pagination is rejected before the client is called."""
+    arguments: dict[str, Any] = {"sharegroup_id": 3, **pagination}
+
+    result = await handle_linode_image_sharegroup_image_list(arguments, sample_config)
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_linode_client.list_image_sharegroup_images.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("pagination", "message"),
+    [
+        ({"page": 0}, "page must be an integer at least 1"),
+        ({"page_size": 24}, "page_size must be an integer between 25 and 500"),
+    ],
+)
+async def test_handle_linode_images_token_images_list_rejects_bad_pagination(
+    pagination: dict[str, Any],
+    message: str,
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    """Token image list rejects invalid pagination before calling the client."""
+    arguments: dict[str, Any] = {
+        "token_uuid": "11111111-1111-4111-8111-111111111111",
+        **pagination,
+    }
+
+    result = await handle_linode_image_sharegroup_token_image_list(
+        arguments, sample_config
+    )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_linode_client.list_image_sharegroup_images_by_token.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("pagination", "message"),
+    [
+        ({"page": 0}, "page must be an integer at least 1"),
+        ({"page_size": 501}, "page_size must be an integer between 25 and 500"),
+    ],
+)
+async def test_handle_linode_images_by_image_list_rejects_bad_pagination(
+    pagination: dict[str, Any],
+    message: str,
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    """Share-groups-by-image list rejects bad pagination before the client call."""
+    arguments: dict[str, Any] = {"image_id": "private/12345", **pagination}
+
+    result = await handle_linode_image_sharegroup_by_image_list(
+        arguments, sample_config
+    )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_linode_client.list_image_sharegroups_by_image.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -3377,6 +3657,46 @@ async def test_client_update_image_sharegroup_token_encodes_path_param() -> None
 
 
 @pytest.mark.asyncio
+async def test_client_create_image_sharegroup_token_maps_http_error() -> None:
+    """Low-level client maps HTTP failures on token create to a NetworkError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("temporary", request=request)
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="CreateImageSharegroupToken"):
+            await client.create_image_sharegroup_token(
+                valid_for_sharegroup_uuid="11111111-1111-4111-8111-111111111111",
+                label="partner-token",
+            )
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_client_update_image_sharegroup_token_maps_http_error() -> None:
+    """Low-level client maps HTTP failures on token update to a NetworkError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("temporary", request=request)
+
+    client = Client("https://api.linode.com/v4", "test-token")
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    try:
+        with pytest.raises(NetworkError, match="UpdateImageSharegroupToken"):
+            await client.update_image_sharegroup_token(
+                token_uuid="11111111-1111-4111-8111-111111111111",
+                label="renamed-token",
+            )
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_retryable_client_update_image_sharegroup_token_delegates_once() -> None:
     """Retryable update wrapper should not replay token updates after errors."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
@@ -3428,11 +3748,16 @@ async def test_handle_linode_images_sharegroups_token_update_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group token updated",
+        "message": f"Image share group token '{token_uuid}' updated successfully",
         "token": {
-            "id": "sharegroup-record-1",
+            "token": "",
             "token_uuid": token_uuid,
+            "status": "",
             "label": "renamed-token",
+            "created": "",
+            "valid_for_sharegroup_uuid": "",
+            "sharegroup_uuid": "",
+            "sharegroup_label": "",
         },
     }
     mock_linode_client.update_image_sharegroup_token.assert_awaited_once_with(
@@ -3662,7 +3987,7 @@ async def test_handle_linode_images_sharegroups_token_delete_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {"message": "Image share group token deleted"}
+    assert payload == {"message": "Image share group token removed successfully"}
     mock_linode_client.delete_image_sharegroup_token.assert_awaited_once_with(
         token_uuid=token_uuid
     )
@@ -3792,12 +4117,18 @@ def test_create_linode_images_sharegroups_tokens_list_tool_schema() -> None:
 async def test_handle_linode_images_sharegroups_tokens_list_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Handler returns image share group tokens and pagination metadata."""
+    """Handler returns image share group tokens in the proto list envelope."""
     mock_linode_client.list_image_sharegroup_tokens.return_value = {
         "data": [
             {
-                "id": "sharegroup-record-1",
+                "token": "tok_abcdef1234567890",
+                "token_uuid": "99998888-7777-6666-5555-444433332222",
+                "status": "active",
+                "label": "partner-token",
                 "created": "2026-01-01T00:00:00",
+                "valid_for_sharegroup_uuid": "abc12345-def6-7890-abcd-ef1234567890",
+                "sharegroup_uuid": "abc12345-def6-7890-abcd-ef1234567890",
+                "sharegroup_label": "shared-images",
             }
         ],
         "page": 1,
@@ -3809,17 +4140,19 @@ async def test_handle_linode_images_sharegroups_tokens_list_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Image share group tokens listed",
         "count": 1,
-        "tokens": [
+        "image_sharegroup_tokens": [
             {
-                "id": "sharegroup-record-1",
+                "token": "tok_abcdef1234567890",
+                "token_uuid": "99998888-7777-6666-5555-444433332222",
+                "status": "active",
+                "label": "partner-token",
                 "created": "2026-01-01T00:00:00",
+                "valid_for_sharegroup_uuid": "abc12345-def6-7890-abcd-ef1234567890",
+                "sharegroup_uuid": "abc12345-def6-7890-abcd-ef1234567890",
+                "sharegroup_label": "shared-images",
             }
         ],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
     }
     mock_linode_client.list_image_sharegroup_tokens.assert_awaited_once_with(
         page=None, page_size=None
@@ -3991,6 +4324,22 @@ async def test_retryable_client_update_image_sharegroup_image_delegates_once() -
     )
 
 
+@pytest.mark.asyncio
+async def test_retryable_update_sharegroup_image_requires_a_field() -> None:
+    """Shared-image update without label or description raises before the call."""
+    retryable = _CapturingRetryableClient()
+    mock_update = AsyncMock()
+    cast("Any", retryable.client).update_image_sharegroup_image = mock_update
+
+    try:
+        with pytest.raises(ValueError, match="at least one of label or description"):
+            await retryable.update_image_sharegroup_image("sharegroup", "image")
+    finally:
+        await retryable.close()
+
+    mock_update.assert_not_called()
+
+
 def test_create_linode_images_sharegroup_image_update_tool_schema() -> None:
     """Tool schema exposes both path params, body fields, confirm, and dry_run."""
     tool, capability = create_linode_image_sharegroup_image_update_tool()
@@ -4030,8 +4379,25 @@ async def test_handle_linode_images_sharegroup_image_update_success(
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Shared image updated",
-        "image": {"id": str(image_id), "label": "new-label"},
+        "message": (
+            f"Shared image '{image_id}' in image share group "
+            f"{sharegroup_id} updated successfully"
+        ),
+        "image": {
+            "id": str(image_id),
+            "label": "new-label",
+            "description": "",
+            "type": "",
+            "vendor": "",
+            "status": "",
+            "created": "",
+            "created_by": "",
+            "capabilities": [],
+            "tags": [],
+            "size": 0,
+            "is_public": False,
+            "deprecated": False,
+        },
     }
     mock_linode_client.update_image_sharegroup_image.assert_awaited_once_with(
         str(sharegroup_id), str(image_id), label="new-label", description=None
@@ -4060,8 +4426,24 @@ async def test_handle_linode_images_sharegroup_image_update_description_only_suc
 
     payload = json.loads(result[0].text)
     assert payload == {
-        "message": "Shared image updated",
-        "image": {"id": "1234", "description": "new description"},
+        "message": (
+            "Shared image '1234' in image share group 123 updated successfully"
+        ),
+        "image": {
+            "id": "1234",
+            "label": "",
+            "description": "new description",
+            "type": "",
+            "vendor": "",
+            "status": "",
+            "created": "",
+            "created_by": "",
+            "capabilities": [],
+            "tags": [],
+            "size": 0,
+            "is_public": False,
+            "deprecated": False,
+        },
     }
     mock_linode_client.update_image_sharegroup_image.assert_awaited_once_with(
         "123", "shared/1234", label=None, description="new description"
@@ -4282,7 +4664,9 @@ async def test_handle_linode_image_delete_success(
         {"image_id": "private/123", "confirm": True}, sample_config
     )
 
-    assert json.loads(result[0].text) == {"message": "Private image deleted"}
+    assert json.loads(result[0].text) == {
+        "message": "Image private/123 deleted successfully"
+    }
     mock_linode_client.delete_image.assert_awaited_once_with("private/123")
 
 
