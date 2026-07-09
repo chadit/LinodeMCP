@@ -62,7 +62,7 @@ def _walk(
 def spec_defaults(doc: dict[str, Any]) -> set[str]:
     """Collect every '<field> = <default>' the API documents on a request body."""
     out: set[str] = set()
-    for _, ops in doc.get("paths", {}).items():
+    for ops in doc.get("paths", {}).values():
         for method, op in ops.items():
             if method not in ("post", "put", "patch") or not isinstance(op, dict):
                 continue
@@ -97,9 +97,10 @@ def main(argv: list[str]) -> int:
     current = spec_defaults(doc)
 
     if "--update-baseline" in argv:
+        version = doc.get("info", {}).get("version", "unknown")
         header = (
-            "# API wire-body defaults snapshot (reviewed at linode-api-openapi %s)\n"
-            % (doc.get("info", {}).get("version", "unknown"))
+            f"# API wire-body defaults snapshot "
+            f"(reviewed at linode-api-openapi {version})\n"
         )
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
         BASELINE.write_text(
@@ -113,7 +114,8 @@ def main(argv: list[str]) -> int:
     removed = baseline - current
     if added or removed:
         print(
-            "API default drift (review whether strip-and-defer still matches, then rebaseline):",
+            "API default drift "
+            "(review whether strip-and-defer still matches, then rebaseline):",
             file=sys.stderr,
         )
         for d in sorted(added):

@@ -67,10 +67,11 @@ def _divergences() -> list[str]:
         str(_REPO_ROOT / "python" / "src" / "linodemcp" / "tools"),
     )
 
-    lines: list[str] = []
-    for tool in sorted(set(go_map) & set(py_map)):
-        if go_map[tool] != py_map[tool]:
-            lines.append(f"{tool}\t{go_map[tool]}\t{py_map[tool]}")
+    lines: list[str] = [
+        f"{tool}\t{go_map[tool]}\t{py_map[tool]}"
+        for tool in sorted(set(go_map) & set(py_map))
+        if go_map[tool] != py_map[tool]
+    ]
 
     return lines
 

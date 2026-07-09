@@ -30,6 +30,25 @@ repos:
         language: system
         pass_filenames: false
 
+      # The repo gate/verify scripts (scripts/) live outside python/, so the
+      # two hooks above skip them. These run the same venv ruff from the repo
+      # root over scripts/, where ruff auto-discovers scripts/ruff.toml (which
+      # extends python/pyproject.toml and ignores only the CLI-legit rules).
+      - id: ruff-scripts
+        name: ruff (scripts)
+        entry: bash -c 'python/.venv/bin/ruff check scripts/'
+        files: ^scripts/.*\.py$
+        types: [python]
+        language: system
+        pass_filenames: false
+      - id: ruff-format-scripts
+        name: ruff format (scripts)
+        entry: bash -c 'python/.venv/bin/ruff format --check scripts/'
+        files: ^scripts/.*\.py$
+        types: [python]
+        language: system
+        pass_filenames: false
+
   # Markdown linter (managed - auto-installed by pre-commit)
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.21.0

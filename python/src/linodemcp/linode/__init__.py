@@ -6218,7 +6218,7 @@ class Client:
         )
 
         if params:
-            filtered = {
+            filtered: dict[str, str] = {
                 key: params[key]
                 for key in ("prefix", "delimiter", "marker", "page_size")
                 if key in params

@@ -1,0 +1,21 @@
+# Ruff config for the repo's gate/verify scripts.
+#
+# These are command-line tools, not library code: they print progress to stdout
+# and shell out to Go/Python toolchains by name. They inherit the same rule set,
+# line length, and target version as the Python package (python/pyproject.toml)
+# so style stays consistent, then ignore only the handful of rules that are
+# legitimate for a CLI gate script rather than importable source.
+extend = "../python/pyproject.toml"
+
+[lint]
+# extend-ignore adds to the inherited ignore list rather than replacing it, so
+# the package's own ignores (TRY003, PLR0913, ...) still apply here.
+extend-ignore = [
+    "T201",    # print: gate scripts report progress/results to stdout by design
+    "S603",    # subprocess-without-shell-equals-true: we invoke fixed argv, no shell
+    "S607",    # start-process-with-partial-path: tools resolved from PATH (go, python)
+    "C901",    # complex-structure: verify routines branch over many tool shapes
+    "PLR0912", # too-many-branches: same, these are linear classification scripts
+    "PLR0915", # too-many-statements: same
+    "PLR2004", # magic-value-comparison: inline constants read fine in one-shot scripts
+]

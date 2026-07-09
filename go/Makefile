@@ -59,20 +59,13 @@ lint: _ensure-hooks
 	@echo "Running golangci-lint..."
 	@golangci-lint run --allow-parallel-runners --max-issues-per-linter=0 --max-same-issues=0 ./...
 	@echo "Running gosec..."
-	@if command -v gosec >/dev/null 2>&1; then \
-		gosec -quiet -exclude-generated ./...; \
-	else \
-		echo "[warn] gosec not installed, skipping security scan"; \
-	fi
+	@# go run @latest, unconditionally, byte-matching CI. A PATH-guarded gosec
+	@# silently SKIPS the scan on any machine without it installed (local passes,
+	@# CI fails), and a stale PATH binary misses what CI's latest catches.
+	@# -exclude-generated skips the protoc-gen-go tree (genpb).
+	@go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet -exclude-generated ./...
 	@echo "Running cairnlint..."
-	@if command -v cairnlint >/dev/null 2>&1; then \
-		cairnlint ./...; \
-	elif command -v go >/dev/null 2>&1; then \
-		go run github.com/chadit/cairnlint@latest ./...; \
-	else \
-		echo "[error] cairnlint not installed and go unavailable to fetch it"; \
-		exit 1; \
-	fi
+	@go run github.com/chadit/cairnlint@latest ./...
 
 ## lint-fast: Run golangci-lint only (CI fast-lane, skips gosec/cairnlint)
 lint-fast: _ensure-hooks

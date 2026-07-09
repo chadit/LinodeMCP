@@ -239,9 +239,7 @@ def main() -> int:
     # future fixture regression.
     fixtured_exempt = sorted(exempt & covered)
     if fixtured_exempt:
-        _say(
-            f"exempt tools with fixtures ({len(fixtured_exempt)}) - drop exemption:"
-        )
+        _say(f"exempt tools with fixtures ({len(fixtured_exempt)}) - drop exemption:")
         for tool in fixtured_exempt:
             _say(f"  {tool}")
         return 1

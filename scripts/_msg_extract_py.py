@@ -24,11 +24,15 @@ def collect_message(lines: list[str], start: int) -> str | None:
     while j < n and j < start + 6:
         s = lines[j].strip()
         if (
-            s.startswith("return _error_response(")
-            or s.startswith("return error_response(")
-            or s.startswith("return [")
-            or s.startswith("error = (")
-            or s.startswith("error = ")
+            s.startswith(
+                (
+                    "return _error_response(",
+                    "return error_response(",
+                    "return [",
+                    "error = (",
+                    "error = ",
+                )
+            )
             or "TextContent(" in s
         ):
             break
@@ -56,8 +60,7 @@ def collect_message(lines: list[str], start: int) -> str | None:
             break
         k += 1
     msg = "".join(buf)
-    if msg.startswith("Error: "):
-        msg = msg[len("Error: ") :]
+    msg = msg.removeprefix("Error: ")
     return msg or None
 
 

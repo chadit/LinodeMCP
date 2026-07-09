@@ -23,7 +23,8 @@ source (Go via cmd/hand-list-dump, Python via ast) and diffs it against the
 same live spec, folding the result into the same baseline.
 
 Usage: verify_sync_enums.py [--spec PATH] [--go-lists PATH] [--update-baseline]
-  --spec PATH        read the spec from a local file instead of fetching (CI/offline test)
+  --spec PATH        read the spec from a local file instead of fetching
+                     (CI/offline test)
   --go-lists PATH    read the Go hand-lists from a JSON file instead of running
                      cmd/hand-list-dump (CI/offline test)
   --update-baseline  rewrite docs/enum-sync-baseline.txt from the current diff
@@ -141,7 +142,8 @@ def _walk(
 
 
 def spec_enum(doc: dict[str, Any], field: str, path_substr: str) -> set[str]:
-    """Union a field's request-body enum across matching endpoints and oneOf branches."""
+    """Union a field's request-body enum across matching endpoints and oneOf
+    branches."""
     out: set[str] = set()
     for path, ops in doc.get("paths", {}).items():
         if path_substr not in path:
@@ -174,7 +176,10 @@ def staleness_note(doc: dict[str, Any]) -> str:
         return f"spec version {version}; changelog unreachable ({exc})"
     dates = sorted(set(re.findall(r"20\d\d-\d\d-\d\d", html)), reverse=True)
     newest = dates[0] if dates else "unknown"
-    return f"spec version {version}; newest changelog entry {newest} (spec may trail the API)"
+    return (
+        f"spec version {version}; newest changelog entry {newest} "
+        "(spec may trail the API)"
+    )
 
 
 def read_baseline() -> set[str]:
@@ -280,7 +285,8 @@ def spec_object_props(doc: dict[str, Any], field: str, path_substr: str) -> set[
 
 
 def _string_members(value: ast.expr) -> set[str]:
-    """Collect string constants of a set/list/tuple literal or set()/frozenset() call."""
+    """Collect string constants of a set/list/tuple literal or set()/frozenset()
+    call."""
     elts: list[ast.expr] = []
     if isinstance(value, (ast.Set, ast.List, ast.Tuple)):
         elts = list(value.elts)
@@ -331,7 +337,7 @@ def go_hand_lists(go_lists_path: str | None) -> dict[str, set[str]]:
     if go_lists_path:
         raw = json.loads(Path(go_lists_path).read_text(encoding="utf-8"))
     else:
-        proc = subprocess.run(  # noqa: S603, S607 - fixed argv, no shell
+        proc = subprocess.run(
             ["go", "run", "./cmd/hand-list-dump"],
             cwd=GO_DIR,
             capture_output=True,
@@ -340,7 +346,8 @@ def go_hand_lists(go_lists_path: str | None) -> dict[str, set[str]]:
         )
         if proc.returncode != 0:
             raise RuntimeError(
-                f"cmd/hand-list-dump failed (exit {proc.returncode}): {proc.stderr.strip()}"
+                f"cmd/hand-list-dump failed (exit {proc.returncode}): "
+                f"{proc.stderr.strip()}"
             )
         raw = json.loads(proc.stdout)
     return {str(k): {str(v) for v in vals} for k, vals in raw.items()}
@@ -396,7 +403,8 @@ def hand_list_diffs(doc: dict[str, Any], go_lists: dict[str, set[str]]) -> list[
         if go_vals and go_vals != py_vals:
             diffs.append(
                 f"{key}: go and python hand-lists differ "
-                f"(go-only={sorted(go_vals - py_vals)}, py-only={sorted(py_vals - go_vals)})"
+                f"(go-only={sorted(go_vals - py_vals)}, "
+                f"py-only={sorted(py_vals - go_vals)})"
             )
     return diffs
 
@@ -439,10 +447,10 @@ def main(argv: list[str]) -> int:
         if extra:
             diffs.append(f"{name}: proto has value(s) not in API: {sorted(extra)}")
 
-    for name in mapped - set(enums):
-        diffs.append(
-            f"{name}: mapped but no such proto enum (stale ENUM_SPEC_MAP entry)"
-        )
+    diffs.extend(
+        f"{name}: mapped but no such proto enum (stale ENUM_SPEC_MAP entry)"
+        for name in mapped - set(enums)
+    )
 
     try:
         go_lists = go_hand_lists(go_lists_path)
@@ -453,8 +461,9 @@ def main(argv: list[str]) -> int:
 
     if update:
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
-        header = "# enum-sync drift baseline (reviewed at linode-api-openapi %s)\n" % (
-            doc.get("info", {}).get("version", "unknown")
+        version = doc.get("info", {}).get("version", "unknown")
+        header = (
+            f"# enum-sync drift baseline (reviewed at linode-api-openapi {version})\n"
         )
         BASELINE.write_text(header + "".join(f"{d}\n" for d in diffs), encoding="utf-8")
         print(f"wrote {len(diffs)} baseline line(s)", file=sys.stderr)
@@ -469,7 +478,8 @@ def main(argv: list[str]) -> int:
     fixed = baseline - set(diffs)
     if new:
         print(
-            "enum drift vs live API (reconcile proto, regen, fixture, then rebaseline):",
+            "enum drift vs live API "
+            "(reconcile proto, regen, fixture, then rebaseline):",
             file=sys.stderr,
         )
         for d in new:

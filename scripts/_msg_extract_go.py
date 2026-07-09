@@ -24,7 +24,9 @@ if MANIFEST:
 
 TOOL_LIT = re.compile(r'"(linode_[a-z0-9_]+)"')
 # const definitions like: name = "linode_foo"  OR  name = "linode_" + "foo"
-CONST_DEF = re.compile(r"^\s*(\w+)\s*=\s*(\"linode_[a-z0-9_]*\"(?:\s*\+\s*\"[a-z0-9_]*\")*)")
+CONST_DEF = re.compile(
+    r"^\s*(\w+)\s*=\s*(\"linode_[a-z0-9_]*\"(?:\s*\+\s*\"[a-z0-9_]*\")*)"
+)
 STR = r'"((?:[^"\\]|\\.)*)"'
 MSG = re.compile(STR)
 CONFIRM_MSG_FIELD = re.compile(r"ConfirmMessage:\s*" + STR)
@@ -96,14 +98,12 @@ def main() -> int:
                 if rn and (not VALID_TOOLS or rn in VALID_TOOLS):
                     tool_names.add(rn)
 
-            messages: list[str] = []
-            for rc in REQUIRE_CONFIRM.finditer(text):
-                messages.append(rc.group(1))
-            for cf in CONFIRM_MSG_FIELD.finditer(text):
-                messages.append(cf.group(1))
-            destroy_pairs: list[tuple[str | None, str]] = []
-            for rd in REQUIRE_DESTROY.finditer(text):
-                destroy_pairs.append((resolve_toolname(rd.group(1)), rd.group(2)))
+            messages: list[str] = [rc.group(1) for rc in REQUIRE_CONFIRM.finditer(text)]
+            messages.extend(cf.group(1) for cf in CONFIRM_MSG_FIELD.finditer(text))
+            destroy_pairs: list[tuple[str | None, str]] = [
+                (resolve_toolname(rd.group(1)), rd.group(2))
+                for rd in REQUIRE_DESTROY.finditer(text)
+            ]
 
             # direct destroy pairs: toolname + message both in the call
             for tn, msg in destroy_pairs:
@@ -126,13 +126,15 @@ def main() -> int:
                 elif len(tool_names) == len(messages) and len(tool_names) > 1:
                     # ambiguous multi in one func; report
                     conflicts.append(
-                        f"{f.name}:{fm.group(1)} MULTI names={sorted(tool_names)} msgs={messages}"
+                        f"{f.name}:{fm.group(1)} MULTI "
+                        f"names={sorted(tool_names)} msgs={messages}"
                     )
                 elif len(tool_names) == 0:
                     pass  # helper, caller supplies
                 else:
                     conflicts.append(
-                        f"{f.name}:{fm.group(1)} UNPAIRED names={sorted(tool_names)} msgs={messages}"
+                        f"{f.name}:{fm.group(1)} UNPAIRED "
+                        f"names={sorted(tool_names)} msgs={messages}"
                     )
 
             i = j + 1

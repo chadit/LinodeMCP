@@ -109,6 +109,17 @@ jobs:
         working-directory: python
         run: ruff format --check src/ tests/
 
+      # The repo gate/verify scripts live outside python/, so the src/tests
+      # runs above skip them. Lint them from the repo root, where ruff
+      # auto-discovers scripts/ruff.toml (extends python/pyproject.toml,
+      # ignores the CLI-legit rules). Mirrors the Makefile scripts-lint /
+      # scripts-fmt-check targets and the pre-commit ruff-scripts hooks.
+      - name: ruff check (scripts)
+        run: ruff check scripts/
+
+      - name: ruff format check (scripts)
+        run: ruff format --check scripts/
+
       - name: mypy
         working-directory: python
         run: mypy --ignore-missing-imports src/ tests/
@@ -255,7 +266,10 @@ jobs:
 
       - name: gosec
         working-directory: go
-        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet ./...
+        # -exclude-generated skips the protoc-gen-go tree (genpb), whose inherent
+        # protoimpl unsafe usage trips G103. Mirrors `make -C go lint`'s gosec so
+        # CI and local run the identical scan.
+        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet -exclude-generated ./...
 
       - name: cairnlint
         working-directory: go

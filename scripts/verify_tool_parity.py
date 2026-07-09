@@ -101,10 +101,12 @@ def _compare(go: dict[str, dict[str, Any]], py: dict[str, dict[str, Any]]) -> li
     """Return a sorted list of human-readable divergence lines."""
     problems: list[str] = []
 
-    for name in sorted(set(go) - set(py)):
-        problems.append(f"{name}: registered in Go but not Python")
-    for name in sorted(set(py) - set(go)):
-        problems.append(f"{name}: registered in Python but not Go")
+    problems.extend(
+        f"{name}: registered in Go but not Python" for name in sorted(set(go) - set(py))
+    )
+    problems.extend(
+        f"{name}: registered in Python but not Go" for name in sorted(set(py) - set(go))
+    )
 
     for name in sorted(set(go) & set(py)):
         problems.extend(_compare_one(name, go[name], py[name]))
@@ -123,16 +125,20 @@ def _compare_one(name: str, go: dict[str, Any], py: dict[str, Any]) -> list[str]
 
     go_params, py_params = go["params"], py["params"]
 
-    for param in sorted(set(go_params) - set(py_params)):
-        out.append(f"{name}: param '{param}' in Go but not Python")
-    for param in sorted(set(py_params) - set(go_params)):
-        out.append(f"{name}: param '{param}' in Python but not Go")
-    for param in sorted(set(go_params) & set(py_params)):
-        if go_params[param] != py_params[param]:
-            out.append(
-                f"{name}: param '{param}' type "
-                f"Go={go_params[param] or '?'} Python={py_params[param] or '?'}"
-            )
+    out.extend(
+        f"{name}: param '{param}' in Go but not Python"
+        for param in sorted(set(go_params) - set(py_params))
+    )
+    out.extend(
+        f"{name}: param '{param}' in Python but not Go"
+        for param in sorted(set(py_params) - set(go_params))
+    )
+    out.extend(
+        f"{name}: param '{param}' type "
+        f"Go={go_params[param] or '?'} Python={py_params[param] or '?'}"
+        for param in sorted(set(go_params) & set(py_params))
+        if go_params[param] != py_params[param]
+    )
 
     if go["required"] != py["required"]:
         out.append(f"{name}: required Go={go['required']} Python={py['required']}")
