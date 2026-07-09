@@ -6,7 +6,7 @@ MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 PYRIGHT := pyright
 
-.PHONY: help venv install install-dev build test test-cov lint format typecheck vulture deptry clean run all check _ensure-hooks update-hooks
+.PHONY: help venv install install-dev build test test-cov lint format typecheck lock-check vulture deptry clean run all check _ensure-hooks update-hooks
 
 # Auto-install commit and push hooks if not already set up
 _ensure-hooks:
@@ -26,6 +26,7 @@ help: _ensure-hooks
 	@echo "  lint         - Run ruff linter"
 	@echo "  format       - Format code with ruff"
 	@echo "  typecheck    - Run mypy type checker"
+	@echo "  lock-check   - Verify uv.lock is in sync with pyproject.toml"
 	@echo "  vulture      - Find dead code"
 	@echo "  deptry       - Check for unused dependencies"
 	@echo "  clean        - Remove build artifacts"
@@ -80,6 +81,19 @@ format: _ensure-hooks
 typecheck: _ensure-hooks
 	$(MYPY) src/linodemcp
 
+# Catch pyproject.toml <-> uv.lock drift in the normal check chain, not just at
+# pre-push. A dep floor bump that skips regenerating the lock passes lint/test
+# but fails `uv lock --check` on push; running it here surfaces it early. Skips
+# with a warning when uv is absent, matching the pre-commit hook and the
+# betterleaks/trivy skip pattern.
+lock-check: _ensure-hooks
+	@echo "Checking uv.lock is in sync with pyproject.toml..."
+	@if command -v uv >/dev/null 2>&1; then \
+		uv lock --check; \
+	else \
+		echo "[warn] uv not installed, skipping lock-sync check"; \
+	fi
+
 vulture: _ensure-hooks
 	vulture src/linodemcp --min-confidence 80
 
@@ -102,6 +116,6 @@ clean:
 run: _ensure-hooks
 	$(VENV)/bin/linodemcp
 
-check: lint typecheck test
+check: lock-check lint typecheck test
 
-all: clean install-dev lint typecheck test
+all: clean install-dev lock-check lint typecheck test
