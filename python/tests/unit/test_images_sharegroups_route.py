@@ -1054,7 +1054,7 @@ async def test_handle_linode_images_sharegroups_token_get_success(
         {"token_uuid": "11111111?1111-4111-8111-111111111111"},
         {"token_uuid": ".."},
         {"token_uuid": 123},
-        {"token_uuid": "123e4567e89b12d3a456426614174000"},
+        {"token_uuid": "123e4567e89b12d3a456426614174000"},  # betterleaks:allow fake
     ],
 )
 async def test_handle_linode_images_sharegroups_token_get_rejects_invalid_token_uuid(
