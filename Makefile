@@ -1,4 +1,4 @@
-.PHONY: help build test check lint clean install-hooks check-hooks tool-parity write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults \
+.PHONY: help build test check lint fmt-check go-fmt-check python-fmt-check clean install-hooks check-hooks tool-parity write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-test go-lint go-fmt go-clean go-run go-check \
@@ -48,8 +48,22 @@ $(PROTO_STAMP): $(PROTO_SRCS)
 ## build: Build all language binaries (Go + Python) into each language's bin/
 build: proto go-build python-build
 
-## check: Run all linters and tests (go-check + python-check + tool-parity + write-proto + read-proto + input-proto + meta-proto + behavior)
-check: proto go-check python-check tool-parity write-proto read-proto input-proto meta-proto behavior messages
+## check: Run all linters and tests (fmt-check + go-check + python-check + tool-parity + write-proto + read-proto + input-proto + meta-proto + behavior)
+check: proto fmt-check go-check python-check tool-parity write-proto read-proto input-proto meta-proto behavior messages
+
+## fmt-check: Verify Go + Python formatting, read-only (generated code excluded). Shared by check, lint, and CI.
+# Read-only on purpose: it must mirror what CI checks, never auto-fix (an
+# auto-fixing check hides drift that CI's read-only gate would fail on). Run
+# `make fmt` / `make -C python format` to apply formatting. Generated genpb is
+# excluded (Go via GO_FMT_SRC, Python via the ruff config) so a fresh regen is
+# never format-gated.
+fmt-check: go-fmt-check python-fmt-check
+
+go-fmt-check:
+	$(MAKE) -C go fmt-check
+
+python-fmt-check:
+	$(MAKE) -C python fmt-check
 
 ## tool-parity: Verify Go/Python tool-surface parity (capability, params, required)
 # Runs the Go dumper (go run) and imports the Python registry (needs the venv),
@@ -128,8 +142,8 @@ sync-defaults:
 ## sync: Run all live API-drift checks (scheduled agent; needs network)
 sync: sync-enums sync-defaults
 
-## lint: Run all linters (go-lint, python-lint, betterleaks, trivy, actionlint)
-lint: proto go-lint python-lint betterleaks trivy actionlint
+## lint: Run all linters (fmt-check, go-lint, python-lint, betterleaks, trivy, actionlint)
+lint: proto fmt-check go-lint python-lint betterleaks trivy actionlint
 
 ## test: Run all tests (go-test + python-test)
 test: proto go-test python-test
@@ -276,4 +290,4 @@ docker-clean:
 
 ## clean: Clean all build artifacts and container images
 clean: go-clean python-clean docker-clean
-	-rm -rf .make go/internal/genpb python/src/linodemcp/genpb
+	-rm -rf .make go/internal/genpb python/src/linodemcp/genpb go/internal/toolschemas/data

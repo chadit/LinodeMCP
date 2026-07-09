@@ -6,7 +6,7 @@ MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
 PYRIGHT := pyright
 
-.PHONY: help venv install install-dev build test test-cov lint format typecheck lock-check vulture deptry clean run all check _ensure-hooks update-hooks
+.PHONY: help venv install install-dev build test test-cov lint fmt-check format typecheck lock-check vulture deptry clean run all check _ensure-hooks update-hooks
 
 # Auto-install commit and push hooks if not already set up
 _ensure-hooks:
@@ -59,8 +59,6 @@ test-cov: _ensure-hooks
 lint: _ensure-hooks
 	@echo "Running ruff check..."
 	@$(RUFF) check src/ tests/
-	@echo "Running ruff format --check..."
-	@$(RUFF) format --check src/ tests/
 	@echo "Running mypy type check..."
 	@if [ -x "$(MYPY)" ]; then \
 		$(MYPY) src/ tests/; \
@@ -77,6 +75,11 @@ lint: _ensure-hooks
 
 format: _ensure-hooks
 	$(RUFF) format src/ tests/
+
+## fmt-check: Verify Python formatting (read-only; generated genpb excluded via ruff config)
+fmt-check: _ensure-hooks
+	@echo "Running ruff format --check..."
+	@$(RUFF) format --check src/ tests/
 
 typecheck: _ensure-hooks
 	$(MYPY) src/linodemcp

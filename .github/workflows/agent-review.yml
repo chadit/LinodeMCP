@@ -1,4 +1,4 @@
-name: Qwen Code Review
+name: Agent Code Review
 
 on:
     pull_request:
@@ -6,8 +6,8 @@ on:
 
 jobs:
     review:
-        # Qwen is intentionally limited to Chad's same-repo PRs. Fork PRs and
-        # other authors skip this job so QWEN_API_KEY is not exposed to
+        # The review agent is intentionally limited to Chad's same-repo PRs. Fork
+        # PRs and other authors skip this job so ZAI_API_KEY is not exposed to
         # untrusted code.
         if: >-
             github.event.pull_request.user.login == 'chadit' &&
@@ -23,13 +23,13 @@ jobs:
                   # GitHub masks secret values inside if-conditions, but a boolean
                   # comparison done in env (`secret != ''`) yields a plain
                   # 'true'/'false' string we can branch on without leaking anything.
-                  HAS_QWEN_API_KEY: ${{ secrets.QWEN_API_KEY != '' }}
+                  HAS_ZAI_API_KEY: ${{ secrets.ZAI_API_KEY != '' }}
               shell: bash
               run: |
                   set -euo pipefail
                   skip=false
-                  if [[ "${HAS_QWEN_API_KEY}" != "true" ]]; then
-                    echo "::warning title=Qwen review skipped::QWEN_API_KEY secret is not configured. Add it under Settings -> Secrets and variables -> Actions to enable AI code review."
+                  if [[ "${HAS_ZAI_API_KEY}" != "true" ]]; then
+                    echo "::warning title=Agent review skipped::ZAI_API_KEY secret is not configured. Add it under Settings -> Secrets and variables -> Actions to enable AI code review."
                     skip=true
                   fi
                   echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
@@ -37,14 +37,6 @@ jobs:
             - name: Checkout codebase
               if: steps.secrets.outputs.skip != 'true'
               uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-            - name: Install Qwen Code
-              if: steps.secrets.outputs.skip != 'true'
-              shell: bash
-              run: |
-                  set -euo pipefail
-                  npm install --global @qwen-code/qwen-code@0.17.0
-                  qwen --version
 
             - name: Prepare review input
               if: steps.secrets.outputs.skip != 'true'
@@ -55,17 +47,17 @@ jobs:
               shell: bash
               run: |
                   set -euo pipefail
-                  mkdir -p qwen-review/chunks
+                  mkdir -p agent-review/chunks
                   gh pr view "${PR_NUMBER}" --repo "${GH_REPO}" \
                     --json number,title,baseRefName,headRefName,headRefOid,author,changedFiles,additions,deletions,files \
-                    > qwen-review/pr-context.json
-                  gh pr diff "${PR_NUMBER}" --repo "${GH_REPO}" --patch > qwen-review/pr.diff
+                    > agent-review/pr-context.json
+                  gh pr diff "${PR_NUMBER}" --repo "${GH_REPO}" --patch > agent-review/pr.diff
 
                   python3 <<'PY'
                   import json
                   import pathlib
 
-                  root = pathlib.Path('qwen-review')
+                  root = pathlib.Path('agent-review')
                   diff_path = root / 'pr.diff'
                   context_path = root / 'pr-context.json'
                   chunks_dir = root / 'chunks'
@@ -139,7 +131,7 @@ jobs:
                           current_size = 0
                       if len(file_diff) > max_chars:
                           # Keep review scoped to the changed file, but split very large file diffs
-                          # at hunk boundaries so the CLI prompt never becomes an oversized argv.
+                          # at hunk boundaries so the prompt payload never becomes oversized.
                           prefix = []
                           active = []
                           parts = []
@@ -181,50 +173,109 @@ jobs:
                       'max_chunk_chars': max_chars,
                       'prompt_files': [str(p) for p in sorted(chunks_dir.glob('prompt-*.txt'))],
                   }, indent=2) + '\n')
-                  print(f"Prepared {len(chunks)} Qwen review prompt chunk(s)")
+                  print(f"Prepared {len(chunks)} review prompt chunk(s)")
                   PY
 
-            - name: Run Qwen review
+            - name: Run agent review
               if: steps.secrets.outputs.skip != 'true'
-              id: qwen
+              id: agent
               continue-on-error: true
+              # --- Provider-specific section --------------------------------------
+              # This is the only model-aware step. It drives z.ai's GLM-5.2 through the
+              # OpenAI-compatible chat endpoint. To swap the review model, change these
+              # env vars (and the request body below if the target API shape differs).
               env:
-                  OPENAI_API_KEY: ${{ secrets.QWEN_API_KEY }}
-                  OPENAI_BASE_URL: https://coding-intl.dashscope.aliyuncs.com/v1
-                  OPENAI_MODEL: qwen3.7-plus
-                  QWEN_CODE_SUPPRESS_YOLO_WARNING: "1"
+                  ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+                  # z.ai GLM Coding Plan, OpenAI-compatible endpoint. ZAI_API_KEY is the
+                  # same Coding Plan key the local omp-glm wrapper uses (omp authenticates
+                  # it with its "zai-coding-plan" preset), so this coding endpoint is the
+                  # right one. A standard pay-as-you-go key would instead use
+                  # https://api.z.ai/api/paas/v4.
+                  MODEL_BASE_URL: https://api.z.ai/api/coding/paas/v4
+                  MODEL_ID: glm-5.2
+                  # GLM-5.2 tops out at "max" reasoning effort; z.ai recommends max for coding.
+                  MODEL_REASONING_EFFORT: max
+                  # Per-request timeout (seconds). Max effort reasons for a while on large chunks.
+                  MODEL_REQUEST_TIMEOUT: "600"
               shell: bash
               run: |
-                  set +e
-                  overall_rc=0
-                  index=0
-                  for prompt_file in qwen-review/chunks/prompt-*.txt; do
-                    index=$((index + 1))
-                    raw_file="qwen-review/review-${index}.raw"
-                    stderr_file="qwen-review/qwen-${index}.stderr"
-                    exit_file="qwen-review/qwen-${index}.exitcode"
-                    # Block unrelated tool use and rely on the normalizer below to
-                    # extract a review JSON object from plain text or CLI wrappers.
-                    qwen --bare \
-                      --auth-type openai \
-                      --approval-mode plan \
-                      --max-tool-calls 0 \
-                      --max-session-turns 2 \
-                      --max-wall-time 300s \
-                      --output-format text \
-                      < "${prompt_file}" \
-                      > "${raw_file}" 2> "${stderr_file}"
-                    rc=$?
-                    echo "${rc}" > "${exit_file}"
-                    if [[ "${rc}" != "0" ]]; then
-                      overall_rc="${rc}"
-                      break
-                    fi
-                  done
-                  set -e
-                  echo "exit_code=${overall_rc}" >> "${GITHUB_OUTPUT}"
-                  echo "${overall_rc}" > qwen-review/qwen.exitcode
-                  exit "${overall_rc}"
+                  set -euo pipefail
+                  # Direct call to the OpenAI-compatible chat endpoint: the prompt already
+                  # forbids tools and asks for raw review JSON, so no agentic CLI is needed.
+                  # thinking + reasoning_effort go at the top level of the request body.
+                  python3 <<'PY'
+                  import json
+                  import os
+                  import pathlib
+                  import sys
+                  import time
+                  import urllib.error
+                  import urllib.request
+
+                  root = pathlib.Path('agent-review')
+                  api_key = os.environ['ZAI_API_KEY']
+                  url = os.environ['MODEL_BASE_URL'].rstrip('/') + '/chat/completions'
+                  model = os.environ['MODEL_ID']
+                  effort = os.environ['MODEL_REASONING_EFFORT']
+                  timeout = float(os.environ.get('MODEL_REQUEST_TIMEOUT', '600'))
+                  max_attempts = 3
+                  transient_status = {429, 500, 502, 503, 504}
+
+                  def call_model(prompt: str):
+                      body = json.dumps({
+                          'model': model,
+                          'thinking': {'type': 'enabled'},
+                          'reasoning_effort': effort,
+                          'stream': False,
+                          'messages': [{'role': 'user', 'content': prompt}],
+                      }).encode()
+                      req = urllib.request.Request(url, data=body, method='POST', headers={
+                          'Authorization': 'Bearer ' + api_key,
+                          'Content-Type': 'application/json',
+                          'Accept': 'application/json',
+                      })
+                      last_err = 'no attempt made'
+                      for attempt in range(1, max_attempts + 1):
+                          try:
+                              with urllib.request.urlopen(req, timeout=timeout) as resp:
+                                  payload = json.loads(resp.read().decode('utf-8', 'replace'))
+                              choices = payload.get('choices') or []
+                              content = (choices[0].get('message', {}).get('content') if choices else '') or ''
+                              if not content.strip():
+                                  raise ValueError('model returned empty content: ' + json.dumps(payload)[:500])
+                              return content, None
+                          except urllib.error.HTTPError as exc:
+                              try:
+                                  detail = exc.read().decode('utf-8', 'replace')
+                              except Exception:
+                                  detail = ''
+                              # Response body only; the auth header is never echoed back.
+                              last_err = f'HTTP {exc.code} {exc.reason}\n{detail}'
+                              if exc.code not in transient_status:
+                                  return None, last_err
+                          except Exception as exc:
+                              last_err = f'{type(exc).__name__}: {exc}'
+                          if attempt < max_attempts:
+                              time.sleep(attempt * 5)
+                      return None, last_err
+
+                  overall_rc = 0
+                  prompt_files = sorted((root / 'chunks').glob('prompt-*.txt'))
+                  for index, prompt_file in enumerate(prompt_files, 1):
+                      content, err = call_model(prompt_file.read_text())
+                      (root / f'agent-{index}.exitcode').write_text('0' if err is None else '1')
+                      if err is None:
+                          (root / f'review-{index}.raw').write_text(content)
+                      else:
+                          (root / f'agent-{index}.stderr').write_text(err)
+                          overall_rc = 1
+                          break
+
+                  (root / 'agent.exitcode').write_text(str(overall_rc))
+                  with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+                      out.write(f'exit_code={overall_rc}\n')
+                  sys.exit(overall_rc)
+                  PY
 
             - name: Normalize review artifact
               if: steps.secrets.outputs.skip != 'true'
@@ -237,7 +288,7 @@ jobs:
                   import pathlib
                   import re
 
-                  root = pathlib.Path('qwen-review')
+                  root = pathlib.Path('agent-review')
 
                   summary = {
                       'valid_json': False,
@@ -245,7 +296,7 @@ jobs:
                       'event': None,
                       'comment_count': 0,
                       'invalid_comments': [],
-                      'qwen_exit_code': int((root / 'qwen.exitcode').read_text().strip() or '1') if (root / 'qwen.exitcode').exists() else 1,
+                      'agent_exit_code': int((root / 'agent.exitcode').read_text().strip() or '1') if (root / 'agent.exitcode').exists() else 1,
                       'chunk_count': 0,
                   }
 
@@ -348,7 +399,7 @@ jobs:
                       if not raw_paths and (root / 'review.raw').exists():
                           raw_paths = [root / 'review.raw']
                       if not raw_paths:
-                          raise ValueError('no Qwen review output files found')
+                          raise ValueError('no agent review output files found')
                       reviews = [load_review(raw_path) for raw_path in raw_paths]
                       review = {
                           'event': 'REQUEST_CHANGES' if any(r.get('event') == 'REQUEST_CHANGES' for r in reviews) else 'COMMENT',
@@ -404,10 +455,10 @@ jobs:
                       print(f"event={summary['event'] or ''}", file=out)
                       print(f"valid_json={str(summary['valid_json']).lower()}", file=out)
                       print(f"valid_targets={str(summary['valid_targets']).lower()}", file=out)
-                      print(f"qwen_exit_code={summary['qwen_exit_code']}", file=out)
+                      print(f"agent_exit_code={summary['agent_exit_code']}", file=out)
                   PY
 
-            - name: Display Qwen review result
+            - name: Display review result
               if: steps.secrets.outputs.skip != 'true' && always()
               shell: bash
               run: |
@@ -418,7 +469,7 @@ jobs:
                   import pathlib
                   import re
 
-                  root = pathlib.Path('qwen-review')
+                  root = pathlib.Path('agent-review')
                   summary_path = root / 'summary.json'
                   review_path = root / 'review.json'
                   summary = json.loads(summary_path.read_text()) if summary_path.exists() else {}
@@ -427,7 +478,7 @@ jobs:
                   def clipped(text: str, limit: int = 12000) -> str:
                       if len(text) <= limit:
                           return text
-                      return text[:limit] + f"\n\n... truncated {len(text) - limit} characters; download qwen-review artifact for full output ..."
+                      return text[:limit] + f"\n\n... truncated {len(text) - limit} characters; download agent-review artifact for full output ..."
 
                   def redacted(text: str) -> str:
                       patterns = [
@@ -443,9 +494,9 @@ jobs:
                       return text
 
                   lines = [
-                      '# Qwen review result',
+                      '# Agent review result',
                       '',
-                      f"- Qwen exit code: `{summary.get('qwen_exit_code', '')}`",
+                      f"- Agent exit code: `{summary.get('agent_exit_code', '')}`",
                       f"- Valid JSON: `{str(summary.get('valid_json', '')).lower()}`",
                       f"- Valid targets: `{str(summary.get('valid_targets', '')).lower()}`",
                       f"- Event: `{summary.get('event') or ''}`",
@@ -456,9 +507,9 @@ jobs:
                       lines.extend(['', '## Normalization error', '', '```text', str(summary['error']), '```'])
                   if summary.get('invalid_comments'):
                       lines.extend(['', '## Invalid comment targets', '', '```json', json.dumps(summary['invalid_comments'], indent=2), '```'])
-                  stderr_files = sorted(root.glob('qwen-*.stderr'))
+                  stderr_files = sorted(root.glob('agent-*.stderr'))
                   if stderr_files:
-                      lines.extend(['', '## Qwen stderr', ''])
+                      lines.extend(['', '## Agent stderr', ''])
                       for path in stderr_files:
                           text = path.read_text(errors='replace').strip()
                           if not text:
@@ -479,7 +530,7 @@ jobs:
                   else:
                       raw_files = sorted(root.glob('review-*.raw'))
                       if raw_files:
-                          lines.extend(['', '## Raw Qwen output'])
+                          lines.extend(['', '## Raw agent output'])
                           for path in raw_files:
                               text = path.read_text(errors='replace').strip()
                               if not text:
@@ -496,35 +547,35 @@ jobs:
               if: steps.secrets.outputs.skip != 'true' && always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               with:
-                  name: qwen-review-pr-${{ github.event.pull_request.number }}
-                  path: qwen-review/
+                  name: agent-review-pr-${{ github.event.pull_request.number }}
+                  path: agent-review/
                   if-no-files-found: error
                   retention-days: 14
 
-            - name: Gate on Qwen result
+            - name: Gate on review result
               if: steps.secrets.outputs.skip != 'true'
               shell: bash
               run: |
                   set -euo pipefail
-                  qwen_exit='${{ steps.normalize.outputs.qwen_exit_code }}'
+                  agent_exit='${{ steps.normalize.outputs.agent_exit_code }}'
                   valid_json='${{ steps.normalize.outputs.valid_json }}'
                   valid_targets='${{ steps.normalize.outputs.valid_targets }}'
                   event='${{ steps.normalize.outputs.event }}'
 
-                  if [[ "${qwen_exit}" != "0" ]]; then
-                    echo "::error title=Qwen review failed::Qwen exited with ${qwen_exit}. See the Display Qwen review result step above."
+                  if [[ "${agent_exit}" != "0" ]]; then
+                    echo "::error title=Agent review failed::Model API call failed with ${agent_exit}. See the Display review result step above."
                     exit 1
                   fi
                   if [[ "${valid_json}" != "true" ]]; then
-                    echo "::error title=Qwen review invalid::Qwen did not return valid review JSON. See the Display Qwen review result step above."
+                    echo "::error title=Agent review invalid::Model did not return valid review JSON. See the Display review result step above."
                     exit 1
                   fi
                   if [[ "${valid_targets}" != "true" ]]; then
-                    echo "::error title=Qwen review invalid targets::One or more comments do not target added PR lines. See the Display Qwen review result step above."
+                    echo "::error title=Agent review invalid targets::One or more comments do not target added PR lines. See the Display review result step above."
                     exit 1
                   fi
                   if [[ "${event}" == "REQUEST_CHANGES" ]]; then
-                    echo "::error title=Qwen requested changes::Qwen returned REQUEST_CHANGES. See the Display Qwen review result step above."
+                    echo "::error title=Agent requested changes::The review agent returned REQUEST_CHANGES. See the Display review result step above."
                     exit 1
                   fi
-                  echo "Qwen returned ${event}; no blocking review requested."
+                  echo "Agent review returned ${event}; no blocking review requested."

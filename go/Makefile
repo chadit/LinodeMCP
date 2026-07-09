@@ -79,18 +79,26 @@ lint-fast: _ensure-hooks
 	@echo "Running golangci-lint..."
 	@golangci-lint run --allow-parallel-runners --max-issues-per-linter=0 --max-same-issues=0 ./...
 
-## fmt: Format with goimports and gofumpt
-fmt: _ensure-hooks
-	@goimports -w .
-	@gofumpt -w .
+# Hand-written Go sources, excluding the generated genpb tree. protoc-gen-go
+# emits a single import group that goimports regroups into two (stdlib split
+# out), so format-gating generated code makes a fresh `buf generate` (one group)
+# diverge from a formatted on-disk copy (two groups) -- the exact local-vs-CI
+# drift that broke CI. Generated code is never format-gated; its source is the
+# proto contract, and a clean regen must reproduce it byte-for-byte.
+GO_FMT_SRC := $(shell find . -name '*.go' -not -path './internal/genpb/*')
 
-## fmt-check: Verify code is formatted (CI gate, no writes)
+## fmt: Format hand-written Go with goimports and gofumpt (never the generated tree)
+fmt: _ensure-hooks
+	@goimports -w $(GO_FMT_SRC)
+	@gofumpt -w $(GO_FMT_SRC)
+
+## fmt-check: Verify hand-written code is formatted (CI gate, no writes, excludes genpb)
 fmt-check:
-	@unformatted=$$(gofumpt -l . 2>/dev/null); \
+	@unformatted=$$(gofumpt -l $(GO_FMT_SRC) 2>/dev/null); \
 	if [ -n "$$unformatted" ]; then \
 		echo "[error] gofumpt would reformat:"; echo "$$unformatted"; exit 1; \
 	fi
-	@unimports=$$(goimports -l . 2>/dev/null); \
+	@unimports=$$(goimports -l $(GO_FMT_SRC) 2>/dev/null); \
 	if [ -n "$$unimports" ]; then \
 		echo "[error] goimports would rewrite:"; echo "$$unimports"; exit 1; \
 	fi
@@ -110,8 +118,8 @@ coverage: _ensure-hooks
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
-## check: Run fmt, lint, and test
-check: fmt lint test
+## check: Run lint and test (formatting is gated by the root `fmt-check` target)
+check: lint test
 
 ## install-tools: Install dev tools (goimports, gofumpt, gopls, golangci-lint)
 install-tools:
