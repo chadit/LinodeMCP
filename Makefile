@@ -230,10 +230,14 @@ python-check:
 # --- Shared linters ---
 
 ## betterleaks: Run betterleaks secrets scan
+# --verbose lists each finding (file, line, rule) instead of only the tally, so
+# a failure is actionable without a second manual run. --redact masks the secret
+# value: a real leak's location is what you need, and echoing the raw value into
+# the terminal or CI logs would just copy the secret somewhere new.
 betterleaks:
 	@if command -v betterleaks >/dev/null 2>&1; then \
 		echo "Running betterleaks secrets scan..."; \
-		betterleaks dir .; \
+		betterleaks dir . --verbose --redact; \
 	else \
 		echo "[warn] betterleaks not installed, skipping secrets scan"; \
 	fi
