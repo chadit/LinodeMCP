@@ -1,0 +1,22 @@
+{
+  "tool": "linode_image_sharegroup_token_delete",
+  "description": "Destroy tool. Pins the token_uuid rejection, the confirm-alone destroy gate, and the bypassed DELETE.",
+  "cases": [
+    {
+      "name": "rejects missing token_uuid",
+      "args": {},
+      "expect_error": "token_uuid must be a non-empty string"
+    },
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": { "token_uuid": "123e4567-e89b-12d3-a456-426614174000", "confirm": true },
+      "expect_error": "linode_image_sharegroup_token_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the token",
+      "args": { "token_uuid": "123e4567-e89b-12d3-a456-426614174000", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/images/sharegroups/tokens/123e4567-e89b-12d3-a456-426614174000" }
+    }
+  ]
+}

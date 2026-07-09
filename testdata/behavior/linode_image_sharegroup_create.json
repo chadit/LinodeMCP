@@ -1,0 +1,17 @@
+{
+  "tool": "linode_image_sharegroup_create",
+  "description": "With a valid label and no confirm both languages return the same confirm message. Success POSTs the create body.",
+  "cases": [
+    {
+      "name": "requires confirm",
+      "args": { "label": "my-group" },
+      "expect_error": "This creates an image share group. Set confirm=true to proceed."
+    },
+    {
+      "name": "creates a share group",
+      "args": { "label": "my-group", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/images/sharegroups", "body": { "label": "my-group" } }
+    }
+  ]
+}

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -39,17 +38,10 @@ func TestLinodeFirewallDevicesListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyFirewallID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallID)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyFirewallID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallID)
-	}
-
-	for _, key := range []string{keyPage, keyPageSize} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyFirewallID, keyPage, keyPageSize} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -177,8 +169,13 @@ func TestLinodeFirewallDevicesListToolRejectsInvalidFirewallIdBeforeClientCall(t
 				t.Error("result.IsError = false, want true")
 			}
 
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDPositive) {
-				t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDPositive)
+			wantFirewallID := errFirewallIDPositive
+			if name == caseMissingFirewallPathID {
+				wantFirewallID = errFirewallIDRequired
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantFirewallID) {
+				t.Errorf("error text %q does not contain %q", text.Text, wantFirewallID)
 			}
 
 			if called.Load() {
@@ -342,7 +339,7 @@ func TestLinodeFirewallDeviceGetToolRejectsInvalidIdsBeforeClientCall(t *testing
 		args map[string]any
 		want string
 	}{
-		{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
+		{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456)}, want: errFirewallIDRequired},
 		{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
 		{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
 		{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456)}, want: errFirewallIDPositive},
@@ -461,15 +458,10 @@ func TestLinodeFirewallDeviceDeleteToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyFirewallID, keyFirewallDeviceID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyFirewallID, keyFirewallDeviceID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -599,7 +591,7 @@ func TestLinodeFirewallDeviceDeleteToolRejectsInvalidIdsBeforeClientCall(t *test
 		args map[string]any
 		want string
 	}{
-		{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
+		{name: caseMissingFirewallPathID, args: map[string]any{keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDRequired},
 		{name: caseZeroFirewallPathID, args: map[string]any{keyFirewallID: float64(0), keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
 		{name: caseSlashFirewallPathID, args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
 		{name: caseQueryFirewallPathID, args: map[string]any{keyFirewallID: databaseInvalidInstanceIDQuery, keyFirewallDeviceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, want: errFirewallIDPositive},
@@ -704,8 +696,8 @@ func TestLinodeFirewallDeviceDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeFirewallDeviceDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 

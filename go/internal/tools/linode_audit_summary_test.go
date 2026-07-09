@@ -42,10 +42,10 @@ func TestLinodeAuditSummaryDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
+	raw := string(tool.RawInputSchema)
 	for _, param := range []string{keySince, "group_by", "include_meta"} {
-		if _, ok := props[param]; !ok {
-			t.Errorf("props missing key %v", param)
+		if !strings.Contains(raw, param) {
+			t.Errorf("tool.RawInputSchema missing key %v", param)
 		}
 	}
 }

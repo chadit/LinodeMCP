@@ -1,0 +1,40 @@
+{
+  "tool": "linode_stackscript_create",
+  "description": "StackScript create. With confirm both languages reach field validation; label and script rejections agree, the images rejection and no-confirm gate messages diverge (see report). Success POSTs the label/script/images body.",
+  "cases": [
+    {
+      "name": "requires label",
+      "args": { "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires script",
+      "args": { "confirm": true, "label": "deploy", "images": ["linode/ubuntu22.04"] },
+      "expect_error": "script is required"
+    },
+    {
+      "name": "creates a StackScript",
+      "args": {
+        "confirm": true,
+        "label": "deploy",
+        "script": "#!/bin/bash\necho hi",
+        "images": ["linode/ubuntu22.04"]
+      },
+      "api_response": { "id": 456, "label": "deploy" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/stackscripts",
+        "body": {
+          "label": "deploy",
+          "script": "#!/bin/bash\necho hi",
+          "images": ["linode/ubuntu22.04"]
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "deploy", "script": "#!/bin/bash\necho hi", "images": ["linode/ubuntu22.04"]},
+      "expect_error": "This creates a new StackScript in your account. Set confirm=true to proceed."
+    }
+  ]
+}

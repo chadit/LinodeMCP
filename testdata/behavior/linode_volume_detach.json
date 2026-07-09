@@ -1,0 +1,32 @@
+{
+  "tool": "linode_volume_detach",
+  "description": "Volume detach: volume_id-required rejection both languages agree on (confirm set so Go reaches it), plus the detach POST. Go requires confirm, Python does not (see report).",
+  "cases": [
+    {
+      "name": "requires volume_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "volume_id is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "volume_id": 5
+      },
+      "expect_error": "This detaches a block storage volume from an instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "detaches a volume",
+      "args": {
+        "confirm": true,
+        "volume_id": 123
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes/123/detach"
+      }
+    }
+  ]
+}

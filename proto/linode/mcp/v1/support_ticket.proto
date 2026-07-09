@@ -101,3 +101,121 @@ message SupportTicketIDResponse {
   string message = 1;
   int32 ticket_id = 2;
 }
+
+// SupportTicketListInput is the input contract for linode_support_ticket_list.
+message SupportTicketListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// SupportTicketCreateInput is the input contract for
+// linode_support_ticket_create. summary, description, and confirm are
+// required; the entity references are optional and mutually independent.
+message SupportTicketCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Short summary for the support ticket.
+  string summary = 2;
+  // Detailed support ticket description.
+  string description = 3;
+  // Object Storage bucket related to the ticket (optional).
+  optional string bucket = 4;
+  // Database ID related to the ticket (optional).
+  optional int32 database_id = 5;
+  // Domain ID related to the ticket (optional).
+  optional int32 domain_id = 6;
+  // Firewall ID related to the ticket (optional).
+  optional int32 firewall_id = 7;
+  // Linode ID related to the ticket (optional).
+  optional int32 linode_id = 8;
+  // LKE cluster ID related to the ticket (optional).
+  optional int32 lkecluster_id = 9;
+  // Longview client ID related to the ticket (optional).
+  optional int32 longviewclient_id = 10;
+  // Whether the ticket concerns a Managed service issue (optional).
+  optional bool managed_issue = 11;
+  // NodeBalancer ID related to the ticket (optional).
+  optional int32 nodebalancer_id = 12;
+  // Region related to the ticket (optional).
+  optional string region = 13;
+  // Support ticket severity level 1, 2, or 3 (optional).
+  optional int32 severity = 14;
+  // VLAN related to the ticket (optional).
+  optional string vlan = 15;
+  // Volume ID related to the ticket (optional).
+  optional int32 volume_id = 16;
+  // VPC ID related to the ticket (optional).
+  optional int32 vpc_id = 17;
+  // Must be true to confirm support ticket creation. Ignored when
+  // dry_run=true.
+  bool confirm = 18;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 19;
+}
+
+// SupportTicketCloseInput is the input contract for
+// linode_support_ticket_close.
+message SupportTicketCloseInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Support ticket ID to close.
+  int32 ticket_id = 2;
+  // Must be true to confirm closing the support ticket. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// SupportTicketReplyListInput is the input contract for
+// linode_support_ticket_reply_list.
+message SupportTicketReplyListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Support ticket ID whose replies should be listed.
+  int32 ticket_id = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
+}
+
+// SupportTicketReplyCreateInput is the input contract for
+// linode_support_ticket_reply_create.
+message SupportTicketReplyCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Support ticket ID to reply to.
+  int32 ticket_id = 2;
+  // Reply description to add to the support ticket.
+  string description = 3;
+  // Must be true to confirm support ticket reply creation. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// SupportTicketAttachmentCreateInput is the input contract for
+// linode_support_ticket_attachment_create.
+message SupportTicketAttachmentCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Support ticket ID to attach the file to.
+  int32 ticket_id = 2;
+  // Attachment file content or reference accepted by the Linode API.
+  string file = 3;
+  // Must be true to confirm support ticket attachment creation. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}

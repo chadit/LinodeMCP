@@ -25,8 +25,8 @@ func TestLinodeInstanceConfigCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeInstanceConfigCreateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -114,8 +114,8 @@ func TestLinodeInstanceConfigUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeInstanceConfigUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -170,8 +170,8 @@ func TestLinodeInstanceConfigDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeInstanceConfigDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -243,8 +243,8 @@ func TestLinodeInstanceConfigInterfaceAddToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeInstanceConfigInterfaceAddTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -299,8 +299,8 @@ func TestLinodeInstanceConfigInterfaceUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeInstanceConfigInterfaceUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -356,8 +356,8 @@ func TestLinodeInstanceConfigInterfaceDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeInstanceConfigInterfaceDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -412,8 +412,8 @@ func TestLinodeInstanceConfigInterfacesReorderToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeInstanceConfigInterfacesReorderTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

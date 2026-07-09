@@ -1,0 +1,12 @@
+{
+  "tool": "linode_account_get",
+  "description": "Pins the bare account GET path both languages issue.",
+  "cases": [
+    {
+      "name": "gets the authenticated account",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account" }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "tool": "linode_image_sharegroup_token_image_list",
+  "description": "Pins the token_uuid rejection and the images-by-token GET.",
+  "cases": [
+    {
+      "name": "rejects missing token_uuid",
+      "args": {},
+      "expect_error": "token_uuid must be a non-empty string"
+    },
+    {
+      "name": "lists images available through a token",
+      "args": { "token_uuid": "123e4567-e89b-12d3-a456-426614174000" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/images/sharegroups/tokens/123e4567-e89b-12d3-a456-426614174000/sharegroup/images" }
+    }
+  ]
+}

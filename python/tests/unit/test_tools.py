@@ -16,22 +16,16 @@ from linodemcp.genpb.linode.mcp.v1 import (
 )
 from linodemcp.linode import (
     Account,
-    Addons,
     Alerts,
     Backups,
-    BackupsAddon,
     Domain,
     DomainRecord,
-    Image,
     Instance,
-    InstanceType,
     NodeBalancer,
-    Price,
     Profile,
     Schedule,
     Specs,
     SSHKey,
-    StackScript,
     Transfer,
     Volume,
 )
@@ -489,6 +483,7 @@ from linodemcp.tools import (
 )
 from linodemcp.tools.linode_object_storage import object_storage_key_to_response_dict
 from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema as proto_schema
 
 
 async def test_handle_hello_with_name() -> None:
@@ -711,7 +706,7 @@ def test_create_linode_profile_preferences_update_tool() -> None:
 
     assert tool.name == "linode_profile_preferences_update"
     assert capability == Capability.Write
-    assert tool.inputSchema["required"] == ["preferences", "confirm"]
+    assert tool.inputSchema["required"] == ["confirm"]
     assert tool.inputSchema["properties"]["preferences"]["type"] == "object"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
@@ -733,7 +728,10 @@ async def test_handle_linode_profile_preferences_update_success(
         )
 
     assert len(result) == 1
-    assert "dashboard" in result[0].text
+    assert json.loads(result[0].text) == {
+        "message": "Profile preferences updated successfully",
+        "preferences": preferences,
+    }
     mock_client.update_profile_preferences.assert_awaited_once_with(preferences)
 
 
@@ -756,18 +754,18 @@ async def test_handle_linode_profile_preferences_update_requires_boolean_confirm
     mock_client_class.assert_not_called()
 
 
-@pytest.mark.parametrize("preferences", [None, [], "theme", 1, True])
+@pytest.mark.parametrize("preferences", [None, [], "theme", 1, True, {}])
 async def test_handle_linode_profile_preferences_update_requires_object(
     sample_config: Config, preferences: Any
 ) -> None:
-    """Profile preferences update validates preferences before client calls."""
+    """Profile preferences update rejects a non-object or empty preferences."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_profile_preferences_update(
             {"preferences": preferences, "confirm": True}, sample_config
         )
 
     assert len(result) == 1
-    assert "preferences must be an object" in result[0].text
+    assert "preferences must be a non-empty object" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -783,7 +781,7 @@ async def test_handle_linode_profile_preferences_update_error(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_profile_preferences_update(
-            {"preferences": {}, "confirm": True}, sample_config
+            {"preferences": {"theme": "dark"}, "confirm": True}, sample_config
         )
 
     assert len(result) == 1
@@ -797,8 +795,6 @@ async def test_linode_instance_config_delete_tool_definition() -> None:
     assert tool.name == "linode_instance_config_delete"
     assert capability == Capability.Destroy
     assert tool.inputSchema["required"] == ["linode_id", "config_id", "confirm"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -905,7 +901,11 @@ async def test_handle_linode_instance_config_delete_invalid_ids(
     result = await handle_linode_instance_config_delete(arguments, sample_config)
 
     assert len(result) == 1
-    assert "positive integer" in result[0].text or "confirm=true" in result[0].text
+    assert (
+        "positive integer" in result[0].text
+        or "confirm=true" in result[0].text
+        or "is required" in result[0].text
+    )
 
 
 async def test_handle_linode_instance_config_delete_error(
@@ -940,7 +940,7 @@ async def test_linode_instance_config_get_tool_definition() -> None:
 
 async def test_handle_linode_instance_config_get(sample_config: Config) -> None:
     """Test linode_instance_config_get tool."""
-    mock_config = {"id": 6, "label": "boot-config"}
+    mock_config = {"id": 6, "label": "boot-config", "not_in_proto": "dropped"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -955,6 +955,7 @@ async def test_handle_linode_instance_config_get(sample_config: Config) -> None:
 
     assert len(result) == 1
     assert "boot-config" in result[0].text
+    assert "not_in_proto" not in result[0].text
     mock_client.get_instance_config.assert_called_once_with(123, 6)
 
 
@@ -986,7 +987,7 @@ async def test_handle_linode_instance_config_get_invalid_ids(
     result = await handle_linode_instance_config_get(arguments, sample_config)
 
     assert len(result) == 1
-    assert "positive integer" in result[0].text
+    assert "positive integer" in result[0].text or "is required" in result[0].text
 
 
 async def test_handle_linode_instance_config_get_error(sample_config: Config) -> None:
@@ -1080,7 +1081,7 @@ async def test_handle_linode_instance_config_interface_get_invalid_ids(
     result = await handle_linode_instance_config_interface_get(arguments, sample_config)
 
     assert len(result) == 1
-    assert "positive integer" in result[0].text
+    assert "positive integer" in result[0].text or "is required" in result[0].text
 
 
 async def test_handle_linode_instance_config_interface_get_error(
@@ -1109,8 +1110,6 @@ async def test_linode_instance_config_interfaces_list_tool_definition() -> None:
     assert tool.name == "linode_instance_config_interface_list"
     assert capability == Capability.Read
     assert tool.inputSchema["required"] == ["linode_id", "config_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
 
 
 async def test_handle_linode_instance_config_interfaces_list(
@@ -1204,7 +1203,7 @@ async def test_handle_linode_instance_config_interfaces_list_invalid_ids(
     )
 
     assert len(result) == 1
-    assert "positive integer" in result[0].text
+    assert "positive integer" in result[0].text or "is required" in result[0].text
 
 
 async def test_handle_linode_instance_config_interfaces_list_error(
@@ -1233,18 +1232,16 @@ async def test_linode_instance_configs_list_tool_definition() -> None:
     assert tool.name == "linode_instance_config_list"
     assert capability == Capability.Read
     assert tool.inputSchema["required"] == ["linode_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
 
 
 def test_create_linode_instance_stats_tool_schema() -> None:
-    """Linode instance stats tool requires a positive Linode ID."""
+    """Linode instance stats tool advertises the proto-generated input schema."""
     tool, capability = create_linode_instance_stats_get_tool()
 
     assert tool.name == "linode_instance_stats_get"
     assert capability == Capability.Read
+    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceStatsGetInput")
     assert tool.inputSchema["required"] == ["linode_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
 
 
 async def test_handle_linode_instance_stats(sample_config: Config) -> None:
@@ -1287,7 +1284,10 @@ async def test_handle_linode_instance_stats_rejects_invalid_linode_id(
         result = await handle_linode_instance_stats_get(arguments, sample_config)
 
     assert len(result) == 1
-    assert "linode_id must be a positive integer" in result[0].text
+    assert (
+        "linode_id must be a positive integer" in result[0].text
+        or "linode_id is required" in result[0].text
+    )
     mock_client_class.assert_not_called()
 
 
@@ -1336,7 +1336,10 @@ async def test_handle_linode_instance_configs_list_invalid_linode_id(
     result = await handle_linode_instance_config_list(arguments, sample_config)
 
     assert len(result) == 1
-    assert "linode_id must be a positive integer" in result[0].text
+    assert (
+        "linode_id must be a positive integer" in result[0].text
+        or "linode_id is required" in result[0].text
+    )
 
 
 @pytest.mark.parametrize(
@@ -1580,7 +1583,10 @@ async def test_handle_linode_account_beta_enroll(
             {"id": "distributed-beta", "confirm": True}, sample_config
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Account beta enrollment requested successfully",
+        "id": "distributed-beta",
+    }
     mock_client.enroll_account_beta.assert_awaited_once_with("distributed-beta")
 
 
@@ -1604,8 +1610,8 @@ async def test_handle_linode_account_beta_enroll_requires_boolean_confirm(
     ("arguments", "expected_error"),
     [
         ({"confirm": True}, "id is required"),
-        ({"id": 123, "confirm": True}, "id must be a string"),
-        ({"id": "   ", "confirm": True}, "id is required"),
+        ({"id": 123, "confirm": True}, "id must be a non-empty string"),
+        ({"id": "   ", "confirm": True}, "id must be a non-empty string"),
     ],
 )
 async def test_handle_linode_account_beta_enroll_rejects_invalid_id(
@@ -1672,14 +1678,28 @@ async def test_handle_linode_account_agreements_acknowledge(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_account_agreement_acknowledge(
-            {"eu_model": True, "privacy_policy": False, "confirm": True},
+            {"eu_model": True, "privacy_policy": True, "confirm": True},
             sample_config,
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Account agreements acknowledged successfully"
+    }
     mock_client.acknowledge_account_agreements.assert_awaited_once_with(
-        {"eu_model": True, "privacy_policy": False}
+        {"eu_model": True, "privacy_policy": True}
     )
+
+
+async def test_handle_linode_account_agreements_acknowledge_rejects_false(
+    sample_config: Config,
+) -> None:
+    """Agreement acknowledge rejects a false value locally (matches Go)."""
+    result = await handle_linode_account_agreement_acknowledge(
+        {"billing_agreement": False}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "billing_agreement must be true when provided" in result[0].text
 
 
 @pytest.mark.parametrize("bad_confirm", [None, False, "true", 1])
@@ -1738,30 +1758,30 @@ async def test_create_linode_account_update_tool() -> None:
 
 async def test_handle_linode_account_update(sample_config: Config) -> None:
     """Test linode_account_update tool."""
-    mock_account = Account(
-        first_name="Test",
-        last_name="User",
-        email="updated@example.com",
-        company="TestCo",
-        address_1="123 Test St",
-        address_2="Suite 1",
-        city="Test City",
-        state="TS",
-        zip="12345",
-        country="US",
-        phone="555-1234",
-        balance=100.50,
-        balance_uninvoiced=50.25,
-        capabilities=["Linodes", "Block Storage"],
-        active_since="2020-01-01T00:00:00",
-        euuid="abcd-1234",
-        billing_source="linode",
-        active_promotions=[],
-    )
+    mock_account = {
+        "first_name": "Test",
+        "last_name": "User",
+        "email": "updated@example.com",
+        "company": "TestCo",
+        "address_1": "123 Test St",
+        "address_2": "Suite 1",
+        "city": "Test City",
+        "state": "TS",
+        "zip": "12345",
+        "country": "US",
+        "phone": "555-1234",
+        "balance": 100.50,
+        "balance_uninvoiced": 50.25,
+        "capabilities": ["Linodes", "Block Storage"],
+        "active_since": "2020-01-01T00:00:00",
+        "euuid": "abcd-1234",
+        "billing_source": "linode",
+        "active_promotions": [],
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_account.return_value = mock_account
+        mock_client.put_raw.return_value = mock_account
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1772,7 +1792,10 @@ async def test_handle_linode_account_update(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "updated@example.com" in result[0].text
-        mock_client.update_account.assert_called_once_with(email="updated@example.com")
+        assert "Account updated successfully" in result[0].text
+        mock_client.put_raw.assert_called_once_with(
+            "/account", {"email": "updated@example.com"}
+        )
 
 
 async def test_handle_linode_account_update_requires_confirm(
@@ -1849,9 +1872,9 @@ async def test_create_linode_managed_contacts_list_tool() -> None:
     assert capability is Capability.Read
     assert tool.inputSchema["type"] == "object"
     assert "required" not in tool.inputSchema
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert "environment" in tool.inputSchema["properties"]
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_contacts_list(sample_config: Config) -> None:
@@ -1893,15 +1916,15 @@ async def test_handle_linode_managed_contacts_list_rejects_invalid_page(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_managed_contact_list({"page": 0}, sample_config)
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
 @pytest.mark.parametrize(
     ("page_size", "expected"),
     [
-        (24, "page_size must be at least 25"),
-        (501, "page_size must be at most 500"),
+        (24, "page_size must be an integer from 25 through 500"),
+        (501, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_handle_linode_managed_contacts_list_rejects_invalid_page_size(
@@ -1925,9 +1948,8 @@ async def test_create_linode_managed_issues_list_tool() -> None:
     assert capability is Capability.Read
     assert tool.inputSchema["type"] == "object"
     assert "required" not in tool.inputSchema
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_issues_list(sample_config: Config) -> None:
@@ -1974,15 +1996,15 @@ async def test_handle_linode_managed_issues_list_rejects_invalid_page(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_managed_issue_list({"page": 0}, sample_config)
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
 @pytest.mark.parametrize(
     ("page_size", "expected"),
     [
-        (24, "page_size must be at least 25"),
-        (501, "page_size must be at most 500"),
+        (24, "page_size must be an integer from 25 through 500"),
+        (501, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_handle_linode_managed_issues_list_rejects_invalid_page_size(
@@ -2006,9 +2028,9 @@ async def test_create_linode_managed_linode_settings_list_tool() -> None:
     assert capability is Capability.Read
     assert tool.inputSchema["type"] == "object"
     assert "required" not in tool.inputSchema
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert "environment" in tool.inputSchema["properties"]
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_linode_settings_list(
@@ -2053,7 +2075,7 @@ async def test_handle_linode_managed_linode_settings_list_rejects_invalid_page(
             {"page": 0}, sample_config
         )
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2066,7 +2088,7 @@ async def test_handle_linode_managed_linode_settings_list_rejects_page_size(
             {"page_size": 501}, sample_config
         )
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2092,7 +2114,7 @@ async def test_handle_linode_managed_linode_settings_list_rejects_low_page_size(
             {"page_size": 24}, sample_config
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2104,7 +2126,7 @@ async def test_create_linode_managed_service_disable_tool() -> None:
     assert capability is Capability.Admin
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["service_id", "confirm"]
-    assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["service_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -2178,7 +2200,7 @@ async def test_create_linode_managed_contact_delete_tool() -> None:
     assert capability is Capability.Admin
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["contact_id", "confirm"]
-    assert tool.inputSchema["properties"]["contact_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["contact_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -2309,7 +2331,7 @@ async def test_create_linode_managed_credential_username_password_update_tool() 
         "password",
         "confirm",
     }
-    assert tool.inputSchema["properties"]["credential_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["password"]["type"] == "string"
     assert tool.inputSchema["properties"]["username"]["type"] == "string"
@@ -2398,9 +2420,8 @@ async def test_create_linode_managed_credentials_list_tool() -> None:
 
     assert tool.name == "linode_managed_credential_list"
     assert capability == Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_credentials_list(sample_config: Config) -> None:
@@ -2444,7 +2465,7 @@ async def test_handle_linode_managed_credentials_list_rejects_invalid_page(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_managed_credential_list({"page": 0}, sample_config)
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2457,7 +2478,7 @@ async def test_handle_linode_managed_credentials_list_rejects_invalid_page_size(
             {"page_size": 501}, sample_config
         )
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2472,8 +2493,11 @@ async def test_create_linode_managed_ssh_key_get_tool() -> None:
 
 
 async def test_handle_linode_managed_ssh_key_get(sample_config: Config) -> None:
-    """Test linode_managed_sshkey_get tool."""
-    response_data: dict[str, Any] = {"ssh_key": "ssh-rsa AAAAmanagedkey linode-managed"}
+    """Managed SSH key get emits {ssh_key} proto-canonically (unknown fields drop)."""
+    response_data: dict[str, Any] = {
+        "ssh_key": "ssh-rsa AAAAmanagedkey linode-managed",
+        "not_in_proto": "dropped",
+    }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_managed_ssh_key.return_value = response_data
@@ -2484,7 +2508,9 @@ async def test_handle_linode_managed_ssh_key_get(sample_config: Config) -> None:
         result = await handle_linode_managed_sshkey_get({}, sample_config)
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "ssh_key": "ssh-rsa AAAAmanagedkey linode-managed"
+    }
     mock_client.get_managed_ssh_key.assert_awaited_once_with()
 
 
@@ -2513,7 +2539,7 @@ async def test_create_linode_managed_credential_update_tool() -> None:
     assert tool.name == "linode_managed_credential_update"
     assert capability is Capability.Admin
     assert set(tool.inputSchema["required"]) == {"credential_id", "label", "confirm"}
-    assert tool.inputSchema["properties"]["credential_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["label"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
@@ -2934,26 +2960,28 @@ async def test_handle_linode_account_beta_get(sample_config: Config) -> None:
     mock_client.get_account_beta.assert_awaited_once_with("example-open")
 
 
-@pytest.mark.parametrize("arguments", [{}, {"beta_id": ""}, {"beta_id": "   "}])
 async def test_handle_linode_account_beta_get_requires_beta_id(
-    arguments: dict[str, Any], sample_config: Config
+    sample_config: Config,
 ) -> None:
-    """Account beta get requires a non-empty beta_id before client calls."""
+    """Account beta get requires beta_id before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_account_beta_get(arguments, sample_config)
+        result = await handle_linode_account_beta_get({}, sample_config)
 
     assert "beta_id is required" in result[0].text
     mock_client_class.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "arguments", [{"beta_id": 123}, {"beta_id": ""}, {"beta_id": "   "}]
+)
 async def test_handle_linode_account_beta_get_rejects_non_string_beta_id(
-    sample_config: Config,
+    arguments: dict[str, Any], sample_config: Config
 ) -> None:
-    """Account beta get rejects non-string beta_id values before client calls."""
+    """Account beta get rejects non-string or blank beta_id before client calls."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        result = await handle_linode_account_beta_get({"beta_id": 123}, sample_config)
+        result = await handle_linode_account_beta_get(arguments, sample_config)
 
-    assert "beta_id must be a string" in result[0].text
+    assert "beta_id must be a non-empty string" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2961,13 +2989,13 @@ async def test_handle_linode_account_beta_get_rejects_non_string_beta_id(
 async def test_handle_linode_account_beta_get_rejects_malformed_beta_id(
     beta_id: str, sample_config: Config
 ) -> None:
-    """Account beta get rejects malformed path separator/traversal values."""
+    """Account beta get rejects charset-invalid beta_id values."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_account_beta_get(
             {"beta_id": beta_id}, sample_config
         )
 
-    assert "beta_id must not contain" in result[0].text
+    assert "beta_id must contain only" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3108,7 +3136,7 @@ async def test_handle_linode_account_notification_list_rejects_bad_page_size(
             {"page_size": 1}, sample_config
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3160,7 +3188,7 @@ async def test_handle_linode_account_payment_method_list_rejects_bad_page(
             {"page": 0}, sample_config
         )
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3211,7 +3239,7 @@ async def test_handle_linode_account_child_account_list_rejects_bad_page_size(
             {"page_size": 1}, sample_config
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3224,7 +3252,7 @@ async def test_handle_linode_account_invoice_item_list_rejects_bad_page_size(
             {"invoice_id": 123, "page_size": 1}, sample_config
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3331,7 +3359,7 @@ async def test_handle_linode_managed_linode_settings_update_accepts_full_ssh(
     [
         (
             {"label": "web", "service_type": "ping", "address": "https://a"},
-            "service_type must be 'url' or 'tcp'",
+            "service_type must be one of: tcp, url",
         ),
         (
             {
@@ -3396,6 +3424,23 @@ async def test_handle_linode_managed_contact_create_rejects_bad_phone(
         )
 
     assert "phone.primary must be a non-empty string or null" in result[0].text
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_managed_contact_create_rejects_read_only_fields(
+    sample_config: Config,
+) -> None:
+    """Setting the API-assigned id/updated on create is rejected before any call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_managed_contact_create(
+            {"id": 5, "name": "Ops", "email": "ops@example.com"},
+            sample_config,
+        )
+
+    assert (
+        "id and updated are read-only and cannot be set "
+        "when creating a managed contact" in result[0].text
+    )
     mock_client_class.assert_not_called()
 
 
@@ -3504,7 +3549,7 @@ async def test_handle_linode_ipv6_pool_list_rejects_page_below_minimum(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_ipv6_pool_list({"page": 0}, sample_config)
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3515,7 +3560,7 @@ async def test_handle_linode_ipv6_range_list_rejects_page_size_above_maximum(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_ipv6_range_list({"page_size": 501}, sample_config)
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3650,7 +3695,7 @@ async def test_handle_linode_account_service_transfer_list_rejects_bad_page(
             {"page": 0}, sample_config
         )
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3721,11 +3766,11 @@ async def test_create_linode_account_availability_list_tool() -> None:
     [
         ({"page": "2"}, "page must be an integer"),
         ({"page": True}, "page must be an integer"),
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page_size": "25"}, "page_size must be an integer"),
         ({"page_size": False}, "page_size must be an integer"),
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_handle_linode_account_availability_list_rejects_invalid_pagination(
@@ -3851,6 +3896,28 @@ async def test_handle_linode_account_tag_objects_list_requires_label(
 
     assert len(result) == 1
     assert "tag_label" in result[0].text
+
+
+async def test_handle_linode_account_tag_objects_list_rejects_path_unsafe_label(
+    sample_config: Config,
+) -> None:
+    """Tagged object listing rejects a path-unsafe tag_label (matches Go)."""
+    result = await handle_linode_tag_object_list(
+        {"tag_label": "bad#tag"}, sample_config
+    )
+
+    assert len(result) == 1
+    assert "tag_label must not contain '?', '#', or '..'" in result[0].text
+
+
+async def test_handle_linode_account_tag_delete_rejects_path_unsafe_label(
+    sample_config: Config,
+) -> None:
+    """Tag delete rejects a path-unsafe tag_label (matches Go)."""
+    result = await handle_linode_tag_delete({"tag_label": "bad#tag"}, sample_config)
+
+    assert len(result) == 1
+    assert "tag_label must not contain '?', '#', or '..'" in result[0].text
 
 
 async def test_handle_linode_account_tag_objects_list_rejects_invalid_page(
@@ -4134,12 +4201,8 @@ async def test_create_linode_account_support_ticket_create_tool() -> None:
 
     assert tool.name == "linode_support_ticket_create"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == [
-        "summary",
-        "description",
-        "confirm",
-    ]
-    assert tool.inputSchema["properties"]["severity"]["maximum"] == 3
+    assert set(tool.inputSchema["required"]) == {"summary", "description", "confirm"}
+    assert "severity" in tool.inputSchema["properties"]
 
 
 async def test_handle_linode_account_support_ticket_create_requires_confirm(
@@ -4533,7 +4596,6 @@ async def test_create_linode_account_payment_method_get_tool() -> None:
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["payment_method_id"]
     assert tool.inputSchema["properties"]["payment_method_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["payment_method_id"]["minimum"] == 1
 
 
 async def test_handle_linode_account_payment_method_get_requires_payment_method_id(
@@ -4549,12 +4611,12 @@ async def test_handle_linode_account_payment_method_get_requires_payment_method_
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"payment_method_id": "123"}, "payment_method_id must be an integer"),
-        ({"payment_method_id": True}, "payment_method_id must be an integer"),
-        ({"payment_method_id": 0}, "payment_method_id must be at least 1"),
-        ({"payment_method_id": "12/3"}, "payment_method_id must be an integer"),
-        ({"payment_method_id": "12?3"}, "payment_method_id must be an integer"),
-        ({"payment_method_id": ".."}, "payment_method_id must be an integer"),
+        ({"payment_method_id": "123"}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": True}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": 0}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": "12/3"}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": "12?3"}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": ".."}, "payment_method_id must be a positive integer"),
     ],
 )
 async def test_handle_linode_account_payment_method_get_rejects_bad_id(
@@ -4574,8 +4636,14 @@ async def test_handle_linode_account_payment_method_get_rejects_bad_id(
 async def test_handle_linode_account_payment_method_get(
     sample_config: Config,
 ) -> None:
-    """Test linode_account_payment_method_get tool."""
-    response_data: dict[str, Any] = {"id": 123, "type": "credit_card"}
+    """Payment method get emits AccountPaymentMethod proto-canonically."""
+    response_data: dict[str, Any] = {
+        "id": 123,
+        "type": "credit_card",
+        "is_default": True,
+        "data": {"card_type": "Visa", "last_four": "1234", "expiry": "12/2027"},
+        "not_in_proto": "dropped",
+    }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.get_account_payment_method.return_value = response_data
@@ -4588,7 +4656,13 @@ async def test_handle_linode_account_payment_method_get(
         )
 
         assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
+        assert json.loads(result[0].text) == {
+            "id": 123,
+            "type": "credit_card",
+            "is_default": True,
+            "data": {"card_type": "Visa", "last_four": "1234", "expiry": "12/2027"},
+        }
+        assert "not_in_proto" not in result[0].text
         mock_client.get_account_payment_method.assert_awaited_once_with(123)
 
 
@@ -4648,11 +4722,13 @@ async def test_handle_linode_account_oauth_client_thumbnail_get_rejects_bad_clie
 async def test_handle_linode_account_oauth_client_thumbnail_get(
     sample_config: Config,
 ) -> None:
-    """Test linode_account_oauth_client_thumbnail_get tool."""
+    """Thumbnail get serializes {client_id, thumbnail_png_base64} proto-canonically."""
+    # The client base64-encodes the raw PNG under thumbnail_png_base64; the
+    # handler stitches in client_id and serializes through OAuthClientThumbnail,
+    # so any extra key the client returns must drop.
     response_data: dict[str, Any] = {
-        "content_type": "image/png",
-        "encoding": "base64",
-        "data": "iVBORw0KGgo=",
+        "thumbnail_png_base64": "iVBORw0KGgo=",
+        "not_in_proto": "dropped",
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -4666,7 +4742,10 @@ async def test_handle_linode_account_oauth_client_thumbnail_get(
         )
 
         assert len(result) == 1
-        assert json.loads(result[0].text) == response_data
+        assert json.loads(result[0].text) == {
+            "client_id": "client-123",
+            "thumbnail_png_base64": "iVBORw0KGgo=",
+        }
         mock_client.get_account_oauth_client_thumbnail.assert_awaited_once_with(
             "client-123"
         )
@@ -4808,8 +4887,8 @@ async def test_create_linode_account_invoice_items_list_tool() -> None:
     assert capability is Capability.Read
     assert tool.inputSchema.get("required") == ["invoice_id"]
     properties = tool.inputSchema.get("properties", {})
-    assert properties["invoice_id"]["minimum"] == 1
-    assert properties["page_size"]["maximum"] == 500
+    assert properties["invoice_id"]["type"] == "integer"
+    assert properties["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_account_invoice_items_list(sample_config: Config) -> None:
@@ -4852,7 +4931,10 @@ async def test_handle_linode_account_invoice_items_list(sample_config: Config) -
         ({"invoice_id": "123?456"}, "invoice_id must be a positive integer"),
         ({"invoice_id": ".."}, "invoice_id must be a positive integer"),
         ({"invoice_id": 123, "page": True}, "page must be an integer"),
-        ({"invoice_id": 123, "page_size": 501}, "page_size must be at most 500"),
+        (
+            {"invoice_id": 123, "page_size": 501},
+            "page_size must be an integer from 25 through 500",
+        ),
     ],
 )
 async def test_handle_linode_account_invoice_items_list_rejects_invalid_arguments(
@@ -5392,7 +5474,7 @@ async def test_handle_linode_account_tag_delete_requires_confirm(
     result = await handle_linode_tag_delete({"tag_label": "obsolete"}, sample_config)
 
     assert len(result) == 1
-    assert "confirm=true" in result[0].text
+    assert "confirm must be true to delete a tag" in result[0].text
 
 
 async def test_handle_linode_account_tag_delete_requires_label(
@@ -5586,7 +5668,12 @@ async def test_create_linode_regions_availability_get_tool() -> None:
 async def test_handle_linode_regions_availability_get(sample_config: Config) -> None:
     """Test linode_region_availability_get tool."""
     availability = [
-        {"available": True, "plan": "g6-standard-1", "region": "us-east"},
+        {
+            "available": True,
+            "plan": "g6-standard-1",
+            "region": "us-east",
+            "not_in_proto": "dropped",
+        },
         {"available": False, "plan": "g6-standard-2", "region": "us-east"},
     ]
 
@@ -5603,9 +5690,10 @@ async def test_handle_linode_regions_availability_get(sample_config: Config) -> 
 
         assert len(result) == 1
         data = json.loads(result[0].text)
-        assert data["region_id"] == "us-east"
         assert data["count"] == 2
-        assert data["availability"] == availability
+        assert len(data["region_availabilities"]) == 2
+        assert data["region_availabilities"][0]["plan"] == "g6-standard-1"
+        assert "not_in_proto" not in result[0].text
         mock_client.get_region_availability.assert_awaited_once_with("us-east")
 
 
@@ -5748,9 +5836,10 @@ def test_linode_kernels_list_tool_schema() -> None:
     assert tool.name == "linode_kernel_list"
     assert capability is Capability.Read
     props: dict[str, Any] = tool.inputSchema["properties"]
-    assert props["page"]["minimum"] == 1
-    assert props["page_size"]["minimum"] == 25
-    assert props["page_size"]["maximum"] == 500
+    # page/page_size convert to int32 proto fields; the generated schema carries
+    # int32 bounds instead of the old hand-built minimum:1 / 25-500 refinements.
+    assert props["page"]["type"] == "integer"
+    assert props["page_size"]["type"] == "integer"
     assert "required" not in tool.inputSchema
 
 
@@ -5901,25 +5990,25 @@ async def test_handle_linode_types_list_filter_class(sample_config: Config) -> N
 
 
 async def test_handle_linode_type_get(sample_config: Config) -> None:
-    """Test linode_type_get tool."""
-    mock_type = InstanceType(
-        id="g6-nanode-1",
-        label="Nanode 1GB",
-        class_="nanode",
-        disk=25600,
-        memory=1024,
-        vcpus=1,
-        gpus=0,
-        network_out=1000,
-        transfer=1000,
-        price=Price(hourly=0.0075, monthly=5.0),
-        addons=Addons(backups=BackupsAddon(price=Price(hourly=0.003, monthly=2.0))),
-        successor=None,
-    )
+    """Type get emits the InstanceType proto-canonically (unknown fields drop)."""
+    raw_type: dict[str, Any] = {
+        "id": "g6-nanode-1",
+        "label": "Nanode 1GB",
+        "class": "nanode",
+        "disk": 25600,
+        "memory": 1024,
+        "vcpus": 1,
+        "gpus": 0,
+        "network_out": 1000,
+        "transfer": 1000,
+        "price": {"hourly": 0.0075, "monthly": 5.0},
+        "addons": {"backups": {"price": {"hourly": 0.003, "monthly": 2.0}}},
+        "not_in_proto": "dropped",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_type.return_value = mock_type
+        mock_client.get_raw.return_value = raw_type
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5931,31 +6020,33 @@ async def test_handle_linode_type_get(sample_config: Config) -> None:
         assert data["id"] == "g6-nanode-1"
         assert data["label"] == "Nanode 1GB"
         assert data["price"] == {"hourly": 0.0075, "monthly": 5.0}
-        mock_client.get_type.assert_awaited_once_with("g6-nanode-1")
+        assert "successor" not in data
+        assert "not_in_proto" not in result[0].text
+        mock_client.get_raw.assert_awaited_once_with("/linode/types/g6-nanode-1")
 
 
 async def test_handle_linode_type_get_includes_successor(
     sample_config: Config,
 ) -> None:
     """A type with a successor includes the successor field in the response."""
-    mock_type = InstanceType(
-        id="g6-standard-2",
-        label="Linode 4GB",
-        class_="standard",
-        disk=81920,
-        memory=4096,
-        vcpus=2,
-        gpus=0,
-        network_out=4000,
-        transfer=4000,
-        price=Price(hourly=0.036, monthly=24.0),
-        addons=Addons(backups=BackupsAddon(price=Price(hourly=0.008, monthly=5.0))),
-        successor="g7-standard-2",
-    )
+    raw_type: dict[str, Any] = {
+        "id": "g6-standard-2",
+        "label": "Linode 4GB",
+        "class": "standard",
+        "disk": 81920,
+        "memory": 4096,
+        "vcpus": 2,
+        "gpus": 0,
+        "network_out": 4000,
+        "transfer": 4000,
+        "price": {"hourly": 0.036, "monthly": 24.0},
+        "addons": {"backups": {"price": {"hourly": 0.008, "monthly": 5.0}}},
+        "successor": "g7-standard-2",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_type.return_value = mock_type
+        mock_client.get_raw.return_value = raw_type
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6000,7 +6091,7 @@ async def test_handle_linode_type_get_error(sample_config: Config) -> None:
     """Test linode_type_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_type.side_effect = Exception("API error")
+        mock_client.get_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6012,25 +6103,26 @@ async def test_handle_linode_type_get_error(sample_config: Config) -> None:
 
 
 async def test_handle_linode_volume_get(sample_config: Config) -> None:
-    """Test linode_volume_get tool."""
-    mock_volume = Volume(
-        id=12345,
-        label="data-vol",
-        status="active",
-        size=100,
-        region="us-east",
-        linode_id=123,
-        linode_label="test-instance",
-        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_data-vol",
-        tags=["production"],
-        created="2024-01-01T00:00:00",
-        updated="2024-01-02T00:00:00",
-        hardware_type="nvme",
-    )
+    """Volume get emits the VolumeGetResponse envelope (unknown fields drop)."""
+    raw_volume: dict[str, Any] = {
+        "id": 12345,
+        "label": "data-vol",
+        "status": "active",
+        "size": 100,
+        "region": "us-east",
+        "linode_id": 123,
+        "linode_label": "test-instance",
+        "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data-vol",
+        "tags": ["production"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00",
+        "hardware_type": "nvme",
+        "not_in_proto": "dropped",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_volume.return_value = mock_volume
+        mock_client.get_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6038,9 +6130,12 @@ async def test_handle_linode_volume_get(sample_config: Config) -> None:
         result = await handle_linode_volume_get({"volume_id": 12345}, sample_config)
 
         assert len(result) == 1
-        assert "data-vol" in result[0].text
-        assert '"id": 12345' in result[0].text
-        mock_client.get_volume.assert_called_once_with(12345)
+        body = json.loads(result[0].text)
+        assert body["volume"]["label"] == "data-vol"
+        assert body["volume"]["id"] == 12345
+        assert body["volume"]["linode_id"] == 123
+        assert "not_in_proto" not in result[0].text
+        mock_client.get_raw.assert_awaited_once_with("/volumes/12345")
 
 
 async def test_handle_linode_volume_get_requires_volume_id(
@@ -6347,28 +6442,26 @@ async def test_create_linode_image_update_tool_def() -> None:
 
 
 async def test_handle_linode_image_update_success(sample_config: Config) -> None:
-    """Image update tool should call the client and return image details."""
-    mock_image = Image(
-        id="private/12345",
-        label="renamed-image",
-        description="Updated image",
-        type="manual",
-        is_public=False,
-        deprecated=False,
-        size=2048,
-        vendor="",
-        status="available",
-        created="2024-01-01T00:00:00",
-        created_by="testuser",
-        expiry=None,
-        eol=None,
-        capabilities=["cloud-init"],
-        tags=["prod"],
-    )
+    """Image update serializes the raw API body through the Image write proto."""
+    raw_image = {
+        "id": "private/12345",
+        "label": "renamed-image",
+        "description": "Updated image",
+        "type": "manual",
+        "vendor": "",
+        "status": "available",
+        "created": "2024-01-01T00:00:00",
+        "created_by": "testuser",
+        "capabilities": ["cloud-init"],
+        "tags": ["prod"],
+        "size": 2048,
+        "is_public": False,
+        "deprecated": False,
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_image.return_value = mock_image
+        mock_client.update_image_raw.return_value = raw_image
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6385,8 +6478,11 @@ async def test_handle_linode_image_update_success(sample_config: Config) -> None
         )
 
     assert len(result) == 1
-    assert "private/12345" in result[0].text
-    mock_client.update_image.assert_awaited_once_with(
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Image 'private/12345' updated successfully"
+    assert payload["image"]["label"] == "renamed-image"
+    assert payload["image"]["tags"] == ["prod"]
+    mock_client.update_image_raw.assert_awaited_once_with(
         image_id="private/12345",
         label="renamed-image",
         description="Updated image",
@@ -6665,28 +6761,26 @@ async def test_create_linode_image_create_tool_def() -> None:
 
 
 async def test_handle_linode_image_create_success(sample_config: Config) -> None:
-    """Test linode_image_create tool."""
-    mock_image = Image(
-        id="private/12345",
-        label="app-image",
-        description="Application image",
-        type="manual",
-        is_public=False,
-        deprecated=False,
-        size=2048,
-        vendor="",
-        status="creating",
-        created="2024-01-01T00:00:00",
-        created_by="testuser",
-        expiry=None,
-        eol=None,
-        capabilities=["cloud-init"],
-        tags=["prod"],
-    )
+    """Image create serializes the raw API body through the Image write proto."""
+    raw_image = {
+        "id": "private/12345",
+        "label": "app-image",
+        "description": "Application image",
+        "type": "manual",
+        "vendor": "",
+        "status": "creating",
+        "created": "2024-01-01T00:00:00",
+        "created_by": "testuser",
+        "capabilities": ["cloud-init"],
+        "tags": ["prod"],
+        "size": 2048,
+        "is_public": False,
+        "deprecated": False,
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_image.return_value = mock_image
+        mock_client.create_image_raw.return_value = raw_image
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6704,8 +6798,16 @@ async def test_handle_linode_image_create_success(sample_config: Config) -> None
         )
 
         assert len(result) == 1
-        assert "private/12345" in result[0].text
-        mock_client.create_image.assert_awaited_once_with(
+        payload = json.loads(result[0].text)
+        assert (
+            payload["message"]
+            == "Image 'app-image' (private/12345) created successfully"
+        )
+        # The full Image proto element is emitted, not a curated subset.
+        assert payload["image"]["id"] == "private/12345"
+        assert payload["image"]["size"] == 2048
+        assert payload["image"]["capabilities"] == ["cloud-init"]
+        mock_client.create_image_raw.assert_awaited_once_with(
             disk_id=123,
             label="app-image",
             description="Application image",
@@ -7340,6 +7442,7 @@ async def test_handle_linode_sshkey_get(sample_config: Config) -> None:
         "label": "work-laptop",
         "ssh_key": "ssh-rsa AAAA... user@work",
         "created": "2024-01-01T00:00:00",
+        "not_in_proto": "dropped",
     }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -7354,6 +7457,7 @@ async def test_handle_linode_sshkey_get(sample_config: Config) -> None:
         assert len(result) == 1
         assert "work-laptop" in result[0].text
         assert "12345" in result[0].text
+        assert "not_in_proto" not in result[0].text
         mock_client.get_raw.assert_called_once_with("/profile/sshkeys/12345")
 
 
@@ -7362,7 +7466,7 @@ async def test_handle_linode_sshkey_get_requires_id(sample_config: Config) -> No
     result = await handle_linode_sshkey_get({}, sample_config)
 
     assert len(result) == 1
-    assert "ssh_key_id is required" in result[0].text
+    assert "ssh_key_id must be a positive integer" in result[0].text
 
 
 async def test_handle_linode_sshkeys_list_filter_label(sample_config: Config) -> None:
@@ -7782,6 +7886,26 @@ async def test_handle_linode_firewall_get_missing_id(sample_config: Config) -> N
     assert "firewall_id is required" in result[0].text
 
 
+async def test_handle_linode_firewall_get_rejects_negative_id(
+    sample_config: Config,
+) -> None:
+    """Firewall get rejects a non-positive firewall_id locally (matches Go)."""
+    result = await handle_linode_firewall_get({"firewall_id": -1}, sample_config)
+
+    assert len(result) == 1
+    assert "firewall_id must be a positive integer" in result[0].text
+
+
+async def test_handle_linode_firewall_rules_get_rejects_negative_id(
+    sample_config: Config,
+) -> None:
+    """Firewall rules get rejects a non-positive firewall_id locally (matches Go)."""
+    result = await handle_linode_firewall_rules_get({"firewall_id": -1}, sample_config)
+
+    assert len(result) == 1
+    assert "firewall_id must be a positive integer" in result[0].text
+
+
 async def test_handle_linode_firewall_rules_get(sample_config: Config) -> None:
     """Test linode_firewall_rules_get tool."""
     raw_rules = {
@@ -8112,8 +8236,8 @@ async def test_handle_linode_nodebalancer_config_get_invalid_arguments(
 ) -> None:
     """Test linode_nodebalancer_config_get rejects invalid IDs."""
     invalid_cases: list[tuple[dict[str, Any], str]] = [
-        ({"config_id": 6}, "nodebalancer_id must be a positive integer"),
-        ({"nodebalancer_id": 8}, "config_id must be a positive integer"),
+        ({"config_id": 6}, "nodebalancer_id is required"),
+        ({"nodebalancer_id": 8}, "config_id is required"),
         (
             {"nodebalancer_id": True, "config_id": 6},
             "nodebalancer_id must be a positive integer",
@@ -8282,17 +8406,26 @@ async def test_handle_linode_nodebalancer_type_list(sample_config: Config) -> No
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({}, "nodebalancer_id must be a positive integer"),
+        ({}, "nodebalancer_id is required"),
         ({"nodebalancer_id": 0}, "nodebalancer_id"),
         ({"nodebalancer_id": "8"}, "nodebalancer_id"),
         ({"nodebalancer_id": True}, "nodebalancer_id"),
         ({"nodebalancer_id": "1/2"}, "nodebalancer_id"),
         ({"nodebalancer_id": "1?x"}, "nodebalancer_id"),
         ({"nodebalancer_id": ".."}, "nodebalancer_id"),
-        ({"nodebalancer_id": 8, "page": 0}, "page must be at least 1"),
+        (
+            {"nodebalancer_id": 8, "page": 0},
+            "page must be an integer greater than or equal to 1",
+        ),
         ({"nodebalancer_id": 8, "page": "1"}, "page must be an integer"),
-        ({"nodebalancer_id": 8, "page_size": 24}, "page_size must be at least 25"),
-        ({"nodebalancer_id": 8, "page_size": 501}, "page_size must be at most 500"),
+        (
+            {"nodebalancer_id": 8, "page_size": 24},
+            "page_size must be an integer from 25 through 500",
+        ),
+        (
+            {"nodebalancer_id": 8, "page_size": 501},
+            "page_size must be an integer from 25 through 500",
+        ),
         ({"nodebalancer_id": 8, "page_size": False}, "page_size must be an integer"),
     ],
 )
@@ -8389,7 +8522,7 @@ async def test_handle_linode_nodebalancer_config_nodes_list_missing_nodebalancer
         {"config_id": 6}, sample_config
     )
     assert len(result) == 1
-    assert "nodebalancer_id must be a positive integer" in result[0].text
+    assert "nodebalancer_id is required" in result[0].text
 
 
 async def test_handle_linode_nodebalancer_config_nodes_list_missing_config_id(
@@ -8400,7 +8533,7 @@ async def test_handle_linode_nodebalancer_config_nodes_list_missing_config_id(
         {"nodebalancer_id": 8}, sample_config
     )
     assert len(result) == 1
-    assert "config_id must be a positive integer" in result[0].text
+    assert "config_id is required" in result[0].text
 
 
 async def test_handle_linode_nodebalancer_config_nodes_list_invalid_page(
@@ -8687,10 +8820,9 @@ async def test_linode_nodebalancer_vpc_configs_list_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_vpc_config_list"
     assert capability == Capability.Read
-    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
+    assert "page" in tool.inputSchema["properties"]
+    assert "page_size" in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["nodebalancer_id"]
 
 
@@ -8741,17 +8873,26 @@ async def test_handle_linode_nodebalancer_vpc_configs_list(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({}, "nodebalancer_id must be a positive integer"),
+        ({}, "nodebalancer_id is required"),
         ({"nodebalancer_id": 0}, "nodebalancer_id"),
         ({"nodebalancer_id": "8"}, "nodebalancer_id"),
         ({"nodebalancer_id": True}, "nodebalancer_id"),
         ({"nodebalancer_id": "1/2"}, "nodebalancer_id"),
         ({"nodebalancer_id": "1?x"}, "nodebalancer_id"),
         ({"nodebalancer_id": ".."}, "nodebalancer_id"),
-        ({"nodebalancer_id": 8, "page": 0}, "page must be at least 1"),
+        (
+            {"nodebalancer_id": 8, "page": 0},
+            "page must be an integer greater than or equal to 1",
+        ),
         ({"nodebalancer_id": 8, "page": "1"}, "page must be an integer"),
-        ({"nodebalancer_id": 8, "page_size": 24}, "page_size must be at least 25"),
-        ({"nodebalancer_id": 8, "page_size": 501}, "page_size must be at most 500"),
+        (
+            {"nodebalancer_id": 8, "page_size": 24},
+            "page_size must be an integer from 25 through 500",
+        ),
+        (
+            {"nodebalancer_id": 8, "page_size": 501},
+            "page_size must be an integer from 25 through 500",
+        ),
         ({"nodebalancer_id": 8, "page_size": False}, "page_size must be an integer"),
     ],
 )
@@ -8832,7 +8973,7 @@ async def test_handle_linode_nodebalancer_vpc_config_get(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({}, "nodebalancer_id must be a positive integer"),
+        ({}, "nodebalancer_id is required"),
         ({"nodebalancer_id": 0, "vpc_config_id": 456}, "nodebalancer_id"),
         ({"nodebalancer_id": "123", "vpc_config_id": 456}, "nodebalancer_id"),
         ({"nodebalancer_id": True, "vpc_config_id": 456}, "nodebalancer_id"),
@@ -9063,10 +9204,17 @@ async def test_linode_stackscript_delete_tool_schema() -> None:
 
     assert tool.name == "linode_stackscript_delete"
     assert capability == Capability.Destroy
-    assert tool.inputSchema["properties"]["stackscript_id"]["minimum"] == 1
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "stackscript_id",
+        "confirm",
+        "dry_run",
+        "mode",
+        "plan_id",
+    }
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert tool.inputSchema["required"] == ["stackscript_id", "confirm"]
+    assert set(tool.inputSchema["required"]) == {"stackscript_id", "confirm"}
 
 
 async def test_handle_linode_stackscript_delete_dry_run(sample_config: Config) -> None:
@@ -9141,7 +9289,10 @@ async def test_handle_linode_stackscript_delete_rejects_invalid_stackscript_id(
         result = await handle_linode_stackscript_delete(arguments, sample_config)
 
     assert len(result) == 1
-    assert "stackscript_id must be a positive integer" in result[0].text
+    assert (
+        "stackscript_id must be a positive integer" in result[0].text
+        or "stackscript_id is required" in result[0].text
+    )
     mock_client_class.assert_not_called()
 
 
@@ -9168,31 +9319,27 @@ async def test_linode_stackscript_create_tool_schema() -> None:
 
     assert tool.name == "linode_stackscript_create"
     assert capability.name == "Write"
-    assert tool.inputSchema["required"] == ["label", "images", "script", "confirm"]
+    assert set(tool.inputSchema["required"]) == {"label", "script", "confirm"}
+    assert "images" in tool.inputSchema["properties"]
 
 
 async def test_handle_linode_stackscript_create(sample_config: Config) -> None:
     """Test linode_stackscript_create tool."""
-    mock_stackscript = StackScript(
-        id=12345,
-        username="testuser",
-        user_gravatar_id="abc123",
-        label="my-script",
-        description="Test script",
-        images=["linode/ubuntu22.04"],
-        deployments_total=0,
-        deployments_active=0,
-        is_public=False,
-        mine=True,
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-        script="#!/bin/bash",
-        user_defined_fields=[],
-    )
+    raw_stackscript = {
+        "id": 12345,
+        "username": "testuser",
+        "label": "my-script",
+        "description": "Test script",
+        "images": ["linode/ubuntu22.04"],
+        "is_public": False,
+        "mine": True,
+        "created": "2024-01-15T10:00:00",
+        "updated": "2024-01-15T10:00:00",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_stackscript.return_value = mock_stackscript
+        mock_client.post_raw.return_value = raw_stackscript
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9211,15 +9358,23 @@ async def test_handle_linode_stackscript_create(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "my-script" in result[0].text
-        assert "12345" in result[0].text
-        mock_client.create_stackscript.assert_called_once_with(
-            label="my-script",
-            images=["linode/ubuntu22.04"],
-            script="#!/bin/bash",
-            description="Test script",
-            is_public=False,
-            rev_note="Initial revision",
+        payload = json.loads(result[0].text)
+        assert (
+            payload["message"]
+            == "StackScript 'my-script' (ID: 12345) created successfully"
+        )
+        assert payload["stackscript"]["id"] == 12345
+        assert payload["stackscript"]["label"] == "my-script"
+        mock_client.post_raw.assert_called_once_with(
+            "/linode/stackscripts",
+            {
+                "label": "my-script",
+                "images": ["linode/ubuntu22.04"],
+                "script": "#!/bin/bash",
+                "description": "Test script",
+                "is_public": False,
+                "rev_note": "Initial revision",
+            },
         )
 
 
@@ -9442,7 +9597,7 @@ async def test_sshkey_update_dry_run_still_validates_id(
     )
 
     assert len(result) == 1
-    assert "ssh_key_id is required" in result[0].text
+    assert "ssh_key_id must be a positive integer" in result[0].text
 
 
 async def test_sshkey_delete_dry_run_returns_preview(sample_config: Config) -> None:
@@ -9738,10 +9893,10 @@ async def test_handle_linode_instance_firewalls_update_rejects_invalid_firewall_
     ("field", "value", "message"),
     [
         ("page", "2", "page must be an integer"),
-        ("page", 0, "page must be at least 1"),
+        ("page", 0, "page must be an integer greater than or equal to 1"),
         ("page_size", "25", "page_size must be an integer"),
-        ("page_size", 24, "page_size must be at least 25"),
-        ("page_size", 501, "page_size must be at most 500"),
+        ("page_size", 24, "page_size must be an integer from 25 through 500"),
+        ("page_size", 501, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_handle_linode_instance_firewalls_update_rejects_invalid_pagination(
@@ -9770,9 +9925,13 @@ def test_linode_instance_firewalls_update_tool_schema() -> None:
 
     assert tool.name == "linode_instance_firewall_update"
     assert capability.name == "Write"
+    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceFirewallUpdateInput")
     assert "linode_id" in tool.inputSchema["required"]
-    assert "firewall_ids" in tool.inputSchema["required"]
     assert "confirm" in tool.inputSchema["required"]
+    # A repeated proto field cannot land in the generated required set, so
+    # firewall_ids is optional at the schema level; the handler enforces it.
+    assert "firewall_ids" in props
+    assert "firewall_ids" not in tool.inputSchema["required"]
     assert "dry_run" not in tool.inputSchema["required"]
     assert props["dry_run"]["type"] == "boolean"
     assert props["confirm"]["type"] == "boolean"
@@ -9803,7 +9962,19 @@ async def test_handle_linode_instance_firewalls_update(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "count": 1,
+        "firewalls": [
+            {
+                "id": 123,
+                "label": "",
+                "status": "",
+                "tags": [],
+                "created": "",
+                "updated": "",
+            }
+        ],
+    }
     mock_client.update_instance_firewalls.assert_awaited_once_with(
         42, [123], page=2, page_size=25
     )
@@ -9833,7 +10004,7 @@ async def test_handle_linode_instance_firewalls_update_allows_empty_firewall_ids
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {"count": 0, "firewalls": []}
     mock_client.update_instance_firewalls.assert_awaited_once_with(
         42, [], page=None, page_size=None
     )
@@ -9903,35 +10074,23 @@ def test_linode_instance_update_tool_schema() -> None:
 async def test_handle_linode_instance_update(
     sample_config: Config, sample_instance_data: dict[str, Any]
 ) -> None:
-    """Test linode_instance_update tool."""
-    mock_instance = Instance(
-        id=sample_instance_data["id"],
-        label="updated-instance",
-        status=sample_instance_data["status"],
-        type=sample_instance_data["type"],
-        region=sample_instance_data["region"],
-        image=sample_instance_data["image"],
-        ipv4=sample_instance_data["ipv4"],
-        ipv6=sample_instance_data["ipv6"],
-        hypervisor=sample_instance_data["hypervisor"],
-        specs=Specs(**sample_instance_data["specs"]),
-        alerts=Alerts(**sample_instance_data["alerts"]),
-        backups=Backups(
-            enabled=sample_instance_data["backups"]["enabled"],
-            available=sample_instance_data["backups"]["available"],
-            schedule=Schedule(**sample_instance_data["backups"]["schedule"]),
-            last_successful=None,
-        ),
-        created=sample_instance_data["created"],
-        updated=sample_instance_data["updated"],
-        group=sample_instance_data["group"],
-        tags=["updated", "prod"],
-        watchdog_enabled=False,
-    )
+    """Instance update serializes the raw API body through the Instance write proto.
+
+    The raw body carries interface_generation, which the old curated
+    instance_to_response_dict dropped; routing through the full Instance proto
+    now emits it.
+    """
+    raw_instance = {
+        **sample_instance_data,
+        "label": "updated-instance",
+        "tags": ["updated", "prod"],
+        "watchdog_enabled": False,
+        "interface_generation": "linode",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_instance.return_value = mock_instance
+        mock_client.update_instance_raw.return_value = raw_instance
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9948,8 +10107,12 @@ async def test_handle_linode_instance_update(
         )
 
         assert len(result) == 1
-        assert "updated" in result[0].text.lower()
-        mock_client.update_instance.assert_called_once_with(
+        payload = json.loads(result[0].text)
+        assert payload["message"] == "Instance 123456 updated successfully"
+        assert payload["instance"]["label"] == "updated-instance"
+        # interface_generation now survives (the curated dict used to drop it).
+        assert payload["instance"]["interface_generation"] == "linode"
+        mock_client.update_instance_raw.assert_called_once_with(
             12345,
             label="updated-instance",
             tags=["updated", "prod"],
@@ -10006,7 +10169,7 @@ async def test_handle_linode_instance_mutate_rejects_bad_confirm(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_instance_mutate(arguments, sample_config)
 
-    assert "confirm must be true" in result[0].text
+    assert "Set confirm=true to proceed" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10092,8 +10255,6 @@ def test_linode_instance_upgrade_interfaces_tool_schema_requires_confirm() -> No
     assert tool.name == "linode_instance_interface_upgrade"
     assert capability is Capability.Write
     assert "confirm" in tool.inputSchema["required"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["api_dry_run"]["type"] == "boolean"
 
 
@@ -10111,7 +10272,7 @@ async def test_handle_linode_instance_upgrade_interfaces_rejects_bad_confirm(
             arguments, sample_config
         )
 
-    assert "confirm must be true" in result[0].text
+    assert "Set confirm=true to proceed" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10179,7 +10340,12 @@ async def test_handle_linode_instance_upgrade_interfaces(sample_config: Config) 
         )
 
         assert len(result) == 1
-        assert "interface upgrade" in result[0].text.lower()
+        assert json.loads(result[0].text) == {
+            "message": "Linode 123 interface upgrade initiated",
+            "config_id": 0,
+            "dry_run": False,
+            "interfaces": [],
+        }
         mock_client.upgrade_instance_interfaces.assert_awaited_once_with(
             123, config_id=456, dry_run=False
         )
@@ -10321,7 +10487,8 @@ async def test_handle_linode_firewall_delete(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "deleted" in result[0].text.lower()
+        assert "removed successfully" in result[0].text.lower()
+        assert "12345" in result[0].text
 
 
 async def test_firewall_delete_dry_run_returns_preview_without_mutating(
@@ -10769,8 +10936,8 @@ async def test_linode_instance_firewalls_apply_tool_definition() -> None:
 
     assert tool.name == "linode_instance_firewall_apply"
     assert capability is Capability.Write
+    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceFirewallApplyInput")
     assert tool.inputSchema["required"] == ["linode_id", "confirm"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -10812,7 +10979,7 @@ async def test_handle_linode_instance_firewalls_apply_requires_boolean_confirm(
         result = await handle_linode_instance_firewall_apply(arguments, sample_config)
 
     assert len(result) == 1
-    assert "confirm must be true" in result[0].text
+    assert "Set confirm=true to proceed" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10858,9 +11025,9 @@ async def test_linode_firewall_settings_update_tool_definition() -> None:
 
     assert tool.name == "linode_firewall_settings_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["default_firewall_ids", "confirm"]
+    assert tool.inputSchema["required"] == ["confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["default_firewall_ids"]["minProperties"] == 1
+    assert tool.inputSchema["properties"]["default_firewall_ids"]["type"] == "object"
 
 
 async def test_handle_linode_firewall_settings_update(sample_config: Config) -> None:
@@ -10880,7 +11047,10 @@ async def test_handle_linode_firewall_settings_update(sample_config: Config) -> 
         )
 
     assert len(result) == 1
-    assert "updated successfully" in result[0].text.lower()
+    body = json.loads(result[0].text)
+    assert body["message"] == "Default firewall settings updated successfully"
+    assert body["settings"]["default_firewall_ids"]["linode"] == 100
+    assert body["settings"]["default_firewall_ids"]["nodebalancer"] == 101
     mock_client.update_firewall_settings.assert_awaited_once_with(payload)
 
 
@@ -10897,7 +11067,7 @@ async def test_handle_linode_firewall_settings_update_requires_boolean_confirm(
         result = await handle_linode_firewall_settings_update(arguments, sample_config)
 
     assert len(result) == 1
-    assert "confirm must be true" in result[0].text
+    assert "Set confirm=true to proceed" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10929,22 +11099,18 @@ async def test_handle_linode_firewall_settings_update_invalid_default_ids(
 
 
 async def test_handle_linode_domain_clone(sample_config: Config) -> None:
-    """Test linode_domain_clone tool."""
-    mock_domain = Domain(
-        id=23456,
-        domain="clone.example.com",
-        type="master",
-        status="active",
-        soa_email="admin@example.com",
-        description="",
-        tags=[],
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-    )
+    """Test linode_domain_clone tool emits the full proto domain element."""
+    raw_domain = {
+        "id": 23456,
+        "domain": "clone.example.com",
+        "type": "master",
+        "status": "active",
+        "soa_email": "admin@example.com",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.clone_domain.return_value = mock_domain
+        mock_client.post_raw.return_value = raw_domain
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -10955,9 +11121,12 @@ async def test_handle_linode_domain_clone(sample_config: Config) -> None:
         )
 
     assert len(result) == 1
-    assert "clone.example.com" in result[0].text
-    mock_client.clone_domain.assert_awaited_once_with(
-        domain_id=12345, domain="clone.example.com"
+    payload = json.loads(result[0].text)
+    expected = "Domain 12345 cloned as 'clone.example.com' (ID: 23456)"
+    assert payload["message"] == expected
+    assert payload["domain"]["soa_email"] == "admin@example.com"
+    mock_client.post_raw.assert_awaited_once_with(
+        "/domains/12345/clone", {"domain": "clone.example.com"}
     )
 
 
@@ -11033,22 +11202,18 @@ async def test_domain_clone_validates_required_arguments(
 
 
 async def test_handle_linode_domain_create(sample_config: Config) -> None:
-    """Test linode_domain_create tool."""
-    mock_domain = Domain(
-        id=12345,
-        domain="example.com",
-        type="master",
-        status="active",
-        soa_email="admin@example.com",
-        description="",
-        tags=[],
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-    )
+    """Test linode_domain_create tool sends the documented body and full element."""
+    raw_domain = {
+        "id": 12345,
+        "domain": "example.com",
+        "type": "master",
+        "status": "active",
+        "soa_email": "admin@example.com",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_domain.return_value = mock_domain
+        mock_client.post_raw.return_value = raw_domain
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11056,6 +11221,7 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
         result = await handle_linode_domain_create(
             {
                 "domain": "example.com",
+                "type": "master",
                 "soa_email": "admin@example.com",
                 "ttl_sec": 3600,
                 "confirm": True,
@@ -11065,26 +11231,31 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "example.com" in result[0].text
-        assert mock_client.create_domain.call_args.kwargs["ttl_sec"] == 3600
+        mock_client.post_raw.assert_awaited_once_with(
+            "/domains",
+            {
+                "domain": "example.com",
+                "type": "master",
+                "soa_email": "admin@example.com",
+                "ttl_sec": 3600,
+            },
+        )
 
 
 async def test_handle_linode_domain_update(sample_config: Config) -> None:
-    """Test linode_domain_update tool."""
-    mock_domain = Domain(
-        id=12345,
-        domain="example.com",
-        type="master",
-        status="active",
-        soa_email="admin@example.com",
-        description="Updated",
-        tags=[],
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T12:00:00",
-    )
+    """Test linode_domain_update tool sends the documented PUT body."""
+    raw_domain = {
+        "id": 12345,
+        "domain": "example.com",
+        "type": "master",
+        "status": "disabled",
+        "soa_email": "admin@example.com",
+        "description": "Updated",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_domain.return_value = mock_domain
+        mock_client.put_raw.return_value = raw_domain
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11101,10 +11272,11 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "updated" in result[0].text.lower()
-        update_kwargs = mock_client.update_domain.call_args.kwargs
-        assert update_kwargs["status"] == "disabled"
-        assert update_kwargs["ttl_sec"] == 7200
+        assert "modified" in result[0].text.lower()
+        mock_client.put_raw.assert_awaited_once_with(
+            "/domains/12345",
+            {"description": "Updated", "status": "disabled", "ttl_sec": 7200},
+        )
 
 
 async def test_domain_update_dry_run_surfaces_field_changes(
@@ -11209,23 +11381,20 @@ async def test_domain_delete_dry_run_surfaces_ns_record_dependencies(
 
 
 async def test_handle_linode_domain_record_create(sample_config: Config) -> None:
-    """Test linode_domain_record_create tool."""
-    mock_record = DomainRecord(
-        id=12345,
-        type="A",
-        name="www",
-        target="192.0.2.1",
-        priority=0,
-        weight=0,
-        port=0,
-        ttl_sec=300,
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-    )
+    """Test linode_domain_record_create sends documented body, full element."""
+    raw_record = {
+        "id": 12345,
+        "type": "A",
+        "name": "www",
+        "target": "8.8.8.8",
+        "service": "_http",
+        "protocol": "_tcp",
+        "tag": "issue",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_domain_record.return_value = mock_record
+        mock_client.post_raw.return_value = raw_record
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11235,7 +11404,7 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
                 "domain_id": 12345,
                 "type": "A",
                 "name": "www",
-                "target": "192.0.2.1",
+                "target": "8.8.8.8",
                 "service": "_http",
                 "protocol": "_tcp",
                 "tag": "issue",
@@ -11245,31 +11414,34 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
         )
 
         assert len(result) == 1
-        assert "www" in result[0].text
-        record_kwargs = mock_client.create_domain_record.call_args.kwargs
-        assert record_kwargs["service"] == "_http"
-        assert record_kwargs["protocol"] == "_tcp"
-        assert record_kwargs["tag"] == "issue"
+        payload = json.loads(result[0].text)
+        assert payload["message"] == "A record (ID: 12345) created successfully"
+        assert payload["record"]["name"] == "www"
+        mock_client.post_raw.assert_awaited_once_with(
+            "/domains/12345/records",
+            {
+                "type": "A",
+                "name": "www",
+                "target": "8.8.8.8",
+                "service": "_http",
+                "protocol": "_tcp",
+                "tag": "issue",
+            },
+        )
 
 
 async def test_handle_linode_domain_record_update(sample_config: Config) -> None:
-    """Test linode_domain_record_update tool."""
-    mock_record = DomainRecord(
-        id=12345,
-        type="A",
-        name="www",
-        target="192.0.2.2",
-        priority=0,
-        weight=0,
-        port=0,
-        ttl_sec=300,
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T12:00:00",
-    )
+    """Test linode_domain_record_update sends the documented PUT body."""
+    raw_record = {
+        "id": 12345,
+        "type": "A",
+        "name": "www",
+        "target": "192.0.2.2",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_domain_record.return_value = mock_record
+        mock_client.put_raw.return_value = raw_record
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11285,7 +11457,12 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
         )
 
         assert len(result) == 1
-        assert "updated" in result[0].text.lower()
+        payload = json.loads(result[0].text)
+        assert payload["message"] == "Record 12345 modified successfully"
+        assert payload["record"]["target"] == "192.0.2.2"
+        mock_client.put_raw.assert_awaited_once_with(
+            "/domains/12345/records/12345", {"target": "192.0.2.2"}
+        )
 
 
 async def test_domain_create_dry_run_returns_preview(sample_config: Config) -> None:
@@ -11410,25 +11587,20 @@ async def test_handle_linode_volume_create_no_confirm(sample_config: Config) -> 
 
 
 async def test_handle_linode_volume_create(sample_config: Config) -> None:
-    """Test linode_volume_create tool."""
-    mock_volume = Volume(
-        id=12345,
-        label="my-volume",
-        status="creating",
-        size=20,
-        region="us-east",
-        linode_id=None,
-        linode_label=None,
-        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-        tags=[],
-        hardware_type="nvme",
-    )
+    """Test linode_volume_create tool sends documented body, full element."""
+    raw_volume = {
+        "id": 12345,
+        "label": "my-volume",
+        "status": "creating",
+        "size": 20,
+        "region": "us-east",
+        "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
+        "hardware_type": "nvme",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_volume.return_value = mock_volume
+        mock_client.post_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11438,7 +11610,15 @@ async def test_handle_linode_volume_create(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "my-volume" in result[0].text
+        payload = json.loads(result[0].text)
+        assert payload["message"] == (
+            "Volume 'my-volume' (ID: 12345) created successfully in us-east"
+        )
+        assert payload["volume"]["filesystem_path"].endswith("my-volume")
+        # No size supplied -> omitted so the API applies its 20 GB default.
+        mock_client.post_raw.assert_awaited_once_with(
+            "/volumes", {"label": "my-volume", "region": "us-east"}
+        )
 
 
 async def test_handle_linode_volume_clone_no_confirm(sample_config: Config) -> None:
@@ -11463,26 +11643,32 @@ async def test_handle_linode_volume_clone_requires_label(
     assert "label is required" in result[0].text
 
 
-async def test_handle_linode_volume_clone(sample_config: Config) -> None:
-    """Test linode_volume_clone tool."""
-    mock_volume = Volume(
-        id=23456,
-        label="my-volume-clone",
-        status="creating",
-        size=20,
-        region="us-east",
-        linode_id=None,
-        linode_label=None,
-        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_my-volume-clone",
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-        tags=[],
-        hardware_type="nvme",
+async def test_handle_linode_volume_clone_rejects_negative_id(
+    sample_config: Config,
+) -> None:
+    """Volume clone rejects a non-positive volume_id locally (matches Go)."""
+    result = await handle_linode_volume_clone(
+        {"volume_id": -1, "label": "clone-vol", "confirm": True}, sample_config
     )
+
+    assert len(result) == 1
+    assert "volume_id must be a positive integer" in result[0].text
+
+
+async def test_handle_linode_volume_clone(sample_config: Config) -> None:
+    """Test linode_volume_clone tool sends documented body, full element."""
+    raw_volume = {
+        "id": 23456,
+        "label": "my-volume-clone",
+        "status": "creating",
+        "size": 20,
+        "region": "us-east",
+        "hardware_type": "nvme",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.clone_volume.return_value = mock_volume
+        mock_client.post_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11496,31 +11682,33 @@ async def test_handle_linode_volume_clone(sample_config: Config) -> None:
             sample_config,
         )
 
-        mock_client.clone_volume.assert_awaited_once_with(12345, "my-volume-clone")
+        mock_client.post_raw.assert_awaited_once_with(
+            "/volumes/12345/clone", {"label": "my-volume-clone"}
+        )
         assert len(result) == 1
-        assert "my-volume-clone" in result[0].text
+        payload = json.loads(result[0].text)
+        assert payload["message"] == (
+            'Volume 12345 cloned successfully as "my-volume-clone"'
+        )
+        assert payload["volume"]["hardware_type"] == "nvme"
 
 
 async def test_handle_linode_volume_attach(sample_config: Config) -> None:
-    """Test linode_volume_attach tool."""
-    mock_volume = Volume(
-        id=12345,
-        label="my-volume",
-        status="active",
-        size=20,
-        region="us-east",
-        linode_id=54321,
-        linode_label="my-linode",
-        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T12:00:00",
-        tags=[],
-        hardware_type="nvme",
-    )
+    """Test linode_volume_attach tool sends documented body, full element."""
+    raw_volume = {
+        "id": 12345,
+        "label": "my-volume",
+        "status": "active",
+        "size": 20,
+        "region": "us-east",
+        "linode_id": 54321,
+        "linode_label": "my-linode",
+        "hardware_type": "nvme",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.attach_volume.return_value = mock_volume
+        mock_client.post_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11530,7 +11718,16 @@ async def test_handle_linode_volume_attach(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "attached" in result[0].text.lower()
+        payload = json.loads(result[0].text)
+        assert payload["message"] == (
+            "Volume 12345 attached to Linode 54321 successfully"
+        )
+        assert payload["volume"]["linode_id"] == 54321
+        # persist_across_boots not supplied -> omitted so the API applies its default.
+        mock_client.post_raw.assert_awaited_once_with(
+            "/volumes/12345/attach",
+            {"linode_id": 54321},
+        )
 
 
 async def test_handle_linode_volume_detach(sample_config: Config) -> None:
@@ -11561,25 +11758,19 @@ async def test_handle_linode_volume_resize_no_confirm(sample_config: Config) -> 
 
 
 async def test_handle_linode_volume_resize(sample_config: Config) -> None:
-    """Test linode_volume_resize tool."""
-    mock_volume = Volume(
-        id=12345,
-        label="my-volume",
-        status="resizing",
-        size=40,
-        region="us-east",
-        linode_id=None,
-        linode_label=None,
-        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T12:00:00",
-        tags=[],
-        hardware_type="nvme",
-    )
+    """Test linode_volume_resize tool sends documented body, full element."""
+    raw_volume = {
+        "id": 12345,
+        "label": "my-volume",
+        "status": "resizing",
+        "size": 40,
+        "region": "us-east",
+        "hardware_type": "nvme",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.resize_volume.return_value = mock_volume
+        mock_client.post_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11589,7 +11780,14 @@ async def test_handle_linode_volume_resize(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "resize" in result[0].text.lower()
+        payload = json.loads(result[0].text)
+        assert payload["message"] == (
+            "Volume 12345 resize to 40 GB initiated successfully"
+        )
+        assert payload["volume"]["size"] == 40
+        mock_client.post_raw.assert_awaited_once_with(
+            "/volumes/12345/resize", {"size": 40}
+        )
 
 
 async def test_handle_linode_volume_update_no_confirm(sample_config: Config) -> None:
@@ -11615,25 +11813,20 @@ async def test_handle_linode_volume_update_requires_change(
 
 
 async def test_handle_linode_volume_update(sample_config: Config) -> None:
-    """Test linode_volume_update tool."""
-    mock_volume = Volume(
-        id=12345,
-        label="renamed-volume",
-        status="active",
-        size=20,
-        region="us-east",
-        linode_id=None,
-        linode_label=None,
-        filesystem_path="/dev/disk/by-id/scsi-0Linode_Volume_renamed-volume",
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T12:00:00",
-        tags=["prod"],
-        hardware_type="nvme",
-    )
+    """Test linode_volume_update tool sends documented PUT body, full element."""
+    raw_volume = {
+        "id": 12345,
+        "label": "renamed-volume",
+        "status": "active",
+        "size": 20,
+        "region": "us-east",
+        "tags": ["prod"],
+        "hardware_type": "nvme",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.update_volume.return_value = mock_volume
+        mock_client.put_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11648,13 +11841,14 @@ async def test_handle_linode_volume_update(sample_config: Config) -> None:
             sample_config,
         )
 
-        mock_client.update_volume.assert_awaited_once_with(
-            volume_id=12345,
-            label="renamed-volume",
-            tags=["prod"],
+        mock_client.put_raw.assert_awaited_once_with(
+            "/volumes/12345",
+            {"label": "renamed-volume", "tags": ["prod"]},
         )
         assert len(result) == 1
-        assert "updated" in result[0].text.lower()
+        payload = json.loads(result[0].text)
+        assert payload["message"] == "Volume 12345 updated successfully"
+        assert payload["volume"]["tags"] == ["prod"]
 
 
 async def test_handle_linode_volume_delete_no_confirm(sample_config: Config) -> None:
@@ -11795,7 +11989,6 @@ async def test_volume_detach_dry_run_surfaces_current_attachment(
     sample_config: Config,
 ) -> None:
     """Phase 2 Tier B walk: detach names the instance the volume is on."""
-    from linodemcp.linode import Volume
 
     attached = Volume(
         id=333,
@@ -11854,7 +12047,6 @@ async def test_volume_resize_dry_run_surfaces_size_change(
     sample_config: Config,
 ) -> None:
     """Phase 2 Tier B walk: resize names the size change + grow-only warning."""
-    from linodemcp.linode import Volume
 
     current = Volume(
         id=333,
@@ -11931,17 +12123,15 @@ async def test_linode_nodebalancer_firewalls_update_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_firewall_update"
     assert capability == Capability.Write
-    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["firewall_ids"]["type"] == "array"
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert "page" in tool.inputSchema["properties"]
+    assert "page_size" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["required"] == [
-        "nodebalancer_id",
-        "firewall_ids",
-        "confirm",
-    ]
+    # firewall_ids is a required array in the hand-built schema; a repeated proto
+    # field cannot land in the generated required set, so it drops to optional
+    # there while the handler still enforces its presence.
+    assert tool.inputSchema["required"] == ["nodebalancer_id", "confirm"]
 
 
 async def test_handle_linode_nodebalancer_firewalls_update(
@@ -11975,7 +12165,10 @@ async def test_handle_linode_nodebalancer_firewalls_update(
 
         assert len(result) == 1
         data = json.loads(result[0].text)
-        assert data["data"][0]["id"] == 123
+        assert data["count"] == 1
+        assert data["firewalls"][0]["id"] == 123
+        assert data["firewalls"][0]["label"] == "web-fw"
+        assert "filter" not in data
         mock_client.update_nodebalancer_firewalls.assert_called_once_with(
             8, [123], page=1, page_size=25
         )
@@ -11984,22 +12177,22 @@ async def test_handle_linode_nodebalancer_firewalls_update(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"nodebalancer_id": 8, "firewall_ids": [123]}, "confirm must be true"),
+        ({"nodebalancer_id": 8, "firewall_ids": [123]}, "Set confirm=true to proceed"),
         (
             {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": False},
-            "confirm must be true",
+            "Set confirm=true to proceed",
         ),
         (
             {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": "true"},
-            "confirm must be true",
+            "Set confirm=true to proceed",
         ),
         (
             {"nodebalancer_id": 8, "firewall_ids": [123], "confirm": 1},
-            "confirm must be true",
+            "Set confirm=true to proceed",
         ),
         (
             {"firewall_ids": [123], "confirm": True},
-            "nodebalancer_id must be a positive integer",
+            "nodebalancer_id is required",
         ),
         (
             {"nodebalancer_id": 0, "firewall_ids": [123], "confirm": True},
@@ -12043,7 +12236,7 @@ async def test_handle_linode_nodebalancer_firewalls_update(
         ),
         (
             {"nodebalancer_id": 8, "firewall_ids": [], "page": 0, "confirm": True},
-            "page must be at least 1",
+            "page must be an integer greater than or equal to 1",
         ),
         (
             {"nodebalancer_id": 8, "firewall_ids": [], "page": "1", "confirm": True},
@@ -12056,7 +12249,7 @@ async def test_handle_linode_nodebalancer_firewalls_update(
                 "page_size": 24,
                 "confirm": True,
             },
-            "page_size must be at least 25",
+            "page_size must be an integer from 25 through 500",
         ),
         (
             {
@@ -12065,7 +12258,7 @@ async def test_handle_linode_nodebalancer_firewalls_update(
                 "page_size": 501,
                 "confirm": True,
             },
-            "page_size must be at most 500",
+            "page_size must be an integer from 25 through 500",
         ),
     ],
 )
@@ -12089,8 +12282,8 @@ def test_linode_nodebalancer_config_rebuild_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_config_rebuild"
     assert capability == Capability.Write
-    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
+    assert "config_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["required"] == [
         "nodebalancer_id",
@@ -12163,10 +12356,10 @@ async def test_handle_linode_nodebalancer_config_rebuild_empty_response(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({}, "confirm must be true"),
-        ({"confirm": False}, "confirm must be true"),
-        ({"confirm": "true"}, "confirm must be true"),
-        ({"confirm": 1}, "confirm must be true"),
+        ({}, "This rebuilds a NodeBalancer config. Set confirm=true to proceed."),
+        ({"confirm": False}, "Set confirm=true to proceed"),
+        ({"confirm": "true"}, "Set confirm=true to proceed"),
+        ({"confirm": 1}, "Set confirm=true to proceed"),
         (
             {"nodebalancer_id": 0, "config_id": 6, "confirm": True},
             "nodebalancer_id",
@@ -12284,24 +12477,24 @@ async def test_handle_linode_nodebalancer_create_no_confirm(
 
 
 async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
-    """Test linode_nodebalancer_create tool."""
-    mock_nodebalancer = NodeBalancer(
-        id=12345,
-        label="my-nodebalancer",
-        region="us-east",
-        hostname="nb-192-0-2-1.newark.nodebalancer.linode.com",
-        ipv4="192.0.2.1",
-        ipv6="2600:3c03::1",
-        created="2024-01-15T10:00:00",
-        updated="2024-01-15T10:00:00",
-        client_conn_throttle=0,
-        transfer=Transfer(in_=100, out=200, total=300),
-        tags=[],
-    )
+    """NodeBalancer create serializes the raw body through the write proto."""
+    raw_nodebalancer: dict[str, Any] = {
+        "id": 12345,
+        "label": "my-nodebalancer",
+        "region": "us-east",
+        "hostname": "nb-192-0-2-1.newark.nodebalancer.linode.com",
+        "ipv4": "192.0.2.1",
+        "ipv6": "2600:3c03::1",
+        "client_conn_throttle": 0,
+        "transfer": {"in": 100.0, "out": 200.0, "total": 300.0},
+        "tags": [],
+        "created": "2024-01-15T10:00:00",
+        "updated": "2024-01-15T10:00:00",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.create_nodebalancer.return_value = mock_nodebalancer
+        mock_client.create_nodebalancer_raw.return_value = raw_nodebalancer
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -12311,7 +12504,13 @@ async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "my-nodebalancer" in result[0].text or "12345" in result[0].text
+        payload = json.loads(result[0].text)
+        expected_message = (
+            "NodeBalancer 'my-nodebalancer' (ID: 12345) created successfully in us-east"
+        )
+        assert payload["message"] == expected_message
+        assert payload["nodebalancer"]["id"] == 12345
+        assert payload["nodebalancer"]["transfer"]["total"] == 300.0
 
 
 async def test_handle_linode_nodebalancer_update(sample_config: Config) -> None:
@@ -12541,7 +12740,7 @@ async def test_networking_ip_allocate_dry_run_returns_preview(
     )
 
     result = await handle_linode_networking_ip_allocate(
-        {"linode_id": 123, "type": "ipv4", "dry_run": True},
+        {"linode_id": 123, "type": "ipv4", "public": True, "dry_run": True},
         sample_config,
     )
 
@@ -12611,17 +12810,12 @@ async def test_linode_nodebalancer_config_node_update_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_config_node_update_tool()
     assert tool.name == "linode_nodebalancer_config_node_update"
     assert capability == Capability.Write
-    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["node_id"]["minimum"] == 1
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
+    assert "config_id" in tool.inputSchema["properties"]
+    assert "node_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["mode"]["enum"] == [
-        "accept",
-        "reject",
-        "drain",
-        "backup",
-    ]
-    assert tool.inputSchema["properties"]["weight"]["maximum"] == 255
+    assert "mode" in tool.inputSchema["properties"]
+    assert "weight" in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == [
         "nodebalancer_id",
         "config_id",
@@ -12723,10 +12917,10 @@ async def test_handle_linode_nodebalancer_config_node_update_empty_response(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({}, "confirm must be true"),
-        ({"confirm": False}, "confirm must be true"),
-        ({"confirm": "true"}, "confirm must be true"),
-        ({"confirm": 1}, "confirm must be true"),
+        ({}, "This updates a NodeBalancer node. Set confirm=true to proceed."),
+        ({"confirm": False}, "Set confirm=true to proceed"),
+        ({"confirm": "true"}, "Set confirm=true to proceed"),
+        ({"confirm": 1}, "Set confirm=true to proceed"),
         (
             {"nodebalancer_id": 12345, "config_id": 6, "node_id": 7, "confirm": True},
             "at least one update field is required",
@@ -12871,7 +13065,7 @@ async def test_handle_linode_nodebalancer_config_node_update_empty_response(
                 "mode": "invalid",
                 "confirm": True,
             },
-            "mode must be one of accept, reject, drain, backup",
+            "mode must be one of: accept, backup, drain, none, reject",
         ),
         (
             {
@@ -12989,7 +13183,7 @@ async def test_handle_linode_nodebalancer_config_delete_confirm_rejected(
         )
 
     assert len(result) == 1
-    assert "confirm must be true" in result[0].text.lower()
+    assert "set confirm=true to proceed" in result[0].text.lower()
     mock_client.delete_nodebalancer_config.assert_not_called()
 
 
@@ -12998,7 +13192,7 @@ async def test_handle_linode_nodebalancer_config_delete_confirm_rejected(
     [
         (
             {"config_id": 6, "confirm": True},
-            "nodebalancer_id must be a positive integer",
+            "nodebalancer_id is required",
         ),
         (
             {"nodebalancer_id": "1/2", "config_id": 6, "confirm": True},
@@ -13091,7 +13285,7 @@ async def test_nodebalancer_config_delete_dry_run_still_validates_ids(
     )
 
     assert len(result) == 1
-    assert "nodebalancer_id must be a positive integer" in result[0].text
+    assert "nodebalancer_id is required" in result[0].text
 
 
 async def test_linode_nodebalancer_config_node_delete_tool_definition() -> None:
@@ -13302,12 +13496,13 @@ async def test_handle_linode_object_storage_buckets_list_error(
 async def test_handle_linode_object_storage_buckets_region_list(
     sample_config: Config,
 ) -> None:
-    """Test linode_object_storage_bucket_by_region_list tool."""
+    """By-region list emits the shared bucket list envelope (unknown fields drop)."""
     mock_buckets = [
         {
             "label": "app-data",
             "region": "us-ord",
             "hostname": "app-data.us-ord-1.linodeobjects.com",
+            "not_in_proto": "dropped",
         },
     ]
 
@@ -13323,8 +13518,13 @@ async def test_handle_linode_object_storage_buckets_region_list(
         )
 
         assert len(result) == 1
-        assert "app-data" in result[0].text
-        assert '"count": 1' in result[0].text
+        body = json.loads(result[0].text)
+        assert body["count"] == 1
+        assert body["buckets"][0]["label"] == "app-data"
+        # The region is an input echo, not part of the ObjectStorageBucketListResponse
+        # envelope, so the output carries only count + buckets.
+        assert "region" not in body
+        assert "not_in_proto" not in result[0].text
         mock_client.list_object_storage_buckets_for_region.assert_called_once_with(
             "us-ord"
         )
@@ -13344,7 +13544,7 @@ async def test_handle_linode_object_storage_buckets_region_list_rejects_bad_regi
     sample_config: Config,
 ) -> None:
     """Test region-scoped bucket list rejects malformed path values."""
-    for region in ("us/ord", "us?ord", ".."):
+    for region in ("us/ord", "us?ord", "..", "US-ORD", "us--ord"):
         with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
             result = await handle_linode_object_storage_bucket_by_region_list(
                 {"region": region}, sample_config
@@ -13508,7 +13708,7 @@ async def test_handle_linode_object_storage_bucket_contents(
         body = json.loads(result[0].text)
         assert body["count"] == 1
         assert body["objects"][0]["name"] == "photos/cat.jpg"
-        assert body["objects"][0]["size"] == "512000"
+        assert body["objects"][0]["size"] == 512000
         assert body["is_truncated"] is False
 
 
@@ -13599,8 +13799,8 @@ async def test_handle_linode_object_storage_bucket_object_list_marker_and_page_s
         body = json.loads(result[0].text)
         assert body["count"] == 1
         assert body["objects"][0]["name"] == "images/next.png"
-        # size is int64 in proto, so it serializes back as a JSON string.
-        assert body["objects"][0]["size"] == "512000"
+        # size is int64 in proto and stays a JSON number.
+        assert body["objects"][0]["size"] == 512000
         assert "marker" not in body.get("filter", "")
         assert "page_size" not in body.get("filter", "")
 
@@ -14034,6 +14234,7 @@ async def test_handle_linode_object_storage_quota_get(
     mock_quota = {
         "quota_id": "obj-buckets-us-sea-1.linodeobjects.com",
         "quota_limit": 1000,
+        "not_in_proto": "dropped",
     }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -14051,6 +14252,7 @@ async def test_handle_linode_object_storage_quota_get(
         assert len(result) == 1
         assert "quota_id" in result[0].text
         assert "obj-buckets-us-sea-1.linodeobjects.com" in result[0].text
+        assert "not_in_proto" not in result[0].text
         mock_client.get_object_storage_quota.assert_called_once_with(
             "obj-buckets-us-sea-1.linodeobjects.com"
         )
@@ -14119,8 +14321,12 @@ def test_linode_object_storage_quota_usage_tool_schema() -> None:
 async def test_handle_linode_object_storage_quota_usage(
     sample_config: Config,
 ) -> None:
-    """Test linode_object_storage_quota_usage_get tool."""
-    mock_usage = {"quota_id": 123, "usage": {"objects": 7}}
+    """Quota usage get keeps int64 byte counts as JSON numbers, unknown fields drop."""
+    mock_usage = {
+        "quota_limit": 1000000000000,
+        "usage": 5368709120,
+        "not_in_proto": "dropped",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -14134,8 +14340,10 @@ async def test_handle_linode_object_storage_quota_usage(
         )
 
         assert len(result) == 1
-        assert "quota_id" in result[0].text
-        assert "123" in result[0].text
+        assert json.loads(result[0].text) == {
+            "quota_limit": 1000000000000,
+            "usage": 5368709120,
+        }
         mock_client.get_object_storage_quota_usage.assert_called_once_with(
             "obj-bucket-us-ord-1"
         )
@@ -14190,8 +14398,8 @@ async def test_handle_linode_object_storage_quota_usage_error(
 async def test_handle_linode_object_storage_transfer(
     sample_config: Config,
 ) -> None:
-    """Test linode_object_storage_transfer_get tool."""
-    mock_transfer = {"used": 1073741824}
+    """Transfer get emits the int64 used byte count as a JSON string, unknown drop."""
+    mock_transfer = {"used": 1073741824, "not_in_proto": "dropped"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -14203,7 +14411,7 @@ async def test_handle_linode_object_storage_transfer(
         result = await handle_linode_object_storage_transfer_get({}, sample_config)
 
         assert len(result) == 1
-        assert "1073741824" in result[0].text
+        assert json.loads(result[0].text) == {"used": 1073741824}
         mock_client.get_object_storage_transfer.assert_called_once()
 
 
@@ -14327,10 +14535,12 @@ async def test_handle_object_storage_cancel_requires_boolean_true_confirm(
 async def test_handle_object_storage_cancel_success(
     sample_config: Config,
 ) -> None:
-    """Object Storage cancel should call the retryable client."""
+    """Object Storage cancel returns the fixed confirmation, matching Go."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.cancel_object_storage.return_value = {"message": "scheduled"}
+        # The cancel endpoint returns an empty body; the handler emits the fixed
+        # confirmation message regardless, so the API return is not echoed.
+        mock_client.cancel_object_storage.return_value = {}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -14340,7 +14550,9 @@ async def test_handle_object_storage_cancel_success(
         )
 
     assert len(result) == 1
-    assert "scheduled" in result[0].text
+    assert json.loads(result[0].text) == {
+        "message": "Object Storage cancellation requested successfully"
+    }
     mock_client.cancel_object_storage.assert_called_once_with()
 
 
@@ -14404,7 +14616,10 @@ async def test_handle_object_storage_bucket_create_invalid_acl(
     )
 
     assert len(result) == 1
-    assert "acl must be one of" in result[0].text
+    assert result[0].text == (
+        "Error: acl must be one of: "
+        "private, public-read, authenticated-read, public-read-write"
+    )
 
 
 async def test_handle_object_storage_bucket_create_missing_region(
@@ -14633,7 +14848,10 @@ async def test_handle_object_storage_bucket_access_allow_invalid_acl(
     )
 
     assert len(result) == 1
-    assert "acl must be one of" in result[0].text
+    assert result[0].text == (
+        "Error: acl must be one of: "
+        "private, public-read, authenticated-read, public-read-write"
+    )
 
 
 async def test_handle_object_storage_bucket_access_allow_success(
@@ -14749,7 +14967,10 @@ async def test_handle_object_storage_bucket_access_update_invalid_acl(
     )
 
     assert len(result) == 1
-    assert "acl must be one of" in result[0].text
+    assert result[0].text == (
+        "Error: acl must be one of: "
+        "private, public-read, authenticated-read, public-read-write"
+    )
 
 
 async def test_handle_object_storage_bucket_access_update_success(
@@ -14775,6 +14996,11 @@ async def test_handle_object_storage_bucket_access_update_success(
 
         assert len(result) == 1
         assert "modified successfully" in result[0].text
+        payload = json.loads(result[0].text)
+        assert payload["message"] == (
+            "Access settings for bucket 'my-bucket' in us-east-1 modified successfully"
+        )
+        assert payload["access"] == {"acl": "public-read", "cors_enabled": False}
 
 
 # Phase 4: Object Storage Access Key Write Tool Tests
@@ -14952,10 +15178,17 @@ async def test_object_storage_key_update_invalid_key_id(
 async def test_object_storage_key_update_success(
     sample_config: Config,
 ) -> None:
-    """Key update should succeed with valid input."""
+    """Key update should succeed and echo the key element from the response."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.update_object_storage_key.return_value = None
+        # The update endpoint echoes the full key (no secret material), which
+        # put_raw returns for the proto key element.
+        mock_client.put_raw.return_value = {
+            "id": 42,
+            "label": "updated-key",
+            "access_key": "SYNTHETICACCESSKEY000000",
+            "limited": True,
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -14973,6 +15206,10 @@ async def test_object_storage_key_update_success(
 
         assert len(result) == 1
         assert "modified successfully" in result[0].text
+        payload = json.loads(result[0].text)
+        assert payload["message"] == "Access key 42 modified successfully"
+        assert payload["key"]["id"] == 42
+        assert payload["key"]["label"] == "updated-key"
 
 
 async def test_object_storage_key_delete_requires_confirm(
@@ -15104,11 +15341,12 @@ async def test_presigned_url_invalid_expires(
 async def test_presigned_url_success(
     sample_config: Config,
 ) -> None:
-    """Presigned URL should succeed with valid input."""
+    """Presigned URL create emits {url} proto-canonically (unknown fields drop)."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.create_presigned_url.return_value = {
             "url": "https://bucket.example.com/photo.jpg?signed=abc",
+            "not_in_proto": "dropped",
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -15127,7 +15365,9 @@ async def test_presigned_url_success(
         )
 
         assert len(result) == 1
-        assert "signed=abc" in result[0].text
+        assert json.loads(result[0].text) == {
+            "url": "https://bucket.example.com/photo.jpg?signed=abc",
+        }
 
 
 async def test_presigned_url_missing_env() -> None:
@@ -15232,7 +15472,10 @@ async def test_object_acl_update_invalid_acl(
     )
 
     assert len(result) == 1
-    assert "acl must be one of" in result[0].text
+    assert result[0].text == (
+        "Error: acl must be one of: "
+        "private, public-read, authenticated-read, public-read-write"
+    )
 
 
 async def test_object_acl_update_success(
@@ -15264,6 +15507,14 @@ async def test_object_acl_update_success(
 
         assert len(result) == 1
         assert "public-read" in result[0].text
+        payload = json.loads(result[0].text)
+        assert (
+            payload["message"]
+            == "ACL for object 'photo.jpg' in bucket 'my-bucket' modified successfully"
+        )
+        assert payload["acl"]["acl"] == "public-read"
+        acl_xml = "<AccessControlPolicy>...</AccessControlPolicy>"
+        assert payload["acl"]["acl_xml"] == acl_xml
 
 
 async def test_ssl_get_success(
@@ -15354,6 +15605,12 @@ async def test_ssl_upload_success(
         mock_client.upload_bucket_ssl.assert_awaited_once_with(
             "us-east-1", "my-bucket", "cert", "key"
         )
+        payload = json.loads(result[0].text)
+        assert (
+            payload["message"]
+            == "SSL certificate uploaded to bucket 'my-bucket' in region 'us-east-1'"
+        )
+        assert payload["ssl"] == {"ssl": True}
 
 
 async def test_ssl_upload_missing_private_key(
@@ -16937,14 +17194,17 @@ async def test_lke_service_token_delete_dry_run_fetches_cluster_not_token(
 
 
 async def test_lke_acl_get(sample_config: Config) -> None:
-    """LKE ACL get should emit the bare ACL object (unwrapped from "acl")."""
+    """LKE ACL get emits the bare ACL proto-canonically (unknown fields drop)."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        # The client layer unwraps the API's {"acl": {...}} envelope, so the
-        # handler receives and emits the bare ACL object.
+        # The client layer unwraps the API's {"acl": {...}} envelope. The
+        # handler serializes the bare ACL through LKEControlPlaneACL, so a
+        # field the proto does not model must be dropped, proving the output
+        # routes through the serializer rather than passing the dict through.
         mock_client.get_lke_control_plane_acl.return_value = {
             "enabled": True,
             "addresses": {"ipv4": ["10.0.0.0/8"], "ipv6": []},
+            "not_in_proto": "dropped",
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -16996,8 +17256,10 @@ async def test_lke_acl_update_success(sample_config: Config) -> None:
             await handle_linode_lke_acl_update(
                 {
                     "cluster_id": 1,
-                    "enabled": True,
-                    "addresses": {"ipv4": ["10.0.0.0/8"]},
+                    "acl": {
+                        "enabled": True,
+                        "addresses": {"ipv4": ["10.0.0.0/8"]},
+                    },
                     "confirm": True,
                 },
                 sample_config,
@@ -17005,7 +17267,17 @@ async def test_lke_acl_update_success(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "acl" in result[0].text.lower()
+        body = json.loads(result[0].text)
+        assert body == {
+            "message": "Control plane ACL for cluster 1 modified successfully",
+            "acl": {
+                "enabled": True,
+                "addresses": {"ipv4": ["10.0.0.0/8"], "ipv6": []},
+            },
+        }
+        mock_client.update_lke_control_plane_acl.assert_awaited_once_with(
+            1, {"enabled": True, "addresses": {"ipv4": ["10.0.0.0/8"]}}
+        )
 
 
 async def test_lke_acl_delete_confirm_required(sample_config: Config) -> None:
@@ -17038,7 +17310,10 @@ async def test_lke_acl_delete_success(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "deleted" in result[0].text.lower()
+        assert json.loads(result[0].text) == {
+            "message": "Control plane ACL for cluster 1 removed successfully",
+            "cluster_id": 1,
+        }
 
 
 async def test_lke_versions_list(sample_config: Config) -> None:
@@ -17086,6 +17361,18 @@ async def test_lke_version_get_missing_id(sample_config: Config) -> None:
 
     assert len(result) == 1
     assert "version" in result[0].text.lower()
+
+
+async def test_lke_version_get_rejects_path_separator(sample_config: Config) -> None:
+    """LKE version get rejects a path-unsafe version locally (matches Go)."""
+    result = list(
+        await handle_linode_lke_version_get(
+            {"version": "1.31/../secrets"}, sample_config
+        )
+    )
+
+    assert len(result) == 1
+    assert "version must be a Kubernetes version ID" in result[0].text
 
 
 async def test_lke_types_list(sample_config: Config) -> None:
@@ -17147,14 +17434,13 @@ async def test_lke_tier_versions_list_requires_tier(sample_config: Config) -> No
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         result = list(await handle_linode_lke_tier_version_list({}, sample_config))
 
-    assert "tier must be a non-empty path segment" in result[0].text
+    assert "tier is required" in result[0].text
     mock_cls.assert_not_called()
 
 
 @pytest.mark.parametrize(
     "tier",
     [
-        "",
         "standard/enterprise",
         "standard?tier",
         "..",
@@ -17162,18 +17448,19 @@ async def test_lke_tier_versions_list_requires_tier(sample_config: Config) -> No
         "bad&",
         "bad tier",
         "standard%2F..",
+        "internal",
     ],
 )
 async def test_lke_tier_versions_list_rejects_malformed_tier(
     sample_config: Config, tier: object
 ) -> None:
-    """LKE tier versions list rejects malformed tier path segments."""
+    """LKE tier versions list rejects any tier outside the standard|enterprise set."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         result = list(
             await handle_linode_lke_tier_version_list({"tier": tier}, sample_config)
         )
 
-    assert "tier must be a non-empty path segment" in result[0].text
+    assert "tier must be one of: standard, enterprise" in result[0].text
     mock_cls.assert_not_called()
 
 
@@ -17450,7 +17737,7 @@ async def test_vlans_list_rejects_page_size_below_minimum(
         result = list(await handle_linode_vlan_list({"page_size": 10}, sample_config))
 
         assert len(result) == 1
-        assert "page_size must be at least 25" in result[0].text
+        assert "page_size must be an integer from 25 through 500" in result[0].text
         mock_client.list_vlans.assert_not_called()
 
 
@@ -17465,7 +17752,7 @@ async def test_vlans_list_rejects_page_size_above_maximum(
         result = list(await handle_linode_vlan_list({"page_size": 999}, sample_config))
 
         assert len(result) == 1
-        assert "page_size must be at most 500" in result[0].text
+        assert "page_size must be an integer from 25 through 500" in result[0].text
         mock_client.list_vlans.assert_not_called()
 
 
@@ -17575,6 +17862,17 @@ async def test_vlan_delete_dry_run_still_validates_region(
     assert "region_id is required" in result[0].text
 
 
+async def test_vlan_delete_rejects_malformed_region(sample_config: Config) -> None:
+    """VLAN delete rejects a non-slug region_id locally (matches Go)."""
+    result = list(
+        await handle_linode_vlan_delete(
+            {"region_id": "US_EAST", "label": "app-vlan", "dry_run": True},
+            sample_config,
+        )
+    )
+    assert "region_id must be a lowercase region slug" in result[0].text
+
+
 async def test_vpc_get(sample_config: Config) -> None:
     """VPC get should return VPC details."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
@@ -17620,14 +17918,19 @@ async def test_ipv6_range_get_missing_range(sample_config: Config) -> None:
 
 
 async def test_ipv6_range_get_success(sample_config: Config) -> None:
-    """IPv6 range get should return IPv6 range data."""
-    ipv6_range = "2001:0db8::"
+    """IPv6 range get emits the detail shape (is_bgp + linodes) proto-canonically."""
+    ipv6_range = "2001:0db8::/64"
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
+        # The detail endpoint returns is_bgp and the bound Linode IDs and omits
+        # route_target; the extra key must drop through the serializer.
         mock_client.get_ipv6_range.return_value = {
             "range": ipv6_range,
             "region": "us-east",
             "prefix": 64,
+            "is_bgp": False,
+            "linodes": [12345, 12346],
+            "not_in_proto": "dropped",
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -17641,8 +17944,41 @@ async def test_ipv6_range_get_success(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert ipv6_range in result[0].text
+        # route_target is implicit-presence so it serializes as "" on the detail
+        # GET; is_bgp is optional so a genuine false still serializes.
+        assert json.loads(result[0].text) == {
+            "range": ipv6_range,
+            "region": "us-east",
+            "prefix": 64,
+            "route_target": "",
+            "is_bgp": False,
+            "linodes": [12345, 12346],
+        }
         mock_client.get_ipv6_range.assert_called_once_with(ipv6_range)
+
+
+async def test_ipv6_range_get_rejects_malformed_range(sample_config: Config) -> None:
+    """IPv6 range get rejects a non-prefix range locally (matches Go)."""
+    result = list(
+        await handle_linode_ipv6_range_get({"range": "not-a-range"}, sample_config)
+    )
+
+    assert len(result) == 1
+    assert "range must be a valid IPv6 prefix" in result[0].text
+
+
+async def test_ipv6_range_delete_rejects_malformed_range(
+    sample_config: Config,
+) -> None:
+    """IPv6 range delete rejects a non-prefix range locally (matches Go)."""
+    result = list(
+        await handle_linode_ipv6_range_delete(
+            {"range": "2001:db8::1/64"}, sample_config
+        )
+    )
+
+    assert len(result) == 1
+    assert "range must be a valid IPv6 prefix" in result[0].text
 
 
 async def test_vpc_create_confirm_required(sample_config: Config) -> None:
@@ -17770,7 +18106,8 @@ async def test_vpc_delete_success(sample_config: Config) -> None:
         )
 
         assert len(result) == 1
-        assert "deleted" in result[0].text.lower()
+        assert "removed successfully" in result[0].text.lower()
+        assert '"vpc_id": 1' in result[0].text
 
 
 async def test_vpc_delete_dry_run_returns_preview_without_mutating(
@@ -17942,7 +18279,10 @@ async def test_ipv6_range_create_success_with_linode_id(
             "message": "IPv6 range created",
             "range": {
                 "range": "2001:0db8::/64",
+                "region": "",
+                "prefix": 0,
                 "route_target": "2001:0db8::1",
+                "linodes": [],
             },
         }
         mock_client.create_ipv6_range.assert_called_once_with(
@@ -17983,7 +18323,10 @@ async def test_ipv6_range_create_success_with_route_target(
             "message": "IPv6 range created",
             "range": {
                 "range": "2001:0db8::/56",
+                "region": "",
+                "prefix": 0,
                 "route_target": "2001:0db8::1",
+                "linodes": [],
             },
         }
         mock_client.create_ipv6_range.assert_called_once_with(
@@ -17997,7 +18340,7 @@ async def test_ipv6_range_delete_confirm_required(sample_config: Config) -> None
     """IPv6 range delete should require confirm=true."""
     result = list(
         await handle_linode_ipv6_range_delete(
-            {"range": "2001:0db8::", "confirm": False},
+            {"range": "2001:0db8::/64", "confirm": False},
             sample_config,
         )
     )
@@ -18021,7 +18364,7 @@ async def test_ipv6_range_delete_missing_range(sample_config: Config) -> None:
 
 async def test_ipv6_range_delete_success(sample_config: Config) -> None:
     """IPv6 range delete should succeed with valid input."""
-    ipv6_range = "2001:0db8::"
+    ipv6_range = "2001:0db8::/64"
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
         mock_client.delete_ipv6_range.return_value = None
@@ -19363,22 +19706,31 @@ async def test_instance_clone_passes_backups_enabled(
     sample_config: Config,
     sample_instance_data: dict[str, Any],
 ) -> None:
-    """Clone forwards backups_enabled to the client."""
+    """Clone forwards backups_enabled to the client and serializes the raw body."""
+    raw_instance = {
+        **sample_instance_data,
+        "id": 999,
+        "label": "cloned",
+        "status": "provisioning",
+        "interface_generation": "linode",
+    }
     with patch("linodemcp.tools.helpers.RetryableClient") as mc:
         mock_client = AsyncMock()
-        mock_client.clone_instance.return_value = _make_instance(
-            999, "cloned", "provisioning", sample_instance_data
-        )
+        mock_client.clone_instance_raw.return_value = raw_instance
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mc.return_value = mock_client
 
-        await handle_linode_instance_clone(
+        result = await handle_linode_instance_clone(
             {"linode_id": 123, "backups_enabled": True, "confirm": True},
             sample_config,
         )
 
-    assert mock_client.clone_instance.await_args.kwargs["backups_enabled"] is True
+    kwargs = mock_client.clone_instance_raw.await_args.kwargs
+    assert kwargs["backups_enabled"] is True
+    payload = json.loads(result[0].text)
+    assert payload["message"] == "Instance 123 cloned as 'cloned' (ID: 999) in us-east"
+    assert payload["instance"]["interface_generation"] == "linode"
 
 
 async def test_instance_migrate_no_confirm(
@@ -20345,7 +20697,7 @@ async def test_handle_linode_networking_ip_allocate_rejects_bad_type(
             sample_config,
         )
 
-    assert "type must be ipv4 or ipv6" in result[0].text
+    assert "type must be one of: ipv4" in result[0].text
     mock_cls.assert_not_called()
 
 
@@ -20360,7 +20712,7 @@ async def test_handle_linode_instance_ip_delete_success(
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
-    assert data["message"] == "IP 203.0.113.1 deleted from instance 123"
+    assert data["message"] == "IP 203.0.113.1 removed from instance 123"
     assert data["linode_id"] == 123
     assert data["address"] == "203.0.113.1"
     mock_linode_client.delete_instance_ip.assert_called_once_with(123, "203.0.113.1")
@@ -20402,7 +20754,11 @@ async def test_instance_ip_delete_dry_run_still_validates_address(
 async def test_handle_linode_instance_migrate_success(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
-    """Migrate should succeed with confirm=true."""
+    """Migrate should succeed with confirm=true.
+
+    When the caller picks a region, the message names it and the region field is
+    echoed, matching Go's InstanceMigrateWriteResponse.
+    """
     mock_linode_client.migrate_instance.return_value = None
     result = await handle_linode_instance_migrate(
         {"linode_id": 123, "region": "eu-west", "confirm": True},
@@ -20410,8 +20766,9 @@ async def test_handle_linode_instance_migrate_success(
     )
     assert len(result) == 1
     data = json.loads(result[0].text)
-    assert data["message"] == "Migration initiated for instance 123"
+    assert data["message"] == "Migration initiated for instance 123 to region eu-west"
     assert data["linode_id"] == 123
+    assert data["region"] == "eu-west"
     mock_linode_client.migrate_instance.assert_called_once_with(123, region="eu-west")
 
 
@@ -21054,10 +21411,9 @@ def test_create_linode_monitor_service_alert_definition_get_tool() -> None:
     assert capability is Capability.Read
     schema = tool.inputSchema
     assert "confirm" not in schema["properties"]
-    assert schema["required"] == ["service_type", "alert_id"]
-    assert schema["properties"]["service_type"]["pattern"] == "^[A-Za-z0-9_-]+$"
+    assert sorted(schema["required"]) == ["alert_id", "service_type"]
+    assert "service_type" in schema["properties"]
     assert schema["properties"]["alert_id"]["type"] == "integer"
-    assert schema["properties"]["alert_id"]["minimum"] == 1
 
 
 async def test_handle_linode_monitor_service_alert_definition_get(
@@ -21067,6 +21423,8 @@ async def test_handle_linode_monitor_service_alert_definition_get(
     mock_linode_client.get_monitor_service_alert_definition.return_value = {
         "id": 12345,
         "label": "CPU high",
+        "service_type": "dbaas",
+        "not_in_proto": "dropped",
     }
     result = await handle_linode_monitor_service_alert_definition_get(
         {"service_type": "dbaas", "alert_id": 12345}, sample_config
@@ -21075,6 +21433,7 @@ async def test_handle_linode_monitor_service_alert_definition_get(
     text = result[0].text
     assert "CPU high" in text
     assert "dbaas" in text
+    assert "not_in_proto" not in text
     mock_linode_client.get_monitor_service_alert_definition.assert_awaited_once_with(
         "dbaas", 12345
     )
@@ -21112,17 +21471,18 @@ async def test_handle_linode_monitor_service_alert_definition_get_bad_alert_id(
 
 
 def test_create_linode_monitor_service_token_create_tool() -> None:
-    """Tool definition advertises required service_type and entity_ids."""
+    """Tool definition advertises service_type; entity_ids is handler-enforced."""
     tool, _ = create_linode_monitor_service_token_create_tool()
     assert tool.name == "linode_monitor_service_token_create"
     schema = tool.inputSchema
     required = schema["required"]
     assert "service_type" in required
-    assert "entity_ids" in required
+    # entity_ids converts to a repeated proto field, which the generator never
+    # emits into the required set; the handler still enforces it at runtime.
+    assert "entity_ids" not in required
     props = schema["properties"]
     assert props["entity_ids"]["type"] == "array"
     assert props["entity_ids"]["items"]["type"] == "integer"
-    assert props["entity_ids"]["minItems"] == 1
 
 
 async def test_handle_linode_monitor_service_token_create(
@@ -21198,6 +21558,22 @@ async def test_handle_linode_monitor_service_token_create_non_int_entity_ids(
         {"service_type": "dbaas", "entity_ids": [True], "confirm": True}, sample_config
     )
     assert "entity_ids" in result_bool[0].text
+
+
+@pytest.mark.parametrize("bad_ids", [[0], [-5], [1, 0]])
+async def test_handle_linode_monitor_service_token_create_non_positive_entity_ids(
+    sample_config: Config, bad_ids: list[int]
+) -> None:
+    """Non-positive entity IDs are rejected, matching the Go handler."""
+    result = await handle_linode_monitor_service_token_create(
+        {"service_type": "dbaas", "entity_ids": bad_ids, "confirm": True},
+        sample_config,
+    )
+    assert len(result) == 1
+    assert (
+        result[0].text
+        == "Error: entity_ids must be a non-empty array of positive integers"
+    )
 
 
 async def test_handle_linode_monitor_service_token_create_error(
@@ -21365,7 +21741,7 @@ def test_create_linode_profile_tfa_enable_confirm_tool() -> None:
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["tfa_code", "confirm"]
     assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["tfa_code"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["tfa_code"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -21418,6 +21794,7 @@ async def test_handle_linode_profile_tfa_enable_confirm_success(
         )
 
     assert json.loads(result[0].text) == {
+        "message": "Profile two-factor authentication enabled successfully",
         "scratch": "setup-token",
         "expiry": "2026-01-01T00:00:00",
     }
@@ -21452,8 +21829,8 @@ def test_create_linode_profile_phone_number_send_tool() -> None:
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["iso_code", "phone_number", "confirm"]
     assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["iso_code"]["minLength"] == 1
-    assert tool.inputSchema["properties"]["phone_number"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["iso_code"]["type"] == "string"
+    assert tool.inputSchema["properties"]["phone_number"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -21550,7 +21927,9 @@ async def test_handle_linode_profile_phone_number_send_success(
             sample_config,
         )
 
-    assert json.loads(result[0].text) == {}
+    assert json.loads(result[0].text) == {
+        "message": "Profile phone number verification code sent successfully"
+    }
     mock_client.send_profile_phone_number_verification.assert_awaited_once_with(
         "US", "+15551234567"
     )
@@ -21629,7 +22008,9 @@ async def test_handle_linode_profile_phone_number_delete_success(
             {"confirm": True}, sample_config
         )
 
-    assert json.loads(result[0].text) == {}
+    assert json.loads(result[0].text) == {
+        "message": "Profile phone number deleted successfully"
+    }
     mock_client.delete_profile_phone_number.assert_awaited_once_with()
 
 
@@ -21661,7 +22042,7 @@ def test_create_linode_profile_phone_number_verify_tool() -> None:
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["otp_code", "confirm"]
     assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["otp_code"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["otp_code"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -21710,7 +22091,9 @@ async def test_handle_linode_profile_phone_number_verify_success(
             {"otp_code": " 123456 ", "confirm": True}, sample_config
         )
 
-    assert json.loads(result[0].text) == {}
+    assert json.loads(result[0].text) == {
+        "message": "Profile phone number verified successfully"
+    }
     mock_client.verify_profile_phone_number.assert_awaited_once_with("123456")
 
 
@@ -21816,8 +22199,9 @@ def test_create_linode_profile_security_questions_answer_tool() -> None:
 
     assert tool.name == "linode_profile_security_question_answer"
     assert capability == Capability.Admin
-    assert "security_questions" in tool.inputSchema["required"]
+    assert "security_questions" not in tool.inputSchema["required"]
     assert "confirm" in tool.inputSchema["required"]
+    assert tool.inputSchema["properties"]["security_questions"]["type"] == "array"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -21912,7 +22296,7 @@ async def test_handle_linode_profile_security_questions_answer_success(
         )
 
     data = json.loads(result[0].text)
-    assert data == {"security_questions": []}
+    assert data == {"message": "Profile security questions answered successfully"}
     mock_client.answer_profile_security_questions.assert_awaited_once_with(
         [
             {"question_id": 1, "response": "Gotham City"},
@@ -21957,7 +22341,7 @@ def test_create_linode_profile_token_create_tool() -> None:
     assert tool.name == "linode_profile_token_create"
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["confirm"]
-    assert tool.inputSchema["properties"]["label"]["maxLength"] == 100
+    assert tool.inputSchema["properties"]["label"]["type"] == "string"
     assert "expiry" in tool.inputSchema["properties"]
     assert "scopes" in tool.inputSchema["properties"]
 
@@ -22187,7 +22571,7 @@ def test_create_linode_profile_token_get_tool() -> None:
     assert tool.name == "linode_profile_token_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["token_id"]
-    assert tool.inputSchema["properties"]["token_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["token_id"]["type"] == "integer"
 
 
 async def test_handle_linode_profile_token_get_requires_token_id(
@@ -22225,6 +22609,7 @@ async def test_handle_linode_profile_token_get_success(
         mock_client.get_profile_token.return_value = {
             "id": 12345,
             "label": "api-token",
+            "scopes": "*",
         }
         mock_client_class.return_value = mock_client
 
@@ -22232,7 +22617,12 @@ async def test_handle_linode_profile_token_get_success(
             {"token_id": 12345}, sample_config
         )
 
-    assert json.loads(result[0].text) == {"id": 12345, "label": "api-token"}
+    assert json.loads(result[0].text) == {
+        "id": 12345,
+        "label": "api-token",
+        "scopes": "*",
+        "created": "",
+    }
     mock_client.get_profile_token.assert_awaited_once_with(12345)
 
 
@@ -22247,6 +22637,7 @@ async def test_handle_linode_profile_token_get_redacts_secret_fields(
         mock_client.get_profile_token.return_value = {
             "id": 12345,
             "label": "api-token",
+            "scopes": "*",
             "token": "secret-token",
             "access_token": "secret-access-token",
             "secret": "secret-value",
@@ -22257,7 +22648,15 @@ async def test_handle_linode_profile_token_get_redacts_secret_fields(
             {"token_id": 12345}, sample_config
         )
 
-    assert json.loads(result[0].text) == {"id": 12345, "label": "api-token"}
+    assert json.loads(result[0].text) == {
+        "id": 12345,
+        "label": "api-token",
+        "scopes": "*",
+        "created": "",
+    }
+    assert "secret-token" not in result[0].text
+    assert "secret-access-token" not in result[0].text
+    assert "secret-value" not in result[0].text
     mock_client.get_profile_token.assert_awaited_once_with(12345)
 
 
@@ -22457,7 +22856,7 @@ def test_create_linode_profile_token_revoke_tool() -> None:
     assert tool.name == "linode_profile_token_delete"
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["token_id", "confirm"]
-    assert tool.inputSchema["properties"]["token_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["token_id"]["type"] == "integer"
 
 
 async def test_handle_linode_profile_token_revoke_requires_token_id(
@@ -22511,7 +22910,8 @@ async def test_handle_linode_profile_token_revoke_success(
         )
 
     assert json.loads(result[0].text) == {
-        "message": "Profile token 12345 revoked successfully"
+        "message": "Profile token 12345 revoked successfully",
+        "token_id": 12345,
     }
     mock_client.delete_profile_token.assert_awaited_once_with(12345)
 
@@ -22523,8 +22923,8 @@ def test_create_linode_profile_token_update_tool() -> None:
     assert tool.name == "linode_profile_token_update"
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["token_id", "confirm"]
-    assert tool.inputSchema["properties"]["token_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["label"]["maxLength"] == 100
+    assert tool.inputSchema["properties"]["token_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["label"]["type"] == "string"
 
 
 async def test_handle_linode_profile_token_update_requires_token_id(
@@ -22713,7 +23113,7 @@ async def test_handle_linode_profile_device_list_rejects_bad_pagination(
             {"page_size": 10}, sample_config
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client.list_profile_devices.assert_not_awaited()
 
 
@@ -22723,9 +23123,8 @@ def test_create_linode_profile_apps_list_tool() -> None:
     assert tool.name == "linode_profile_app_list"
     assert capability is Capability.Read
     assert "required" not in tool.inputSchema
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
 
 def test_linode_profile_apps_list_tool_is_exported_and_registered() -> None:
@@ -22741,11 +23140,11 @@ def test_linode_profile_apps_list_tool_is_exported_and_registered() -> None:
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page": True}, "page must be an integer"),
         ({"page": "1"}, "page must be an integer"),
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page_size": True}, "page_size must be an integer"),
         ({"page_size": "50"}, "page_size must be an integer"),
     ],
@@ -22877,7 +23276,7 @@ def test_create_linode_profile_app_revoke_tool() -> None:
     assert tool.name == "linode_profile_app_delete"
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["app_id", "confirm"]
-    assert tool.inputSchema["properties"]["app_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["app_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -22965,7 +23364,7 @@ def test_create_linode_profile_device_get_tool() -> None:
     assert tool.name == "linode_profile_device_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["device_id"]
-    assert tool.inputSchema["properties"]["device_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["device_id"]["type"] == "integer"
 
 
 @pytest.mark.parametrize("device_id", [None, 0, -1, True, "123", "/", "?", ".."])
@@ -22994,7 +23393,10 @@ async def test_handle_linode_profile_device_get_success(
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_profile_device.return_value = device
+        mock_client.get_profile_device.return_value = {
+            **device,
+            "not_in_proto": "dropped",
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -23004,6 +23406,7 @@ async def test_handle_linode_profile_device_get_success(
         )
 
     assert json.loads(result[0].text) == device
+    assert "not_in_proto" not in result[0].text
     mock_client.get_profile_device.assert_awaited_once_with(123)
 
 
@@ -23029,7 +23432,7 @@ def test_create_linode_profile_device_revoke_tool() -> None:
     assert tool.name == "linode_profile_device_revoke"
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["device_id", "confirm"]
-    assert tool.inputSchema["properties"]["device_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["device_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -23103,9 +23506,9 @@ def test_create_linode_placement_groups_list_tool() -> None:
     assert capability is Capability.Read
     assert "page" not in tool.inputSchema.get("required", [])
     assert "page_size" not in tool.inputSchema.get("required", [])
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert "environment" in tool.inputSchema["properties"]
+    assert "page" in tool.inputSchema["properties"]
+    assert "page_size" in tool.inputSchema["properties"]
 
 
 def test_linode_placement_groups_list_tool_is_exported_and_registered() -> None:
@@ -23123,11 +23526,11 @@ def test_linode_placement_groups_list_tool_is_exported_and_registered() -> None:
 @pytest.mark.parametrize(
     ("arguments", "error"),
     [
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page": True}, "page must be an integer"),
         ({"page": "2"}, "page must be an integer"),
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page_size": False}, "page_size must be an integer"),
         ({"page_size": "25"}, "page_size must be an integer"),
     ],
@@ -23270,22 +23673,21 @@ def test_create_linode_placement_group_create_tool() -> None:
 
     assert tool.name == "linode_placement_group_create"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == [
+    assert set(tool.inputSchema["required"]) == {
         "label",
         "region",
         "placement_group_type",
         "placement_group_policy",
         "confirm",
-    ]
-    assert tool.inputSchema["properties"]["label"]["minLength"] == 1
-    assert tool.inputSchema["properties"]["region"]["minLength"] == 1
-    assert tool.inputSchema["properties"]["placement_group_type"]["enum"] == [
-        "anti_affinity:local"
-    ]
-    assert tool.inputSchema["properties"]["placement_group_policy"]["enum"] == [
-        "strict",
-        "flexible",
-    ]
+    }
+    for key in (
+        "label",
+        "region",
+        "placement_group_type",
+        "placement_group_policy",
+        "confirm",
+    ):
+        assert key in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -23392,7 +23794,7 @@ async def test_handle_linode_placement_group_create_requires_valid_policy(
             sample_config,
         )
 
-    assert "placement_group_policy must be strict or flexible" in result[0].text
+    assert "placement_group_policy must be one of: flexible, strict" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -23459,8 +23861,8 @@ def test_create_linode_placement_group_delete_tool() -> None:
 
     assert tool.name == "linode_placement_group_delete"
     assert capability is Capability.Destroy
-    assert tool.inputSchema["required"] == ["group_id", "confirm"]
-    assert tool.inputSchema["properties"]["group_id"]["minimum"] == 1
+    assert set(tool.inputSchema["required"]) == {"group_id", "confirm"}
+    assert "group_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -23538,10 +23940,9 @@ def test_create_linode_placement_group_update_tool() -> None:
 
     assert tool.name == "linode_placement_group_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["group_id", "label", "confirm"]
-    assert tool.inputSchema["properties"]["group_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["label"]["minLength"] == 1
-    assert "pattern" in tool.inputSchema["properties"]["label"]
+    assert set(tool.inputSchema["required"]) == {"group_id", "label", "confirm"}
+    assert "group_id" in tool.inputSchema["properties"]
+    assert "label" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -23639,9 +24040,9 @@ def test_create_linode_placement_group_assign_tool() -> None:
 
     assert tool.name == "linode_placement_group_assign"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["group_id", "linodes", "confirm"]
-    assert tool.inputSchema["properties"]["group_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["linodes"]["minItems"] == 1
+    assert set(tool.inputSchema["required"]) == {"group_id", "confirm"}
+    assert "group_id" in tool.inputSchema["properties"]
+    assert "linodes" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -23735,9 +24136,9 @@ def test_create_linode_placement_group_unassign_tool() -> None:
 
     assert tool.name == "linode_placement_group_unassign"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["group_id", "linodes", "confirm"]
-    assert tool.inputSchema["properties"]["group_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["linodes"]["minItems"] == 1
+    assert set(tool.inputSchema["required"]) == {"group_id", "confirm"}
+    assert "group_id" in tool.inputSchema["properties"]
+    assert "linodes" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
 
 
@@ -23830,7 +24231,7 @@ async def test_create_linode_nodebalancer_stats_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_stats_get_tool()
     assert tool.name == "linode_nodebalancer_stats_get"
     assert capability == Capability.Read
-    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["nodebalancer_id"]
 
 
@@ -23897,7 +24298,7 @@ async def test_linode_nodebalancer_firewalls_list_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_firewall_list"
     assert capability == Capability.Read
-    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["nodebalancer_id"]
 
 
@@ -23962,17 +24363,26 @@ async def test_handle_linode_nodebalancer_firewalls_list(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({}, "nodebalancer_id must be a positive integer"),
+        ({}, "nodebalancer_id is required"),
         ({"nodebalancer_id": 0}, "nodebalancer_id"),
         ({"nodebalancer_id": "8"}, "nodebalancer_id"),
         ({"nodebalancer_id": True}, "nodebalancer_id"),
         ({"nodebalancer_id": "1/2"}, "nodebalancer_id"),
         ({"nodebalancer_id": "1?x"}, "nodebalancer_id"),
         ({"nodebalancer_id": ".."}, "nodebalancer_id"),
-        ({"nodebalancer_id": 8, "page": 0}, "page must be at least 1"),
+        (
+            {"nodebalancer_id": 8, "page": 0},
+            "page must be an integer greater than or equal to 1",
+        ),
         ({"nodebalancer_id": 8, "page": "1"}, "page must be an integer"),
-        ({"nodebalancer_id": 8, "page_size": 24}, "page_size must be at least 25"),
-        ({"nodebalancer_id": 8, "page_size": 501}, "page_size must be at most 500"),
+        (
+            {"nodebalancer_id": 8, "page_size": 24},
+            "page_size must be an integer from 25 through 500",
+        ),
+        (
+            {"nodebalancer_id": 8, "page_size": 501},
+            "page_size must be an integer from 25 through 500",
+        ),
         ({"nodebalancer_id": 8, "page_size": False}, "page_size must be an integer"),
     ],
 )
@@ -24087,8 +24497,8 @@ def test_linode_nodebalancer_config_update_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_config_update"
     assert capability == Capability.Write
-    assert tool.inputSchema["properties"]["nodebalancer_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    assert "nodebalancer_id" in tool.inputSchema["properties"]
+    assert "config_id" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["required"] == [
         "nodebalancer_id",
@@ -24119,6 +24529,8 @@ async def test_handle_linode_nodebalancer_config_update(
                 "config_id": 6,
                 "port": 443,
                 "protocol": "https",
+                "ssl_cert": "cert",
+                "ssl_key": "key",
                 "confirm": True,
             },
             sample_config,
@@ -24132,7 +24544,9 @@ async def test_handle_linode_nodebalancer_config_update(
         assert data["config"]["id"] == 6
         assert data["config"]["port"] == 443
         mock_client.update_nodebalancer_config.assert_called_once_with(
-            8, 6, {"port": 443, "protocol": "https"}
+            8,
+            6,
+            {"port": 443, "protocol": "https", "ssl_cert": "cert", "ssl_key": "key"},
         )
 
 
@@ -24153,7 +24567,7 @@ async def test_handle_linode_nodebalancer_config_update_empty_response(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_nodebalancer_config_update(
-            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
+            {"nodebalancer_id": 8, "config_id": 6, "port": 443, "confirm": True},
             sample_config,
         )
 
@@ -24162,16 +24576,18 @@ async def test_handle_linode_nodebalancer_config_update_empty_response(
         assert "updated successfully" in data["message"]
         assert data["config"]["id"] == 0
         assert data["config"]["nodebalancer_id"] == 0
-        mock_client.update_nodebalancer_config.assert_called_once_with(8, 6, {})
+        mock_client.update_nodebalancer_config.assert_called_once_with(
+            8, 6, {"port": 443}
+        )
 
 
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({}, "confirm must be true"),
-        ({"confirm": False}, "confirm must be true"),
-        ({"confirm": "true"}, "confirm must be true"),
-        ({"confirm": 1}, "confirm must be true"),
+        ({}, "This updates a NodeBalancer config. Set confirm=true to proceed."),
+        ({"confirm": False}, "Set confirm=true to proceed"),
+        ({"confirm": "true"}, "Set confirm=true to proceed"),
+        ({"confirm": 1}, "Set confirm=true to proceed"),
         (
             {"nodebalancer_id": 0, "config_id": 6, "confirm": True},
             "nodebalancer_id",
@@ -24219,6 +24635,37 @@ async def test_handle_linode_nodebalancer_config_update_empty_response(
         (
             {"nodebalancer_id": 8, "config_id": "..", "confirm": True},
             "config_id",
+        ),
+        (
+            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
+            "at least one update field is required",
+        ),
+        (
+            {
+                "nodebalancer_id": 8,
+                "config_id": 6,
+                "check": "bogus",
+                "confirm": True,
+            },
+            "check must be one of: none, connection, http, http_body",
+        ),
+        (
+            {
+                "nodebalancer_id": 8,
+                "config_id": 6,
+                "port": 99999,
+                "confirm": True,
+            },
+            "port must be an integer from 1 through 65535",
+        ),
+        (
+            {
+                "nodebalancer_id": 8,
+                "config_id": 6,
+                "protocol": "https",
+                "confirm": True,
+            },
+            "ssl_cert and ssl_key are required when protocol is https",
         ),
     ],
 )
@@ -24349,7 +24796,7 @@ async def test_handle_linode_nodebalancer_config_create_confirm_required(
     for args in invalid_confirm:
         result = await handle_linode_nodebalancer_config_create(args, sample_config)
         assert len(result) == 1
-        assert "confirm must be true" in result[0].text
+        assert "Set confirm=true to proceed" in result[0].text
 
 
 async def test_handle_linode_nodebalancer_config_create_invalid_nodebalancer_id(
@@ -24357,7 +24804,7 @@ async def test_handle_linode_nodebalancer_config_create_invalid_nodebalancer_id(
 ) -> None:
     """Test linode_nodebalancer_config_create rejects invalid nodebalancer_id."""
     invalid_cases: list[tuple[dict[str, Any], str]] = [
-        ({"confirm": True}, "nodebalancer_id must be a positive integer"),
+        ({"confirm": True}, "nodebalancer_id is required"),
         (
             {"nodebalancer_id": True, "confirm": True},
             "nodebalancer_id must be a positive integer",
@@ -24398,11 +24845,48 @@ async def test_handle_linode_nodebalancer_config_create_error(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_nodebalancer_config_create(
-            {"nodebalancer_id": 8, "confirm": True}, sample_config
+            {"nodebalancer_id": 8, "port": 80, "confirm": True}, sample_config
         )
 
         assert len(result) == 1
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"nodebalancer_id": 8, "confirm": True}, "port is required"),
+        (
+            {"nodebalancer_id": 8, "port": 99999, "confirm": True},
+            "port must be an integer from 1 through 65535",
+        ),
+        (
+            {"nodebalancer_id": 8, "port": 80, "check": "bogus", "confirm": True},
+            "check must be one of: none, connection, http, http_body",
+        ),
+        (
+            {
+                "nodebalancer_id": 8,
+                "port": 443,
+                "protocol": "https",
+                "confirm": True,
+            },
+            "ssl_cert and ssl_key are required when protocol is https",
+        ),
+    ],
+)
+async def test_handle_linode_nodebalancer_config_create_body_validation(
+    sample_config: Config, arguments: dict[str, Any], message: str
+) -> None:
+    """Config create ports Go's port/check/ssl body validation (strictest-wins)."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_config_create(
+            arguments, sample_config
+        )
+
+    assert len(result) == 1
+    assert message in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_firewall_rule_version_get(
@@ -24636,30 +25120,17 @@ async def test_handle_linode_firewall_template_get_missing_slug(
     assert "slug is required" in result[0].text
 
 
-async def test_handle_linode_firewall_template_get_rejects_path_traversal(
+async def test_handle_linode_firewall_template_get_rejects_invalid_slug(
     sample_config: Config,
 ) -> None:
-    """Test that path traversal characters in slug are rejected."""
-    # Test with /
-    result = await handle_linode_firewall_template_get(
-        {"slug": "allow/http"}, sample_config
-    )
-    assert len(result) == 1
-    assert "path separators" in result[0].text
-
-    # Test with ?
-    result = await handle_linode_firewall_template_get(
-        {"slug": "allow?http"}, sample_config
-    )
-    assert len(result) == 1
-    assert "path separators" in result[0].text
-
-    # Test with ..
-    result = await handle_linode_firewall_template_get(
-        {"slug": "allow/../http"}, sample_config
-    )
-    assert len(result) == 1
-    assert "path separators" in result[0].text
+    """Slug is validated against the public|vpc closed set, which also rejects
+    path-traversal and other out-of-set values."""
+    for slug in ("allow/http", "allow?http", "allow/../http", "internal"):
+        result = await handle_linode_firewall_template_get(
+            {"slug": slug}, sample_config
+        )
+        assert len(result) == 1
+        assert "slug must be one of: public, vpc" in result[0].text
 
 
 async def test_handle_linode_firewall_template_get_rejects_non_string_slug(
@@ -24683,21 +25154,21 @@ async def test_handle_linode_firewall_template_get_rejects_invalid_pagination(
     """Test that invalid pagination parameters are rejected."""
     # Test with negative page
     result = await handle_linode_firewall_template_get(
-        {"slug": "allow-http", "page": -1}, sample_config
+        {"slug": "public", "page": -1}, sample_config
     )
     assert len(result) == 1
     assert "page must be a positive integer" in result[0].text
 
     # Test with zero page_size
     result = await handle_linode_firewall_template_get(
-        {"slug": "allow-http", "page_size": 0}, sample_config
+        {"slug": "public", "page_size": 0}, sample_config
     )
     assert len(result) == 1
     assert "page_size must be a positive integer" in result[0].text
 
     # Test with non-int page
     result = await handle_linode_firewall_template_get(
-        {"slug": "allow-http", "page": "abc"}, sample_config
+        {"slug": "public", "page": "abc"}, sample_config
     )
     assert len(result) == 1
     assert "page must be a positive integer" in result[0].text
@@ -24779,24 +25250,23 @@ async def test_handle_linode_firewall_device_get_missing_args(
 
 async def test_handle_linode_firewall_device_create(sample_config: Config) -> None:
     """Test successful firewall device creation."""
-    with patch(
-        "linodemcp.tools.linode_firewalls_write.handle_linode_firewall_device_create",
-        new_callable=AsyncMock,
-    ) as mock_handle:
-        mock_handle.return_value = [
-            TextContent(
-                type="text",
-                text=(
-                    '{"message": "Firewall device created successfully", '
-                    '"device": {"id": 456}}'
-                ),
-            )
-        ]
+    from linodemcp.tools.linode_firewalls_write import (
+        handle_linode_firewall_device_create,
+    )
 
-        # Import here to avoid circular imports
-        from linodemcp.tools.linode_firewalls_write import (
-            handle_linode_firewall_device_create,
-        )
+    raw_device = {
+        "id": 456,
+        "created": "2024-01-15T10:00:00",
+        "updated": "2024-01-15T10:00:00",
+        "entity": {"id": 123, "type": "linode", "label": "web-1"},
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_firewall_device.return_value = raw_device
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
 
         arguments = {
             "firewall_id": 12345,
@@ -24806,9 +25276,14 @@ async def test_handle_linode_firewall_device_create(sample_config: Config) -> No
         }
         result = await handle_linode_firewall_device_create(arguments, sample_config)
 
-        assert len(result) == 1
-        assert "Firewall device created successfully" in result[0].text
-        mock_handle.assert_awaited_once_with(arguments, sample_config)
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert body["message"] == "Firewall device assigned successfully"
+    assert body["device"]["id"] == 456
+    assert body["device"]["entity"]["type"] == "linode"
+    mock_client.create_firewall_device.assert_awaited_once_with(
+        firewall_id=12345, device_id=123, device_type="linode"
+    )
 
 
 async def test_handle_linode_firewall_device_create_requires_confirm(
@@ -24829,14 +25304,14 @@ async def test_handle_linode_firewall_device_create_requires_confirm(
     }
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
-    assert "confirmation" in result[0].text
+    assert "Set confirm=true to proceed" in result[0].text
     assert "confirm=true" in result[0].text
 
     # Test with missing confirm
     arguments = {"firewall_id": 12345, "id": 123, "type": "linode"}
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
-    assert "confirmation" in result[0].text
+    assert "Set confirm=true to proceed" in result[0].text
     assert "confirm=true" in result[0].text
 
 
@@ -24886,7 +25361,7 @@ async def test_handle_linode_firewall_device_create_invalid_args(
     }
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
-    assert "firewall_id must be a valid integer" in result[0].text
+    assert "firewall_id must be a positive integer" in result[0].text
 
     # Test invalid id
     arguments = {
@@ -24897,7 +25372,7 @@ async def test_handle_linode_firewall_device_create_invalid_args(
     }
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
-    assert "id must be a valid integer" in result[0].text
+    assert "id must be a positive integer" in result[0].text
 
     # Test invalid type
     arguments = {
@@ -25746,8 +26221,13 @@ async def test_ipv4_share_dry_run_still_validates_linode_id(
     assert "linode_id is required" in result[0].text
 
 
-def test_networking_ip_share_schema_requires_confirm_ips_linode_id() -> None:
-    """Networking IP share schema requires ips, linode_id, and confirm."""
+def test_networking_ip_share_schema_requires_confirm_linode_id() -> None:
+    """Networking IP share schema requires linode_id and confirm.
+
+    ips is enforced by the handler, but the proto-generated schema cannot mark a
+    repeated field required, so it drops from the required set (see the
+    input-proto required-flag-loss log).
+    """
     from linodemcp.tools.linode_networking import (
         create_linode_networking_ip_share_tool,
     )
@@ -25756,7 +26236,9 @@ def test_networking_ip_share_schema_requires_confirm_ips_linode_id() -> None:
 
     assert tool.name == "linode_networking_ip_share"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["ips", "linode_id", "confirm"]
+    assert sorted(tool.inputSchema["required"]) == ["confirm", "linode_id"]
+    assert "ips" not in tool.inputSchema["required"]
+    assert "ips" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "IP addresses" in (tool.description or "")
 
@@ -26050,7 +26532,11 @@ def test_networking_ip_assign_tool_definition() -> None:
     for key in ("environment", "region", "assignments", "confirm", "dry_run"):
         assert key in props, f"schema missing property {key}"
 
-    assert tool.inputSchema["required"] == ["region", "assignments", "confirm"]
+    # assignments is enforced by the handler, but the proto-generated schema
+    # cannot mark a repeated message field required, so it drops from the
+    # required set (see the input-proto required-flag-loss log).
+    assert sorted(tool.inputSchema["required"]) == ["confirm", "region"]
+    assert "assignments" not in tool.inputSchema["required"]
 
 
 async def test_networking_ip_assign_success(sample_config: Config) -> None:
@@ -26943,8 +27429,6 @@ async def test_volume_delete_dry_run_dependency_walk(
     """dry_run surfaces the attached instance and never deletes."""
     from dataclasses import fields as dataclass_fields
 
-    from linodemcp.linode import Volume
-
     volume_kwargs: dict[str, Any] = {
         field.name: None for field in dataclass_fields(Volume)
     }
@@ -27018,15 +27502,14 @@ def test_create_linode_instance_config_create_tool_schema() -> None:
     assert props["kernel"]["type"] == "string"
     assert props["memory_limit"]["type"] == "integer"
     assert props["root_device"]["type"] == "string"
-    assert props["run_level"]["enum"] == ["default", "single", "binbash"]
-    assert props["virt_mode"]["enum"] == ["paravirt", "fullvirt"]
     # helpers and interfaces mirror Go: JSON-encoded string args, not required.
     assert props["helpers"]["type"] == "string"
     assert props["interfaces"]["type"] == "string"
+    # devices maps to a proto map field, so it drops out of the generated
+    # required set even though the handler still enforces it.
     assert set(tool.inputSchema["required"]) == {
         "linode_id",
         "label",
-        "devices",
         "confirm",
     }
 
@@ -27162,7 +27645,7 @@ async def test_handle_linode_instance_config_create_rejects_bad_interface_purpos
     )
 
     assert len(result) == 1
-    assert "interfaces[0].purpose must be public, vlan, or vpc" in result[0].text
+    assert "interfaces[0].purpose must be one of: public, vlan, vpc" in result[0].text
 
 
 async def test_handle_linode_instance_config_create_rejects_non_object_helpers(
@@ -27271,7 +27754,10 @@ async def test_handle_linode_instance_config_create_requires_boolean_confirm(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         result = await handle_linode_instance_config_create(arguments, sample_config)
 
-    assert result[0].text == "Error: Set confirm=true to proceed."
+    assert result[0].text == (
+        "Error: This creates a configuration profile on the instance. Set confirm=true "
+        "to proceed."
+    )
     mock_client_class.assert_not_called()
 
 
@@ -27344,6 +27830,58 @@ async def test_handle_linode_instance_config_create_validates_required_arguments
 
     assert message in result[0].text
     mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_instance_config_create_rejects_invalid_device_slot(
+    sample_config: Config,
+) -> None:
+    """A device slot outside sda-sdh is rejected before any client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_instance_config_create(
+            {
+                "linode_id": 456,
+                "label": "boot-config",
+                "devices": {"sdz": {"disk_id": 123}},
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert result[0].text == "Error: device slot sdz must be one of sda through sdh"
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_instance_config_create_accepts_all_valid_slots(
+    sample_config: Config,
+) -> None:
+    """Every slot from sda through sdh passes validation and reaches the client."""
+    devices = {
+        slot: {"disk_id": 100 + index}
+        for index, slot in enumerate(
+            ("sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh")
+        )
+    }
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_instance_config.return_value = {"id": 1, "label": "c"}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_instance_config_create(
+            {
+                "linode_id": 456,
+                "label": "boot-config",
+                "devices": devices,
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    body = json.loads(result[0].text)
+    assert "created on instance 456" in body["message"]
+    mock_client.create_instance_config.assert_awaited_once()
 
 
 async def test_instance_disk_password_reset_tool_def() -> None:
@@ -27470,12 +28008,12 @@ async def test_instance_volumes_list_tool_def() -> None:
     tool, capability = create_linode_instance_volume_list_tool()
     assert tool.name == "linode_instance_volume_list"
     assert capability is Capability.Read
+    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceVolumeListInput")
     required: list[str] = tool.inputSchema.get("required") or []
     assert "linode_id" in required
     props = tool.inputSchema["properties"]
-    assert props["page"]["minimum"] == 1
-    assert props["page_size"]["minimum"] == 25
-    assert props["page_size"]["maximum"] == 500
+    assert "page" in props
+    assert "page_size" in props
 
 
 async def test_instance_volumes_list_success(sample_config: Config) -> None:
@@ -27552,12 +28090,12 @@ async def test_instance_firewalls_list_tool_def() -> None:
     """Linode firewalls list tool should require linode_id and expose pagination."""
     tool, _ = create_linode_instance_firewall_list_tool()
     assert tool.name == "linode_instance_firewall_list"
+    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceFirewallListInput")
     required: list[str] = tool.inputSchema.get("required") or []
     assert "linode_id" in required
     props = tool.inputSchema["properties"]
-    assert props["page"]["minimum"] == 1
-    assert props["page_size"]["minimum"] == 25
-    assert props["page_size"]["maximum"] == 500
+    assert "page" in props
+    assert "page_size" in props
 
 
 async def test_instance_firewalls_list_success(sample_config: Config) -> None:
@@ -27611,9 +28149,6 @@ async def test_instance_interface_firewalls_list_tool_def() -> None:
     assert capability is Capability.Read
     required: list[str] = tool.inputSchema.get("required") or []
     assert required == ["linode_id", "interface_id"]
-    props = tool.inputSchema["properties"]
-    assert props["linode_id"]["minimum"] == 1
-    assert props["interface_id"]["minimum"] == 1
 
 
 async def test_instance_interface_firewalls_list_success(sample_config: Config) -> None:

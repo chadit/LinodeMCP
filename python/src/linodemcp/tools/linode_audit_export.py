@@ -22,17 +22,19 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.audit import (
     DEFAULT_EXPORT_MAX_RECORDS,
-    EXPORT_FORMAT_CSV,
-    EXPORT_FORMAT_JSON,
-    EXPORT_FORMAT_NDJSON,
     MAX_EXPORT_RECORDS,
     RecentQuery,
     encode_events,
     export_events,
     resolve_default_audit_dir,
 )
+from linodemcp.genpb.linode.mcp.v1 import audit_pb2
 from linodemcp.profiles import Capability
+from linodemcp.tools.helpers import error_response
 from linodemcp.tools.linode_audit_summary import audit_sqlite_path
+from linodemcp.tools.proto_enum import required_enum_error
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 _ARG_FORMAT = "format"
 _ARG_SINCE = "since"
@@ -40,8 +42,6 @@ _ARG_UNTIL = "until"
 _ARG_TOOL = "tool"
 _ARG_MAX_RECORDS = "max_records"
 _ARG_INCLUDE_META = "include_meta"
-
-_VALID_FORMATS = (EXPORT_FORMAT_JSON, EXPORT_FORMAT_CSV, EXPORT_FORMAT_NDJSON)
 
 
 def create_linode_audit_export_tool() -> tuple[Tool, Capability]:
@@ -54,46 +54,7 @@ def create_linode_audit_export_tool() -> tuple[Tool, Capability]:
                 "path. Reads SQLite when enabled, else the JSONL log. Optional "
                 "filters: since, until, tool (glob), max_records, include_meta."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_FORMAT: {
-                        "type": "string",
-                        "description": "Output format: json, csv, or ndjson.",
-                    },
-                    _ARG_SINCE: {
-                        "type": "string",
-                        "description": (
-                            "Only events at or after this RFC 3339 timestamp."
-                        ),
-                    },
-                    _ARG_UNTIL: {
-                        "type": "string",
-                        "description": (
-                            "Only events at or before this RFC 3339 timestamp."
-                        ),
-                    },
-                    _ARG_TOOL: {
-                        "type": "string",
-                        "description": (
-                            "Only events whose tool name matches this glob."
-                        ),
-                    },
-                    _ARG_MAX_RECORDS: {
-                        "type": "integer",
-                        "description": (
-                            "Max events to export. Default 10000, capped at 100000."
-                        ),
-                    },
-                    _ARG_INCLUDE_META: {
-                        "type": "boolean",
-                        "description": (
-                            "Include audit/profile meta-tool events. Default false."
-                        ),
-                    },
-                },
-                "required": [_ARG_FORMAT],
-            },
+            inputSchema=schema("linode.mcp.v1.AuditExportInput"),
         ),
         Capability.Meta,
     )
@@ -108,13 +69,13 @@ async def handle_linode_audit_export(
     error message rather than writing a file.
     """
     export_format = arguments.get(_ARG_FORMAT, "")
-    if export_format not in _VALID_FORMATS:
-        return [
-            TextContent(
-                type="text",
-                text=f"unknown format {export_format!r}: expected json, csv, or ndjson",
-            )
-        ]
+    format_error = required_enum_error(
+        arguments, _ARG_FORMAT, audit_pb2.AuditExportFormat.Value
+    )
+    if format_error is not None:
+        # Return the standard Error:-prefixed shape (like the other tools) so the
+        # cross-language behavior runner matches this against Go's error result.
+        return error_response(format_error)
 
     try:
         query = _build_export_query(arguments)
@@ -130,7 +91,8 @@ async def handle_linode_audit_export(
         "format": export_format,
         "record_count": len(events),
     }
-    return [TextContent(type="text", text=json.dumps(payload))]
+    result = serialize_api_response(payload, audit_pb2.AuditExportResponse())
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def _build_export_query(arguments: dict[str, Any]) -> RecentQuery:

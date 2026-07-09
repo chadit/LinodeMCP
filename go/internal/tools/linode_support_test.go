@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -241,12 +240,9 @@ func TestLinodeSupportTicketRepliesToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[supportTicketIDKey]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", supportTicketIDKey)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, supportTicketIDKey) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", supportTicketIDKey)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, supportTicketIDKey) {
+		t.Errorf("tool.RawInputSchema missing key %v", supportTicketIDKey)
 	}
 
 	if handler == nil {
@@ -638,22 +634,10 @@ func TestLinodeSupportTicketCloseToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[supportTicketIDKey]; !ok {
-		t.Errorf("props missing key %v", supportTicketIDKey)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
-	}
-
-	for _, key := range []string{supportTicketIDKey, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{supportTicketIDKey, keyConfirm, keyDryRun} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }

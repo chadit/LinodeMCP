@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_list",
+  "description": "Pins the unfiltered list GET. Both languages fetch /linode/instances with no query params and filter by status client-side.",
+  "cases": [
+    {
+      "name": "lists instances",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/instances" }
+    }
+  ]
+}

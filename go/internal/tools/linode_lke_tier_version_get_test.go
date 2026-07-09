@@ -17,7 +17,7 @@ import (
 
 const (
 	lkeTierParam             = "tier"
-	lkeTierSeparatorError    = "tier must not contain path separators"
+	lkeTierInvalidError      = "tier must be one of: standard, enterprise"
 	lkeVersionSeparatorError = "version must not contain path separators"
 )
 
@@ -65,14 +65,14 @@ func TestLinodeLKETierVersionGetToolTestCase(t *testing.T) {
 	}{
 		{name: "missing tier", args: map[string]any{databaseVersionParam: lkeVersion129}, want: "tier is required"},
 		{name: "missing version", args: map[string]any{lkeTierParam: classStandard}, want: "version is required"},
-		{name: "tier path separator", args: map[string]any{lkeTierParam: "standard/extra", databaseVersionParam: lkeVersion129}, want: lkeTierSeparatorError},
-		{name: "tier query separator", args: map[string]any{lkeTierParam: "standard?debug=true", databaseVersionParam: lkeVersion129}, want: lkeTierSeparatorError},
-		{name: "tier traversal", args: map[string]any{lkeTierParam: pathTraversalValue, databaseVersionParam: lkeVersion129}, want: lkeTierSeparatorError},
-		{name: "tier padded whitespace", args: map[string]any{lkeTierParam: " standard ", databaseVersionParam: lkeVersion129}, want: lkeTierSeparatorError},
+		{name: "tier path separator", args: map[string]any{lkeTierParam: "standard/extra", databaseVersionParam: lkeVersion129}, want: lkeTierInvalidError},
+		{name: "tier query separator", args: map[string]any{lkeTierParam: "standard?debug=true", databaseVersionParam: lkeVersion129}, want: lkeTierInvalidError},
+		{name: "tier traversal", args: map[string]any{lkeTierParam: pathTraversalValue, databaseVersionParam: lkeVersion129}, want: lkeTierInvalidError},
+		{name: "tier padded whitespace", args: map[string]any{lkeTierParam: " standard ", databaseVersionParam: lkeVersion129}, want: lkeTierInvalidError},
 		{name: "version path separator", args: map[string]any{lkeTierParam: classStandard, databaseVersionParam: "1.29/edge"}, want: lkeVersionSeparatorError},
 		{name: "version query separator", args: map[string]any{lkeTierParam: classStandard, databaseVersionParam: "1.29?debug=true"}, want: lkeVersionSeparatorError},
 		{name: "version traversal", args: map[string]any{lkeTierParam: classStandard, databaseVersionParam: pathTraversalValue}, want: lkeVersionSeparatorError},
-		{name: "tier fragment separator", args: map[string]any{lkeTierParam: "standard#fragment", databaseVersionParam: lkeVersion129}, want: lkeTierSeparatorError},
+		{name: "tier fragment separator", args: map[string]any{lkeTierParam: "standard#fragment", databaseVersionParam: lkeVersion129}, want: lkeTierInvalidError},
 		{name: "version fragment separator", args: map[string]any{lkeTierParam: classStandard, databaseVersionParam: "1.29#fragment"}, want: lkeVersionSeparatorError},
 		{name: "version padded whitespace", args: map[string]any{lkeTierParam: classStandard, databaseVersionParam: " 1.29 "}, want: lkeVersionSeparatorError},
 	} {

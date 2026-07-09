@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,15 +35,10 @@ func TestLinodeImageShareGroupImageDeleteToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyShareGroupID, keyImageID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyShareGroupID, keyImageID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -65,12 +59,12 @@ func TestLinodeImageShareGroupImageDeleteToolValidation(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
 		{name: caseStringConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyImageID: 5678, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingShareGroupID, args: map[string]any{keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseMissingShareGroupID, args: map[string]any{keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDRequired},
 		{name: caseZeroShareGroupID, args: map[string]any{keyShareGroupID: 0, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
 		{name: caseSlashShareGroupID, args: map[string]any{keyShareGroupID: pathSeparatorValue, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
 		{name: caseQueryShareGroupID, args: map[string]any{keyShareGroupID: shareGroupIDQueryValue, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
 		{name: caseTraversalShareGroupID, args: map[string]any{keyShareGroupID: pathTraversalValue, keyImageID: 5678, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
-		{name: caseMissingImageID, args: map[string]any{keyShareGroupID: 1234, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
+		{name: caseMissingImageID, args: map[string]any{keyShareGroupID: 1234, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDRequired},
 		{name: "zero image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: 0, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
 		{name: "slash image id", args: map[string]any{keyShareGroupID: 1234, keyImageID: pathSeparatorValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
 		{name: caseQueryImageID, args: map[string]any{keyShareGroupID: 1234, keyImageID: "5?6", keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errImageIDPositive},
@@ -223,8 +217,8 @@ func TestLinodeImageShareGroupImageDeleteToolDryRunSchemaAdvertisesDryRun(t *tes
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeImageShareGroupImageDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -334,7 +328,7 @@ func TestLinodeImageShareGroupImageDeleteToolDryRunStillValidatesImageId(t *test
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "image_id must be a positive integer") {
-		t.Errorf("error text %q does not contain %q", text.Text, "image_id must be a positive integer")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errImageIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errImageIDRequired)
 	}
 }

@@ -40,8 +40,8 @@ func TestLinodeDomainImportToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDomainImportTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -116,8 +116,8 @@ func TestLinodeDomainCloneToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDomainCloneTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -190,8 +190,8 @@ func TestLinodeDomainCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeDomainCreateTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -280,8 +280,8 @@ func TestLinodeDomainRecordCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) 
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeDomainRecordCreateTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -375,8 +375,8 @@ func TestLinodeDomainRecordUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeDomainRecordUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

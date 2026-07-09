@@ -16,6 +16,7 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_nodebalancer_list_tool,
     handle_linode_instance_nodebalancer_list,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
@@ -121,10 +122,9 @@ def test_create_linode_instance_nodebalancers_list_tool_schema() -> None:
 
     assert tool.name == "linode_instance_nodebalancer_list"
     assert capability is Capability.Read
+    assert tool.inputSchema == schema("linode.mcp.v1.InstanceNodeBalancerListInput")
     assert tool.inputSchema["required"] == ["linode_id"]
-    linode_schema = tool.inputSchema["properties"]["linode_id"]
-    assert linode_schema["type"] == "integer"
-    assert linode_schema["minimum"] == 1
+    assert tool.inputSchema["properties"]["linode_id"]["type"] == "integer"
 
 
 @pytest.mark.asyncio

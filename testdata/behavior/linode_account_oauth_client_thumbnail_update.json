@@ -1,0 +1,27 @@
+{
+  "tool": "linode_account_oauth_client_thumbnail_update",
+  "description": "OAuth client thumbnail update: strict base64 rejection agrees, confirm gate, and the PUT once confirmed (binary body, so only method/path pinned). Missing client_id and missing-thumbnail texts diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects invalid base64",
+      "args": { "client_id": "abc123", "thumbnail_png_base64": "not!!base64" },
+      "expect_error": "thumbnail_png_base64 must be valid standard base64"
+    },
+    {
+      "name": "requires confirm before updating thumbnail",
+      "args": { "client_id": "abc123", "thumbnail_png_base64": "aGVsbG8=" },
+      "expect_error": "This updates an OAuth client thumbnail. Set confirm=true to proceed."
+    },
+    {
+      "name": "updates an OAuth client thumbnail",
+      "args": { "client_id": "abc123", "thumbnail_png_base64": "aGVsbG8=", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "PUT", "path": "/account/oauth-clients/abc123/thumbnail" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"client_id": "abc123", "thumbnail_png_base64": "aGVsbG8="},
+      "expect_error": "This updates an OAuth client thumbnail. Set confirm=true to proceed."
+    }
+  ]
+}

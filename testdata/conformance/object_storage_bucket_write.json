@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageBucketWriteResponse",
+  "description": "Object Storage bucket write envelope: a confirmation message plus the full bucket element.",
+  "input": {
+    "message": "Bucket 'assets-prod' created successfully in us-east-1",
+    "bucket": {
+      "label": "assets-prod",
+      "region": "us-east-1",
+      "hostname": "assets-prod.us-east-1.linodeobjects.com",
+      "created": "2026-02-12T12:00:00",
+      "objects": 128,
+      "size": 4096,
+      "cluster": "us-east-1"
+    }
+  },
+  "canonical": {
+    "message": "Bucket 'assets-prod' created successfully in us-east-1",
+    "bucket": {
+      "label": "assets-prod",
+      "region": "us-east-1",
+      "hostname": "assets-prod.us-east-1.linodeobjects.com",
+      "created": "2026-02-12T12:00:00",
+      "objects": 128,
+      "size": 4096,
+      "cluster": "us-east-1"
+    }
+  }
+}

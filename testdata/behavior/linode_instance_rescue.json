@@ -1,0 +1,43 @@
+{
+  "tool": "linode_instance_rescue",
+  "description": "Pins the linode_id-required rejection and the rescue POST. Both languages omit devices when the caller does not supply them (Go now omits the empty map, matching Python), so a minimal call sends an empty body. A supplied devices map is sent verbatim.",
+  "cases": [
+    {
+      "name": "requires linode_id",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "boots into rescue mode with the API default devices",
+      "args": {
+        "linode_id": 5,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/rescue",
+        "body": {}
+      }
+    },
+    {
+      "name": "boots into rescue mode with explicit devices",
+      "args": {
+        "linode_id": 5,
+        "devices": { "sda": { "disk_id": 123 } },
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/rescue",
+        "body": { "devices": { "sda": { "disk_id": 123 } } }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 5, "devices": {"sda": {"disk_id": 123}}},
+      "expect_error": "This reboots the instance into rescue mode. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "message": "linode.mcp.v1.VersionResponse",
+  "description": "The version tool and CLI version subcommand envelope: the shared build/runtime metadata field set both the Go and Python servers emit. Values are per-build; this fixture pins fixed literals to lock the shape.",
+  "input": {
+    "version": "0.1.0",
+    "api_version": "0.1.0",
+    "build_date": "2026-07-02",
+    "commit": "abc1234",
+    "platform": "linux/amd64"
+  },
+  "canonical": {
+    "version": "0.1.0",
+    "api_version": "0.1.0",
+    "build_date": "2026-07-02",
+    "commit": "abc1234",
+    "platform": "linux/amd64"
+  }
+}

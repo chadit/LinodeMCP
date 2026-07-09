@@ -7,27 +7,23 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeNodeBalancerConfigDeleteTool creates a tool for deleting a NodeBalancer config.
 func NewLinodeNodeBalancerConfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_config_delete",
 		"Deletes a config from a NodeBalancer. WARNING: This can disrupt load balancer traffic.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("nodebalancer_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer whose config should be deleted")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm config deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerConfigDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerConfigDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerConfigDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -66,7 +62,7 @@ func handleLinodeNodeBalancerConfigDeleteRequest(ctx context.Context, request *m
 		)
 	}
 
-	if result := RequireConfirm(request, destroyConfirmMessage); result != nil {
+	if result := requireDestroyConfirmation(ctx, request, "linode_nodebalancer_config_delete", destroyConfirmMessage); result != nil {
 		return result, nil
 	}
 
@@ -80,17 +76,11 @@ func handleLinodeNodeBalancerConfigDeleteRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError("Failed to delete config " + strconv.Itoa(configID) + " from NodeBalancer " + strconv.Itoa(nodeBalancerID) + ": " + deleteFailureMessage), nil
 	}
 
-	response := struct {
-		Message        string `json:"message"`
-		NodeBalancerID int    `json:"nodebalancer_id"`
-		ConfigID       int    `json:"config_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.NodeBalancerConfigDeleteResponse{
 		Message:        "Config " + strconv.Itoa(configID) + " removed from NodeBalancer " + strconv.Itoa(nodeBalancerID) + " successfully",
-		NodeBalancerID: nodeBalancerID,
-		ConfigID:       configID,
-	}
-
-	return MarshalToolResponse(response)
+		NodebalancerId: linodeIDToInt32(nodeBalancerID),
+		ConfigId:       linodeIDToInt32(configID),
+	})
 }
 
 func deleteNodeBalancerConfig(ctx context.Context, client *linode.Client, nodeBalancerID, configID int) string {

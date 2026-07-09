@@ -16,6 +16,7 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_transfer_month_get_tool,
     handle_linode_instance_transfer_month_get,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.version import FEATURE_TOOLS_LIST
 
 if TYPE_CHECKING:
@@ -146,35 +147,34 @@ def test_create_linode_instance_transfer_month_get_tool_schema() -> None:
 
     assert tool.name == "linode_instance_transfer_month_get"
     assert capability is Capability.Read
+    assert tool.inputSchema == schema("linode.mcp.v1.InstanceTransferMonthGetInput")
     assert tool.inputSchema["required"] == ["linode_id", "year", "month"]
-    linode_schema = tool.inputSchema["properties"]["linode_id"]
-    assert linode_schema["type"] == "integer"
-    assert linode_schema["minimum"] == 1
-    year_schema = tool.inputSchema["properties"]["year"]
-    assert year_schema["type"] == "integer"
-    assert year_schema["minimum"] == 1970
-    assert year_schema["maximum"] == 9999
-    month_schema = tool.inputSchema["properties"]["month"]
-    assert month_schema["type"] == "integer"
-    assert month_schema["minimum"] == 1
-    assert month_schema["maximum"] == 12
+    for field in ("linode_id", "year", "month"):
+        assert tool.inputSchema["properties"][field]["type"] == "integer"
 
 
 @pytest.mark.asyncio
 async def test_handle_linode_instance_transfer_month_get_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
+    # The month endpoint returns bytes_in/bytes_out/bytes_total (a distinct shape
+    # from the current-month billable/quota/used); int64 byte counts stay JSON
+    # numbers under the canonical serializer.
     mock_linode_client.get_instance_transfer_by_year_month.return_value = {
-        "in": 1.25,
-        "out": 2.5,
-        "total": 3.75,
+        "bytes_in": 30471077120,
+        "bytes_out": 22956600198,
+        "bytes_total": 53427677318,
     }
 
     result = await handle_linode_instance_transfer_month_get(
         {"linode_id": 123, "year": 2024, "month": 5}, sample_config
     )
 
-    assert json.loads(result[0].text) == {"in": 1.25, "out": 2.5, "total": 3.75}
+    assert json.loads(result[0].text) == {
+        "bytes_in": 30471077120,
+        "bytes_out": 22956600198,
+        "bytes_total": 53427677318,
+    }
     mock_linode_client.get_instance_transfer_by_year_month.assert_awaited_once_with(
         123, 2024, 5
     )

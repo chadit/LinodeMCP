@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageBucketDeleteResponse",
+  "description": "Object Storage bucket delete id-echo: a confirmation message plus the region and label identifying the deleted bucket. The endpoint returns an empty body.",
+  "input": {
+    "message": "Bucket 'my-bucket' in us-east-1 removed successfully",
+    "region": "us-east-1",
+    "label": "my-bucket"
+  },
+  "canonical": {
+    "message": "Bucket 'my-bucket' in us-east-1 removed successfully",
+    "region": "us-east-1",
+    "label": "my-bucket"
+  }
+}

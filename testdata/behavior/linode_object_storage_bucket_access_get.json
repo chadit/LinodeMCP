@@ -1,0 +1,22 @@
+{
+  "tool": "linode_object_storage_bucket_access_get",
+  "description": "Pins the region/label-required rejections both languages share and the bucket access GET.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": {},
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires label",
+      "args": { "region": "us-east" },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "gets bucket access",
+      "args": { "region": "us-east", "label": "my-bucket" },
+      "api_response": { "acl": "private", "cors_enabled": false },
+      "expect_request": { "method": "GET", "path": "/object-storage/buckets/us-east/my-bucket/access" }
+    }
+  ]
+}

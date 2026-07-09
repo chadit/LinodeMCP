@@ -4,6 +4,21 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+// NodeBalancerNodeMode is the backend node traffic mode. Values are the exact
+// lowercase API strings, authored from the live OpenAPI spec, which includes
+// `none` (both languages' hand-maintained allowlists were missing it). See the
+// enum-wrapper convention in nodebalancer_config.proto.
+message NodeBalancerNodeMode {
+  enum Value {
+    unspecified = 0;
+    accept = 1;
+    backup = 2;
+    drain = 3;
+    none = 4;
+    reject = 5;
+  }
+}
+
 // NodeBalancerConfigNode mirrors one backend node of a NodeBalancer config.
 message NodeBalancerConfigNode {
   int32 id = 1;
@@ -44,4 +59,107 @@ message NodeBalancerConfigNodeGetInput {
   int32 config_id = 3;
   // The ID of the config node to retrieve (required).
   int32 node_id = 4;
+}
+
+// NodeBalancerConfigNodeDeleteResponse is the id-echo envelope
+// linode_nodebalancer_config_node_delete returns: a confirmation message plus
+// the parent NodeBalancer, config, and deleted node IDs.
+message NodeBalancerConfigNodeDeleteResponse {
+  string message = 1;
+  int32 nodebalancer_id = 2;
+  int32 config_id = 3;
+  int32 node_id = 4;
+}
+
+// NodeBalancerConfigNodeListInput is the input contract for
+// linode_nodebalancer_config_node_list.
+message NodeBalancerConfigNodeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer whose config nodes should be listed.
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config whose nodes should be listed.
+  int32 config_id = 3;
+  // Page number to retrieve.
+  optional int32 page = 4;
+  // Number of results per page, from 25 through 500.
+  optional int32 page_size = 5;
+}
+
+// NodeBalancerConfigNodeCreateInput is the input contract for
+// linode_nodebalancer_config_node_create. Note: mode here is the backend node
+// mode, not the two-stage plan/apply mode.
+message NodeBalancerConfigNodeCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer that owns the config.
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config that should receive a new node.
+  int32 config_id = 3;
+  // Label for the backend node.
+  string label = 4;
+  // Backend node address, including port, for example 192.0.2.10:80.
+  string address = 5;
+  // Optional traffic weight for this node.
+  optional int32 weight = 6;
+  // Optional node mode: accept, backup, drain, none, or reject.
+  optional NodeBalancerNodeMode.Value mode = 7;
+  // Optional VPC subnet ID for VPC backend nodes.
+  optional int32 subnet_id = 8;
+  // Must be set to true to confirm NodeBalancer node creation. Ignored when
+  // dry_run=true.
+  bool confirm = 9;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 10;
+}
+
+// NodeBalancerConfigNodeUpdateInput is the input contract for
+// linode_nodebalancer_config_node_update. Note: mode here is the backend node
+// mode, not the two-stage plan/apply mode.
+message NodeBalancerConfigNodeUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer that owns the config.
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config that owns the node.
+  int32 config_id = 3;
+  // The ID of the NodeBalancer config node to update.
+  int32 node_id = 4;
+  // Optional new label for the backend node.
+  optional string label = 5;
+  // Optional backend node address, including port, for example 192.0.2.10:80.
+  optional string address = 6;
+  // Optional traffic weight for this node.
+  optional int32 weight = 7;
+  // Optional node mode: accept, backup, drain, none, or reject.
+  optional NodeBalancerNodeMode.Value mode = 8;
+  // Optional VPC subnet ID for VPC backend nodes.
+  optional int32 subnet_id = 9;
+  // Must be set to true to confirm NodeBalancer node update. Ignored when
+  // dry_run=true.
+  bool confirm = 10;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 11;
+}
+
+// NodeBalancerConfigNodeDeleteInput is the input contract for
+// linode_nodebalancer_config_node_delete. This destroy does not use the
+// two-stage flow, so there is no mode/plan_id (matches the registered schema).
+message NodeBalancerConfigNodeDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer that owns the config.
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config that owns the node.
+  int32 config_id = 3;
+  // The ID of the NodeBalancer config node to delete.
+  int32 node_id = 4;
+  // Must be set to true to confirm NodeBalancer node deletion. Ignored when
+  // dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
 }

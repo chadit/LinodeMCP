@@ -1,0 +1,57 @@
+{
+  "tool": "linode_vlan_delete",
+  "description": "VLAN delete needs region_id (a lowercase region slug, now enforced in both languages) and label, then DELETEs the region/label path when authorized.",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": {
+        "region_id": "us-east",
+        "label": "my-vlan",
+        "confirm": true
+      },
+      "expect_error": "linode_vlan_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "rejects a malformed region_id",
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true,
+        "region_id": "US_EAST",
+        "label": "my-vlan"
+      },
+      "expect_error": "region_id must be a lowercase region slug"
+    },
+    {
+      "name": "requires region_id",
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true,
+        "label": "my-vlan"
+      },
+      "expect_error": "region_id is required"
+    },
+    {
+      "name": "requires label",
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true,
+        "region_id": "us-east"
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "deletes the vlan when authorized",
+      "args": {
+        "region_id": "us-east",
+        "label": "my-vlan",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/networking/vlans/us-east/my-vlan"
+      }
+    }
+  ]
+}

@@ -258,9 +258,8 @@ def test_create_linode_databases_types_list_tool_schema() -> None:
 
     assert tool.name == "linode_database_type_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
 
 @pytest.mark.asyncio

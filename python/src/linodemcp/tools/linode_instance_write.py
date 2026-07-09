@@ -5,16 +5,10 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from mcp.types import TextContent, Tool
 
-from linodemcp.genpb.linode.mcp.v1 import instance_pb2
-from linodemcp.linode import APIError, NetworkError, instance_to_response_dict
+from linodemcp.genpb.linode.mcp.v1 import firewall_pb2, instance_pb2
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     TWO_STAGE_OPT_IN_NOTE,
     DryRunDetails,
@@ -22,8 +16,16 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
+    required_int_id,
 )
-from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.proto_response import (
+    raw_int,
+    raw_str,
+    serialize_api_response,
+    serialize_list_response,
+)
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -35,13 +37,6 @@ if TYPE_CHECKING:
 def _error_response(message: str) -> list[TextContent]:
     """Return a single-element TextContent error list."""
     return [TextContent(type="text", text=f"Error: {message}")]
-
-
-def _positive_int_argument(arguments: dict[str, Any], name: str) -> int | None:
-    value = arguments.get(name)
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        return None
-    return value
 
 
 def _optional_int_argument(
@@ -77,36 +72,7 @@ def create_linode_instance_boot_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_boot",
         description="Boots a Linode instance that is currently offline.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "instance_id": {
-                    "type": "integer",
-                    "description": "The ID of the instance to boot (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "description": (
-                        "The ID of the config profile to boot with (optional)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceBootInput"),
     ), Capability.Write
 
 
@@ -134,12 +100,20 @@ async def handle_linode_instance_boot(
             _fetch,
         )
 
+    if arguments.get("confirm") is not True:
+        return _error_response(
+            "This boots a Linode instance. Set confirm=true to proceed."
+        )
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.boot_instance(int(instance_id), config_id)
-        return {
-            "message": f"Instance {instance_id} boot initiated successfully",
-            "instance_id": instance_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Instance {instance_id} boot initiated successfully",
+                "instance_id": int(instance_id),
+            },
+            instance_pb2.InstancePowerActionResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "boot instance", _call)
 
@@ -149,36 +123,7 @@ def create_linode_instance_reboot_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_reboot",
         description="Reboots a running Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "instance_id": {
-                    "type": "integer",
-                    "description": "The ID of the instance to reboot (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "description": (
-                        "The ID of the config profile to reboot with (optional)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceRebootInput"),
     ), Capability.Write
 
 
@@ -206,12 +151,21 @@ async def handle_linode_instance_reboot(
             _fetch,
         )
 
+    if arguments.get("confirm") is not True:
+        return _error_response(
+            "This reboots a Linode instance and causes a brief outage. "
+            "Set confirm=true to proceed."
+        )
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.reboot_instance(int(instance_id), config_id)
-        return {
-            "message": f"Instance {instance_id} reboot initiated successfully",
-            "instance_id": instance_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Instance {instance_id} reboot initiated successfully",
+                "instance_id": int(instance_id),
+            },
+            instance_pb2.InstancePowerActionResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "reboot instance", _call)
 
@@ -221,30 +175,7 @@ def create_linode_instance_shutdown_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_shutdown",
         description="Shuts down a running Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "instance_id": {
-                    "type": "integer",
-                    "description": "The ID of the instance to shutdown (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceShutdownInput"),
     ), Capability.Write
 
 
@@ -271,12 +202,20 @@ async def handle_linode_instance_shutdown(
             _fetch,
         )
 
+    if arguments.get("confirm") is not True:
+        return _error_response(
+            "This shuts down a Linode instance. Set confirm=true to proceed."
+        )
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.shutdown_instance(int(instance_id))
-        return {
-            "message": f"Instance {instance_id} shutdown initiated successfully",
-            "instance_id": instance_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Instance {instance_id} shutdown initiated successfully",
+                "instance_id": int(instance_id),
+            },
+            instance_pb2.InstancePowerActionResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "shutdown instance", _call)
 
@@ -289,49 +228,7 @@ def create_linode_instance_firewall_update_tool() -> tuple[Tool, Capability]:
             "Replaces the firewall assignments for a Linode instance. "
             "Pass an empty firewall_ids list to remove all assignments."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "firewall_ids": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "description": (
-                        "Complete list of Firewall IDs to assign. Use [] to remove all."
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of assigned Firewall results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of assigned Firewall results per page",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to replace Linode firewall assignments. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "firewall_ids", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceFirewallUpdateInput"),
     ), Capability.Write
 
 
@@ -339,17 +236,17 @@ async def handle_linode_instance_firewall_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_firewall_update tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return _error_response("linode_id must be a positive integer")
+        return _error_response(error)
 
     firewall_ids = _firewall_ids_argument(arguments)
     if firewall_ids is None:
         return _error_response("firewall_ids must be a list of positive integers")
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return _error_response(str(exc))
 
@@ -379,11 +276,17 @@ async def handle_linode_instance_firewall_update(
         )
 
     if arguments.get("confirm") is not True:
-        return _error_response("confirm must be true")
+        return _error_response(
+            "This replaces firewall assignments for a Linode instance. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_instance_firewalls(
+        raw = await client.update_instance_firewalls(
             linode_id, firewall_ids, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw, "firewalls", firewall_pb2.FirewallListResponse()
         )
 
     return await execute_tool(
@@ -399,54 +302,7 @@ def create_linode_instance_interface_settings_update_tool() -> tuple[Tool, Capab
             "Updates Network Helper and default route settings on a Linode. "
             "Power off the Linode before enabling or disabling Network Helper."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode to update (required)",
-                },
-                "network_helper": {
-                    "type": "boolean",
-                    "description": "Enable or disable Network Helper (optional)",
-                },
-                "default_route": {
-                    "type": "object",
-                    "description": (
-                        "Default route interface IDs. Supports ipv4_interface_id "
-                        "and ipv6_interface_id values, each integer or null."
-                    ),
-                    "additionalProperties": False,
-                    "minProperties": 1,
-                    "properties": {
-                        "ipv4_interface_id": {
-                            "type": ["integer", "null"],
-                            "minimum": 1,
-                        },
-                        "ipv6_interface_id": {
-                            "type": ["integer", "null"],
-                            "minimum": 1,
-                        },
-                    },
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to update interface settings. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceSettingsUpdateInput"),
     ), Capability.Write
 
 
@@ -504,7 +360,9 @@ async def handle_linode_instance_interface_settings_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_interface_settings_update tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
+    if linode_id is None:
+        return _error_response(error)
     network_helper = arguments.get("network_helper")
 
     try:
@@ -517,7 +375,7 @@ async def handle_linode_instance_interface_settings_update(
     )
     if validation_error is not None:
         return _error_response(validation_error)
-    linode_id_int = cast("int", linode_id)
+    linode_id_int = linode_id
 
     request_body: dict[str, Any] = {}
     if default_route is not None:
@@ -539,13 +397,26 @@ async def handle_linode_instance_interface_settings_update(
         )
 
     if arguments.get("confirm") is not True:
-        return _error_response("confirm must be true")
+        return _error_response(
+            "This updates interface settings for the Linode instance. Set confirm=true "
+            "to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_instance_interface_settings(
+        settings_result = await client.update_instance_interface_settings(
             linode_id_int,
             default_route=default_route,
             network_helper=network_helper if "network_helper" in arguments else None,
+        )
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Interface settings for instance "
+                    f"{linode_id_int} updated successfully"
+                ),
+                "settings": settings_result,
+            },
+            instance_pb2.InstanceInterfaceSettingsWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "update Linode interface settings", _call)
@@ -563,82 +434,7 @@ def create_linode_instance_create_tool() -> tuple[Tool, Capability]:
             "interface model is not yet supported by this tool; use "
             "linode_vpc_* tools after create."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": (
-                        "Region where the instance will be created (required)"
-                    ),
-                },
-                "type": {
-                    "type": "string",
-                    "description": "Instance type/plan (required)",
-                },
-                "image": {
-                    "type": "string",
-                    "description": "Image ID to deploy (optional)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label for the instance (optional)",
-                },
-                "root_pass": {
-                    "type": "string",
-                    "description": "Root password (required if image is provided)",
-                },
-                "authorized_keys": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "SSH public keys to add (optional)",
-                },
-                "booted": {
-                    "type": "boolean",
-                    "description": "Whether to boot the instance (default: true)",
-                },
-                "backups_enabled": {
-                    "type": "boolean",
-                    "description": "Enable backups (default: false)",
-                },
-                "firewall_id": {
-                    "type": "integer",
-                    "description": (
-                        "Cloud Firewall ID to attach to the public interface. "
-                        "Required under the current Linode Interfaces generation."
-                    ),
-                },
-                "route_ipv4": {
-                    "type": "boolean",
-                    "description": (
-                        "Whether the public interface owns the IPv4 default "
-                        "route (optional, default: true)"
-                    ),
-                },
-                "route_ipv6": {
-                    "type": "boolean",
-                    "description": (
-                        "Whether the public interface owns the IPv6 default "
-                        "route (optional, default: true)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. This incurs billing."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["region", "type", "firewall_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceCreateInput"),
     ), Capability.Write
 
 
@@ -685,19 +481,16 @@ async def handle_linode_instance_create(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text="Error: This creates a billable resource. Set confirm=true.",
-            )
-        ]
+        return _error_response(
+            "This operation creates a billable resource. Set confirm=true to proceed."
+        )
 
     fields_error = _instance_create_error(region, instance_type, firewall_id)
     if fields_error is not None:
         return _error_response(fields_error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        instance = await client.create_instance(
+        raw = await client.create_instance_raw(
             region=region,
             instance_type=instance_type,
             firewall_id=firewall_id,
@@ -705,18 +498,22 @@ async def handle_linode_instance_create(
             label=arguments.get("label"),
             root_pass=arguments.get("root_pass"),
             authorized_keys=arguments.get("authorized_keys"),
-            booted=arguments.get("booted", True),
+            booted=arguments.get("booted"),
             backups_enabled=arguments.get("backups_enabled", False),
             route_ipv4=arguments.get("route_ipv4", True),
             route_ipv6=arguments.get("route_ipv6", True),
         )
-        return {
-            "message": (
-                f"Instance '{instance.label}' (ID: {instance.id}) "
-                f"created successfully in {instance.region}"
-            ),
-            "instance": instance_to_response_dict(instance),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Instance '{raw_str(raw, 'label')}' "
+                    f"(ID: {raw_int(raw, 'id')}) "
+                    f"created successfully in {raw_str(raw, 'region')}"
+                ),
+                "instance": raw,
+            },
+            instance_pb2.InstanceWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create instance", _call)
 
@@ -726,56 +523,7 @@ def create_linode_instance_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_update",
         description="Updates editable fields on a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "instance_id": {
-                    "type": "integer",
-                    "description": "The ID of the instance to update (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "New Linode label (optional)",
-                },
-                "group": {
-                    "type": "string",
-                    "description": "Deprecated group label (optional)",
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Tags to assign to the Linode (optional)",
-                },
-                "alerts": {
-                    "type": "object",
-                    "description": "Alert threshold settings (optional)",
-                },
-                "maintenance_policy": {
-                    "type": "string",
-                    "description": (
-                        "Maintenance policy, such as linode/migrate (optional)"
-                    ),
-                },
-                "watchdog_enabled": {
-                    "type": "boolean",
-                    "description": (
-                        "Whether Lassie shutdown watchdog is enabled (optional)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceUpdateInput"),
     ), Capability.Write
 
 
@@ -805,7 +553,9 @@ async def handle_linode_instance_update(
     confirm = arguments.get("confirm", False)
 
     if not confirm:
-        return _error_response("Set confirm=true to update the instance.")
+        return _error_response(
+            "This updates a Linode instance. Set confirm=true to proceed."
+        )
 
     if not instance_id:
         return _error_response("instance_id is required")
@@ -830,11 +580,14 @@ async def handle_linode_instance_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        instance = await client.update_instance(int(instance_id), **update_fields)
-        return {
-            "message": f"Instance {instance.id} updated successfully",
-            "instance": instance_to_response_dict(instance),
-        }
+        raw = await client.update_instance_raw(int(instance_id), **update_fields)
+        return serialize_api_response(
+            {
+                "message": f"Instance {raw_int(raw, 'id')} updated successfully",
+                "instance": raw,
+            },
+            instance_pb2.InstanceWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update instance", _call)
 
@@ -849,31 +602,7 @@ def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
             "without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "instance_id": {
-                    "type": "integer",
-                    "description": "The ID of the instance to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -977,10 +706,13 @@ async def _instance_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance(int(instance_id))
-        return {
-            "message": f"Instance {instance_id} removed successfully",
-            "instance_id": instance_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Instance {instance_id} removed successfully",
+                "instance_id": instance_id,
+            },
+            instance_pb2.InstanceDeleteResponse(),
+        )
 
     async def _ts_walk(client: RetryableClient, state: Any) -> DryRunDetails:
         return await _instance_delete_dependency_walk(client, int(instance_id), state)
@@ -1032,22 +764,23 @@ async def handle_linode_instance_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return _error_response(
+            "This operation is destructive and irreversible. "
+            "Set confirm=true to proceed."
+        )
 
     if not instance_id:
         return _error_response("instance_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance(int(instance_id))
-        return {
-            "message": f"Instance {instance_id} removed successfully",
-            "instance_id": instance_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Instance {instance_id} removed successfully",
+                "instance_id": instance_id,
+            },
+            instance_pb2.InstanceDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete instance", _call)
 
@@ -1060,37 +793,7 @@ def create_linode_instance_mutate_tool() -> tuple[Tool, Capability]:
             "Upgrades a Linode using the mutate endpoint. "
             "WARNING: This changes instance state and may resize disks."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode to mutate (required)",
-                },
-                "allow_auto_disk_resize": {
-                    "type": "boolean",
-                    "description": (
-                        "Automatically resize disks when resizing a Linode "
-                        "(optional, default: true)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm upgrade. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceMutateInput"),
     ), Capability.Write
 
 
@@ -1098,15 +801,26 @@ async def handle_linode_instance_mutate(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_mutate tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return _error_response("linode_id must be a positive integer")
+        return _error_response(error)
 
-    allow_auto_disk_resize = arguments.get("allow_auto_disk_resize", True)
-    if not isinstance(allow_auto_disk_resize, bool):
-        return _error_response("allow_auto_disk_resize must be a boolean")
+    # Pass allow_auto_disk_resize only when the caller set it explicitly; an
+    # omitted value defers to the API default (true), matching Go, which only
+    # sets the field when the argument is present.
+    allow_auto_disk_resize: bool | None = None
+    if "allow_auto_disk_resize" in arguments:
+        raw_allow = arguments["allow_auto_disk_resize"]
+        if not isinstance(raw_allow, bool):
+            return _error_response("allow_auto_disk_resize must be a boolean")
+        allow_auto_disk_resize = raw_allow
 
     if is_dry_run(arguments):
+        request_body = (
+            {"allow_auto_disk_resize": allow_auto_disk_resize}
+            if allow_auto_disk_resize is not None
+            else None
+        )
         return build_dry_run_response(
             "linode_instance_mutate",
             arguments.get("environment", ""),
@@ -1115,11 +829,14 @@ async def handle_linode_instance_mutate(
             None,
             side_effects=[f"Linode {linode_id} will be upgraded."],
             warnings=["The Linode may be unavailable during the upgrade."],
-            request_body={"allow_auto_disk_resize": allow_auto_disk_resize},
+            request_body=request_body,
         )
 
     if arguments.get("confirm") is not True:
-        return _error_response("confirm must be true")
+        return _error_response(
+            "This upgrades the instance and may cause downtime. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.mutate_instance(
@@ -1141,43 +858,7 @@ def create_linode_instance_interface_upgrade_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_interface_upgrade",
         description="Upgrades a Linode to Linode Interfaces.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode to upgrade (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Config profile ID to upgrade (optional)",
-                },
-                "api_dry_run": {
-                    "type": "boolean",
-                    "description": (
-                        "Pass dry_run to the Linode API to validate the upgrade "
-                        "without applying it (optional)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to upgrade instance interfaces. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceUpgradeInput"),
     ), Capability.Write
 
 
@@ -1185,9 +866,9 @@ async def handle_linode_instance_interface_upgrade(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_instance_interface_upgrade tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return _error_response("linode_id must be a positive integer")
+        return _error_response(error)
 
     try:
         config_id = _optional_int_argument(arguments, "config_id", 1)
@@ -1216,17 +897,22 @@ async def handle_linode_instance_interface_upgrade(
         )
 
     if arguments.get("confirm") is not True:
-        return _error_response("confirm must be true")
+        return _error_response(
+            "This irreversibly upgrades Linode network interfaces. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.upgrade_instance_interfaces(
             linode_id, config_id=config_id, dry_run=api_dry_run
         )
-        return {
-            "message": f"Linode {linode_id} interface upgrade initiated",
-            "linode_id": linode_id,
-            "response": result,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Linode {linode_id} interface upgrade initiated",
+                **result,
+            },
+            instance_pb2.InstanceInterfaceUpgradeWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "upgrade Linode interfaces", _call)
 
@@ -1240,45 +926,7 @@ def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
             "WARNING: This may cause downtime and billing changes."
             + TWO_STAGE_OPT_IN_NOTE
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "instance_id": {
-                    "type": "integer",
-                    "description": "The ID of the instance to resize (required)",
-                },
-                "type": {
-                    "type": "string",
-                    "description": "The new instance type/plan (required)",
-                },
-                "allow_auto_disk_resize": {
-                    "type": "boolean",
-                    "description": (
-                        "Auto-resize disks to fit new plan (default: true)"
-                    ),
-                },
-                "migration_type": {
-                    "type": "string",
-                    "description": "Migration type: 'warm' or 'cold' (default: 'warm')",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm resize. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["instance_id", "type", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceResizeInput"),
     ), Capability.Write
 
 
@@ -1358,17 +1006,20 @@ async def _instance_resize_two_stage(
         await client.resize_instance(
             instance_id=instance_id,
             instance_type=instance_type,
-            allow_auto_disk_resize=arguments.get("allow_auto_disk_resize", True),
-            migration_type=arguments.get("migration_type", "warm"),
+            allow_auto_disk_resize=arguments.get("allow_auto_disk_resize", False),
+            migration_type=arguments.get("migration_type", ""),
         )
-        return {
-            "message": (
-                f"Instance {instance_id} resize to {instance_type} "
-                "initiated successfully"
-            ),
-            "instance_id": instance_id,
-            "new_type": instance_type,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Instance {instance_id} resize to {instance_type} "
+                    "initiated successfully"
+                ),
+                "instance_id": instance_id,
+                "new_type": instance_type,
+            },
+            instance_pb2.InstanceResizeWriteResponse(),
+        )
 
     async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
         return _instance_resize_side_effects(_resize_from_type(state), instance_type)
@@ -1425,27 +1076,28 @@ async def handle_linode_instance_resize(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text="Error: This may cause downtime. Set confirm=true to proceed.",
-            )
-        ]
+        return _error_response(
+            "This operation causes downtime and may affect billing. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.resize_instance(
             instance_id=int(instance_id),
             instance_type=instance_type,
-            allow_auto_disk_resize=arguments.get("allow_auto_disk_resize", True),
-            migration_type=arguments.get("migration_type", "warm"),
+            allow_auto_disk_resize=arguments.get("allow_auto_disk_resize", False),
+            migration_type=arguments.get("migration_type", ""),
         )
-        return {
-            "message": (
-                f"Instance {instance_id} resize to {instance_type} "
-                "initiated successfully"
-            ),
-            "instance_id": instance_id,
-            "new_type": instance_type,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Instance {instance_id} resize to {instance_type} "
+                    "initiated successfully"
+                ),
+                "instance_id": instance_id,
+                "new_type": instance_type,
+            },
+            instance_pb2.InstanceResizeWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "resize instance", _call)

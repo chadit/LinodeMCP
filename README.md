@@ -631,6 +631,7 @@ LinodeMCP/
 ### Key Design Decisions
 
 - **Dual implementation**: Go for performance and single-binary deployment, Python for quick prototyping and the MCP Python ecosystem. Both share the same config format.
+- **Proto contract**: The `proto/` directory is the single source of truth for both tool input schemas and tool output messages in both languages. `buf` generates the Go and Python types and the MCP input JSON Schema from those `.proto` files, so the two implementations cannot drift by construction. Four ratchet gates keep it honest: `tool-parity` (matching input schemas), `input-proto` (input schemas are proto-generated), `read-proto` and `write-proto` (read and mutating output routed through proto), backed by a cross-language conformance corpus that feeds shared fixtures through both languages and asserts byte-identical output. `make check` runs all of them.
 - **Stdio transport**: Communicates over stdin/stdout per the MCP spec. This is what Claude Desktop and similar clients expect.
 - **Retry with backoff**: The Linode API client wraps all calls with configurable retry logic, exponential backoff, and circuit breaker protection.
 - **Path validation**: Config file loading validates paths against a list of dangerous system directories and restricts access to the user's home, working directory, and temp paths.

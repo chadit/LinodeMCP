@@ -1,0 +1,17 @@
+{
+  "tool": "linode_monitor_dashboard_get",
+  "description": "Pins the non-positive dashboard_id rejection both languages share and the get GET. Missing/non-integer dashboard_id text diverges (Go 'dashboard_id is required'/'positive integer' vs Python 'dashboard_id must be a valid integer'), so only the non-positive case is fixtured (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive dashboard_id",
+      "args": { "dashboard_id": 0 },
+      "expect_error": "dashboard_id must be a positive integer"
+    },
+    {
+      "name": "gets the monitor dashboard",
+      "args": { "dashboard_id": 7 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/monitor/dashboards/7" }
+    }
+  ]
+}

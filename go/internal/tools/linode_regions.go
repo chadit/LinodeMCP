@@ -15,10 +15,11 @@ import (
 
 // NewLinodeRegionListTool creates a tool for listing Linode regions.
 func NewLinodeRegionListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_region_list",
 		"Lists all available Linode regions (datacenters) with optional filtering by country or capabilities",
+		"linode.mcp.v1.RegionListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.Region, error) {
 			return client.ListRegionsProto(ctx)
 		},
@@ -73,10 +74,11 @@ func NewLinodeRegionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 
 // NewLinodeRegionAvailabilityListTool creates a tool for listing compute type availability across regions.
 func NewLinodeRegionAvailabilityListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_region_availability_list",
 		"Lists compute instance type availability across Linode regions",
+		"linode.mcp.v1.RegionAvailabilityListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.RegionAvailability, error) {
 			return client.ListRegionsAvailabilityProto(ctx)
 		},
@@ -93,11 +95,10 @@ func regionAvailabilityListResponse(items []*linodev1.RegionAvailability, count 
 
 // NewLinodeRegionAvailabilityGetTool creates a tool for listing compute type availability in one region.
 func NewLinodeRegionAvailabilityGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_region_availability_get",
-		mcp.WithDescription("Lists compute instance type availability for a Linode region"),
-		mcp.WithString("region_id", mcp.Required(), mcp.Description("Region slug to inspect, for example 'us-east'")),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
+		"Lists compute instance type availability for a Linode region",
+		toolschemas.Schema("linode.mcp.v1.RegionAvailabilityGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -116,7 +117,7 @@ func NewLinodeRegionAvailabilityGetTool(cfg *config.Config) (mcp.Tool, profiles.
 			return mcp.NewToolResultError(failureMessage), nil
 		}
 
-		return MarshalToolResponse(availability)
+		return finishProtoList(&request, availability, nil, regionAvailabilityListResponse)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -152,8 +153,8 @@ func regionAvailabilityRegionIDFromTool(request *mcp.CallToolRequest) (string, s
 	return regionID, ""
 }
 
-func getRegionAvailability(ctx context.Context, client *linode.Client, regionID string) ([]linode.RegionAvailability, string) {
-	availability, err := client.GetRegionAvailability(ctx, regionID)
+func getRegionAvailability(ctx context.Context, client *linode.Client, regionID string) ([]*linodev1.RegionAvailability, string) {
+	availability, err := client.GetRegionAvailabilityProto(ctx, regionID)
 	if err != nil {
 		return nil, "Failed to retrieve linode_region_availability_get: " + err.Error()
 	}

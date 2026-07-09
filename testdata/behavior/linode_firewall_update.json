@@ -1,0 +1,31 @@
+{
+  "tool": "linode_firewall_update",
+  "description": "Firewall update requires firewall_id and PUTs label/status. Note: Go gates on confirm while Python does not (see report), so only the confirmed success path is captured.",
+  "cases": [
+    {
+      "name": "requires firewall_id",
+      "args": { "confirm": true, "label": "renamed" },
+      "expect_error": "firewall_id is required"
+    },
+    {
+      "name": "updates label and status",
+      "args": { "confirm": true, "firewall_id": 123, "label": "renamed-fw", "status": "enabled" },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/firewalls/123",
+        "body": { "label": "renamed-fw", "status": "enabled" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"firewall_id": 123, "label": "renamed-fw", "status": "enabled"},
+      "expect_error": "This updates a Cloud Firewall. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects an invalid inbound_policy (proto FirewallPolicy enum)",
+      "args": { "confirm": true, "firewall_id": 123, "inbound_policy": "MAYBE" },
+      "expect_error": "inbound_policy must be one of: ACCEPT, DROP"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.InstanceConfigDeleteResponse",
+  "description": "Instance config delete id-echo: a confirmation message plus the parent instance and deleted configuration-profile IDs. The delete endpoint returns an empty body, so the response echoes the IDs.",
+  "input": {
+    "message": "Configuration profile 555 deleted from instance 12345 successfully",
+    "linode_id": 12345,
+    "config_id": 555
+  },
+  "canonical": {
+    "message": "Configuration profile 555 deleted from instance 12345 successfully",
+    "linode_id": 12345,
+    "config_id": 555
+  }
+}

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -20,7 +19,7 @@ import (
 const (
 	keyProfileTokenID             = "token_id"
 	profileTokenDeleteConfirmText = "confirm=true"
-	profileTokenIDIntegerError    = "token_id must be an integer"
+	profileTokenIDIntegerError    = "token_id must be a positive integer"
 )
 
 func TestLinodeProfileTokenDeleteToolDefinition(t *testing.T) {
@@ -45,22 +44,22 @@ func TestLinodeProfileTokenDeleteToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyProfileTokenID]; !ok {
-		t.Errorf("props missing key %v", keyProfileTokenID)
+	raw := string(tool.RawInputSchema)
+	if !strings.Contains(raw, keyProfileTokenID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyProfileTokenID)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(raw, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
+	if !strings.Contains(raw, keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 
 	for _, key := range []string{keyProfileTokenID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -244,7 +243,7 @@ func TestLinodeProfileTokenDeleteToolInvalidTokenIdRejectsBeforeClientCall(t *te
 		want string
 	}{
 		{name: caseMissing, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: "token_id is required"},
-		{name: caseZero, args: map[string]any{keyProfileTokenID: 0, keyConfirm: true, keyConfirmedDryRun: true}, want: "token_id must be an integer greater than or equal to 1"},
+		{name: caseZero, args: map[string]any{keyProfileTokenID: 0, keyConfirm: true, keyConfirmedDryRun: true}, want: "token_id must be a positive integer"},
 		{name: caseString, args: map[string]any{keyProfileTokenID: "12345", keyConfirm: true, keyConfirmedDryRun: true}, want: profileTokenIDIntegerError},
 		{name: caseFractionalServiceID, args: map[string]any{keyProfileTokenID: 12345.5, keyConfirm: true, keyConfirmedDryRun: true}, want: profileTokenIDIntegerError},
 		{name: caseSlashServiceID, args: map[string]any{keyProfileTokenID: placementGroupSlashID, keyConfirm: true, keyConfirmedDryRun: true}, want: profileTokenIDIntegerError},

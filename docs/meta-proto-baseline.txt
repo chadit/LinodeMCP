@@ -1,0 +1,5 @@
+# Handler-level meta-proto stragglers: Meta tools not yet proto-routed on
+# both sides. One line per straggler: <tool>\t<go_status>\t<py_status>.
+# Ratchet: convert a handler to proto on both sides, then remove its
+# line; never add a line by hand. Regenerate:
+#   python scripts/verify_meta_proto.py --update-baseline

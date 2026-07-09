@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.InstancePowerActionResponse",
+  "description": "Instance power action id-echo shared by boot, reboot, and shutdown: a confirmation message plus the affected instance id. These endpoints return no resource body, so the id echoes the request. The id field is instance_id (not linode_id) to match the power tools' input schema.",
+  "input": {
+    "message": "Instance 123 boot initiated successfully",
+    "instance_id": 123
+  },
+  "canonical": {
+    "message": "Instance 123 boot initiated successfully",
+    "instance_id": 123
+  }
+}

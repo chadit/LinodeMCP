@@ -6,22 +6,17 @@ import httpx
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import instance_pb2
-from linodemcp.linode import APIError, NetworkError, instance_to_response_dict
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     execute_dry_run,
     execute_tool,
     is_dry_run,
 )
-from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.proto_response import raw_int, raw_str, serialize_api_response
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -33,23 +28,6 @@ if TYPE_CHECKING:
 def _error_response(message: str) -> list[TextContent]:
     """Return a single-element TextContent error list."""
     return [TextContent(type="text", text=f"Error: {message}")]
-
-
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-
-_LINODE_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the Linode instance (required)",
-}
-
-_CONFIRM_PROP: dict[str, Any] = {
-    "type": "boolean",
-    "description": "Must be true to confirm this operation.",
-}
 
 
 def _parse_instance_id(
@@ -70,42 +48,7 @@ def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_clone",
         description="Clones a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "region": {
-                    "type": "string",
-                    "description": "Target region for clone",
-                },
-                "type": {
-                    "type": "string",
-                    "description": ("Instance type for the clone"),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label for cloned instance",
-                },
-                "backups_enabled": {
-                    "type": "boolean",
-                    "description": "Enable backups on the cloned instance (optional)",
-                },
-                "disks": {
-                    "type": "array",
-                    "description": "Disk IDs to include",
-                    "items": {"type": "integer"},
-                },
-                "configs": {
-                    "type": "array",
-                    "description": "Config IDs to include",
-                    "items": {"type": "integer"},
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceCloneInput"),
     ), Capability.Write
 
 
@@ -132,12 +75,15 @@ async def handle_linode_instance_clone(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This clones a Linode instance and creates a billable resource. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        instance = await client.clone_instance(
+        raw = await client.clone_instance_raw(
             iid,
             region=arguments.get("region"),
             instance_type=arguments.get("type"),
@@ -146,13 +92,16 @@ async def handle_linode_instance_clone(
             disks=arguments.get("disks"),
             configs=arguments.get("configs"),
         )
-        return {
-            "message": (
-                f"Instance {iid} cloned as '{instance.label}' "
-                f"(ID: {instance.id}) in {instance.region}"
-            ),
-            "instance": instance_to_response_dict(instance),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Instance {iid} cloned as '{raw_str(raw, 'label')}' "
+                    f"(ID: {raw_int(raw, 'id')}) in {raw_str(raw, 'region')}"
+                ),
+                "instance": raw,
+            },
+            instance_pb2.InstanceWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "clone instance", _call)
 
@@ -162,20 +111,7 @@ def create_linode_instance_migrate_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_migrate",
         description=("Migrates a Linode instance to a new region"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "region": {
-                    "type": "string",
-                    "description": ("Target region for migration"),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceMigrateInput"),
     ), Capability.Write
 
 
@@ -227,16 +163,33 @@ async def handle_linode_instance_migrate(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This migrates the instance and causes downtime during migration. Set "
+            "confirm=true to proceed."
+        )
+
+    region = arguments.get("region", "")
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        await client.migrate_instance(iid, region=arguments.get("region"))
-        return {
-            "message": (f"Migration initiated for instance {iid}"),
+        await client.migrate_instance(iid, region=region or None)
+        # Echo the target region only when the caller picked one; an omitted
+        # region (Linode picks the destination) leaves the field unset so it
+        # stays absent from the output, matching Go's InstanceMigrateWriteResponse.
+        payload: dict[str, Any] = {
+            "message": f"Migration initiated for instance {iid}",
             "linode_id": iid,
         }
+        if region:
+            payload["message"] = (
+                f"Migration initiated for instance {iid} to region {region}"
+            )
+            payload["region"] = region
+        return serialize_api_response(
+            payload,
+            instance_pb2.InstanceMigrateWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "migrate instance", _call)
 
@@ -250,57 +203,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
             " All data on existing disks will be destroyed."
             " Pass dry_run=true to preview without rebuilding." + TWO_STAGE_NOTE
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "image": {
-                    "type": "string",
-                    "description": ("Image ID to rebuild with (required)"),
-                },
-                "root_pass": {
-                    "type": "string",
-                    "description": (
-                        "Root password for the rebuilt instance (required)"
-                    ),
-                },
-                "authorized_keys": {
-                    "type": "array",
-                    "description": "SSH public keys",
-                    "items": {"type": "string"},
-                },
-                "authorized_users": {
-                    "type": "array",
-                    "description": ("Usernames with SSH keys on profile"),
-                    "items": {"type": "string"},
-                },
-                "booted": {
-                    "type": "boolean",
-                    "description": (
-                        "Whether to boot the instance after rebuild"
-                        " (optional, defaults to true)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm rebuild."
-                        " Destroys all existing disk data."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": [
-                "linode_id",
-                "image",
-                "root_pass",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceRebuildInput"),
     ), Capability.Destroy
 
 
@@ -422,7 +325,10 @@ async def handle_linode_instance_rebuild(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
+        return _error_response(
+            "This DESTROYS ALL DATA on the instance and rebuilds it. Set confirm=true "
+            "to proceed."
+        )
 
     # Mirror Go's explicit-only semantics: pass booted only when the caller
     # supplied the key, so an omitted value leaves the API default (true).
@@ -455,20 +361,7 @@ def create_linode_instance_rescue_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_rescue",
         description=("Boots a Linode instance into rescue mode"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "devices": {
-                    "type": "object",
-                    "description": ("Device mappings for rescue mode"),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceRescueInput"),
     ), Capability.Write
 
 
@@ -519,16 +412,21 @@ async def handle_linode_instance_rescue(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This reboots the instance into rescue mode. Set confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.rescue_instance(iid, devices=arguments.get("devices"))
-        return {
-            "message": (f"Instance {iid} is booting into rescue mode"),
-            "linode_id": iid,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Instance {iid} is booting into rescue mode",
+                "linode_id": iid,
+            },
+            instance_pb2.InstanceActionWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "rescue instance", _call)
 
@@ -542,26 +440,7 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without resetting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "root_pass": {
-                    "type": "string",
-                    "description": ("New root password (required)"),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": [
-                "linode_id",
-                "root_pass",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstancePasswordResetInput"),
     ), Capability.Destroy
 
 
@@ -595,10 +474,13 @@ async def _instance_password_reset_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.reset_instance_password(iid, root_pass)
-        return {
-            "message": f"Root password reset for instance {iid}",
-            "linode_id": iid,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Root password reset for instance {iid}",
+                "linode_id": iid,
+            },
+            instance_pb2.InstanceActionWriteResponse(),
+        )
 
     async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
         return _instance_password_reset_side_effects_walk(state)
@@ -652,15 +534,21 @@ async def handle_linode_instance_password_reset(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This resets the root password on the instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.reset_instance_password(iid, root_pass)
-        return {
-            "message": (f"Root password reset for instance {iid}"),
-            "linode_id": iid,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Root password reset for instance {iid}",
+                "linode_id": iid,
+            },
+            instance_pb2.InstanceActionWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "reset instance password", _call)

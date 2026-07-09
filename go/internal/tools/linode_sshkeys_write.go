@@ -5,29 +5,26 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeSSHKeyCreateTool creates a tool for creating an SSH key.
 func NewLinodeSSHKeyCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_sshkey_create",
 		"Creates a new SSH key in your Linode profile. The key can then be used when deploying new Linode instances. Pass dry_run=true to preview without creating.",
-		[]mcp.ToolOption{
-			mcp.WithString("label", mcp.Required(), mcp.Description("A label for the SSH key (must be unique)")),
-			mcp.WithString("ssh_key", mcp.Required(),
-				mcp.Description("The public SSH key in authorized_keys format (e.g., 'ssh-rsa AAAA...')")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm SSH key creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeSSHKeyCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.SSHKeyCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeSSHKeyCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -88,19 +85,15 @@ func handleLinodeSSHKeyCreateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeSSHKeyUpdateTool creates a tool for updating an SSH key.
 func NewLinodeSSHKeyUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_sshkey_update",
 		"Updates the label for an SSH key in your Linode profile. Pass dry_run=true to preview without updating.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("ssh_key_id", mcp.Required(), mcp.Description("The ID of the SSH key to update")),
-			mcp.WithString("label", mcp.Required(), mcp.Description("The new label for the SSH key")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm SSH key update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeSSHKeyUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.SSHKeyUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeSSHKeyUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -160,22 +153,27 @@ func handleLinodeSSHKeyUpdateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeSSHKeyDeleteTool creates a tool for deleting an SSH key.
 func NewLinodeSSHKeyDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_sshkey_delete",
 		"Deletes an SSH key from your Linode profile. This will not affect any instances already using this key. Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("ssh_key_id", mcp.Required(), mcp.Description("The ID of the SSH key to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm SSH key deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleLinodeSSHKeyDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.SSHKeyDeleteInput"),
 	)
 
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeSSHKeyDeleteRequest(ctx, &request, cfg)
+	}
+
 	return tool, profiles.CapDestroy, handler
+}
+
+// sshKeyDeleteProto builds the proto-canonical id-echo body for a successful
+// SSH key delete, keeping the proto literal off the handler's struct literal so
+// the delete handlers stay below the dupl threshold.
+func sshKeyDeleteProto(id int) proto.Message {
+	return &linodev1.SSHKeyDeleteResponse{
+		Message:  fmt.Sprintf("SSH key %d removed successfully", id),
+		SshKeyId: linodeIDToInt32(id),
+	}
 }
 
 func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -185,7 +183,7 @@ func handleLinodeSSHKeyDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		Method:         httpMethodDelete,
 		PathPattern:    "/profile/sshkeys/%d",
 		ConfirmMessage: "This removes an SSH key from your Linode profile. Set confirm=true to proceed.",
-		SuccessFormat:  "SSH key %d removed successfully",
+		SuccessProto:   sshKeyDeleteProto,
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetSSHKey(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteSSHKey(ctx, id) },
 	})

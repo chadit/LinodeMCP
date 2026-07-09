@@ -1,0 +1,17 @@
+{
+  "tool": "linode_profile_device_get",
+  "description": "Shared non-positive device_id rejection and the trusted-device GET path. Missing-device_id text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive device_id",
+      "args": { "device_id": 0 },
+      "expect_error": "device_id must be a positive integer"
+    },
+    {
+      "name": "gets a trusted device by id",
+      "args": { "device_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/profile/devices/123" }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageKeyDeleteResponse",
+  "description": "Object Storage key delete id-echo: a confirmation message plus the revoked key's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "Access key 159 revoked successfully",
+    "key_id": 159
+  },
+  "canonical": {
+    "message": "Access key 159 revoked successfully",
+    "key_id": 159
+  }
+}

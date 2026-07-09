@@ -1,0 +1,36 @@
+{
+  "tool": "linode_account_user_grants_update",
+  "description": "Account user grants update: missing username agrees, confirm gate, and the PUT body once confirmed. Empty-grants text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires username",
+      "args": {},
+      "expect_error": "username is required"
+    },
+    {
+      "name": "requires confirm before updating grants",
+      "args": { "username": "alice", "global": { "account_access": "read_only" } },
+      "expect_error": "This updates account user grants. Set confirm=true to proceed."
+    },
+    {
+      "name": "updates account user grants",
+      "args": { "username": "alice", "global": { "account_access": "read_only" }, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/account/users/alice/grants",
+        "body": { "global": { "account_access": "read_only" } }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"username": "alice", "global": {"account_access": "read_only"}},
+      "expect_error": "This updates account user grants. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects an invalid resource grant permission",
+      "args": {"username": "alice", "linode": [{"id": 123, "permissions": "read_everything"}]},
+      "expect_error": "linode[0].permissions must be one of: read_only, read_write"
+    }
+  ]
+}

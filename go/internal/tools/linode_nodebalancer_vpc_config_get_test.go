@@ -60,7 +60,7 @@ func TestLinodeNodeBalancerVPCConfigGetToolRequiredArguments(t *testing.T) {
 	}{
 		{name: "missing nodebalancer id", args: map[string]any{keyVPCConfigID: 456}, want: "nodebalancer_id is required"},
 		{name: "missing vpc config id", args: map[string]any{keyNodeBalancerID: 123}, want: "vpc_config_id is required"},
-		{name: "bad vpc config id", args: map[string]any{keyNodeBalancerID: 123, keyVPCConfigID: 0}, want: "vpc_config_id must be an integer greater than or equal to 1"},
+		{name: "bad vpc config id", args: map[string]any{keyNodeBalancerID: 123, keyVPCConfigID: 0}, want: "vpc_config_id must be a positive integer"},
 	}
 
 	for _, testCase := range cases {

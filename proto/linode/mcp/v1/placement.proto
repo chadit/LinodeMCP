@@ -4,6 +4,17 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+// PlacementGroupPolicy is the placement group affinity-enforcement policy.
+// Values are the exact lowercase Linode API strings, authored from the live
+// OpenAPI spec. See the enum-wrapper convention in nodebalancer_config.proto.
+message PlacementGroupPolicy {
+  enum Value {
+    unspecified = 0;
+    flexible = 1;
+    strict = 2;
+  }
+}
+
 // PlacementGroup mirrors the Linode placement group object. members is a repeated
 // field (emitted as [] when empty, vs the Go struct's omitempty); migrations is an
 // optional message, omitted when the group is not migrating.
@@ -50,6 +61,13 @@ message PlacementGroupWriteResponse {
   PlacementGroup placement_group = 2;
 }
 
+// PlacementGroupDeleteResponse is the confirmation envelope
+// linode_placement_group_delete returns. The delete endpoint returns an empty
+// body and the handler emits only a human-readable message.
+message PlacementGroupDeleteResponse {
+  string message = 1;
+}
+
 // PlacementGroupListResponse is the envelope linode_placement_group_list
 // returns: a count, an optional echoed filter, and the full proto
 // PlacementGroup elements.
@@ -57,4 +75,112 @@ message PlacementGroupListResponse {
   int32 count = 1;
   optional string filter = 2;
   repeated PlacementGroup placement_groups = 3;
+}
+
+// PlacementGroupListInput is the input contract for
+// linode_placement_group_list.
+message PlacementGroupListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// PlacementGroupCreateInput is the input contract for
+// linode_placement_group_create. label, region, placement_group_type,
+// placement_group_policy, and confirm are required.
+message PlacementGroupCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Placement group label.
+  string label = 2;
+  // Region where the placement group is created.
+  string region = 3;
+  // Placement group type. Currently anti_affinity:local.
+  string placement_group_type = 4;
+  // Placement group policy: flexible or strict.
+  PlacementGroupPolicy.Value placement_group_policy = 5;
+  // Must be true to confirm placement group creation. Ignored when
+  // dry_run=true.
+  bool confirm = 6;
+  // Preview placement group creation without creating it.
+  optional bool dry_run = 7;
+}
+
+// PlacementGroupUpdateInput is the input contract for
+// linode_placement_group_update. group_id, label, and confirm are required.
+message PlacementGroupUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Placement group ID to update.
+  int32 group_id = 2;
+  // New placement group label.
+  string label = 3;
+  // Must be true to confirm placement group update.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// PlacementGroupDeleteInput is the input contract for
+// linode_placement_group_delete, a two-stage destroy.
+message PlacementGroupDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the placement group to delete.
+  int32 group_id = 2;
+  // Must be set to true to confirm deletion. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// PlacementGroupAssignInput is the input contract for
+// linode_placement_group_assign. group_id and confirm are required. linodes is
+// a required array of Linode IDs in the hand-built schema, but repeated fields
+// cannot be marked required in the generated schema, so it drops to optional
+// there (the handler still enforces a non-empty list at runtime).
+message PlacementGroupAssignInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the placement group to assign Linodes to.
+  int32 group_id = 2;
+  // Array of Linode IDs to assign to the placement group.
+  repeated int32 linodes = 3;
+  // Must be true to confirm assigning Linodes to the placement group. Ignored
+  // when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// PlacementGroupUnassignInput is the input contract for
+// linode_placement_group_unassign. group_id and confirm are required. linodes
+// is a required array of Linode IDs in the hand-built schema, but repeated
+// fields cannot be marked required in the generated schema, so it drops to
+// optional there (the handler still enforces a non-empty list at runtime).
+message PlacementGroupUnassignInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the placement group.
+  int32 group_id = 2;
+  // Linode IDs to unassign from the placement group.
+  repeated int32 linodes = 3;
+  // Must be true to confirm placement group unassignment. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
 }

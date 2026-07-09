@@ -15,7 +15,8 @@ import (
 )
 
 // healthResult mirrors the subset of the linode_audit_health JSON
-// response the test asserts on.
+// response the test asserts on. The canonical serializer emits int64
+// counters as JSON numbers, so dropped_events decodes as an int64.
 type healthResult struct {
 	JSONLPath        string `json:"jsonl_path"`
 	ActiveLogExists  bool   `json:"active_log_exists"`
@@ -101,6 +102,6 @@ func TestLinodeAuditHealthReportsJSONL(t *testing.T) {
 	}
 
 	if decoded.DroppedEvents != 0 {
-		t.Errorf("decoded.DroppedEvents = %v, want zero", decoded.DroppedEvents)
+		t.Errorf("decoded.DroppedEvents = %v, want %v", decoded.DroppedEvents, 0)
 	}
 }

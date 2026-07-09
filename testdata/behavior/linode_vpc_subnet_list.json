@@ -1,0 +1,17 @@
+{
+  "tool": "linode_vpc_subnet_list",
+  "description": "VPC subnet list requires vpc_id (a string id), then GETs the subnet collection.",
+  "cases": [
+    {
+      "name": "requires vpc_id",
+      "args": {},
+      "expect_error": "vpc_id is required"
+    },
+    {
+      "name": "lists the subnets",
+      "args": { "vpc_id": "5" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/vpcs/5/subnets" }
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "tool": "linode_instance_config_create",
+  "description": "Pins the shared missing-linode_id and missing-label rejections and the config-create POST body. devices/size rejection text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects missing label",
+      "args": { "linode_id": 123, "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "creates a config profile",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/configs",
+        "body": { "label": "boot", "devices": { "sda": { "disk_id": 111 } } }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "label": "boot", "devices": {"sda": {"disk_id": 111}}},
+      "expect_error": "This creates a configuration profile on the instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects an invalid run_level (proto ConfigRunLevel enum)",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "run_level": "turbo", "confirm": true },
+      "expect_error": "run_level must be one of: default, single, binbash"
+    },
+    {
+      "name": "rejects an invalid virt_mode (proto ConfigVirtMode enum)",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "virt_mode": "hvm", "confirm": true },
+      "expect_error": "virt_mode must be one of: paravirt, fullvirt"
+    },
+    {
+      "name": "rejects an invalid device slot",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sdz": { "disk_id": 111 } }, "confirm": true },
+      "expect_error": "device slot sdz must be one of sda through sdh"
+    }
+  ]
+}

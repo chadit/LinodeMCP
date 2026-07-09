@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_invoice_get",
+  "description": "Shared missing-invoice_id rejection and the invoice GET path. Invalid/out-of-range text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires invoice_id",
+      "args": {},
+      "expect_error": "invoice_id is required"
+    },
+    {
+      "name": "gets an account invoice by id",
+      "args": { "invoice_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/invoices/123" }
+    }
+  ]
+}

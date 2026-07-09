@@ -1,0 +1,49 @@
+{
+  "tool": "linode_support_ticket_attachment_create",
+  "description": "Pins the ticket-attachment local validation incl. the API's documented extension allowlist (checked before any file read). The multipart success path is not pinnable: bodies carry random boundaries and no portable accepted-extension file exists on every machine; the transport itself is unit-tested per language.",
+  "cases": [
+    {
+      "name": "requires confirm before attaching",
+      "args": {
+        "ticket_id": 123,
+        "file": "/tmp/log.txt"
+      },
+      "expect_error": "This creates a support ticket attachment. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects non-positive ticket_id",
+      "args": {
+        "confirm": true,
+        "ticket_id": 0,
+        "file": "/tmp/log.txt"
+      },
+      "expect_error": "ticket_id must be a positive integer"
+    },
+    {
+      "name": "requires file",
+      "args": {
+        "confirm": true,
+        "ticket_id": 123
+      },
+      "expect_error": "file is required"
+    },
+    {
+      "name": "rejects a relative file path",
+      "args": {
+        "confirm": true,
+        "ticket_id": 123,
+        "file": "relative/path.txt"
+      },
+      "expect_error": "file must be a local, absolute path"
+    },
+    {
+      "name": "rejects a disallowed file extension",
+      "args": {
+        "ticket_id": 123,
+        "file": "/home/user/script.sh",
+        "confirm": true
+      },
+      "expect_error": "file must have an accepted extension: .gif, .jpg, .jpeg, .pjpg, .pjpeg, .tif, .tiff, .png, .pdf, or .txt"
+    }
+  ]
+}

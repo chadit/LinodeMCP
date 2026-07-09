@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.ImageShareGroupTokenDeleteResponse",
+  "description": "Share group token delete confirmation: only a message is emitted so the token secret is never echoed.",
+  "input": {
+    "message": "Image share group token removed successfully"
+  },
+  "canonical": {
+    "message": "Image share group token removed successfully"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "tool": "linode_vpc_subnet_delete",
+  "description": "VPC subnet delete requires both ids (integers), is Destroy (confirm alone blocked by the bypass gate), and DELETEs the subnet when authorized.",
+  "cases": [
+    {
+      "name": "requires vpc_id",
+      "args": {},
+      "expect_error": "vpc_id is required"
+    },
+    {
+      "name": "requires subnet_id",
+      "args": { "vpc_id": 5 },
+      "expect_error": "subnet_id is required"
+    },
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": { "vpc_id": 5, "subnet_id": 7, "confirm": true },
+      "expect_error": "linode_vpc_subnet_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the subnet when authorized",
+      "args": { "vpc_id": 5, "subnet_id": 7, "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/vpcs/5/subnets/7" }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "tool": "linode_image_create",
+  "description": "Pins the create POST body. disk_id and confirm-message rejections diverge in text (see report).",
+  "cases": [
+    {
+      "name": "creates an image from a disk",
+      "args": { "disk_id": 123, "label": "my-image", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/images", "body": { "disk_id": 123, "label": "my-image" } }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"disk_id": 123, "label": "my-image"},
+      "expect_error": "This creates a private image from a Linode disk. Set confirm=true to proceed."
+    }
+  ]
+}

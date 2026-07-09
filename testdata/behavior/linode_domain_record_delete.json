@@ -1,0 +1,27 @@
+{
+  "tool": "linode_domain_record_delete",
+  "description": "Domain record delete requires both ids, is Destroy (confirm alone blocked by the bypass gate), and DELETEs the record when authorized.",
+  "cases": [
+    {
+      "name": "requires domain_id",
+      "args": {},
+      "expect_error": "domain_id is required"
+    },
+    {
+      "name": "requires record_id",
+      "args": { "domain_id": 5 },
+      "expect_error": "record_id is required"
+    },
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": { "domain_id": 5, "record_id": 7, "confirm": true },
+      "expect_error": "linode_domain_record_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the record when authorized",
+      "args": { "domain_id": 5, "record_id": 7, "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/domains/5/records/7" }
+    }
+  ]
+}

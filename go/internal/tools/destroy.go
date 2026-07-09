@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
@@ -16,10 +17,9 @@ import (
 // per-tool struct literals don't each repeat them (which trips
 // goconst once enough tools accumulate the same string).
 const (
-	httpMethodDelete   = "DELETE"
-	httpMethodPost     = "POST"
-	httpMethodPut      = "PUT"
-	responseKeyMessage = "message"
+	httpMethodDelete = "DELETE"
+	httpMethodPost   = "POST"
+	httpMethodPut    = "PUT"
 
 	// destroyConfirmMessage is the generic confirm gate for destroy tools
 	// whose resource type is already clear from the tool name.
@@ -39,7 +39,7 @@ type DestructiveAction struct {
 	ConfirmMessage string
 	FetchState     func(ctx context.Context, client *linode.Client) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client) error
-	Success        func() any
+	Success        func() proto.Message
 
 	// DependencyWalk, when non-nil, runs the Phase 2 dependency walk on a
 	// dry-run after FetchState succeeds, enriching the preview with
@@ -244,9 +244,16 @@ type DestructiveActionByID struct {
 	Method         string
 	PathPattern    string // single %d slot for the ID, e.g. "/domains/%d"
 	ConfirmMessage string
-	SuccessFormat  string // single %d slot for the ID, e.g. "Domain %d removed successfully"
 	FetchState     func(ctx context.Context, client *linode.Client, id int) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client, id int) error
+
+	// SuccessProto builds the success body as a proto message from the parsed
+	// ID, routing the output through the proto-canonical marshaller so it
+	// matches the Python side byte for byte. Required: every destroy response
+	// is proto-canonical. The write-proto-dump classifier keys off this field
+	// to mark the tool proto-routed, so a tool must also carry a conformance
+	// fixture for its response message.
+	SuccessProto func(id int) proto.Message
 
 	// DependencyWalk, when non-nil, runs the Phase 2 dependency walk on a
 	// dry-run after FetchState. It receives the parsed ID and fetched state.
@@ -292,25 +299,25 @@ func RunDestructiveActionWithID(
 		Execute: func(ctx context.Context, client *linode.Client) error {
 			return params.Execute(ctx, client, id)
 		},
-		Success: func() any {
-			return map[string]any{
-				responseKeyMessage: fmt.Sprintf(params.SuccessFormat, id),
-				params.IDParam:     id,
-			}
-		},
+		Success:        destructiveByIDSuccess(params, id),
 		DependencyWalk: walk,
 		HashIgnore:     params.HashIgnore,
 	})
+}
+
+// destructiveByIDSuccess binds the call site's SuccessProto builder to the
+// parsed ID. Keeping this off the struct literal lets the write-proto
+// classifier inspect SuccessProto at the call site.
+func destructiveByIDSuccess(params *DestructiveActionByID, id int) func() proto.Message {
+	return func() proto.Message {
+		return params.SuccessProto(id)
+	}
 }
 
 // DestructiveActionByTwoIDs configures a destroy tool keyed by a
 // pair of integer IDs in a parent/child path shape (e.g. `/domains/{d}/records/{r}`,
 // `/vpcs/{v}/subnets/{s}`, `/networking/firewalls/{f}/devices/{d}`).
 // PathPattern takes two %d slots: outer first, then inner.
-// SuccessFormat is fmt.Sprintf'd with (inner, outer) in that order to
-// match the legacy "Record %d removed successfully from domain %d"
-// shape; a format with no %d slots (e.g. for tools whose success
-// message is static) is also fine since fmt.Sprintf ignores extras.
 type DestructiveActionByTwoIDs struct {
 	ToolName       string
 	OuterIDParam   string
@@ -318,9 +325,16 @@ type DestructiveActionByTwoIDs struct {
 	Method         string
 	PathPattern    string
 	ConfirmMessage string
-	SuccessFormat  string
 	FetchState     func(ctx context.Context, client *linode.Client, outerID, innerID int) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client, outerID, innerID int) error
+
+	// SuccessProto builds the success body as a proto message from the two
+	// parsed IDs, routing the output through the proto-canonical marshaller
+	// so it matches the Python side byte for byte. Required: every destroy
+	// response is proto-canonical. The write-proto-dump classifier keys off
+	// this field to mark the tool proto-routed, so a tool must also carry a
+	// conformance fixture for its response message.
+	SuccessProto func(outerID, innerID int) proto.Message
 
 	// DependencyWalk, when non-nil, runs the Phase 2 dependency walk on a
 	// dry-run after FetchState. It receives both parsed IDs and the fetched
@@ -373,33 +387,39 @@ func RunDestructiveActionByTwoIDs(
 		Execute: func(ctx context.Context, client *linode.Client) error {
 			return params.Execute(ctx, client, outerID, innerID)
 		},
-		Success: func() any {
-			return map[string]any{
-				responseKeyMessage:  fmt.Sprintf(params.SuccessFormat, innerID, outerID),
-				params.OuterIDParam: outerID,
-				params.InnerIDParam: innerID,
-			}
-		},
+		Success:        destructiveByTwoIDsSuccess(params, outerID, innerID),
 		DependencyWalk: walk,
 		HashIgnore:     params.HashIgnore,
 	})
 }
 
+// destructiveByTwoIDsSuccess binds the call site's SuccessProto builder to the
+// two parsed IDs. Keeping this off the struct literal lets the write-proto
+// classifier inspect SuccessProto at the call site.
+func destructiveByTwoIDsSuccess(params *DestructiveActionByTwoIDs, outerID, innerID int) func() proto.Message {
+	return func() proto.Message {
+		return params.SuccessProto(outerID, innerID)
+	}
+}
+
 // DestructiveActionByRegionLabel configures a destroy tool keyed by
 // the (region, label) pair, the canonical Object Storage path shape.
-// PathPattern takes two %s slots: region first, then label. The success
-// response always carries "region", plus a label value keyed by
-// SuccessKey ("label" or "bucket", per legacy response shapes).
-// SuccessFormat takes two %s slots: label first, then region.
+// PathPattern takes two %s slots: region first, then label.
 type DestructiveActionByRegionLabel struct {
 	ToolName       string
 	Method         string
 	PathPattern    string
 	ConfirmMessage string
-	SuccessKey     string
-	SuccessFormat  string
 	FetchState     func(ctx context.Context, client *linode.Client, region, label string) (any, error)
 	Execute        func(ctx context.Context, client *linode.Client, region, label string) error
+
+	// SuccessProto builds the success body as a proto message from the parsed
+	// region and label, routing the output through the proto-canonical
+	// marshaller so it matches the Python side byte for byte. Required: every
+	// destroy response is proto-canonical. The write-proto-dump classifier
+	// keys off this field to mark the tool proto-routed, so a tool must also
+	// carry a conformance fixture for its response message.
+	SuccessProto func(region, label string) proto.Message
 
 	// HashIgnore lists cosmetic state fields stripped before the two-stage
 	// drift hash. Use twostage.HashIgnoreFields(resourceType) to populate it.
@@ -439,13 +459,16 @@ func RunDestructiveActionByRegionLabel(
 		Execute: func(ctx context.Context, client *linode.Client) error {
 			return params.Execute(ctx, client, region, label)
 		},
-		Success: func() any {
-			return map[string]any{
-				responseKeyMessage: fmt.Sprintf(params.SuccessFormat, label, region),
-				"region":           region,
-				params.SuccessKey:  label,
-			}
-		},
+		Success:    destructiveByRegionLabelSuccess(params, region, label),
 		HashIgnore: params.HashIgnore,
 	})
+}
+
+// destructiveByRegionLabelSuccess binds the call site's SuccessProto builder
+// to the parsed region and label. Keeping this off the struct literal lets the
+// write-proto classifier inspect SuccessProto at the call site.
+func destructiveByRegionLabelSuccess(params *DestructiveActionByRegionLabel, region, label string) func() proto.Message {
+	return func() proto.Message {
+		return params.SuccessProto(region, label)
+	}
 }

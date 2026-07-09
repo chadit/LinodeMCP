@@ -11,6 +11,25 @@ message LKENode {
   string status = 3;
 }
 
+// LKENodeDeleteResponse is the id-echo envelope linode_lke_node_delete returns:
+// a confirmation message plus the parent cluster ID and the deleted node ID. The
+// node ID is a string. The delete endpoint returns an empty body, so the echo
+// confirms the target.
+message LKENodeDeleteResponse {
+  string message = 1;
+  int32 cluster_id = 2;
+  string node_id = 3;
+}
+
+// LKENodeRecycleResponse is the id-echo envelope linode_lke_node_recycle
+// returns: a confirmation message plus the parent cluster ID and the recycled
+// node ID (a string). The recycle endpoint returns an empty body.
+message LKENodeRecycleResponse {
+  string message = 1;
+  int32 cluster_id = 2;
+  string node_id = 3;
+}
+
 // LKENodeGetInput is the input contract for linode_lke_node_get.
 message LKENodeGetInput {
   // Linode environment to use (optional, defaults to "default").
@@ -19,4 +38,40 @@ message LKENodeGetInput {
   string cluster_id = 2;
   // The ID of the node to retrieve (required).
   string node_id = 3;
+}
+
+// LKENodeDeleteInput is the input contract for linode_lke_node_delete.
+message LKENodeDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster.
+  int32 cluster_id = 2;
+  // The ID of the node to delete (string format).
+  string node_id = 3;
+  // Must be true to confirm node deletion. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 6;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 7;
+}
+
+// LKENodeRecycleInput is the input contract for linode_lke_node_recycle.
+message LKENodeRecycleInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster.
+  int32 cluster_id = 2;
+  // The ID of the node to recycle (string format).
+  string node_id = 3;
+  // Must be true to confirm node recycling. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
 }

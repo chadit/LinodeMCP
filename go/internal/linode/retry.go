@@ -326,6 +326,22 @@ func (c *Client) GetProfileDevice(ctx context.Context, deviceID int) (*ProfileDe
 	return device, err
 }
 
+// GetProfileDeviceProto retrieves one trusted device as a proto element with
+// automatic retry on transient failures.
+func (c *Client) GetProfileDeviceProto(ctx context.Context, deviceID int) (*linodev1.TrustedDevice, error) {
+	var device *linodev1.TrustedDevice
+
+	err := c.executeWithRetry(ctx, "GetProfileDevice", func() error {
+		var err error
+
+		device, err = c.httpGetProfileDeviceProto(ctx, deviceID)
+
+		return err
+	})
+
+	return device, err
+}
+
 // DeleteProfileDevice revokes one trusted device without retrying the destructive DELETE.
 func (c *Client) DeleteProfileDevice(ctx context.Context, deviceID int) error {
 	return c.httpDeleteProfileDevice(ctx, deviceID)
@@ -349,14 +365,15 @@ func (c *Client) GetProfileGrants(ctx context.Context) (*Grants, error) {
 	return grants, err
 }
 
-// GetProfileToken retrieves one personal access token with automatic retry on transient failures.
-func (c *Client) GetProfileToken(ctx context.Context, tokenID int) (*ProfileToken, error) {
-	var token *ProfileToken
+// GetProfileTokenProto retrieves one personal access token's metadata as a proto
+// element with automatic retry on transient failures.
+func (c *Client) GetProfileTokenProto(ctx context.Context, tokenID int) (*linodev1.PersonalAccessToken, error) {
+	var token *linodev1.PersonalAccessToken
 
 	err := c.executeWithRetry(ctx, "GetProfileToken", func() error {
 		var err error
 
-		token, err = c.httpGetProfileToken(ctx, tokenID)
+		token, err = c.httpGetProfileTokenProto(ctx, tokenID)
 
 		return err
 	})
@@ -479,14 +496,15 @@ func (c *Client) GetInstanceProto(ctx context.Context, instanceID int) (*linodev
 	return instance, err
 }
 
-// GetInstanceStatsByYearMonth retrieves monthly instance statistics with automatic retry on transient failures.
-func (c *Client) GetInstanceStatsByYearMonth(ctx context.Context, linodeID, year, month int) (*InstanceStats, error) {
-	var stats *InstanceStats
+// GetInstanceStatsByYearMonthProto retrieves monthly instance statistics as a
+// proto message with automatic retry on transient failures.
+func (c *Client) GetInstanceStatsByYearMonthProto(ctx context.Context, linodeID, year, month int) (*linodev1.InstanceStats, error) {
+	var stats *linodev1.InstanceStats
 
 	err := c.executeWithRetry(ctx, "GetInstanceStatsByYearMonth", func() error {
 		var retryErr error
 
-		stats, retryErr = c.httpGetInstanceStatsByYearMonth(ctx, linodeID, year, month)
+		stats, retryErr = c.httpGetInstanceStatsByYearMonthProto(ctx, linodeID, year, month)
 
 		return retryErr
 	})
@@ -494,14 +512,15 @@ func (c *Client) GetInstanceStatsByYearMonth(ctx context.Context, linodeID, year
 	return stats, err
 }
 
-// GetInstanceTransfer retrieves monthly transfer statistics with automatic retry on transient failures.
-func (c *Client) GetInstanceTransfer(ctx context.Context, linodeID int) (*InstanceTransfer, error) {
-	var transfer *InstanceTransfer
+// GetInstanceTransferProto retrieves the current month's transfer pool as a
+// proto message with automatic retry on transient failures.
+func (c *Client) GetInstanceTransferProto(ctx context.Context, linodeID int) (*linodev1.InstanceTransfer, error) {
+	var transfer *linodev1.InstanceTransfer
 
 	err := c.executeWithRetry(ctx, "GetInstanceTransfer", func() error {
 		var err error
 
-		transfer, err = c.httpGetInstanceTransfer(ctx, linodeID)
+		transfer, err = c.httpGetInstanceTransferProto(ctx, linodeID)
 
 		return err
 	})
@@ -640,6 +659,12 @@ func (c *Client) UpdateAccountSettings(ctx context.Context, req *UpdateAccountSe
 	return c.httpUpdateAccountSettings(ctx, req)
 }
 
+// UpdateAccountSettingsProto updates account settings and returns the proto
+// AccountSettings element without retrying the mutating request.
+func (c *Client) UpdateAccountSettingsProto(ctx context.Context, req *UpdateAccountSettingsRequest) (*linodev1.AccountSettings, error) {
+	return c.httpUpdateAccountSettingsProto(ctx, req)
+}
+
 // EnableAccountManaged enables Linode Managed for the account without retrying
 // the mutating request. Retrying can replay side effects after a transient
 // error, so this method delegates exactly once.
@@ -683,14 +708,15 @@ func (c *Client) UpdateManagedCredentialUsernamePassword(ctx context.Context, cr
 	return c.httpUpdateManagedCredentialUsernamePassword(ctx, credentialID, req)
 }
 
-// GetManagedSSHKey retrieves the account Managed SSH public key with automatic retry on transient failures.
-func (c *Client) GetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, error) {
-	var sshKey *ManagedSSHKey
+// GetManagedSSHKeyProto retrieves the account Managed SSH public key decoded into
+// the ManagedSSHKey proto element with automatic retry on transient failures.
+func (c *Client) GetManagedSSHKeyProto(ctx context.Context) (*linodev1.ManagedSSHKey, error) {
+	var sshKey *linodev1.ManagedSSHKey
 
 	err := c.executeWithRetry(ctx, "GetManagedSSHKey", func() error {
 		var err error
 
-		sshKey, err = c.httpGetManagedSSHKey(ctx)
+		sshKey, err = c.httpGetManagedSSHKeyProto(ctx)
 
 		return err
 	})
@@ -703,6 +729,14 @@ func (c *Client) GetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, error) {
 // transient error, so this method delegates exactly once.
 func (c *Client) CreateManagedCredential(ctx context.Context, request *CreateManagedCredentialRequest) (*ManagedCredential, error) {
 	return c.httpCreateManagedCredential(ctx, request)
+}
+
+// CreateManagedCredentialProto creates a stored Managed credential and decodes the
+// response into the proto element so the write tool emits the same field set as
+// the credential GET/LIST path (the secret is never echoed). Like the struct
+// sibling it delegates exactly once so a transient error never replays creation.
+func (c *Client) CreateManagedCredentialProto(ctx context.Context, request *CreateManagedCredentialRequest) (*linodev1.ManagedCredential, error) {
+	return c.httpCreateManagedCredentialProto(ctx, request)
 }
 
 // GetManagedCredential retrieves one stored managed credential with automatic retry on transient failures.
@@ -1061,6 +1095,41 @@ func (c *Client) UpdateManagedService(ctx context.Context, serviceID int, reques
 	return service, err
 }
 
+// CreateManagedServiceProto creates a Managed service monitor and decodes the
+// response into the proto element so the write tool emits the same field set as
+// the service GET/LIST path. It delegates exactly once because service creation
+// is not guaranteed idempotent after a transient error.
+func (c *Client) CreateManagedServiceProto(ctx context.Context, request *CreateManagedServiceRequest) (*linodev1.ManagedService, error) {
+	var service *linodev1.ManagedService
+
+	err := c.executeWithoutRetry(ctx, "CreateManagedService", func() error {
+		var retryErr error
+
+		service, retryErr = c.httpCreateManagedServiceProto(ctx, request)
+
+		return retryErr
+	})
+
+	return service, err
+}
+
+// UpdateManagedServiceProto updates one Managed service monitor and decodes the
+// response into the proto element. Like the struct sibling it delegates exactly
+// once so a transient error never replays the mutation.
+func (c *Client) UpdateManagedServiceProto(ctx context.Context, serviceID int, request *UpdateManagedServiceRequest) (*linodev1.ManagedService, error) {
+	var service *linodev1.ManagedService
+
+	err := c.executeWithoutRetry(ctx, "UpdateManagedService", func() error {
+		var retryErr error
+
+		service, retryErr = c.httpUpdateManagedServiceProto(ctx, serviceID, request)
+
+		return retryErr
+	})
+
+	return service, err
+}
+
 // DeleteManagedService deletes a Managed service monitor without retrying the
 // destructive request. Managed service deletion is not replay-safe after a
 // transient error, so this method delegates exactly once.
@@ -1208,6 +1277,24 @@ func (c *Client) UpdateManagedContact(ctx context.Context, contactID int, req Up
 // transient error never replays the mutation.
 func (c *Client) UpdateManagedContactProto(ctx context.Context, contactID int, req UpdateManagedContactRequest) (*linodev1.ManagedContact, error) {
 	return c.httpUpdateManagedContactProto(ctx, contactID, req)
+}
+
+// CreateManagedContactProto creates a Managed contact and decodes the response
+// into the proto element so the write tool emits the same field set as the
+// contact GET/LIST path. It delegates exactly once because contact creation is
+// not guaranteed idempotent after a transient error.
+func (c *Client) CreateManagedContactProto(ctx context.Context, request *CreateManagedContactRequest) (*linodev1.ManagedContact, error) {
+	var contact *linodev1.ManagedContact
+
+	err := c.executeWithoutRetry(ctx, "CreateManagedContact", func() error {
+		var retryErr error
+
+		contact, retryErr = c.httpCreateManagedContactProto(ctx, request)
+
+		return retryErr
+	})
+
+	return contact, err
 }
 
 // ListAccountNotifications retrieves account notifications with automatic retry on transient failures.
@@ -1538,6 +1625,22 @@ func (c *Client) GetLongviewPlan(ctx context.Context) (*LongviewSubscription, er
 	return plan, err
 }
 
+// GetLongviewPlanProto retrieves the Longview subscription plan as the proto
+// LongviewSubscription element with automatic retry on transient failures.
+func (c *Client) GetLongviewPlanProto(ctx context.Context) (*linodev1.LongviewSubscription, error) {
+	var plan *linodev1.LongviewSubscription
+
+	err := c.executeWithRetry(ctx, "GetLongviewPlan", func() error {
+		var err error
+
+		plan, err = c.httpGetLongviewPlanProto(ctx)
+
+		return err
+	})
+
+	return plan, err
+}
+
 // ListLongviewTypes retrieves the available Longview subscription types with automatic retry on transient failures.
 func (c *Client) ListLongviewTypes(ctx context.Context) (*PaginatedResponse[LongviewType], error) {
 	var types *PaginatedResponse[LongviewType]
@@ -1715,9 +1818,11 @@ func (c *Client) GetMonitorServiceMetrics(ctx context.Context, serviceType strin
 
 // CreateMonitorServiceToken creates a service token without retrying
 // the token-creating request. Token creation is not guaranteed idempotent
-// after a transient error, so this method delegates exactly once.
-func (c *Client) CreateMonitorServiceToken(ctx context.Context, serviceType string, request *CreateMonitorServiceTokenRequest) (*MonitorServiceToken, error) {
-	var token *MonitorServiceToken
+// after a transient error, so this method delegates exactly once. The
+// response decodes into the MonitorServiceTokenCreateResponse proto message
+// so the write tool emits the proto-canonical body.
+func (c *Client) CreateMonitorServiceToken(ctx context.Context, serviceType string, request *CreateMonitorServiceTokenRequest) (*linodev1.MonitorServiceTokenCreateResponse, error) {
+	var token *linodev1.MonitorServiceTokenCreateResponse
 
 	err := c.executeWithoutRetry(ctx, "CreateMonitorServiceToken", func() error {
 		var retryErr error
@@ -1773,6 +1878,23 @@ func (c *Client) GetMonitorServiceAlertDefinition(ctx context.Context, serviceTy
 		var err error
 
 		definition, err = c.httpGetMonitorServiceAlertDefinition(ctx, serviceType, alertID)
+
+		return err
+	})
+
+	return definition, err
+}
+
+// GetMonitorServiceAlertDefinitionProto retrieves one alert definition for one
+// monitoring service type as a proto element with automatic retry on transient
+// failures.
+func (c *Client) GetMonitorServiceAlertDefinitionProto(ctx context.Context, serviceType string, alertID int) (*linodev1.MonitorAlertDefinition, error) {
+	var definition *linodev1.MonitorAlertDefinition
+
+	err := c.executeWithRetry(ctx, "GetMonitorServiceAlertDefinition", func() error {
+		var err error
+
+		definition, err = c.httpGetMonitorServiceAlertDefinitionProto(ctx, serviceType, alertID)
 
 		return err
 	})
@@ -1840,14 +1962,15 @@ func (c *Client) ListMonitorDashboardsProto(ctx context.Context, page, pageSize 
 	return dashboards, err
 }
 
-// GetMonitorDashboard retrieves one monitoring dashboard with automatic retry on transient failures.
-func (c *Client) GetMonitorDashboard(ctx context.Context, dashboardID int) (MonitorDashboard, error) {
-	var dashboard MonitorDashboard
+// GetMonitorDashboardProto retrieves one monitoring dashboard as a proto element
+// with automatic retry on transient failures.
+func (c *Client) GetMonitorDashboardProto(ctx context.Context, dashboardID int) (*linodev1.MonitorDashboard, error) {
+	var dashboard *linodev1.MonitorDashboard
 
 	err := c.executeWithRetry(ctx, "GetMonitorDashboard", func() error {
 		var err error
 
-		dashboard, err = c.httpGetMonitorDashboard(ctx, dashboardID)
+		dashboard, err = c.httpGetMonitorDashboardProto(ctx, dashboardID)
 
 		return err
 	})
@@ -2029,6 +2152,22 @@ func (c *Client) GetAccountPaymentMethod(ctx context.Context, paymentMethodID st
 	return method, err
 }
 
+// GetAccountPaymentMethodProto retrieves one account payment method as the proto
+// AccountPaymentMethod element with automatic retry on transient failures.
+func (c *Client) GetAccountPaymentMethodProto(ctx context.Context, paymentMethodID string) (*linodev1.AccountPaymentMethod, error) {
+	var method *linodev1.AccountPaymentMethod
+
+	err := c.executeWithRetry(ctx, "GetAccountPaymentMethod", func() error {
+		var err error
+
+		method, err = c.httpGetAccountPaymentMethodProto(ctx, paymentMethodID)
+
+		return err
+	})
+
+	return method, err
+}
+
 // CreateAccountPaymentMethod adds a payment method without retrying the
 // mutating request. Retrying can replay payment-method creation after a
 // transient error, so this method delegates exactly once.
@@ -2108,6 +2247,12 @@ func (c *Client) CreateLongviewClient(ctx context.Context, req *CreateLongviewCl
 // so this method delegates exactly once.
 func (c *Client) UpdateOAuthClient(ctx context.Context, clientID string, req *UpdateOAuthClientRequest) (*OAuthClient, error) {
 	return c.httpUpdateOAuthClient(ctx, clientID, req)
+}
+
+// UpdateOAuthClientProto updates an account OAuth client and returns the proto
+// OAuthClient element without retrying the mutating request.
+func (c *Client) UpdateOAuthClientProto(ctx context.Context, clientID string, req *UpdateOAuthClientRequest) (*linodev1.OAuthClient, error) {
+	return c.httpUpdateOAuthClientProto(ctx, clientID, req)
 }
 
 // UpdateOAuthClientThumbnail updates an account OAuth client's thumbnail without
@@ -2384,6 +2529,22 @@ func (c *Client) GetAccountUserGrants(ctx context.Context, username string) (*Gr
 		var err error
 
 		grants, err = c.httpGetAccountUserGrants(ctx, username)
+
+		return err
+	})
+
+	return grants, err
+}
+
+// GetAccountUserGrantsProto retrieves one account user's grants as the proto
+// AccountUserGrants element with automatic retry on transient failures.
+func (c *Client) GetAccountUserGrantsProto(ctx context.Context, username string) (*linodev1.AccountUserGrants, error) {
+	var grants *linodev1.AccountUserGrants
+
+	err := c.executeWithRetry(ctx, "GetAccountUserGrants", func() error {
+		var err error
+
+		grants, err = c.httpGetAccountUserGrantsProto(ctx, username)
 
 		return err
 	})
@@ -2854,6 +3015,13 @@ func (c *Client) CreateAccountServiceTransfer(ctx context.Context, req *CreateAc
 	return c.httpCreateAccountServiceTransfer(ctx, req)
 }
 
+// CreateAccountServiceTransferProto creates an account service transfer and
+// returns the proto AccountEntityTransfer element without retrying the mutating
+// request.
+func (c *Client) CreateAccountServiceTransferProto(ctx context.Context, req *CreateAccountServiceTransferRequest) (*linodev1.AccountEntityTransfer, error) {
+	return c.httpCreateAccountServiceTransferProto(ctx, req)
+}
+
 // DeleteAccountServiceTransfer cancels an account service transfer without retrying
 // the mutating request. Retrying can replay transfer cancellation after a
 // transient error, so this method delegates exactly once.
@@ -2883,11 +3051,33 @@ func (c *Client) GetAccountChildAccount(ctx context.Context, euuid string) (*Chi
 	return childAccount, err
 }
 
+// GetAccountChildAccountProto retrieves one child-level account as the proto
+// ChildAccount element with automatic retry on transient failures.
+func (c *Client) GetAccountChildAccountProto(ctx context.Context, euuid string) (*linodev1.ChildAccount, error) {
+	var childAccount *linodev1.ChildAccount
+
+	err := c.executeWithRetry(ctx, "GetAccountChildAccount", func() error {
+		var err error
+
+		childAccount, err = c.httpGetAccountChildAccountProto(ctx, euuid)
+
+		return err
+	})
+
+	return childAccount, err
+}
+
 // CreateAccountChildAccountToken creates a proxy user token without retrying the
 // mutating request. Retrying can create multiple short-lived tokens after a
 // transient error, so this method delegates exactly once.
 func (c *Client) CreateAccountChildAccountToken(ctx context.Context, euuid string) (*ProxyUserToken, error) {
 	return c.httpCreateAccountChildAccountToken(ctx, euuid)
+}
+
+// CreateAccountChildAccountTokenProto creates a proxy user token and returns the
+// proto ProxyUserToken element without retrying the mutating request.
+func (c *Client) CreateAccountChildAccountTokenProto(ctx context.Context, euuid string) (*linodev1.ProxyUserToken, error) {
+	return c.httpCreateAccountChildAccountTokenProto(ctx, euuid)
 }
 
 // GetAccountBeta retrieves one enrolled account beta program with automatic retry on transient failures.
@@ -2940,6 +3130,12 @@ func (c *Client) AcknowledgeAccountAgreements(ctx context.Context, req *Acknowle
 // method delegates exactly once.
 func (c *Client) CancelAccount(ctx context.Context, req *CancelAccountRequest) (*CancelAccountResponse, error) {
 	return c.httpCancelAccount(ctx, req)
+}
+
+// CancelAccountProto cancels the account and returns the proto
+// AccountCancelResponse element without retrying the destructive request.
+func (c *Client) CancelAccountProto(ctx context.Context, req *CancelAccountRequest) (*linodev1.AccountCancelResponse, error) {
+	return c.httpCancelAccountProto(ctx, req)
 }
 
 // UpdateAccount updates account billing/contact fields without retrying the
@@ -3079,14 +3275,16 @@ func (c *Client) ListRegionsAvailabilityProto(ctx context.Context) ([]*linodev1.
 	return availability, err
 }
 
-// GetRegionAvailability retrieves compute type availability for one region with automatic retry on transient failures.
-func (c *Client) GetRegionAvailability(ctx context.Context, regionID string) ([]RegionAvailability, error) {
-	var availability []RegionAvailability
+// GetRegionAvailabilityProto retrieves compute type availability for one region
+// as proto RegionAvailability messages with automatic retry on transient
+// failures.
+func (c *Client) GetRegionAvailabilityProto(ctx context.Context, regionID string) ([]*linodev1.RegionAvailability, error) {
+	var availability []*linodev1.RegionAvailability
 
 	err := c.executeWithRetry(ctx, "GetRegionAvailability", func() error {
 		var err error
 
-		availability, err = c.httpGetRegionAvailability(ctx, regionID)
+		availability, err = c.httpGetRegionAvailabilityProto(ctx, regionID)
 
 		return err
 	})
@@ -3525,6 +3723,38 @@ func (c *Client) GetDatabasePostgreSQLInstance(ctx context.Context, instanceID i
 		var err error
 
 		instance, err = c.httpGetDatabasePostgreSQLInstance(ctx, instanceID)
+
+		return err
+	})
+
+	return instance, err
+}
+
+// GetDatabaseInstanceProto retrieves one MySQL Managed Database instance as a
+// proto element with automatic retry on transient failures.
+func (c *Client) GetDatabaseInstanceProto(ctx context.Context, instanceID int) (*linodev1.DatabaseInstance, error) {
+	var instance *linodev1.DatabaseInstance
+
+	err := c.executeWithRetry(ctx, "GetDatabaseInstance", func() error {
+		var err error
+
+		instance, err = c.httpGetDatabaseInstanceProto(ctx, instanceID)
+
+		return err
+	})
+
+	return instance, err
+}
+
+// GetDatabasePostgreSQLInstanceProto retrieves one PostgreSQL Managed Database
+// instance as a proto element with automatic retry on transient failures.
+func (c *Client) GetDatabasePostgreSQLInstanceProto(ctx context.Context, instanceID int) (*linodev1.DatabaseInstance, error) {
+	var instance *linodev1.DatabaseInstance
+
+	err := c.executeWithRetry(ctx, "GetDatabasePostgreSQLInstance", func() error {
+		var err error
+
+		instance, err = c.httpGetDatabasePostgreSQLInstanceProto(ctx, instanceID)
 
 		return err
 	})
@@ -4705,6 +4935,22 @@ func (c *Client) CreateFirewallDevice(ctx context.Context, firewallID int, req *
 	return device, err
 }
 
+// CreateFirewallDeviceProto assigns a device to a Cloud Firewall and decodes the
+// response into the FirewallDevice proto element without retrying the mutating request.
+func (c *Client) CreateFirewallDeviceProto(ctx context.Context, firewallID int, req *CreateFirewallDeviceRequest) (*linodev1.FirewallDevice, error) {
+	var device *linodev1.FirewallDevice
+
+	err := c.executeWithoutRetry(ctx, "CreateFirewallDevice", func() error {
+		var err error
+
+		device, err = c.httpCreateFirewallDeviceProto(ctx, firewallID, req)
+
+		return err
+	})
+
+	return device, err
+}
+
 // GetFirewallDevice retrieves one device assigned to a Cloud Firewall with automatic retry on transient failures.
 func (c *Client) GetFirewallDevice(ctx context.Context, firewallID, deviceID int) (*FirewallDevice, error) {
 	var device *FirewallDevice
@@ -4751,6 +4997,22 @@ func (c *Client) ListFirewallSettings(ctx context.Context, page, pageSize int) (
 		var err error
 
 		settings, err = c.httpListFirewallSettings(ctx, page, pageSize)
+
+		return err
+	})
+
+	return settings, err
+}
+
+// ListFirewallSettingsProto retrieves default firewall assignments as a proto
+// message with automatic retry on transient failures.
+func (c *Client) ListFirewallSettingsProto(ctx context.Context, page, pageSize int) (*linodev1.FirewallSettings, error) {
+	var settings *linodev1.FirewallSettings
+
+	err := c.executeWithRetry(ctx, "ListFirewallSettings", func() error {
+		var err error
+
+		settings, err = c.httpListFirewallSettingsProto(ctx, page, pageSize)
 
 		return err
 	})
@@ -4813,6 +5075,23 @@ func (c *Client) UpdateFirewallSettings(ctx context.Context, req *UpdateFirewall
 		var err error
 
 		settings, err = c.httpUpdateFirewallSettings(ctx, req)
+
+		return err
+	})
+
+	return settings, err
+}
+
+// UpdateFirewallSettingsProto updates default firewall assignments and decodes
+// the response into the FirewallSettings proto element without retrying the
+// mutating request.
+func (c *Client) UpdateFirewallSettingsProto(ctx context.Context, req *UpdateFirewallSettingsRequest) (*linodev1.FirewallSettings, error) {
+	var settings *linodev1.FirewallSettings
+
+	err := c.executeWithoutRetry(ctx, "UpdateFirewallSettings", func() error {
+		var err error
+
+		settings, err = c.httpUpdateFirewallSettingsProto(ctx, req)
 
 		return err
 	})
@@ -5065,6 +5344,22 @@ func (c *Client) CreateIPv6Range(ctx context.Context, req CreateIPv6RangeRequest
 	return ipv6Range, err
 }
 
+// CreateIPv6RangeProto creates an IPv6 range and decodes the response into the
+// IPv6Range proto element without retrying the mutating request.
+func (c *Client) CreateIPv6RangeProto(ctx context.Context, req CreateIPv6RangeRequest) (*linodev1.IPv6Range, error) {
+	var ipv6Range *linodev1.IPv6Range
+
+	err := c.executeWithoutRetry(ctx, "CreateIPv6Range", func() error {
+		var err error
+
+		ipv6Range, err = c.httpCreateIPv6RangeProto(ctx, req)
+
+		return err
+	})
+
+	return ipv6Range, err
+}
+
 // GetIPv6Range retrieves one IPv6 range with automatic retry on transient failures.
 func (c *Client) GetIPv6Range(ctx context.Context, ipv6Range string) (*IPv6Range, error) {
 	var result *IPv6Range
@@ -5073,6 +5368,22 @@ func (c *Client) GetIPv6Range(ctx context.Context, ipv6Range string) (*IPv6Range
 		var err error
 
 		result, err = c.httpGetIPv6Range(ctx, ipv6Range)
+
+		return err
+	})
+
+	return result, err
+}
+
+// GetIPv6RangeProto retrieves one IPv6 range decoded into the IPv6Range proto
+// element with automatic retry on transient failures.
+func (c *Client) GetIPv6RangeProto(ctx context.Context, ipv6Range string) (*linodev1.IPv6Range, error) {
+	var result *linodev1.IPv6Range
+
+	err := c.executeWithRetry(ctx, "GetIPv6Range", func() error {
+		var err error
+
+		result, err = c.httpGetIPv6RangeProto(ctx, ipv6Range)
 
 		return err
 	})
@@ -5281,6 +5592,23 @@ func (c *Client) UpdateNodeBalancerFirewalls(ctx context.Context, nodeBalancerID
 		var retryErr error
 
 		firewalls, retryErr = c.httpUpdateNodeBalancerFirewalls(ctx, nodeBalancerID, page, pageSize, req)
+
+		return retryErr
+	})
+
+	return firewalls, err
+}
+
+// UpdateNodeBalancerFirewallsProto replaces firewall assignments for a
+// NodeBalancer and decodes the returned page into Firewall proto elements
+// without replaying the state-changing request.
+func (c *Client) UpdateNodeBalancerFirewallsProto(ctx context.Context, nodeBalancerID, page, pageSize int, req *UpdateNodeBalancerFirewallsRequest) ([]*linodev1.Firewall, error) {
+	var firewalls []*linodev1.Firewall
+
+	err := c.executeWithoutRetry(ctx, "UpdateNodeBalancerFirewalls", func() error {
+		var retryErr error
+
+		firewalls, retryErr = c.httpUpdateNodeBalancerFirewallsProto(ctx, nodeBalancerID, page, pageSize, req)
 
 		return retryErr
 	})
@@ -5554,14 +5882,15 @@ func (c *Client) UpdateNodeBalancerNodeProto(ctx context.Context, nodeBalancerID
 	return node, err
 }
 
-// GetNodeBalancerStats retrieves node balancer statistics by ID with automatic retry on transient failures.
-func (c *Client) GetNodeBalancerStats(ctx context.Context, nodeBalancerID int) (*NodeBalancerStats, error) {
-	var stats *NodeBalancerStats
+// GetNodeBalancerStatsProto retrieves NodeBalancer statistics by ID as a proto
+// message with automatic retry on transient failures.
+func (c *Client) GetNodeBalancerStatsProto(ctx context.Context, nodeBalancerID int) (*linodev1.NodeBalancerStats, error) {
+	var stats *linodev1.NodeBalancerStats
 
 	err := c.executeWithRetry(ctx, "GetNodeBalancerStats", func() error {
 		var err error
 
-		stats, err = c.httpGetNodeBalancerStats(ctx, nodeBalancerID)
+		stats, err = c.httpGetNodeBalancerStatsProto(ctx, nodeBalancerID)
 
 		return err
 	})
@@ -5662,6 +5991,38 @@ func (c *Client) UpdateStackScript(ctx context.Context, stackScriptID int, req *
 		var err error
 
 		script, err = c.httpUpdateStackScript(ctx, stackScriptID, req)
+
+		return err
+	})
+
+	return script, err
+}
+
+// CreateStackScriptProto creates a StackScript and decodes the response into the
+// StackScript proto element without retrying the mutating request.
+func (c *Client) CreateStackScriptProto(ctx context.Context, req *CreateStackScriptRequest) (*linodev1.StackScript, error) {
+	var script *linodev1.StackScript
+
+	err := c.executeWithoutRetry(ctx, "CreateStackScript", func() error {
+		var err error
+
+		script, err = c.httpCreateStackScriptProto(ctx, req)
+
+		return err
+	})
+
+	return script, err
+}
+
+// UpdateStackScriptProto updates a StackScript and decodes the response into the
+// StackScript proto element without automatic retry.
+func (c *Client) UpdateStackScriptProto(ctx context.Context, stackScriptID int, req *UpdateStackScriptRequest) (*linodev1.StackScript, error) {
+	var script *linodev1.StackScript
+
+	err := c.executeWithoutRetry(ctx, "UpdateStackScript", func() error {
+		var err error
+
+		script, err = c.httpUpdateStackScriptProto(ctx, stackScriptID, req)
 
 		return err
 	})
@@ -6496,14 +6857,15 @@ func (c *Client) ListObjectStorageBucketsProto(ctx context.Context) ([]*linodev1
 	return buckets, err
 }
 
-// ListObjectStorageBucketsByRegion retrieves Object Storage buckets in a region with automatic retry.
-func (c *Client) ListObjectStorageBucketsByRegion(ctx context.Context, region string) ([]ObjectStorageBucket, error) {
-	var buckets []ObjectStorageBucket
+// ListObjectStorageBucketsByRegionProto retrieves Object Storage buckets in a
+// region as proto messages with automatic retry on transient failures.
+func (c *Client) ListObjectStorageBucketsByRegionProto(ctx context.Context, region string) ([]*linodev1.ObjectStorageBucket, error) {
+	var buckets []*linodev1.ObjectStorageBucket
 
 	err := c.executeWithRetry(ctx, "ListObjectStorageBucketsByRegion", func() error {
 		var err error
 
-		buckets, err = c.httpListObjectStorageBucketsByRegion(ctx, region)
+		buckets, err = c.httpListObjectStorageBucketsByRegionProto(ctx, region)
 
 		return err
 	})
@@ -6778,14 +7140,15 @@ func (c *Client) GetObjectStorageKeyProto(ctx context.Context, keyID int) (*lino
 	return key, err
 }
 
-// GetObjectStorageQuotaUsage retrieves Object Storage quota usage with automatic retry.
-func (c *Client) GetObjectStorageQuotaUsage(ctx context.Context, quotaID string) (*ObjectStorageQuotaUsage, error) {
-	var usage *ObjectStorageQuotaUsage
+// GetObjectStorageQuotaUsageProto retrieves Object Storage quota usage decoded
+// into the ObjectStorageQuotaUsage proto element with automatic retry.
+func (c *Client) GetObjectStorageQuotaUsageProto(ctx context.Context, quotaID string) (*linodev1.ObjectStorageQuotaUsage, error) {
+	var usage *linodev1.ObjectStorageQuotaUsage
 
 	err := c.executeWithRetry(ctx, "GetObjectStorageQuotaUsage", func() error {
 		var err error
 
-		usage, err = c.httpGetObjectStorageQuotaUsage(ctx, quotaID)
+		usage, err = c.httpGetObjectStorageQuotaUsageProto(ctx, quotaID)
 
 		return err
 	})
@@ -6793,14 +7156,15 @@ func (c *Client) GetObjectStorageQuotaUsage(ctx context.Context, quotaID string)
 	return usage, err
 }
 
-// GetObjectStorageTransfer retrieves Object Storage transfer usage with automatic retry.
-func (c *Client) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error) {
-	var transfer *ObjectStorageTransfer
+// GetObjectStorageTransferProto retrieves Object Storage transfer usage decoded
+// into the ObjectStorageTransfer proto element with automatic retry.
+func (c *Client) GetObjectStorageTransferProto(ctx context.Context) (*linodev1.ObjectStorageTransfer, error) {
+	var transfer *linodev1.ObjectStorageTransfer
 
 	err := c.executeWithRetry(ctx, "GetObjectStorageTransfer", func() error {
 		var err error
 
-		transfer, err = c.httpGetObjectStorageTransfer(ctx)
+		transfer, err = c.httpGetObjectStorageTransferProto(ctx)
 
 		return err
 	})
@@ -6808,14 +7172,15 @@ func (c *Client) GetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTr
 	return transfer, err
 }
 
-// GetObjectStorageQuota retrieves a single Object Storage quota with automatic retry.
-func (c *Client) GetObjectStorageQuota(ctx context.Context, objQuotaID string) (*ObjectStorageQuota, error) {
-	var quota *ObjectStorageQuota
+// GetObjectStorageQuotaProto retrieves a single Object Storage quota as a proto
+// element with automatic retry on transient failures.
+func (c *Client) GetObjectStorageQuotaProto(ctx context.Context, objQuotaID string) (*linodev1.ObjectStorageQuota, error) {
+	var quota *linodev1.ObjectStorageQuota
 
 	err := c.executeWithRetry(ctx, "GetObjectStorageQuota", func() error {
 		var err error
 
-		quota, err = c.httpGetObjectStorageQuota(ctx, objQuotaID)
+		quota, err = c.httpGetObjectStorageQuotaProto(ctx, objQuotaID)
 
 		return err
 	})
@@ -6947,6 +7312,22 @@ func (c *Client) UpdateObjectStorageKey(ctx context.Context, keyID int, req Upda
 	})
 }
 
+// UpdateObjectStorageKeyProto updates a key and returns the echoed key as a
+// proto message with automatic retry on transient failures.
+func (c *Client) UpdateObjectStorageKeyProto(ctx context.Context, keyID int, req UpdateObjectStorageKeyRequest) (*linodev1.ObjectStorageKey, error) {
+	var key *linodev1.ObjectStorageKey
+
+	err := c.executeWithRetry(ctx, "UpdateObjectStorageKey", func() error {
+		var retryErr error
+
+		key, retryErr = c.httpUpdateObjectStorageKeyProto(ctx, keyID, req)
+
+		return retryErr
+	})
+
+	return key, err
+}
+
 // DeleteObjectStorageKey revokes an Object Storage access key with automatic retry.
 func (c *Client) DeleteObjectStorageKey(ctx context.Context, keyID int) error {
 	return c.executeWithRetry(ctx, "DeleteObjectStorageKey", func() error {
@@ -6954,14 +7335,15 @@ func (c *Client) DeleteObjectStorageKey(ctx context.Context, keyID int) error {
 	})
 }
 
-// CreatePresignedURL generates a presigned URL with automatic retry.
-func (c *Client) CreatePresignedURL(ctx context.Context, region, label string, req PresignedURLRequest) (*PresignedURLResponse, error) {
-	var result *PresignedURLResponse
+// CreatePresignedURLProto generates a presigned URL decoded into the
+// PresignedURLResponse proto element with automatic retry.
+func (c *Client) CreatePresignedURLProto(ctx context.Context, region, label string, req PresignedURLRequest) (*linodev1.PresignedURLResponse, error) {
+	var result *linodev1.PresignedURLResponse
 
 	err := c.executeWithRetry(ctx, "CreatePresignedURL", func() error {
 		var retryErr error
 
-		result, retryErr = c.httpCreatePresignedURL(ctx, region, label, req)
+		result, retryErr = c.httpCreatePresignedURLProto(ctx, region, label, req)
 
 		return retryErr
 	})
@@ -7015,6 +7397,22 @@ func (c *Client) UpdateObjectACL(ctx context.Context, region, label string, req 
 	return result, err
 }
 
+// UpdateObjectACLProto updates an object's ACL and returns the echoed ACL as a
+// proto message with automatic retry on transient failures.
+func (c *Client) UpdateObjectACLProto(ctx context.Context, region, label string, req ObjectACLUpdateRequest) (*linodev1.ObjectACL, error) {
+	var result *linodev1.ObjectACL
+
+	err := c.executeWithRetry(ctx, "UpdateObjectACL", func() error {
+		var retryErr error
+
+		result, retryErr = c.httpUpdateObjectACLProto(ctx, region, label, req)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
 // GetBucketSSL retrieves a bucket's SSL status with automatic retry.
 func (c *Client) GetBucketSSL(ctx context.Context, region, label string) (*BucketSSL, error) {
 	var result *BucketSSL
@@ -7061,6 +7459,22 @@ func (c *Client) UploadBucketSSL(ctx context.Context, region, label string, req 
 		var retryErr error
 
 		result, retryErr = c.httpUploadBucketSSL(ctx, region, label, req)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
+// UploadBucketSSLProto uploads a certificate and returns the echoed TLS status
+// as a proto message with automatic retry on transient failures.
+func (c *Client) UploadBucketSSLProto(ctx context.Context, region, label string, req UploadBucketSSLRequest) (*linodev1.BucketSSL, error) {
+	var result *linodev1.BucketSSL
+
+	err := c.executeWithRetry(ctx, "UploadBucketSSL", func() error {
+		var retryErr error
+
+		result, retryErr = c.httpUploadBucketSSLProto(ctx, region, label, req)
 
 		return retryErr
 	})
@@ -7498,6 +7912,39 @@ func (c *Client) UpdateLKEControlPlaneACL(ctx context.Context, clusterID int, re
 		var err error
 
 		acl, err = c.httpUpdateLKEControlPlaneACL(ctx, clusterID, req)
+
+		return err
+	})
+
+	return acl, err
+}
+
+// GetLKEControlPlaneACLProto retrieves the control plane ACL decoded into the
+// LKEControlPlaneACL proto element with automatic retry on transient failures.
+func (c *Client) GetLKEControlPlaneACLProto(ctx context.Context, clusterID int) (*linodev1.LKEControlPlaneACL, error) {
+	var acl *linodev1.LKEControlPlaneACL
+
+	err := c.executeWithRetry(ctx, "GetLKEControlPlaneACL", func() error {
+		var err error
+
+		acl, err = c.httpGetLKEControlPlaneACLProto(ctx, clusterID)
+
+		return err
+	})
+
+	return acl, err
+}
+
+// UpdateLKEControlPlaneACLProto updates the control plane ACL and decodes the
+// response into the LKEControlPlaneACL proto element with automatic retry on
+// transient failures.
+func (c *Client) UpdateLKEControlPlaneACLProto(ctx context.Context, clusterID int, req UpdateLKEControlPlaneACLRequest) (*linodev1.LKEControlPlaneACL, error) {
+	var acl *linodev1.LKEControlPlaneACL
+
+	err := c.executeWithRetry(ctx, "UpdateLKEControlPlaneACL", func() error {
+		var err error
+
+		acl, err = c.httpUpdateLKEControlPlaneACLProto(ctx, clusterID, req)
 
 		return err
 	})
@@ -8033,14 +8480,15 @@ func (c *Client) ListInstanceBackupsProto(ctx context.Context, linodeID int) (*l
 	return backups, err
 }
 
-// GetInstanceStats retrieves daily statistics for an instance with automatic retry on transient failures.
-func (c *Client) GetInstanceStats(ctx context.Context, linodeID int) (*InstanceStats, error) {
-	var stats *InstanceStats
+// GetInstanceStatsProto retrieves daily statistics for an instance as a proto
+// message with automatic retry on transient failures.
+func (c *Client) GetInstanceStatsProto(ctx context.Context, linodeID int) (*linodev1.InstanceStats, error) {
+	var stats *linodev1.InstanceStats
 
 	err := c.executeWithRetry(ctx, "GetInstanceStats", func() error {
 		var retryErr error
 
-		stats, retryErr = c.httpGetInstanceStats(ctx, linodeID)
+		stats, retryErr = c.httpGetInstanceStatsProto(ctx, linodeID)
 
 		return retryErr
 	})
@@ -8048,14 +8496,15 @@ func (c *Client) GetInstanceStats(ctx context.Context, linodeID int) (*InstanceS
 	return stats, err
 }
 
-// GetInstanceTransferByYearMonth retrieves monthly network transfer statistics with automatic retry on transient failures.
-func (c *Client) GetInstanceTransferByYearMonth(ctx context.Context, linodeID, year, month int) (*Transfer, error) {
-	var transfer *Transfer
+// GetInstanceTransferByYearMonthProto retrieves a specific month's network
+// transfer totals as a proto message with automatic retry on transient failures.
+func (c *Client) GetInstanceTransferByYearMonthProto(ctx context.Context, linodeID, year, month int) (*linodev1.InstanceTransferMonth, error) {
+	var transfer *linodev1.InstanceTransferMonth
 
 	err := c.executeWithRetry(ctx, "GetInstanceTransferByYearMonth", func() error {
 		var retryErr error
 
-		transfer, retryErr = c.httpGetInstanceTransferByYearMonth(ctx, linodeID, year, month)
+		transfer, retryErr = c.httpGetInstanceTransferByYearMonthProto(ctx, linodeID, year, month)
 
 		return retryErr
 	})
@@ -8412,6 +8861,22 @@ func (c *Client) UpgradeLinodeInterfaces(ctx context.Context, linodeID int, req 
 	return result, err
 }
 
+// UpgradeLinodeInterfacesProto upgrades a Linode's legacy config interfaces and
+// returns the proto envelope without retrying the POST mutation.
+func (c *Client) UpgradeLinodeInterfacesProto(ctx context.Context, linodeID int, req *UpgradeLinodeInterfacesRequest) (*linodev1.InstanceInterfaceUpgradeWriteResponse, error) {
+	var result *linodev1.InstanceInterfaceUpgradeWriteResponse
+
+	err := c.executeWithoutRetry(ctx, "UpgradeLinodeInterfaces", func() error {
+		var retryErr error
+
+		result, retryErr = c.httpUpgradeLinodeInterfacesProto(ctx, linodeID, req)
+
+		return retryErr
+	})
+
+	return result, err
+}
+
 // GetInstanceInterface retrieves a Linode interface with automatic retry on transient failures.
 func (c *Client) GetInstanceInterface(ctx context.Context, linodeID, interfaceID int) (*InstanceInterface, error) {
 	var instanceInterface *InstanceInterface
@@ -8568,6 +9033,22 @@ func (c *Client) UpdateInstanceInterfaceSettings(ctx context.Context, linodeID i
 	return settings, err
 }
 
+// UpdateInstanceInterfaceSettingsProto updates Linode interface settings and
+// returns the proto element without retrying the PUT mutation.
+func (c *Client) UpdateInstanceInterfaceSettingsProto(ctx context.Context, linodeID int, req *UpdateInstanceInterfaceSettingsRequest) (*linodev1.InstanceInterfaceSettings, error) {
+	var settings *linodev1.InstanceInterfaceSettings
+
+	err := c.executeWithoutRetry(ctx, "UpdateInstanceInterfaceSettings", func() error {
+		var retryErr error
+
+		settings, retryErr = c.httpUpdateInstanceInterfaceSettingsProto(ctx, linodeID, req)
+
+		return retryErr
+	})
+
+	return settings, err
+}
+
 // AddInstanceInterface creates an interface without retrying the POST create call.
 func (c *Client) AddInstanceInterface(ctx context.Context, linodeID int, req *AddInstanceInterfaceRequest) (*InstanceInterface, error) {
 	var instanceInterface *InstanceInterface
@@ -8583,6 +9064,22 @@ func (c *Client) AddInstanceInterface(ctx context.Context, linodeID int, req *Ad
 	return instanceInterface, err
 }
 
+// AddInstanceInterfaceProto creates an interface and returns the proto element
+// without retrying the POST create call.
+func (c *Client) AddInstanceInterfaceProto(ctx context.Context, linodeID int, req *AddInstanceInterfaceRequest) (*linodev1.InstanceInterface, error) {
+	var instanceInterface *linodev1.InstanceInterface
+
+	err := c.executeWithoutRetry(ctx, "AddInstanceInterface", func() error {
+		var retryErr error
+
+		instanceInterface, retryErr = c.httpAddInstanceInterfaceProto(ctx, linodeID, req)
+
+		return retryErr
+	})
+
+	return instanceInterface, err
+}
+
 // UpdateInstanceInterface updates an interface without retrying the PUT mutation.
 func (c *Client) UpdateInstanceInterface(ctx context.Context, linodeID, interfaceID int, req *UpdateInstanceInterfaceRequest) (*InstanceInterface, error) {
 	var instanceInterface *InstanceInterface
@@ -8591,6 +9088,22 @@ func (c *Client) UpdateInstanceInterface(ctx context.Context, linodeID, interfac
 		var retryErr error
 
 		instanceInterface, retryErr = c.httpUpdateInstanceInterface(ctx, linodeID, interfaceID, req)
+
+		return retryErr
+	})
+
+	return instanceInterface, err
+}
+
+// UpdateInstanceInterfaceProto updates an interface and returns the proto element
+// without retrying the PUT mutation.
+func (c *Client) UpdateInstanceInterfaceProto(ctx context.Context, linodeID, interfaceID int, req *UpdateInstanceInterfaceRequest) (*linodev1.InstanceInterface, error) {
+	var instanceInterface *linodev1.InstanceInterface
+
+	err := c.executeWithoutRetry(ctx, "UpdateInstanceInterface", func() error {
+		var retryErr error
+
+		instanceInterface, retryErr = c.httpUpdateInstanceInterfaceProto(ctx, linodeID, interfaceID, req)
 
 		return retryErr
 	})
@@ -8635,6 +9148,23 @@ func (c *Client) UpdateInstanceFirewalls(ctx context.Context, linodeID, page, pa
 	return firewalls, err
 }
 
+// UpdateInstanceFirewallsProto replaces firewall assignments for an instance and
+// decodes the returned page into Firewall proto elements without replaying the
+// state-changing request.
+func (c *Client) UpdateInstanceFirewallsProto(ctx context.Context, linodeID, page, pageSize int, req *UpdateInstanceFirewallsRequest) ([]*linodev1.Firewall, error) {
+	var firewalls []*linodev1.Firewall
+
+	err := c.executeWithoutRetry(ctx, "UpdateInstanceFirewalls", func() error {
+		var retryErr error
+
+		firewalls, retryErr = c.httpUpdateInstanceFirewallsProto(ctx, linodeID, page, pageSize, req)
+
+		return retryErr
+	})
+
+	return firewalls, err
+}
+
 // GetInstanceConfig retrieves a specific configuration profile with automatic retry on transient failures.
 func (c *Client) GetInstanceConfig(ctx context.Context, linodeID, configID int) (*InstanceConfig, error) {
 	var config *InstanceConfig
@@ -8643,6 +9173,22 @@ func (c *Client) GetInstanceConfig(ctx context.Context, linodeID, configID int) 
 		var retryErr error
 
 		config, retryErr = c.httpGetInstanceConfig(ctx, linodeID, configID)
+
+		return retryErr
+	})
+
+	return config, err
+}
+
+// GetInstanceConfigProto retrieves a specific configuration profile as a proto
+// element with automatic retry on transient failures.
+func (c *Client) GetInstanceConfigProto(ctx context.Context, linodeID, configID int) (*linodev1.InstanceConfig, error) {
+	var config *linodev1.InstanceConfig
+
+	err := c.executeWithRetry(ctx, "GetInstanceConfig", func() error {
+		var retryErr error
+
+		config, retryErr = c.httpGetInstanceConfigProto(ctx, linodeID, configID)
 
 		return retryErr
 	})

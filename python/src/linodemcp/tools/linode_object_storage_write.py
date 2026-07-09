@@ -11,16 +11,12 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import (
     bucket_access_pb2,
     bucket_ssl_pb2,
+    common_pb2,
     object_acl_pb2,
+    object_storage_pb2,
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -28,11 +24,12 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
-from linodemcp.tools.linode_object_storage import (
-    object_storage_bucket_to_response_dict,
-    object_storage_key_to_response_dict,
+from linodemcp.tools.proto_enum import required_enum_error
+from linodemcp.tools.proto_response import (
+    raw_int,
+    raw_str,
+    serialize_api_response,
 )
-from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
@@ -44,7 +41,7 @@ if TYPE_CHECKING:
 
 # Validation constants
 _VALID_BUCKET_LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$")
-_VALID_ACLS = {"private", "public-read", "authenticated-read", "public-read-write"}
+_VALID_ACLS = ("private", "public-read", "authenticated-read", "public-read-write")
 _MIN_BUCKET_LABEL_LENGTH = 3
 _MAX_BUCKET_LABEL_LENGTH = 63
 
@@ -68,7 +65,10 @@ def _validate_bucket_label(label: str) -> str | None:
 def _validate_bucket_acl(acl: str) -> str | None:
     """Validate bucket ACL. Returns error message or None."""
     if acl not in _VALID_ACLS:
-        return f"acl must be one of: {', '.join(sorted(_VALID_ACLS))}"
+        # Preserve API/create-endpoint order (no sorting) so the message is
+        # byte-identical to Go's ErrBucketACLInvalid; pinned by the shared
+        # objstorage behavior fixtures.
+        return f"acl must be one of: {', '.join(_VALID_ACLS)}"
     return None
 
 
@@ -81,25 +81,7 @@ def create_linode_object_storage_cancel_tool() -> tuple[Tool, Capability]:
             "Requires confirm=true because this is a destructive "
             "account-level operation."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm Object Storage cancellation"
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageCancelInput"),
     ), Capability.Write
 
 
@@ -117,13 +99,20 @@ async def handle_linode_object_storage_cancel(
         )
 
     if arguments.get("confirm") is not True:
-        return [TextContent(type="text", text="confirm=true is required")]
+        return _error_response(
+            "This operation cancels Object Storage service for the account. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.cancel_object_storage()
-        if result:
-            return result
-        return {"message": "Object Storage cancellation requested successfully"}
+        await client.cancel_object_storage()
+        # The cancel endpoint returns an empty body, so the canonical response is
+        # the confirmation message alone, routed through the shared proto so it
+        # matches Go's MarshalProtoToolResponse output.
+        return serialize_api_response(
+            {"message": "Object Storage cancellation requested successfully"},
+            common_pb2.MessageResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "cancel Object Storage", _call)
 
@@ -135,48 +124,7 @@ def create_linode_object_storage_bucket_create_tool() -> tuple[Tool, Capability]
         description=(
             "Creates a new Object Storage bucket. WARNING: Billing starts immediately."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": (
-                        "Bucket label (3-63 chars, lowercase alphanumeric and hyphens)"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": ("Region for the bucket (e.g. us-east-1)"),
-                },
-                "acl": {
-                    "type": "string",
-                    "description": (
-                        "Access control: private, public-read,"
-                        " authenticated-read, or"
-                        " public-read-write"
-                    ),
-                },
-                "cors_enabled": {
-                    "type": "boolean",
-                    "description": ("Whether to enable CORS (default: true)"),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. This incurs billing."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "region", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketCreateInput"),
     ), Capability.Write
 
 
@@ -218,15 +166,9 @@ async def handle_linode_object_storage_bucket_create(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text=(
-                    "Error: This creates a billable resource."
-                    " Set confirm=true to proceed."
-                ),
-            )
-        ]
+        return _error_response(
+            "This operation creates a billable resource. Set confirm=true to proceed."
+        )
 
     validation_err = _bucket_create_error(label, region, acl)
     if validation_err:
@@ -239,10 +181,16 @@ async def handle_linode_object_storage_bucket_create(
             acl=acl,
             cors_enabled=cors_enabled,
         )
-        return {
-            "message": (f"Bucket '{label}' created successfully in {region}"),
-            "bucket": object_storage_bucket_to_response_dict(bucket),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Bucket '{raw_str(bucket, 'label')}' created successfully "
+                    f"in {raw_str(bucket, 'region')}"
+                ),
+                "bucket": bucket,
+            },
+            object_storage_pb2.ObjectStorageBucketWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create bucket", _call)
 
@@ -258,36 +206,7 @@ def create_linode_object_storage_bucket_delete_tool() -> tuple[Tool, Capability]
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": "Region of the bucket",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label of the bucket",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["region", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketDeleteInput"),
     ), Capability.Destroy
 
 
@@ -303,11 +222,14 @@ async def _object_storage_bucket_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_object_storage_bucket(region, label)
-        return {
-            "message": f"Bucket '{label}' in {region} deleted successfully",
-            "region": region,
-            "label": label,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Bucket '{label}' in {region} removed successfully",
+                "region": region,
+                "label": label,
+            },
+            object_storage_pb2.ObjectStorageBucketDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -359,24 +281,21 @@ async def handle_linode_object_storage_bucket_delete(
     confirm = arguments.get("confirm", False)
 
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text=(
-                    "Error: This is destructive and irreversible."
-                    " All objects must be removed first."
-                    " Set confirm=true to proceed."
-                ),
-            )
-        ]
+        return _error_response(
+            "This operation is destructive and irreversible. All objects must be "
+            "removed first. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_object_storage_bucket(region, label)
-        return {
-            "message": (f"Bucket '{label}' in {region} removed successfully"),
-            "region": region,
-            "label": label,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Bucket '{label}' in {region} removed successfully",
+                "region": region,
+                "label": label,
+            },
+            object_storage_pb2.ObjectStorageBucketDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete bucket", _call)
 
@@ -386,46 +305,7 @@ def create_linode_object_storage_bucket_access_update_tool() -> tuple[Tool, Capa
     return Tool(
         name="linode_object_storage_bucket_access_update",
         description=("Updates access control settings for an Object Storage bucket."),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": "Region of the bucket",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label of the bucket",
-                },
-                "acl": {
-                    "type": "string",
-                    "description": (
-                        "New access control: private,"
-                        " public-read, authenticated-read,"
-                        " or public-read-write"
-                    ),
-                },
-                "cors_enabled": {
-                    "type": "boolean",
-                    "description": ("Whether to enable CORS on the bucket"),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm access update."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["region", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketAccessUpdateInput"),
     ), Capability.Write
 
 
@@ -485,15 +365,10 @@ async def handle_linode_object_storage_bucket_access_update(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text=(
-                    "Error: This changes bucket access controls."
-                    " Set confirm=true to proceed."
-                ),
-            )
-        ]
+        return _error_response(
+            "This operation changes bucket access controls. Set confirm=true to "
+            "proceed."
+        )
 
     validation_err = _bucket_access_error(region, label, acl)
     if validation_err:
@@ -506,17 +381,22 @@ async def handle_linode_object_storage_bucket_access_update(
             acl=acl,
             cors_enabled=cors_enabled,
         )
-        response: dict[str, Any] = {
-            "message": (
-                f"Access settings for bucket '{label}' in {region}"
-                " modified successfully"
-            ),
-            "region": region,
-            "label": label,
-        }
-        if acl is not None:
-            response["acl"] = acl
-        return response
+        # The update endpoint returns no body, so the access element is built
+        # from the request args (acl + cors_enabled). Go builds the same
+        # element so the output matches.
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Access settings for bucket '{label}' in {region}"
+                    " modified successfully"
+                ),
+                "access": {
+                    "acl": acl or "",
+                    "cors_enabled": bool(cors_enabled),
+                },
+            },
+            bucket_access_pb2.ObjectStorageBucketAccessWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update bucket access settings", _call)
 
@@ -526,45 +406,7 @@ def create_linode_object_storage_bucket_access_allow_tool() -> tuple[Tool, Capab
     return Tool(
         name="linode_object_storage_bucket_access_allow",
         description=("Allows access to an Object Storage bucket."),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": "Region of the bucket",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label of the bucket",
-                },
-                "acl": {
-                    "type": "string",
-                    "description": (
-                        "Access control: private, public-read,"
-                        " authenticated-read, or public-read-write"
-                    ),
-                },
-                "cors_enabled": {
-                    "type": "boolean",
-                    "description": ("Whether to enable CORS on the bucket"),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm access changes."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["region", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketAccessAllowInput"),
     ), Capability.Write
 
 
@@ -595,15 +437,10 @@ async def handle_linode_object_storage_bucket_access_allow(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text=(
-                    "Error: This changes bucket access controls."
-                    " Set confirm=true to proceed."
-                ),
-            )
-        ]
+        return _error_response(
+            "This operation changes bucket access controls. Set confirm=true to "
+            "proceed."
+        )
 
     validation_err = _bucket_access_error(region, label, acl)
     if validation_err:
@@ -639,7 +476,6 @@ async def handle_linode_object_storage_bucket_access_allow(
 # Stage 5 Phase 4: Object Storage access key write operations
 
 _MAX_KEY_LABEL_LENGTH = 50
-_VALID_KEY_PERMISSIONS = {"read_only", "read_write"}
 
 
 def _validate_key_label(label: str) -> str | None:
@@ -660,12 +496,13 @@ def _validate_bucket_access_entries(
             return f"entry {i}: bucket_access entries must include bucket_name"
         if not entry.get("region", "").strip():
             return f"entry {i}: bucket_access entries must include region"
-        perms = entry.get("permissions", "")
-        if perms not in _VALID_KEY_PERMISSIONS:
-            return (
-                f"entry {i}: bucket_access permissions must be"
-                f" 'read_only' or 'read_write', got '{perms}'"
-            )
+        perm_error = required_enum_error(
+            {"permissions": entry.get("permissions", "")},
+            "permissions",
+            object_storage_pb2.ObjectStorageKeyPermission.Value,
+        )
+        if perm_error is not None:
+            return f"entry {i}: {perm_error}"
     return None
 
 
@@ -678,40 +515,7 @@ def create_linode_object_storage_key_create_tool() -> tuple[Tool, Capability]:
             " WARNING: The secret_key is only shown ONCE"
             " in the response and cannot be retrieved later."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": ("Label for the access key (max 50 characters)"),
-                },
-                "bucket_access": {
-                    "type": "string",
-                    "description": (
-                        "JSON array of bucket permissions:"
-                        ' [{"bucket_name": "name", "region":'
-                        ' "region", "permissions":'
-                        ' "read_only|read_write"}].'
-                        " Omit for unrestricted access."
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be set to true. The secret_key is only shown ONCE."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyCreateInput"),
     ), Capability.Write
 
 
@@ -722,43 +526,7 @@ def create_linode_object_storage_key_update_tool() -> tuple[Tool, Capability]:
         description=(
             "Updates an Object Storage access key's label or bucket permissions."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "key_id": {
-                    "type": "number",
-                    "description": "ID of the access key to update",
-                },
-                "label": {
-                    "type": "string",
-                    "description": ("New label for the access key (max 50 characters)"),
-                },
-                "bucket_access": {
-                    "type": "string",
-                    "description": (
-                        "JSON array of bucket permissions:"
-                        ' [{"bucket_name": "name", "region":'
-                        ' "region", "permissions":'
-                        ' "read_only|read_write"}]'
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be set to true to confirm key update."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["key_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyUpdateInput"),
     ), Capability.Write
 
 
@@ -771,32 +539,7 @@ def create_linode_object_storage_key_delete_tool() -> tuple[Tool, Capability]:
             "dry_run=true to preview without revoking."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "key_id": {
-                    "type": "number",
-                    "description": ("ID of the access key to revoke"),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be set to true to confirm key revocation. This "
-                        "action is permanent. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["key_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyDeleteInput"),
     ), Capability.Destroy
 
 
@@ -873,19 +616,20 @@ async def handle_linode_object_storage_key_create(
             label=label,
             bucket_access=bucket_access,
         )
-        return {
-            "warning": (
-                "IMPORTANT: The secret_key below is shown"
-                " ONLY ONCE. Save it now - it cannot be"
-                " retrieved later."
-            ),
-            "message": (
-                f"Access key '{key.get('label', label)}'"
-                " created successfully"
-                f" (ID: {key.get('id', 'unknown')})"
-            ),
-            "key": object_storage_key_to_response_dict(key),
-        }
+        return serialize_api_response(
+            {
+                "warning": (
+                    "IMPORTANT: The secret_key below is shown ONLY ONCE. "
+                    "Save it now - it cannot be retrieved later."
+                ),
+                "message": (
+                    f"Access key '{raw_str(key, 'label')}' created successfully "
+                    f"(ID: {raw_int(key, 'id')})"
+                ),
+                "key": key,
+            },
+            object_storage_pb2.ObjectStorageKeyWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create access key", _call)
 
@@ -967,15 +711,21 @@ async def handle_linode_object_storage_key_update(
     bucket_access, _ = _parse_key_bucket_access(bucket_access_json)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        await client.update_object_storage_key(
-            key_id=key_id,
-            label=label or None,
-            bucket_access=bucket_access,
+        # The update endpoint echoes the full key (without secret material), so
+        # put_raw returns the body Go decodes into the key element.
+        body: dict[str, Any] = {}
+        if label:
+            body["label"] = label
+        if bucket_access is not None:
+            body["bucket_access"] = bucket_access
+        key = await client.put_raw(f"/object-storage/keys/{key_id}", body)
+        return serialize_api_response(
+            {
+                "message": f"Access key {key_id} modified successfully",
+                "key": key,
+            },
+            object_storage_pb2.ObjectStorageKeyWriteResponse(),
         )
-        return {
-            "message": (f"Access key {key_id} modified successfully"),
-            "key_id": key_id,
-        }
 
     return await execute_tool(cfg, arguments, f"update access key {key_id}", _call)
 
@@ -992,10 +742,13 @@ async def _object_storage_key_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_object_storage_key(key_id=key_id)
-        return {
-            "message": f"Access key {key_id} revoked successfully",
-            "key_id": key_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Access key {key_id} revoked successfully",
+                "key_id": key_id,
+            },
+            object_storage_pb2.ObjectStorageKeyDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -1057,27 +810,22 @@ async def handle_linode_object_storage_key_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_object_storage_key(key_id=key_id)
-        return {
-            "message": (f"Access key {key_id} revoked successfully"),
-            "key_id": key_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Access key {key_id} revoked successfully",
+                "key_id": key_id,
+            },
+            object_storage_pb2.ObjectStorageKeyDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, f"revoke access key {key_id}", _call)
 
 
 # Stage 5 Phase 5: Presigned URLs, Object ACL, and SSL
 
-_VALID_PRESIGNED_METHODS = {"GET", "PUT"}
 _MIN_EXPIRES_IN = 1
 _MAX_EXPIRES_IN = 604800
 _DEFAULT_EXPIRES_IN = 3600
-
-
-def _validate_presigned_method(method: str) -> str | None:
-    """Validate presigned URL method. Returns error message or None."""
-    if method.upper() not in _VALID_PRESIGNED_METHODS:
-        return f"method must be 'GET' or 'PUT', got '{method}'"
-    return None
 
 
 def _validate_expires_in(expires_in: int) -> str | None:
@@ -1100,42 +848,7 @@ def create_linode_object_storage_presigned_url_create_tool() -> tuple[Tool, Capa
             " in Object Storage. Use method=GET to create a"
             " download URL, method=PUT to create an upload URL."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": ("Region where the bucket is located"),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The bucket label (name)",
-                },
-                "name": {
-                    "type": "string",
-                    "description": ("The object key (path/filename within the bucket)"),
-                },
-                "method": {
-                    "type": "string",
-                    "description": (
-                        "HTTP method: 'GET' for download URL, 'PUT' for upload URL"
-                    ),
-                },
-                "expires_in": {
-                    "type": "number",
-                    "description": (
-                        "URL expiration in seconds (1-604800, default 3600 = 1 hour)"
-                    ),
-                },
-            },
-            "required": ["region", "label", "name", "method"],
-        },
+        inputSchema=schema("linode.mcp.v1.PresignedURLCreateInput"),
     ), Capability.Read
 
 
@@ -1146,7 +859,12 @@ async def handle_linode_object_storage_presigned_url_create(
     region = arguments.get("region", "")
     label = arguments.get("label", "")
     name = arguments.get("name", "")
+    # Presigned method is case-insensitive: GET/PUT are the canonical S3 verbs the
+    # schema advertises, but a caller passing "get" must still work, so normalize
+    # to uppercase before the enum check and send the canonical form.
     method = arguments.get("method", "")
+    if isinstance(method, str):
+        method = method.upper()
     expires_in = int(arguments.get("expires_in", _DEFAULT_EXPIRES_IN))
 
     missing = (
@@ -1161,15 +879,18 @@ async def handle_linode_object_storage_presigned_url_create(
     if missing is not None:
         return _error_response(missing)
 
-    validation_err = _validate_presigned_method(method)
+    validation_err = required_enum_error(
+        {"method": method}, "method", object_storage_pb2.PresignedURLMethod.Value
+    )
     if validation_err is None:
         validation_err = _validate_expires_in(expires_in)
     if validation_err is not None:
         return _error_response(validation_err)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_presigned_url(
-            region, label, name, method.upper(), expires_in
+        return serialize_api_response(
+            await client.create_presigned_url(region, label, name, method, expires_in),
+            object_storage_pb2.PresignedURLResponse(),
         )
 
     return await execute_tool(cfg, arguments, "generate presigned URL", _call)
@@ -1220,54 +941,7 @@ def create_linode_object_storage_object_acl_update_tool() -> tuple[Tool, Capabil
             " object in an Object Storage bucket."
             " Requires confirm=true to proceed."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": ("Region where the bucket is located"),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The bucket label (name)",
-                },
-                "name": {
-                    "type": "string",
-                    "description": ("The object key (path/filename within the bucket)"),
-                },
-                "acl": {
-                    "type": "string",
-                    "description": (
-                        "ACL to set: private, public-read,"
-                        " authenticated-read,"
-                        " or public-read-write"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to proceed."
-                        " This modifies the object's"
-                        " access permissions."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "region",
-                "label",
-                "name",
-                "acl",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectACLUpdateInput"),
     ), Capability.Write
 
 
@@ -1324,20 +998,26 @@ async def handle_linode_object_storage_object_acl_update(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text="This modifies the object's access permissions."
-                " Set confirm=true to proceed.",
-            )
-        ]
+        return _error_response(
+            "This modifies the object's access permissions. "
+            "Set confirm=true to proceed."
+        )
 
     validation_err = _object_acl_update_error(region, label, name, acl)
     if validation_err is not None:
         return _error_response(validation_err)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_object_acl(region, label, name, acl)
+        acl_result = await client.update_object_acl(region, label, name, acl)
+        return serialize_api_response(
+            {
+                "message": (
+                    f"ACL for object '{name}' in bucket '{label}' modified successfully"
+                ),
+                "acl": acl_result,
+            },
+            object_acl_pb2.ObjectStorageObjectACLWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update object ACL", _call)
 
@@ -1384,50 +1064,7 @@ def create_linode_object_storage_ssl_upload_tool() -> tuple[Tool, Capability]:
             " for an Object Storage bucket."
             " Requires confirm=true to proceed."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": ("Region where the bucket is located"),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The bucket label (name)",
-                },
-                "certificate": {
-                    "type": "string",
-                    "description": "Base64 encoded and PEM formatted SSL certificate",
-                },
-                "private_key": {
-                    "type": "string",
-                    "description": "Private key associated with the SSL certificate",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to proceed."
-                        " This uploads SSL certificate material"
-                        " for the bucket."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "region",
-                "label",
-                "certificate",
-                "private_key",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageSSLUploadInput"),
     ), Capability.Write
 
 
@@ -1470,29 +1107,26 @@ async def handle_linode_object_storage_ssl_upload(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text="This uploads SSL certificate material"
-                " for the bucket."
-                " Set confirm=true to proceed.",
-            )
-        ]
+        return _error_response(
+            "This uploads an SSL certificate to the bucket. Set confirm=true to "
+            "proceed."
+        )
 
     validation_err = _ssl_upload_error(region, label, certificate, private_key)
     if validation_err is not None:
         return _error_response(validation_err)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.upload_bucket_ssl(region, label, certificate, private_key)
-        return {
-            "message": (
-                f"SSL certificate uploaded to bucket '{label}' in region '{region}'"
-            ),
-            "region": region,
-            "bucket": label,
-            "ssl": result.get("ssl"),
-        }
+        ssl = await client.upload_bucket_ssl(region, label, certificate, private_key)
+        return serialize_api_response(
+            {
+                "message": (
+                    f"SSL certificate uploaded to bucket '{label}' in region '{region}'"
+                ),
+                "ssl": ssl,
+            },
+            bucket_ssl_pb2.ObjectStorageSSLWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "upload SSL certificate", _call)
 
@@ -1508,38 +1142,7 @@ def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": ("Region where the bucket is located"),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The bucket label (name)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to proceed."
-                        " This removes the SSL certificate"
-                        " from the bucket."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["region", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageSSLDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1555,13 +1158,7 @@ async def _object_storage_ssl_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_bucket_ssl(region, label)
-        return {
-            "message": (
-                f"SSL certificate deleted from bucket '{label}' in region '{region}'"
-            ),
-            "region": region,
-            "bucket": label,
-        }
+        return _object_storage_ssl_delete_response(region, label)
 
     return await run_two_stage_destroy(
         cfg,
@@ -1612,26 +1209,34 @@ async def handle_linode_object_storage_ssl_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="This removes the SSL certificate"
-                " from the bucket."
-                " Set confirm=true to proceed.",
-            )
-        ]
+        return _error_response(
+            "This removes the SSL certificate from the bucket. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_bucket_ssl(region, label)
-        return {
+        return _object_storage_ssl_delete_response(region, label)
+
+    return await execute_tool(cfg, arguments, "delete SSL certificate", _call)
+
+
+def _object_storage_ssl_delete_response(region: str, label: str) -> dict[str, Any]:
+    """Build the SSL-delete echo, routed through the proto.
+
+    The bucket label is keyed "bucket" to match the tool's established response
+    shape and Go's MarshalProtoToolResponse output.
+    """
+    return serialize_api_response(
+        {
             "message": (
                 f"SSL certificate deleted from bucket '{label}' in region '{region}'"
             ),
             "region": region,
             "bucket": label,
-        }
-
-    return await execute_tool(cfg, arguments, "delete SSL certificate", _call)
+        },
+        bucket_ssl_pb2.ObjectStorageSSLDeleteResponse(),
+    )
 
 
 def _error_response(message: str) -> list[TextContent]:

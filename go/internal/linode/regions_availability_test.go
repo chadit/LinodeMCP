@@ -196,7 +196,7 @@ func TestClientGetRegionAvailabilitySuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
+	result, err := client.GetRegionAvailabilityProto(t.Context(), managedServiceRegion)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -205,16 +205,16 @@ func TestClientGetRegionAvailabilitySuccess(t *testing.T) {
 		t.Fatalf("len(result) = %d, want %d", len(result), 1)
 	}
 
-	if result[0].Region != managedServiceRegion {
-		t.Errorf("result[0].Region = %v, want %v", result[0].Region, managedServiceRegion)
+	if result[0].GetRegion() != managedServiceRegion {
+		t.Errorf("result[0].GetRegion() = %v, want %v", result[0].GetRegion(), managedServiceRegion)
 	}
 
-	if result[0].Plan != regionAvailabilityPlanStandard {
-		t.Errorf("result[0].Plan = %v, want %v", result[0].Plan, regionAvailabilityPlanStandard)
+	if result[0].GetPlan() != regionAvailabilityPlanStandard {
+		t.Errorf("result[0].GetPlan() = %v, want %v", result[0].GetPlan(), regionAvailabilityPlanStandard)
 	}
 
-	if !result[0].Available {
-		t.Error("result[0].Available = false, want true")
+	if !result[0].GetAvailable() {
+		t.Error("result[0].GetAvailable() = false, want true")
 	}
 }
 
@@ -242,7 +242,7 @@ func TestClientGetRegionAvailabilityValidSlugWithHyphen(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.GetRegionAvailability(t.Context(), regionAvailabilityHyphenRegion)
+	result, err := client.GetRegionAvailabilityProto(t.Context(), regionAvailabilityHyphenRegion)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -251,8 +251,8 @@ func TestClientGetRegionAvailabilityValidSlugWithHyphen(t *testing.T) {
 		t.Fatalf("len(result) = %d, want %d", len(result), 1)
 	}
 
-	if result[0].Region != regionAvailabilityHyphenRegion {
-		t.Errorf("result[0].Region = %v, want %v", result[0].Region, regionAvailabilityHyphenRegion)
+	if result[0].GetRegion() != regionAvailabilityHyphenRegion {
+		t.Errorf("result[0].GetRegion() = %v, want %v", result[0].GetRegion(), regionAvailabilityHyphenRegion)
 	}
 }
 
@@ -278,7 +278,7 @@ func TestClientGetRegionAvailabilityEscapesRegionID(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetRegionAvailability(t.Context(), "us-east/bad?x=1")
+	_, err := client.GetRegionAvailabilityProto(t.Context(), "us-east/bad?x=1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestClientGetRegionAvailabilityRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "token", nil, singleRetryOpts()...)
 
-	result, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
+	result, err := client.GetRegionAvailabilityProto(t.Context(), managedServiceRegion)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -345,7 +345,7 @@ func TestClientGetRegionAvailabilityAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetRegionAvailability(t.Context(), managedServiceRegion)
+	_, err := client.GetRegionAvailabilityProto(t.Context(), managedServiceRegion)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}

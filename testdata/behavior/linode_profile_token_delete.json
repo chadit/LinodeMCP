@@ -1,0 +1,17 @@
+{
+  "tool": "linode_profile_token_delete",
+  "description": "Revokes a personal access token with a single DELETE once confirmed. Missing-token_id rejection text diverges (see report).",
+  "cases": [
+    {
+      "name": "revokes a personal access token",
+      "args": { "token_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/profile/tokens/123" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"token_id": 123},
+      "expect_error": "This revokes a personal access token. Set confirm=true to proceed."
+    }
+  ]
+}

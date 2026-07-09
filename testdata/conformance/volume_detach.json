@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.VolumeDetachResponse",
+  "description": "Volume detach id-echo: a confirmation message plus the detached volume's ID. The endpoint returns an empty body.",
+  "input": {
+    "message": "Volume 12345 detached successfully",
+    "volume_id": 12345
+  },
+  "canonical": {
+    "message": "Volume 12345 detached successfully",
+    "volume_id": 12345
+  }
+}

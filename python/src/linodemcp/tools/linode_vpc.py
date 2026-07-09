@@ -8,7 +8,12 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import ip_pb2, vpc_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import (
+    error_response,
+    execute_tool,
+    pagination_int_argument,
+    valid_ipv6_prefix,
+)
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -19,54 +24,12 @@ if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
 
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-
-_VPC_ID_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "The ID of the VPC (required)",
-}
-
 _SUBNET_ID_PROP: dict[str, Any] = {
     "type": "string",
     "description": "The ID of the subnet (required)",
 }
 
 _IPV6_RANGE_KEY = "range"
-_IPV6_RANGE_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": (
-        "The IPv6 range to access, without prefix length (for example 2001:0db8::)"
-    ),
-}
-
-
-def _optional_int_argument(
-    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
-) -> int | None:
-    value = arguments.get(name)
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"{name} must be an integer")
-    if value < minimum:
-        raise ValueError(f"{name} must be at least {minimum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{name} must be at most {maximum}")
-    return value
-
-
-_VPC_LABEL_FILTER_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Filter VPCs by label containing this string (case-insensitive)",
-}
-
-_VPC_REGION_FILTER_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Filter VPCs by region (exact match, case-insensitive)",
-}
 
 
 def create_linode_vpc_list_tool() -> tuple[Tool, Capability]:
@@ -74,14 +37,7 @@ def create_linode_vpc_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_list",
         description="Lists all VPCs. Can filter by label or region.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "label": _VPC_LABEL_FILTER_PROP,
-                "region": _VPC_REGION_FILTER_PROP,
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.VpcListInput"),
     ), Capability.Read
 
 
@@ -205,14 +161,7 @@ def create_linode_ipv6_range_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_ipv6_range_get",
         description="Gets details of an IPv6 range",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                _IPV6_RANGE_KEY: _IPV6_RANGE_PROP,
-            },
-            "required": [_IPV6_RANGE_KEY],
-        },
+        inputSchema=schema("linode.mcp.v1.IPv6RangeGetInput"),
     ), Capability.Read
 
 
@@ -224,9 +173,13 @@ async def handle_linode_ipv6_range_get(
     if not isinstance(range_value, str) or not range_value.strip():
         return error_response("range is required")
     ipv6_range = range_value.strip()
+    if not valid_ipv6_prefix(ipv6_range):
+        return error_response("range must be a valid IPv6 prefix")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_ipv6_range(ipv6_range)
+        return serialize_api_response(
+            await client.get_ipv6_range(ipv6_range), ip_pb2.IPv6Range()
+        )
 
     return await execute_tool(cfg, arguments, "get IPv6 range", _call)
 
@@ -236,23 +189,7 @@ def create_linode_ipv6_range_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_ipv6_range_list",
         description="Lists all IPv6 ranges on the account",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.IPv6RangeListInput"),
     ), Capability.Read
 
 
@@ -261,8 +198,8 @@ async def handle_linode_ipv6_range_list(
 ) -> list[TextContent]:
     """Handle linode_ipv6_range_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -282,23 +219,7 @@ def create_linode_ipv6_pool_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_ipv6_pool_list",
         description="Lists all IPv6 pools on the account",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.IPv6PoolListInput"),
     ), Capability.Read
 
 
@@ -307,8 +228,8 @@ async def handle_linode_ipv6_pool_list(
 ) -> list[TextContent]:
     """Handle linode_ipv6_pool_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -328,12 +249,7 @@ def create_linode_vpc_ip_all_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_ip_all_list",
         description="Lists all VPC IP addresses across all VPCs",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.VPCIPAllListInput"),
     ), Capability.Read
 
 
@@ -356,14 +272,7 @@ def create_linode_vpc_ip_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_ip_list",
         description="Lists IP addresses for a specific VPC",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-            },
-            "required": ["vpc_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.VPCIPListInput"),
     ), Capability.Read
 
 
@@ -393,14 +302,7 @@ def create_linode_vpc_subnet_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_subnet_list",
         description="Lists subnets for a specific VPC",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-            },
-            "required": ["vpc_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcSubnetListInput"),
     ), Capability.Read
 
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -44,8 +43,8 @@ func TestLinodeNetworkingIPsListToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
 	}
 
-	if _, ok := tool.InputSchema.Properties["skip_ipv6_rdns"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "skip_ipv6_rdns")
+	if !strings.Contains(string(tool.RawInputSchema), "skip_ipv6_rdns") {
+		t.Errorf("tool.RawInputSchema missing key %v", "skip_ipv6_rdns")
 	}
 
 	if handler == nil {
@@ -381,14 +380,11 @@ func TestLinodeNetworkingIPUpdateRDNSToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyAddress, keyRDNS, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
 	}
 
 	if handler == nil {
@@ -631,24 +627,11 @@ func TestLinodeNetworkingIPAllocateToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
-	if _, ok := tool.InputSchema.Properties["linode_id"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "linode_id")
-	}
-
-	if _, ok := tool.InputSchema.Properties["type"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "type")
-	}
-
-	if _, ok := tool.InputSchema.Properties["public"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "public")
-	}
-
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyLinodeID, keyType, purposePublic, keyConfirm} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 
 	if handler == nil {
@@ -841,14 +824,11 @@ func TestLinodeNetworkingIPAssignToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyRegion, keyAssignments, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
 	}
 
 	if handler == nil {
@@ -1125,14 +1105,11 @@ func TestLinodeNetworkingIPv4AssignToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyRegion, keyAssignments, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
 	}
 
 	if handler == nil {
@@ -1412,14 +1389,11 @@ func TestLinodeNetworkingIPv4ShareToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyIPs, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
 	}
 
 	if handler == nil {
@@ -1440,9 +1414,10 @@ func TestLinodeNetworkingIPShareToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapWrite)
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyIPs, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 

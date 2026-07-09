@@ -25,14 +25,11 @@ def test_create_linode_managed_contacts_update_tool() -> None:
     assert tool.inputSchema["type"] == "object"
     assert tool.inputSchema["required"] == ["contact_id", "confirm"]
     properties = tool.inputSchema["properties"]
-    assert properties["contact_id"]["minimum"] == 1
+    assert properties["contact_id"]["type"] == "integer"
     assert properties["confirm"]["type"] == "boolean"
     assert properties["dry_run"]["type"] == "boolean"
     assert properties["group"]["type"] == "string"
-    assert properties["phone"]["properties"]["primary"]["type"] == [
-        "string",
-        "null",
-    ]
+    assert properties["phone"]["type"] == "object"
     assert "id" not in properties
     assert "updated" not in properties
 

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_vpc_list",
+  "description": "VPC list GETs the /vpcs collection. Label/region filters are client-side and do not change the path.",
+  "cases": [
+    {
+      "name": "lists VPCs",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/vpcs" }
+    }
+  ]
+}

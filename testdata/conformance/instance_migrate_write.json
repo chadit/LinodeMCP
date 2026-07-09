@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.InstanceMigrateWriteResponse",
+  "description": "Instance migrate id-echo: a confirmation message plus the affected Linode and, when the caller picked a destination, the target region. The migrate endpoint returns no resource body, so these echo the request. region is explicit-presence, so it is present here and omitted when the caller lets Linode pick.",
+  "input": {
+    "message": "Migration initiated for instance 123 to region us-east",
+    "linode_id": 123,
+    "region": "us-east"
+  },
+  "canonical": {
+    "message": "Migration initiated for instance 123 to region us-east",
+    "linode_id": 123,
+    "region": "us-east"
+  }
+}

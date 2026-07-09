@@ -1,0 +1,31 @@
+{
+  "tool": "linode_domain_create",
+  "description": "Domain create requires domain and type (with confirm), then POSTs domain/type. Both languages now require type (Python's silent \"master\" default was dropped).",
+  "cases": [
+    {
+      "name": "requires domain",
+      "args": { "confirm": true },
+      "expect_error": "domain is required"
+    },
+    {
+      "name": "requires type",
+      "args": { "confirm": true, "domain": "example.com" },
+      "expect_error": "type is required"
+    },
+    {
+      "name": "creates a master domain",
+      "args": { "confirm": true, "domain": "example.com", "type": "master" },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/domains",
+        "body": { "domain": "example.com", "type": "master" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"domain": "example.com", "type": "master"},
+      "expect_error": "This creates a DNS domain. Set confirm=true to proceed."
+    }
+  ]
+}

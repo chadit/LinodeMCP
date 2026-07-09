@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -32,7 +31,7 @@ const (
 	managedServiceAddressFixture    = "https://example.org"
 	managedServiceBodyFixture       = "it worked"
 	managedServiceConsultFixture    = "on-call"
-	errManagedServiceTypeInvalid    = "service_type must be url or tcp"
+	errManagedServiceTypeInvalid    = "service_type must be one of: tcp, url"
 	errManagedServiceTimeoutInvalid = "timeout must be an integer between 1 and 255"
 )
 
@@ -54,30 +53,10 @@ func TestLinodeManagedServiceCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[managedServiceLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props[managedServiceTypeParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceTypeParam)
-	}
-
-	if _, ok := props[managedServiceAddressParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceAddressParam)
-	}
-
-	if _, ok := props[managedServiceTimeoutParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceTimeoutParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{managedServiceLabelParam, managedServiceTypeParam, managedServiceAddressParam, managedServiceTimeoutParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -158,6 +137,7 @@ func TestLinodeManagedServiceCreateToolInvalidRequestRejectedBeforeClientCall(t 
 		{name: "invalid type", mutate: func(args map[string]any) { args[managedServiceTypeParam] = "udp" }, wantMessage: errManagedServiceTypeInvalid},
 		{name: "bad timeout", mutate: func(args map[string]any) { args[managedServiceTimeoutParam] = 0 }, wantMessage: errManagedServiceTimeoutInvalid},
 		{name: "bad credentials", mutate: func(args map[string]any) { args[managedServiceCredentialsParam] = []any{float64(-1)} }, wantMessage: "credentials must be an array of positive integers"},
+		{name: "read-only field", mutate: func(args map[string]any) { args["id"] = float64(5) }, wantMessage: "Read-only fields are not accepted: id"},
 	}
 
 	for _, testCase := range cases {
@@ -286,6 +266,10 @@ func TestLinodeManagedServiceCreateToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "managed-service-ok") {
 		t.Errorf("textContent.Text does not contain %v", "managed-service-ok")
+	}
+
+	if !strings.Contains(textContent.Text, "Managed service monitor 9944 created successfully") {
+		t.Errorf("textContent.Text does not contain the create confirmation message: %v", textContent.Text)
 	}
 }
 

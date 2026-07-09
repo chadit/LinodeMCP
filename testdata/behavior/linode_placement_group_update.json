@@ -1,0 +1,26 @@
+{
+  "tool": "linode_placement_group_update",
+  "description": "Placement group update: the label PUT once confirmed, and the label-pattern rejection now agrees in both languages (Go gained Python's pattern). Confirm-gate and group_id text still diverge.",
+  "cases": [
+    {
+      "name": "rejects an invalid label",
+      "args": { "confirm": true, "group_id": 123, "label": "-bad" },
+      "expect_error": "label must start and end with an alphanumeric character and contain only alphanumeric characters, hyphens, underscores, or periods"
+    },
+    {
+      "name": "updates a placement group label",
+      "args": { "confirm": true, "group_id": 123, "label": "new-label" },
+      "api_response": { "id": 123, "label": "new-label" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/placement/groups/123",
+        "body": { "label": "new-label" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"group_id": 123, "label": "new-label"},
+      "expect_error": "This updates a placement group. Set confirm=true to proceed."
+    }
+  ]
+}

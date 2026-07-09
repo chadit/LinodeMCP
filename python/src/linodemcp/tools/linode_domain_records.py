@@ -5,15 +5,9 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import domain_pb2
+from linodemcp.linode import validate_dns_record_name, validate_dns_record_target
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    ENV_PARAM_SCHEMA,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -23,6 +17,8 @@ from linodemcp.tools.helpers import (
     is_dry_run,
 )
 from linodemcp.tools.proto_response import (
+    raw_int,
+    raw_str,
     serialize_api_response,
     serialize_list_response,
 )
@@ -35,25 +31,6 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def domain_record_to_response_dict(record: Any) -> dict[str, Any]:
-    """Shape a DomainRecord dataclass to proto-canonical DomainRecord form."""
-    return {
-        "id": record.id,
-        "type": record.type,
-        "name": record.name,
-        "target": record.target,
-        "priority": record.priority,
-        "weight": record.weight,
-        "port": record.port,
-        "service": record.service,
-        "protocol": record.protocol,
-        "ttl_sec": record.ttl_sec,
-        "tag": record.tag,
-        "created": record.created,
-        "updated": record.updated,
-    }
-
-
 def create_linode_domain_record_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_domain_record_list tool."""
     return Tool(
@@ -62,32 +39,7 @@ def create_linode_domain_record_list_tool() -> tuple[Tool, Capability]:
             "Lists all DNS records for a specific domain. "
             "Can filter by record type or name."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": (
-                        "The ID of the domain to list records for (required)"
-                    ),
-                },
-                "type": {
-                    "type": "string",
-                    "description": (
-                        "Filter by record type (A, AAAA, NS, MX, CNAME, TXT, SRV, CAA)"
-                    ),
-                },
-                "name_contains": {
-                    "type": "string",
-                    "description": (
-                        "Filter records by name containing this string "
-                        "(case-insensitive)"
-                    ),
-                },
-            },
-            "required": ["domain_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainRecordListInput"),
     ), Capability.Read
 
 
@@ -165,72 +117,7 @@ def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_record_create",
         description="Creates a new DNS record for a domain.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": "The ID of the domain (required)",
-                },
-                "type": {
-                    "type": "string",
-                    "description": (
-                        "Record type: A, AAAA, NS, MX, CNAME, TXT, SRV, CAA (required)"
-                    ),
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Record name/subdomain (optional)",
-                },
-                "target": {
-                    "type": "string",
-                    "description": (
-                        "Target value for the record (required for most types)"
-                    ),
-                },
-                "priority": {
-                    "type": "integer",
-                    "description": "Priority (for MX and SRV records)",
-                },
-                "weight": {
-                    "type": "integer",
-                    "description": "Weight (for SRV records)",
-                },
-                "port": {
-                    "type": "integer",
-                    "description": "Port (for SRV records)",
-                },
-                "service": {
-                    "type": "string",
-                    "description": "Service name for SRV records (e.g., '_http')",
-                },
-                "protocol": {
-                    "type": "string",
-                    "description": "Protocol for SRV records (e.g., '_tcp', '_udp')",
-                },
-                "tag": {
-                    "type": "string",
-                    "description": (
-                        "Tag for CAA records: 'issue', 'issuewild', or 'iodef' "
-                        "(optional)"
-                    ),
-                },
-                "ttl_sec": {
-                    "type": "integer",
-                    "description": "TTL in seconds (optional)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm this operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["domain_id", "type", "target", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainRecordCreateInput"),
     ), Capability.Write
 
 
@@ -241,6 +128,43 @@ def _record_create_error(domain_id: Any, record_type: str) -> list[TextContent] 
     if not record_type:
         return error_response("type is required")
     return None
+
+
+def _validate_record_fields(
+    record_type: str, name: Any, target: Any
+) -> list[TextContent] | None:
+    """Run DNS name/target validation; return an error response or None."""
+    if name:
+        try:
+            validate_dns_record_name(name)
+        except ValueError as exc:
+            return error_response(str(exc))
+    if target:
+        try:
+            validate_dns_record_target(record_type, target)
+        except ValueError as exc:
+            return error_response(str(exc))
+    return None
+
+
+def _domain_record_create_body(
+    record_type: str, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """Build the record-create POST body, mirroring the client's omit rules."""
+    body: dict[str, Any] = {"type": record_type}
+    optional_fields: dict[str, Any] = {
+        "name": arguments.get("name"),
+        "target": arguments.get("target"),
+        "priority": arguments.get("priority"),
+        "weight": arguments.get("weight"),
+        "port": arguments.get("port"),
+        "ttl_sec": arguments.get("ttl_sec"),
+        "service": arguments.get("service"),
+        "protocol": arguments.get("protocol"),
+        "tag": arguments.get("tag"),
+    }
+    body.update({k: v for k, v in optional_fields.items() if v is not None})
+    return body
 
 
 async def handle_linode_domain_record_create(
@@ -279,24 +203,25 @@ async def handle_linode_domain_record_create(
     if fields_error is not None:
         return fields_error
 
+    validation_error = _validate_record_fields(
+        record_type, arguments.get("name"), arguments.get("target")
+    )
+    if validation_error is not None:
+        return validation_error
+
+    body = _domain_record_create_body(record_type, arguments)
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        record = await client.create_domain_record(
-            domain_id=int(domain_id),
-            record_type=record_type,
-            name=arguments.get("name"),
-            target=arguments.get("target"),
-            priority=arguments.get("priority"),
-            weight=arguments.get("weight"),
-            port=arguments.get("port"),
-            ttl_sec=arguments.get("ttl_sec"),
-            service=arguments.get("service"),
-            protocol=arguments.get("protocol"),
-            tag=arguments.get("tag"),
+        raw = await client.post_raw(f"/domains/{int(domain_id)}/records", body)
+        rec_type = raw_str(raw, "type")
+        rec_id = raw_int(raw, "id")
+        return serialize_api_response(
+            {
+                "message": f"{rec_type} record (ID: {rec_id}) created successfully",
+                "record": raw,
+            },
+            domain_pb2.DomainRecordWriteResponse(),
         )
-        return {
-            "message": (f"{record.type} record (ID: {record.id}) created successfully"),
-            "record": domain_record_to_response_dict(record),
-        }
 
     return await execute_tool(cfg, arguments, "create DNS record", _call)
 
@@ -306,53 +231,7 @@ def create_linode_domain_record_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_record_update",
         description="Updates an existing DNS record.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": "The ID of the domain (required)",
-                },
-                "record_id": {
-                    "type": "integer",
-                    "description": "The ID of the record to update (required)",
-                },
-                "name": {
-                    "type": "string",
-                    "description": "New record name (optional)",
-                },
-                "target": {
-                    "type": "string",
-                    "description": "New target value (optional)",
-                },
-                "priority": {
-                    "type": "integer",
-                    "description": "New priority (optional)",
-                },
-                "weight": {
-                    "type": "integer",
-                    "description": "New weight (optional)",
-                },
-                "port": {
-                    "type": "integer",
-                    "description": "New port (optional)",
-                },
-                "ttl_sec": {
-                    "type": "integer",
-                    "description": "New TTL in seconds (optional)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm this operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["domain_id", "record_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainRecordUpdateInput"),
     ), Capability.Write
 
 
@@ -363,6 +242,16 @@ def _record_update_error(domain_id: Any, record_id: Any) -> list[TextContent] | 
     if not record_id:
         return error_response("record_id is required")
     return None
+
+
+def _domain_record_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Build the record-update PUT body, mirroring the client's omit rules."""
+    body: dict[str, Any] = {}
+    for field in ("name", "target", "priority", "weight", "port", "ttl_sec"):
+        value = arguments.get(field)
+        if value is not None:
+            body[field] = value
+    return body
 
 
 def _domain_record_update_side_effects(
@@ -424,21 +313,26 @@ async def handle_linode_domain_record_update(
     if fields_error is not None:
         return fields_error
 
+    name = arguments.get("name")
+    if name:
+        try:
+            validate_dns_record_name(name)
+        except ValueError as exc:
+            return error_response(str(exc))
+
+    body = _domain_record_update_body(arguments)
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        record = await client.update_domain_record(
-            domain_id=int(domain_id),
-            record_id=int(record_id),
-            name=arguments.get("name"),
-            target=arguments.get("target"),
-            priority=arguments.get("priority"),
-            weight=arguments.get("weight"),
-            port=arguments.get("port"),
-            ttl_sec=arguments.get("ttl_sec"),
+        raw = await client.put_raw(
+            f"/domains/{int(domain_id)}/records/{int(record_id)}", body
         )
-        return {
-            "message": f"Record {record_id} modified successfully",
-            "record": domain_record_to_response_dict(record),
-        }
+        return serialize_api_response(
+            {
+                "message": f"Record {record_id} modified successfully",
+                "record": raw,
+            },
+            domain_pb2.DomainRecordWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update DNS record", _call)
 
@@ -451,31 +345,7 @@ def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a DNS record. Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": "The ID of the domain (required)",
-                },
-                "record_id": {
-                    "type": "integer",
-                    "description": "The ID of the record to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm this operation. Ignored when "
-                        "dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["domain_id", "record_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainRecordDeleteInput"),
     ), Capability.Destroy
 
 
@@ -492,11 +362,14 @@ async def _domain_record_delete_two_stage(
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain_record(domain_id, record_id)
         message = f"Record {record_id} removed successfully from domain {domain_id}"
-        return {
-            "message": message,
-            "domain_id": domain_id,
-            "record_id": record_id,
-        }
+        return serialize_api_response(
+            {
+                "message": message,
+                "domain_id": domain_id,
+                "record_id": record_id,
+            },
+            domain_pb2.DomainRecordDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -554,10 +427,13 @@ async def handle_linode_domain_record_delete(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain_record(int(domain_id), int(record_id))
         message = f"Record {record_id} removed successfully from domain {domain_id}"
-        return {
-            "message": message,
-            "domain_id": domain_id,
-            "record_id": record_id,
-        }
+        return serialize_api_response(
+            {
+                "message": message,
+                "domain_id": domain_id,
+                "record_id": record_id,
+            },
+            domain_pb2.DomainRecordDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete DNS record", _call)

@@ -1,0 +1,27 @@
+{
+  "tool": "linode_longview_subscription_get",
+  "description": "Longview subscription IDs are opaque strings (for example longview-10). Pins the required/non-empty/traversal rejections both languages share and the get GET. Go additionally rejects a '#' in the id; Python does not (see report).",
+  "cases": [
+    {
+      "name": "rejects missing subscription_id",
+      "args": {},
+      "expect_error": "subscription_id is required"
+    },
+    {
+      "name": "rejects empty subscription_id",
+      "args": { "subscription_id": "" },
+      "expect_error": "subscription_id must be a non-empty string"
+    },
+    {
+      "name": "rejects a path separator in subscription_id",
+      "args": { "subscription_id": "a/b" },
+      "expect_error": "subscription_id must not contain path separators, query separators, or traversal segments"
+    },
+    {
+      "name": "gets the longview subscription",
+      "args": { "subscription_id": "longview-10" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/longview/subscriptions/longview-10" }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "tool": "linode_instance_ip_list",
+  "description": "Requires linode_id, then GETs the instance IPs collection.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "lists IPs with a plain GET",
+      "args": { "linode_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/ips" }
+    }
+  ]
+}

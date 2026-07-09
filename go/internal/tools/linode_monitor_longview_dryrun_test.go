@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
@@ -26,8 +27,8 @@ func TestLinodeLongviewClientCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLongviewClientCreateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -96,8 +97,8 @@ func TestLinodeLongviewPlanUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLongviewPlanUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -150,8 +151,8 @@ func TestLinodeLongviewClientUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLongviewClientUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -205,8 +206,8 @@ func TestLinodeLongviewClientDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLongviewClientDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -259,8 +260,8 @@ func TestLinodeMonitorServiceTokenCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeMonitorServiceTokenCreateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -313,8 +314,8 @@ func TestLinodeMonitorServiceAlertDefinitionCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeMonitorServiceAlertDefinitionCreateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -385,8 +386,8 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -441,8 +442,8 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeMonitorServiceAlertDefinitionDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

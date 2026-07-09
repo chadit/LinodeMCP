@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_stats_month_get",
+  "description": "GETs a specific month's stats. The linode_id/year/month rejection texts and year ranges diverge between the languages, so only the success request is fixtured (see report).",
+  "cases": [
+    {
+      "name": "gets a month of stats with a plain GET",
+      "args": { "linode_id": 123, "year": 2024, "month": 8 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/stats/2024/8" }
+    }
+  ]
+}

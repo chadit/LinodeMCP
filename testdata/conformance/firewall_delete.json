@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.FirewallDeleteResponse",
+  "description": "Firewall delete id-echo: a confirmation message plus the deleted firewall's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "Firewall 890 removed successfully",
+    "firewall_id": 890
+  },
+  "canonical": {
+    "message": "Firewall 890 removed successfully",
+    "firewall_id": 890
+  }
+}

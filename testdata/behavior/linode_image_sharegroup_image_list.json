@@ -1,0 +1,27 @@
+{
+  "tool": "linode_image_sharegroup_image_list",
+  "description": "Pins the sharegroup_id rejection and the images-in-group GET.",
+  "cases": [
+    {
+      "name": "rejects missing sharegroup_id",
+      "args": {},
+      "expect_error": "sharegroup_id is required"
+    },
+    {
+      "name": "lists images in a share group",
+      "args": {
+        "sharegroup_id": 5
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/images/sharegroups/5/images"
+      }
+    }
+  ]
+}

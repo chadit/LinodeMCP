@@ -1,0 +1,12 @@
+{
+  "tool": "linode_account_transfer_get",
+  "description": "Pins the account network-transfer GET path both languages issue.",
+  "cases": [
+    {
+      "name": "gets account network transfer usage",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/transfer" }
+    }
+  ]
+}

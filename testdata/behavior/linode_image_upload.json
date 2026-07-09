@@ -1,0 +1,17 @@
+{
+  "tool": "linode_image_upload",
+  "description": "Pins the upload POST body. label/region/confirm rejections diverge in text and order (see report).",
+  "cases": [
+    {
+      "name": "creates an upload target",
+      "args": { "label": "custom-image", "region": "us-east", "confirm": true },
+      "api_response": { "image": { "id": "private/999", "label": "custom-image" }, "upload_to": "https://upload.example.test/x" },
+      "expect_request": { "method": "POST", "path": "/images/upload", "body": { "label": "custom-image", "region": "us-east" } }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "custom-image", "region": "us-east"},
+      "expect_error": "This creates an image upload. Set confirm=true to proceed."
+    }
+  ]
+}

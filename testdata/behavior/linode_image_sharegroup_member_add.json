@@ -1,0 +1,40 @@
+{
+  "tool": "linode_image_sharegroup_member_add",
+  "description": "With confirm set both languages reach the sharegroup_id check. Success POSTs the member label and token.",
+  "cases": [
+    {
+      "name": "rejects missing sharegroup_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "sharegroup_id is required"
+    },
+    {
+      "name": "adds a member to the group",
+      "args": {
+        "sharegroup_id": 5,
+        "label": "member-label",
+        "token": "tok-abc",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups/5/members",
+        "body": {
+          "label": "member-label",
+          "token": "tok-abc"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "sharegroup_id": 5,
+        "label": "member-label",
+        "token": "tok-abc"
+      },
+      "expect_error": "This adds members to an image share group. Set confirm=true to proceed."
+    }
+  ]
+}

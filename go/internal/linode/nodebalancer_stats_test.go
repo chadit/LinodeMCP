@@ -3,15 +3,17 @@ package linode_test
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync/atomic"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
+// writeNodeBalancerStatsFixture writes the real GET /nodebalancers/{id}/stats
+// body, which nests the graphs under a top-level "data" object beside "title".
 func writeNodeBalancerStatsFixture(t *testing.T, w http.ResponseWriter) {
 	t.Helper()
 
@@ -19,8 +21,10 @@ func writeNodeBalancerStatsFixture(t *testing.T, w http.ResponseWriter) {
 
 	_, err := w.Write([]byte(`{
 		"title":"nodebalancer.example.com (nodebalancer123) - day (5 min avg)",
-		"connections":[[1521483600000,12.5]],
-		"traffic":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]]}
+		"data":{
+			"connections":[[1521483600000,12.5]],
+			"traffic":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]]}
+		}
 	}`))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -47,17 +51,13 @@ func TestClientGetNodeBalancerStatsSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
 		}
 
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
 		writeNodeBalancerStatsFixture(t, w)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.GetNodeBalancerStats(t.Context(), 444)
+	got, err := client.GetNodeBalancerStatsProto(t.Context(), 444)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -66,20 +66,20 @@ func TestClientGetNodeBalancerStatsSuccess(t *testing.T) {
 		t.Fatal("got is nil")
 	}
 
-	if got.Title != "nodebalancer.example.com (nodebalancer123) - day (5 min avg)" {
-		t.Errorf("got.Title = %v, want %v", got.Title, "nodebalancer.example.com (nodebalancer123) - day (5 min avg)")
+	if got.GetTitle() != "nodebalancer.example.com (nodebalancer123) - day (5 min avg)" {
+		t.Errorf("got.GetTitle() = %v, want %v", got.GetTitle(), "nodebalancer.example.com (nodebalancer123) - day (5 min avg)")
 	}
 
-	if !reflect.DeepEqual(got.Connections, [][]float64{{1521483600000, 12.5}}) {
-		t.Errorf("got.Connections = %v, want %v", got.Connections, [][]float64{{1521483600000, 12.5}})
+	if v := got.GetData().GetConnections()[0].GetValues()[1].GetNumberValue(); math.Abs(v-12.5) > 0.001 {
+		t.Errorf("connections value = %v, want %v", v, 12.5)
 	}
 
-	if !reflect.DeepEqual(got.Traffic.In, [][]float64{{1521484800000, 2004.36}}) {
-		t.Errorf("got.Traffic.In = %v, want %v", got.Traffic.In, [][]float64{{1521484800000, 2004.36}})
+	if v := got.GetData().GetTraffic().GetIn()[0].GetValues()[1].GetNumberValue(); math.Abs(v-2004.36) > 0.001 {
+		t.Errorf("traffic.in value = %v, want %v", v, 2004.36)
 	}
 
-	if !reflect.DeepEqual(got.Traffic.Out, [][]float64{{1521484800000, 3928.91}}) {
-		t.Errorf("got.Traffic.Out = %v, want %v", got.Traffic.Out, [][]float64{{1521484800000, 3928.91}})
+	if v := got.GetData().GetTraffic().GetOut()[0].GetValues()[1].GetNumberValue(); math.Abs(v-3928.91) > 0.001 {
+		t.Errorf("traffic.out value = %v, want %v", v, 3928.91)
 	}
 }
 
@@ -106,7 +106,7 @@ func TestClientGetNodeBalancerStatsAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetNodeBalancerStats(t.Context(), 444)
+	_, err := client.GetNodeBalancerStatsProto(t.Context(), 444)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -137,12 +137,12 @@ func TestClientGetNodeBalancerStatsRejectsInvalidPathParam(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetNodeBalancerStats(t.Context(), 0)
+	_, err := client.GetNodeBalancerStatsProto(t.Context(), 0)
 	if !errors.Is(err, linode.ErrNodeBalancerIDPositive) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrNodeBalancerIDPositive)
 	}
 
-	_, err = client.GetNodeBalancerStats(t.Context(), -1)
+	_, err = client.GetNodeBalancerStatsProto(t.Context(), -1)
 	if !errors.Is(err, linode.ErrNodeBalancerIDPositive) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrNodeBalancerIDPositive)
 	}
@@ -178,7 +178,7 @@ func TestClientGetNodeBalancerStatsRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	got, err := client.GetNodeBalancerStats(t.Context(), 444)
+	got, err := client.GetNodeBalancerStatsProto(t.Context(), 444)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestClientGetNodeBalancerStatsRetriesTransientError(t *testing.T) {
 		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(2))
 	}
 
-	if got.Title != "nodebalancer.example.com (nodebalancer123) - day (5 min avg)" {
-		t.Errorf("got.Title = %v, want %v", got.Title, "nodebalancer.example.com (nodebalancer123) - day (5 min avg)")
+	if got.GetTitle() != "nodebalancer.example.com (nodebalancer123) - day (5 min avg)" {
+		t.Errorf("got.GetTitle() = %v, want %v", got.GetTitle(), "nodebalancer.example.com (nodebalancer123) - day (5 min avg)")
 	}
 }

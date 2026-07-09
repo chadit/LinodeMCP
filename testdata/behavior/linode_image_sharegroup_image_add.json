@@ -1,0 +1,49 @@
+{
+  "tool": "linode_image_sharegroup_image_add",
+  "description": "With confirm set both languages reach the sharegroup_id check. Success POSTs the images array.",
+  "cases": [
+    {
+      "name": "rejects missing sharegroup_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "sharegroup_id is required"
+    },
+    {
+      "name": "adds an image to the group",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [
+          {
+            "id": "private/123"
+          }
+        ],
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/images/sharegroups/5/images",
+        "body": {
+          "images": [
+            {
+              "id": "private/123"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "sharegroup_id": 5,
+        "images": [
+          {
+            "id": "private/123"
+          }
+        ]
+      },
+      "expect_error": "This adds images to an image share group. Set confirm=true to proceed."
+    }
+  ]
+}

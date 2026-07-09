@@ -1,0 +1,36 @@
+{
+  "tool": "linode_object_storage_bucket_access_update",
+  "description": "Pins the shared region/label validation (behind confirm) and the access PUT body. Every case carries confirm:true because the confirm-gate message text diverges.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": { "confirm": true },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires label",
+      "args": { "region": "us-east", "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "updates bucket access",
+      "args": { "region": "us-east", "label": "my-bucket", "acl": "private", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/object-storage/buckets/us-east/my-bucket/access",
+        "body": { "acl": "private" }
+      }
+    },
+    {
+      "name": "rejects an invalid acl",
+      "args": { "region": "us-east", "label": "my-bucket", "acl": "bogus", "confirm": true },
+      "expect_error": "acl must be one of: private, public-read, authenticated-read, public-read-write"
+    },
+    {
+      "name": "requires confirm",
+      "args": {"region": "us-east", "label": "my-bucket", "acl": "private"},
+      "expect_error": "This operation changes bucket access controls. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "tool": "linode_audit_export",
+  "description": "CapMeta local export tool (no Linode API call). Pins the invalid-format rejection: format is validated against the AuditExportFormat proto enum and both languages return the same Error:-prefixed message before touching any store.",
+  "cases": [
+    {
+      "name": "rejects an invalid format",
+      "args": { "format": "xml" },
+      "expect_error": "format must be one of: json, csv, ndjson"
+    }
+  ]
+}

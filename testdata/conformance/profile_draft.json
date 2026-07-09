@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.ProfileDraftResponse",
+  "description": "Profile draft body the draft new/show tools emit. Empty repeated fields emit as [] preserving the arrays-over-null contract.",
+  "input": {
+    "name": "ops-lite",
+    "description": "Read plus instance power actions",
+    "allowed_tools": [
+      "linode_instance_list",
+      "linode_instance_reboot"
+    ],
+    "allowed_environments": [],
+    "required_token_scopes": [
+      "linodes:read_write"
+    ],
+    "allow_yolo": false
+  },
+  "canonical": {
+    "name": "ops-lite",
+    "description": "Read plus instance power actions",
+    "allowed_tools": [
+      "linode_instance_list",
+      "linode_instance_reboot"
+    ],
+    "allowed_environments": [],
+    "required_token_scopes": [
+      "linodes:read_write"
+    ],
+    "allow_yolo": false
+  }
+}

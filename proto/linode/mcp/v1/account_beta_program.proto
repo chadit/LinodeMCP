@@ -30,3 +30,29 @@ message AccountBetaGetInput {
   // The Beta program ID to retrieve (required).
   string beta_id = 2;
 }
+
+// AccountBetaListInput is the input contract for linode_account_beta_list.
+message AccountBetaListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// AccountBetaEnrollInput is the input contract for linode_account_beta_enroll.
+// The hand-built param is named id (string beta program slug), so the field
+// keeps that name.
+message AccountBetaEnrollInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Unique identifier for the beta program (required).
+  string id = 2;
+  // Must be true to confirm beta program enrollment. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}

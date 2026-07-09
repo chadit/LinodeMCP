@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_interface_firewall_list",
+  "description": "Pins the instance-interface firewalls GET. linode_id/interface_id rejection text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "lists firewalls for an interface",
+      "args": { "linode_id": 123, "interface_id": 9 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/interfaces/9/firewalls" }
+    }
+  ]
+}

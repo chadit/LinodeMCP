@@ -85,6 +85,14 @@ async def test_resize_plan_then_apply_opted_in(
             {**resize_args, "mode": "apply", "plan_id": plan_id}, sample_config
         )
         assert "Error" not in result[0].text
+        # The apply body is proto-canonical, same shape as the single-step path.
+        apply_body = json.loads(result[0].text)
+        assert (
+            apply_body["message"]
+            == "Instance 123 resize to g6-standard-1 initiated successfully"
+        )
+        assert apply_body["instance_id"] == 123
+        assert apply_body["new_type"] == "g6-standard-1"
         mock_linode_client.resize_instance.assert_awaited_once()
         assert await store.length() == 0
     finally:

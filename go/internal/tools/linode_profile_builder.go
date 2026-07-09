@@ -2,15 +2,15 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"slices"
 	"sort"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // CatalogProvider returns the full server tool catalog. The Phase 8.2
@@ -19,25 +19,6 @@ import (
 // runs at handler call time so hot-reload changes to the catalog are
 // reflected without re-registering the tool.
 type CatalogProvider func() []profiles.ToolDescriptor
-
-// toolCatalogJSONEntry is the wire shape for one row of the
-// linode_profile_list_tools response. Lowercase JSON tags match the
-// Python implementation; the model reads this structure to drive
-// follow-up builder operations.
-type toolCatalogJSONEntry struct {
-	Name       string   `json:"name"`
-	Capability string   `json:"capability"`
-	Categories []string `json:"categories"`
-}
-
-// categoryJSONEntry is the wire shape for one row of the
-// linode_profile_list_categories response. ToolCount is the number of
-// tools the category covers across the full catalog (not filtered by
-// capability).
-type categoryJSONEntry struct {
-	Name      string `json:"name"`
-	ToolCount int    `json:"tool_count"`
-}
 
 // NewLinodeProfileListToolsTool returns the linode_profile_list_tools
 // builder tool. It enumerates every tool the server could register,
@@ -55,21 +36,12 @@ type categoryJSONEntry struct {
 func NewLinodeProfileListToolsTool(
 	provider CatalogProvider,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_list_tools",
-		mcp.WithDescription(
-			"List every registerable tool with its capability tag and categories. "+
-				"Used by the profile builder to enumerate the full menu before "+
-				"composing a user-defined profile. Optional filters: category, capability.",
-		),
-		mcp.WithString(
-			"category",
-			mcp.Description(`Filter to tools whose Categories include this exact name (e.g. "compute", "dns").`),
-		),
-		mcp.WithString(
-			"capability",
-			mcp.Description("Filter to tools with this capability. Accepts the short form (read, write, destroy, admin, meta) or the long form (CapRead, CapWrite, ...)."),
-		),
+		"List every registerable tool with its capability tag and categories. "+
+			"Used by the profile builder to enumerate the full menu before "+
+			"composing a user-defined profile. Optional filters: category, capability.",
+		toolschemas.Schema("linode.mcp.v1.ProfileListToolsInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -83,7 +55,7 @@ func NewLinodeProfileListToolsTool(
 		capabilityFilter := request.GetString("capability", "")
 
 		entries := provider()
-		out := make([]toolCatalogJSONEntry, 0, len(entries))
+		out := make([]*linodev1.ProfileToolCatalogItem, 0, len(entries))
 
 		for idx := range entries {
 			cats := profiles.Categories(entries[idx].Name)
@@ -95,19 +67,17 @@ func NewLinodeProfileListToolsTool(
 				continue
 			}
 
-			out = append(out, toolCatalogJSONEntry{
+			out = append(out, &linodev1.ProfileToolCatalogItem{
 				Name:       entries[idx].Name,
 				Capability: entries[idx].Capability.String(),
 				Categories: cats,
 			})
 		}
 
-		body, err := json.Marshal(out)
-		if err != nil {
-			return nil, fmt.Errorf("marshal tool catalog: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.ProfileToolListResponse{
+			Count: linodeIDToInt32(len(out)),
+			Tools: out,
+		})
 	}
 
 	return tool, profiles.CapMeta, handler
@@ -121,13 +91,12 @@ func NewLinodeProfileListToolsTool(
 func NewLinodeProfileListCategoriesTool(
 	provider CatalogProvider,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_list_categories",
-		mcp.WithDescription(
-			"List tool categories with the number of tools each covers. "+
-				"Used by the profile builder to discover available categories "+
-				"before drilling into a category with linode_profile_list_tools.",
-		),
+		"List tool categories with the number of tools each covers. "+
+			"Used by the profile builder to discover available categories "+
+			"before drilling into a category with linode_profile_list_tools.",
+		toolschemas.Schema("linode.mcp.v1.ProfileListCategoriesInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -155,17 +124,15 @@ func NewLinodeProfileListCategoriesTool(
 
 		sort.Strings(names)
 
-		out := make([]categoryJSONEntry, len(names))
+		out := make([]*linodev1.ProfileCategoryItem, len(names))
 		for i, name := range names {
-			out[i] = categoryJSONEntry{Name: name, ToolCount: counts[name]}
+			out[i] = &linodev1.ProfileCategoryItem{Name: name, ToolCount: linodeIDToInt32(counts[name])}
 		}
 
-		body, err := json.Marshal(out)
-		if err != nil {
-			return nil, fmt.Errorf("marshal category list: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.ProfileCategoryListResponse{
+			Count:      linodeIDToInt32(len(out)),
+			Categories: out,
+		})
 	}
 
 	return tool, profiles.CapMeta, handler

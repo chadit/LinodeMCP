@@ -13,10 +13,11 @@ import (
 
 // NewLinodeNetworkTransferPricesTool creates a tool for listing network transfer prices.
 func NewLinodeNetworkTransferPricesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_network_transfer_price_list",
 		"Lists Linode network transfer prices, including default and region-specific rates.",
+		"linode.mcp.v1.NetworkTransferPriceListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.LinodeType, error) {
 			return client.ListNetworkTransferPricesProto(ctx)
 		},

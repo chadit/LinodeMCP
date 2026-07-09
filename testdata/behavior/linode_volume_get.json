@@ -1,0 +1,17 @@
+{
+  "tool": "linode_volume_get",
+  "description": "Volume get: the volume_id-required rejection and the single GET by ID.",
+  "cases": [
+    {
+      "name": "requires volume_id",
+      "args": {},
+      "expect_error": "volume_id is required"
+    },
+    {
+      "name": "gets a volume",
+      "args": { "volume_id": 123 },
+      "api_response": { "id": 123, "label": "my-vol", "region": "us-east" },
+      "expect_request": { "method": "GET", "path": "/volumes/123" }
+    }
+  ]
+}

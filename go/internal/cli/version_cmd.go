@@ -1,18 +1,19 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 
 	"github.com/chadit/LinodeMCP/go/internal/appinfo"
+	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
 // RunVersionCommand prints the build and version metadata as JSON and
-// returns 0. Mirrors the `version` MCP tool's output so the CLI and the
-// tool agree. Output stream is a parameter for tests.
+// returns 0. It serializes the same VersionResponse proto the `version` MCP
+// tool returns, so the CLI subcommand and the tool emit identical bytes.
+// Output stream is a parameter for tests.
 func RunVersionCommand(stdout, stderr io.Writer) int {
-	body, err := json.MarshalIndent(appinfo.Get(), "", "  ")
+	body, err := tools.MarshalProtoJSON(tools.VersionResponseProto())
 	if err != nil {
 		writef(stderr, "marshal version info: %v\n", err)
 

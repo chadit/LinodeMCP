@@ -68,8 +68,8 @@ func TestClientCreateMonitorServiceTokenSuccess(t *testing.T) {
 		t.Fatal("got is nil")
 	}
 
-	if got.Token != tcMonitorToken {
-		t.Errorf("got.Token = %v, want %v", got.Token, tcMonitorToken)
+	if got.GetToken() != tcMonitorToken {
+		t.Errorf("got.GetToken() = %v, want %v", got.GetToken(), tcMonitorToken)
 	}
 }
 
@@ -100,8 +100,8 @@ func TestClientCreateMonitorServiceTokenEscapesPathParams(t *testing.T) {
 		t.Fatal("got is nil")
 	}
 
-	if got.Token != tcMonitorToken {
-		t.Errorf("got.Token = %v, want %v", got.Token, tcMonitorToken)
+	if got.GetToken() != tcMonitorToken {
+		t.Errorf("got.GetToken() = %v, want %v", got.GetToken(), tcMonitorToken)
 	}
 }
 

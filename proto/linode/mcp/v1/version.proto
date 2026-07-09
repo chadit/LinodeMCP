@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// VersionResponse is the shared wire shape the `version` MCP tool and the CLI
+// `version` subcommand return in both languages. The values are build-time and
+// runtime metadata: version and api_version are the server versions, build_date
+// and commit come from the build, and platform is the os/arch pair
+// (e.g. "linux/amd64"). Each server fills its own values, but the field set and
+// types are identical across the Go and Python implementations.
+message VersionResponse {
+  string version = 1;
+  string api_version = 2;
+  string build_date = 3;
+  string commit = 4;
+  string platform = 5;
+}
+
+// VersionInput is the input contract for the version meta tool. It takes no
+// parameters; the empty message generates an empty-properties object schema.
+// The tool is CapMeta and talks to no Linode API, so it advertises no
+// environment param.
+message VersionInput {}
+
+// HelloInput is the input contract for the hello smoke-test meta tool. The
+// hand-built tool does NOT advertise environment (no API client), so the
+// message carries only the optional greeting name.
+message HelloInput {
+  // Name to include in the greeting (optional).
+  optional string name = 1;
+}
+
+// HelloResponse is the hello smoke-test body: the greeting as a
+// proto-canonical JSON object, matching the contract every other tool emits.
+message HelloResponse {
+  // The greeting text.
+  string message = 1;
+}

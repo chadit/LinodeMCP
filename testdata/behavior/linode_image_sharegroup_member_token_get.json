@@ -1,0 +1,30 @@
+{
+  "tool": "linode_image_sharegroup_member_token_get",
+  "description": "Pins the sharegroup_id and token_uuid rejections and the member-token GET.",
+  "cases": [
+    {
+      "name": "rejects missing sharegroup_id",
+      "args": {},
+      "expect_error": "sharegroup_id is required"
+    },
+    {
+      "name": "rejects missing token_uuid",
+      "args": {
+        "sharegroup_id": 5
+      },
+      "expect_error": "token_uuid must be a non-empty string"
+    },
+    {
+      "name": "gets one member token",
+      "args": {
+        "sharegroup_id": 5,
+        "token_uuid": "123e4567-e89b-12d3-a456-426614174000"
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "GET",
+        "path": "/images/sharegroups/5/members/123e4567-e89b-12d3-a456-426614174000"
+      }
+    }
+  ]
+}

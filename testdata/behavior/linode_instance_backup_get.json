@@ -1,0 +1,22 @@
+{
+  "tool": "linode_instance_backup_get",
+  "description": "Requires linode_id then backup_id, then GETs the single backup.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects missing backup_id",
+      "args": { "linode_id": 123 },
+      "expect_error": "backup_id is required"
+    },
+    {
+      "name": "gets one backup with a plain GET",
+      "args": { "linode_id": 123, "backup_id": 456 },
+      "api_response": { "id": 456 },
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/backups/456" }
+    }
+  ]
+}

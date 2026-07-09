@@ -11,30 +11,20 @@ import (
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeMonitorServiceAlertDefinitionUpdateTool creates a tool for updating one monitoring alert definition.
 func NewLinodeMonitorServiceAlertDefinitionUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		monitorServiceAlertDefinitionUpdateToolName,
 		"Updates one alert definition for a supported monitoring service type. Requires confirm=true.",
-		[]mcp.ToolOption{
-			mcp.WithString(monitorServiceTypeParam, mcp.Required(), mcp.Description("Supported monitoring service type slug for the alert definition.")),
-			mcp.WithNumber(monitorAlertIDParam, mcp.Required(), mcp.Description("Alert definition ID to update.")),
-			mcp.WithString(monitorAlertDefinitionLabelParam, mcp.Description("Optional alert definition label.")),
-			mcp.WithNumber(monitorAlertDefinitionSeverityParam, mcp.Description("Optional alert severity: 0 severe, 1 medium, 2 low, or 3 info.")),
-			mcp.WithString(monitorAlertDefinitionStatusParam, mcp.Description("Optional alert status: enabled or disabled.")),
-			mcp.WithObject(monitorAlertDefinitionRuleCriteriaParam, mcp.Description("Optional alert rule criteria object.")),
-			mcp.WithObject(monitorAlertDefinitionTriggerConditionsParam, mcp.Description("Optional alert trigger conditions object.")),
-			mcp.WithArray(monitorAlertDefinitionChannelIDsParam, mcp.Description("Optional alert channel IDs.")),
-			mcp.WithString(monitorAlertDefinitionDescriptionParam, mcp.Description("Optional alert definition description.")),
-			mcp.WithArray(monitorAlertDefinitionEntityIDsParam, mcp.Description("Optional service entity IDs.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating an alert definition. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeMonitorServiceAlertDefinitionUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.MonitorServiceAlertDefinitionUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeMonitorServiceAlertDefinitionUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -45,7 +35,7 @@ func handleLinodeMonitorServiceAlertDefinitionUpdateRequest(ctx context.Context,
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	alertID, validationMessage := requiredPositiveIntArgument(request, monitorAlertIDParam, errMonitorAlertIDMissing, errMonitorAlertIDPositive)
+	alertID, validationMessage := requiredIDArgument(request, monitorAlertIDParam)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}

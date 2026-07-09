@@ -1,0 +1,22 @@
+{
+  "tool": "linode_support_ticket_reply_list",
+  "description": "Support ticket reply list: the invalid-ticket_id and non-integer page rejections both languages agree on, plus the bare replies GET. The missing-ticket_id message diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive ticket_id",
+      "args": { "ticket_id": 0 },
+      "expect_error": "ticket_id must be a positive integer"
+    },
+    {
+      "name": "rejects non-integer page",
+      "args": { "ticket_id": 123, "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "lists support ticket replies",
+      "args": { "ticket_id": 123 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/support/tickets/123/replies" }
+    }
+  ]
+}

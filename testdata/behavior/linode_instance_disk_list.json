@@ -1,0 +1,17 @@
+{
+  "tool": "linode_instance_disk_list",
+  "description": "Pins the shared missing-linode_id rejection and the disk-list GET.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "lists disks for an instance",
+      "args": { "linode_id": 123 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/disks" }
+    }
+  ]
+}

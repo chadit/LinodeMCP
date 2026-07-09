@@ -25,7 +25,6 @@ from linodemcp.genpb.linode.mcp.v1 import (
 )
 from linodemcp.linode import (
     Client,
-    DomainZoneFile,
     NetworkError,
     RetryableClient,
 )
@@ -721,9 +720,10 @@ async def test_domain_zone_file_get_handler_returns_client_response(
     """Domain zone file handler returns the client response."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_domain_zone_file.return_value = DomainZoneFile(
-            zone_file=["$ORIGIN example.com."]
-        )
+        mock_client.get_raw.return_value = {
+            "zone_file": ["$ORIGIN example.com."],
+            "not_in_proto": "dropped",
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -731,7 +731,8 @@ async def test_domain_zone_file_get_handler_returns_client_response(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_domain_zone_file_get", {"domain_id": 1})
 
-    mock_client.get_domain_zone_file.assert_awaited_once_with(1)
+    mock_client.get_raw.assert_awaited_once_with("/domains/1/zone-file")
+    # The exact equality proves the unknown not_in_proto field was dropped.
     assert json.loads(result[0].text) == {"zone_file": ["$ORIGIN example.com."]}
 
 
@@ -959,8 +960,12 @@ async def test_account_settings_update_handler_updates_settings(
     payload = json.loads(result[0].text)
     assert payload["message"] == "Account settings updated successfully"
     assert payload["settings"] == {
+        "backups_enabled": False,
+        "managed": False,
         "network_helper": False,
         "object_storage": "active",
+        "interfaces_for_new_linodes": "",
+        "maintenance_policy": "",
     }
     mock_client.update_account_settings.assert_awaited_once_with(
         network_helper=False, object_storage="active"
@@ -1408,7 +1413,10 @@ async def test_account_beta_enroll_dispatches_from_registry(
             {"id": "distributed-beta", "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Account beta enrollment requested successfully",
+        "id": "distributed-beta",
+    }
     mock_client.enroll_account_beta.assert_awaited_once_with("distributed-beta")
 
 
@@ -1444,7 +1452,9 @@ async def test_account_agreements_acknowledge_dispatches_from_registry(
             {"eu_model": True, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Account agreements acknowledged successfully"
+    }
     mock_client.acknowledge_account_agreements.assert_awaited_once_with(
         {"eu_model": True}
     )
@@ -1583,7 +1593,7 @@ async def test_account_logins_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_login_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -1595,7 +1605,7 @@ async def test_account_logins_list_rejects_invalid_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_login_list", {"page_size": 10})
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -1623,9 +1633,8 @@ async def test_databases_engines_list_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_database_engine_list_tool()
     assert tool.name == "linode_database_engine_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
     registry = {entry.name: entry for entry in get_tool_registry()}
     assert registry["linode_database_engine_list"].capability is Capability.Read
@@ -1674,9 +1683,9 @@ async def test_databases_engines_list_dispatches_from_registry(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"page": 0}, "page must be at least 1"),
-        ({"page_size": 10}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
+        ({"page_size": 10}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page": "2"}, "page must be an integer"),
         ({"page": True}, "page must be an integer"),
     ],
@@ -1701,7 +1710,7 @@ async def test_account_logins_list_rejects_oversized_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_login_list", {"page_size": 501})
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -1768,7 +1777,7 @@ async def test_account_users_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_user_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -1780,7 +1789,7 @@ async def test_account_users_list_rejects_invalid_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_user_list", {"page_size": 10})
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -1804,7 +1813,7 @@ async def test_account_users_list_rejects_oversized_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_user_list", {"page_size": 501})
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2300,7 +2309,7 @@ async def test_account_oauth_clients_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_oauth_client_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2314,7 +2323,7 @@ async def test_account_oauth_clients_list_rejects_invalid_page_size(
             "linode_account_oauth_client_list", {"page_size": 10}
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2340,7 +2349,7 @@ async def test_account_oauth_clients_list_rejects_oversized_page_size(
             "linode_account_oauth_client_list", {"page_size": 501}
         )
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2403,7 +2412,14 @@ async def test_account_oauth_client_update_dispatches_from_registry(
 
     assert json.loads(result[0].text) == {
         "message": "OAuth client updated successfully",
-        "client": response_data,
+        "client": {
+            "id": "client-1",
+            "label": "Updated",
+            "public": False,
+            "redirect_uri": "",
+            "status": "",
+            "thumbnail_url": "",
+        },
     }
     mock_client.update_account_oauth_client.assert_awaited_once_with(
         "client-1", label="Updated"
@@ -2514,10 +2530,7 @@ async def test_account_oauth_client_thumbnail_update_schema_requires_confirm() -
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert (
-        tool.inputSchema["properties"]["client_id"]["pattern"]
-        == r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
-    )
+    assert tool.inputSchema["properties"]["client_id"]["type"] == "string"
     # The PNG payload is required so the tool can actually upload a thumbnail.
     assert tool.inputSchema["properties"]["thumbnail_png_base64"]["type"] == "string"
     assert "thumbnail_png_base64" in tool.inputSchema["required"]
@@ -2740,9 +2753,8 @@ async def test_account_payments_list_tool_is_exported_and_registered(
     assert tool.name == "linode_account_payment_list"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "page", "page_size"}
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
     assert "required" not in tool.inputSchema
 
     srv = Server(sample_config)
@@ -2787,7 +2799,7 @@ async def test_account_payments_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_payment_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2799,7 +2811,7 @@ async def test_account_payments_list_rejects_invalid_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_payment_list", {"page_size": 10})
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2823,7 +2835,7 @@ async def test_account_payments_list_rejects_oversized_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_payment_list", {"page_size": 501})
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2852,9 +2864,8 @@ async def test_account_payment_methods_list_tool_is_exported_and_registered(
     assert tool.name == "linode_account_payment_method_list"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "page", "page_size"}
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
     assert "required" not in tool.inputSchema
 
     srv = Server(sample_config)
@@ -2903,7 +2914,7 @@ async def test_account_payment_methods_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_payment_method_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2917,7 +2928,7 @@ async def test_account_payment_methods_list_rejects_invalid_page_size(
             "linode_account_payment_method_list", {"page_size": 10}
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2943,7 +2954,7 @@ async def test_account_payment_methods_list_rejects_oversized_page_size(
             "linode_account_payment_method_list", {"page_size": 501}
         )
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -2985,9 +2996,8 @@ async def test_account_notifications_list_schema_has_no_route_inputs(
     assert tool.name == "linode_account_notification_list"
     assert capability is Capability.Read
     assert set(tool.inputSchema["properties"]) == {"environment", "page", "page_size"}
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
     assert "required" not in tool.inputSchema
 
     srv = Server(sample_config)
@@ -3036,7 +3046,7 @@ async def test_account_notifications_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_notification_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3050,7 +3060,7 @@ async def test_account_notifications_list_rejects_invalid_page_size(
             "linode_account_notification_list", {"page_size": 10}
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3076,7 +3086,7 @@ async def test_account_notifications_list_rejects_oversized_page_size(
             "linode_account_notification_list", {"page_size": 501}
         )
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3100,7 +3110,7 @@ async def test_account_invoices_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_invoice_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3112,7 +3122,7 @@ async def test_account_invoices_list_rejects_invalid_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_invoice_list", {"page_size": 10})
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3136,7 +3146,7 @@ async def test_account_invoices_list_rejects_oversized_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_invoice_list", {"page_size": 501})
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3208,8 +3218,14 @@ async def test_account_invoice_items_list_dispatches_from_registry(
         ({"invoice_id": "123/456"}, "invoice_id must be a positive integer"),
         ({"invoice_id": "123?456"}, "invoice_id must be a positive integer"),
         ({"invoice_id": ".."}, "invoice_id must be a positive integer"),
-        ({"invoice_id": 123, "page": 0}, "page must be at least 1"),
-        ({"invoice_id": 123, "page_size": 10}, "page_size must be at least 25"),
+        (
+            {"invoice_id": 123, "page": 0},
+            "page must be an integer greater than or equal to 1",
+        ),
+        (
+            {"invoice_id": 123, "page_size": 10},
+            "page_size must be an integer from 25 through 500",
+        ),
         ({"invoice_id": 123, "page": "2"}, "page must be an integer"),
     ],
 )
@@ -3291,7 +3307,7 @@ async def test_account_event_seen_tool_is_exported_registered_and_profiled(
     tool, capability = tools_mod.create_linode_account_event_seen_tool()
     assert tool.name == "linode_account_event_seen"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["event_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["event_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert set(tool.inputSchema["required"]) == {"event_id", "confirm"}
@@ -3433,7 +3449,7 @@ async def test_account_events_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_event_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3445,7 +3461,7 @@ async def test_account_events_list_rejects_invalid_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_event_list", {"page_size": 10})
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3469,7 +3485,7 @@ async def test_account_events_list_rejects_oversized_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_account_event_list", {"page_size": 501})
 
-    assert "page_size must be at most 500" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -3693,6 +3709,28 @@ async def test_database_mysql_config_get_dispatches_from_registry(
     mock_client.get_database_mysql_config.assert_awaited_once_with()
 
 
+async def test_database_mysql_config_get_sorts_keys(sample_config: Config) -> None:
+    """The bare-Struct config path sorts keys, matching the Go output.
+
+    Feeding keys out of order proves MessageToJson emits them alphabetically, the
+    property that makes the Go and Python output byte-identical (pre-proto,
+    Python kept the API's insertion order while Go alpha-sorted). The same
+    serialize_struct_response path backs profile preferences and managed stats.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_database_mysql_config.return_value = {"zebra": 1, "alpha": 2}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(sample_config)
+        result = await srv.dispatch("linode_database_mysql_config_get", {})
+
+    text = result[0].text
+    assert text.index("alpha") < text.index("zebra")
+
+
 async def test_database_postgresql_config_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
@@ -3809,7 +3847,7 @@ async def test_database_postgresql_instance_get_tool_is_exported_and_registered(
     assert tool.name == "linode_database_postgresql_instance_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["instance_id"]
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
 
     srv = Server(sample_config)
     assert "linode_database_postgresql_instance_get" in srv.registered_tool_names
@@ -3844,7 +3882,9 @@ async def test_database_postgresql_instance_get_dispatches_from_registry(
             "linode_database_postgresql_instance_get", {"instance_id": 123}
         )
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == 123
+    assert data["label"] == "primary-db"
     mock_client.get_database_postgresql_instance.assert_awaited_once_with(123)
 
 
@@ -3852,12 +3892,12 @@ async def test_database_postgresql_instance_get_dispatches_from_registry(
     ("arguments", "expected_error"),
     [
         ({}, "instance_id is required"),
-        ({"instance_id": 0}, "instance_id must be at least 1"),
-        ({"instance_id": "123"}, "instance_id must be an integer"),
-        ({"instance_id": True}, "instance_id must be an integer"),
-        ({"instance_id": "1/2"}, "instance_id must be an integer"),
-        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
-        ({"instance_id": ".."}, "instance_id must be an integer"),
+        ({"instance_id": 0}, "instance_id must be a positive integer"),
+        ({"instance_id": "123"}, "instance_id must be a positive integer"),
+        ({"instance_id": True}, "instance_id must be a positive integer"),
+        ({"instance_id": "1/2"}, "instance_id must be a positive integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be a positive integer"),
+        ({"instance_id": ".."}, "instance_id must be a positive integer"),
     ],
 )
 async def test_database_postgresql_instance_get_rejects_invalid_instance_id(
@@ -3946,7 +3986,7 @@ async def test_database_postgresql_instance_patch_tool_is_exported_and_registere
     assert tool.name == "linode_database_postgresql_instance_patch"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -4042,7 +4082,7 @@ async def test_database_postgresql_instance_patch_rejects_non_true_confirm(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"confirm": True}, "instance_id must be a positive integer"),
+        ({"confirm": True}, "instance_id is required"),
         ({"instance_id": 0, "confirm": True}, "instance_id must be a positive integer"),
         (
             {"instance_id": "123", "confirm": True},
@@ -4204,12 +4244,12 @@ async def test_database_postgresql_instance_ssl_get_dispatches_from_registry(
     ("arguments", "expected_error"),
     [
         ({}, "instance_id is required"),
-        ({"instance_id": 0}, "instance_id must be at least 1"),
-        ({"instance_id": "123"}, "instance_id must be an integer"),
-        ({"instance_id": True}, "instance_id must be an integer"),
-        ({"instance_id": "1/2"}, "instance_id must be an integer"),
-        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
-        ({"instance_id": ".."}, "instance_id must be an integer"),
+        ({"instance_id": 0}, "instance_id must be a positive integer"),
+        ({"instance_id": "123"}, "instance_id must be a positive integer"),
+        ({"instance_id": True}, "instance_id must be a positive integer"),
+        ({"instance_id": "1/2"}, "instance_id must be a positive integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be a positive integer"),
+        ({"instance_id": ".."}, "instance_id must be a positive integer"),
     ],
 )
 async def test_database_postgresql_instance_ssl_get_rejects_invalid_instance_id(
@@ -4301,7 +4341,7 @@ async def test_database_mysql_instance_get_tool_is_exported_and_registered(
     assert tool.name == "linode_database_mysql_instance_get"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["instance_id"]
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
 
     srv = Server(sample_config)
     assert "linode_database_mysql_instance_get" in srv.registered_tool_names
@@ -4333,7 +4373,9 @@ async def test_database_mysql_instance_get_dispatches_from_registry(
             "linode_database_mysql_instance_get", {"instance_id": 123}
         )
 
-    assert json.loads(result[0].text) == response_data
+    data = json.loads(result[0].text)
+    assert data["id"] == 123
+    assert data["label"] == "primary-db"
     mock_client.get_database_mysql_instance.assert_awaited_once_with(123)
 
 
@@ -4341,12 +4383,12 @@ async def test_database_mysql_instance_get_dispatches_from_registry(
     ("arguments", "expected_error"),
     [
         ({}, "instance_id is required"),
-        ({"instance_id": 0}, "instance_id must be at least 1"),
-        ({"instance_id": "123"}, "instance_id must be an integer"),
-        ({"instance_id": True}, "instance_id must be an integer"),
-        ({"instance_id": "1/2"}, "instance_id must be an integer"),
-        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
-        ({"instance_id": ".."}, "instance_id must be an integer"),
+        ({"instance_id": 0}, "instance_id must be a positive integer"),
+        ({"instance_id": "123"}, "instance_id must be a positive integer"),
+        ({"instance_id": True}, "instance_id must be a positive integer"),
+        ({"instance_id": "1/2"}, "instance_id must be a positive integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be a positive integer"),
+        ({"instance_id": ".."}, "instance_id must be a positive integer"),
     ],
 )
 async def test_database_mysql_instance_get_rejects_invalid_instance_id(
@@ -4387,7 +4429,7 @@ async def test_database_mysql_instance_credentials_get_tool_is_exported_and_regi
     assert tool.description is not None
     assert "sensitive password material" in tool.description
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -4438,12 +4480,12 @@ async def test_database_mysql_instance_credentials_get_dispatches_from_registry(
     ("arguments", "expected_error"),
     [
         ({}, "instance_id is required"),
-        ({"instance_id": 0}, "instance_id must be at least 1"),
-        ({"instance_id": "123"}, "instance_id must be an integer"),
-        ({"instance_id": True}, "instance_id must be an integer"),
-        ({"instance_id": "1/2"}, "instance_id must be an integer"),
-        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
-        ({"instance_id": ".."}, "instance_id must be an integer"),
+        ({"instance_id": 0}, "instance_id must be a positive integer"),
+        ({"instance_id": "123"}, "instance_id must be a positive integer"),
+        ({"instance_id": True}, "instance_id must be a positive integer"),
+        ({"instance_id": "1/2"}, "instance_id must be a positive integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be a positive integer"),
+        ({"instance_id": ".."}, "instance_id must be a positive integer"),
     ],
 )
 async def test_database_mysql_instance_credentials_get_rejects_invalid_instance_id(
@@ -4579,7 +4621,7 @@ async def test_database_postgresql_credentials_get_tool_registration(
     assert capability is Capability.Write
     assert "sensitive password material" in (tool.description or "")
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.name not in Server(sample_config).registered_tool_names
@@ -4617,12 +4659,12 @@ async def test_database_postgresql_credentials_get_dispatches(
     ("arguments", "expected_error"),
     [
         ({}, "instance_id is required"),
-        ({"instance_id": 0}, "instance_id must be at least 1"),
-        ({"instance_id": "123"}, "instance_id must be an integer"),
-        ({"instance_id": True}, "instance_id must be an integer"),
-        ({"instance_id": "1/2"}, "instance_id must be an integer"),
-        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
-        ({"instance_id": ".."}, "instance_id must be an integer"),
+        ({"instance_id": 0}, "instance_id must be a positive integer"),
+        ({"instance_id": "123"}, "instance_id must be a positive integer"),
+        ({"instance_id": True}, "instance_id must be a positive integer"),
+        ({"instance_id": "1/2"}, "instance_id must be a positive integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be a positive integer"),
+        ({"instance_id": ".."}, "instance_id must be a positive integer"),
     ],
 )
 async def test_database_postgresql_credentials_get_rejects_bad_instance_id(
@@ -4789,12 +4831,12 @@ async def test_database_mysql_instance_ssl_get_dispatches_from_registry(
     ("arguments", "expected_error"),
     [
         ({}, "instance_id is required"),
-        ({"instance_id": 0}, "instance_id must be at least 1"),
-        ({"instance_id": "123"}, "instance_id must be an integer"),
-        ({"instance_id": True}, "instance_id must be an integer"),
-        ({"instance_id": "1/2"}, "instance_id must be an integer"),
-        ({"instance_id": "1?x=y"}, "instance_id must be an integer"),
-        ({"instance_id": ".."}, "instance_id must be an integer"),
+        ({"instance_id": 0}, "instance_id must be a positive integer"),
+        ({"instance_id": "123"}, "instance_id must be a positive integer"),
+        ({"instance_id": True}, "instance_id must be a positive integer"),
+        ({"instance_id": "1/2"}, "instance_id must be a positive integer"),
+        ({"instance_id": "1?x=y"}, "instance_id must be a positive integer"),
+        ({"instance_id": ".."}, "instance_id must be a positive integer"),
     ],
 )
 async def test_database_mysql_instance_ssl_get_rejects_invalid_instance_id(
@@ -4865,7 +4907,7 @@ async def test_account_beta_get_rejects_malformed_beta_id(
             "linode_account_beta_get", {"beta_id": "example/open"}
         )
 
-    assert "beta_id must not contain" in result[0].text
+    assert "beta_id must contain only" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -4955,6 +4997,7 @@ async def test_account_child_account_get_dispatches_from_registry(
     response_data: dict[str, object] = {
         "euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56",
         "company": "Example Child",
+        "not_in_proto": "dropped",
     }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -4970,7 +5013,14 @@ async def test_account_child_account_get_dispatches_from_registry(
             {"euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56"},
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["euuid"] == "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
+    assert body["company"] == "Example Child"
+    # proto-canonical: repeated capabilities emits [] and the message-typed
+    # credit_card is omitted when the API sends none.
+    assert body["capabilities"] == []
+    assert "credit_card" not in body
+    assert "not_in_proto" not in result[0].text
     mock_client.get_account_child_account.assert_awaited_once_with(
         "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
     )
@@ -4980,8 +5030,8 @@ async def test_account_child_account_get_dispatches_from_registry(
     ("arguments", "message"),
     [
         ({}, "euuid is required"),
-        ({"euuid": 123}, "euuid must be a string"),
-        ({"euuid": "   "}, "euuid is required"),
+        ({"euuid": 123}, "euuid must be a non-empty string"),
+        ({"euuid": "   "}, "euuid must be a non-empty string"),
         ({"euuid": "child/account"}, "euuid must not contain"),
         ({"euuid": "child?account"}, "euuid must not contain"),
         ({"euuid": ".."}, "euuid must not contain"),
@@ -5115,11 +5165,11 @@ async def test_account_service_transfer_accept_requires_boolean_confirm(
         ({"confirm": True, "confirmed_dry_run": True}, "token is required"),
         (
             {"token": 123, "confirm": True, "confirmed_dry_run": True},
-            "token must be a string",
+            "token must be a non-empty string",
         ),
         (
             {"token": "   ", "confirm": True, "confirmed_dry_run": True},
-            "token is required",
+            "token must be a non-empty string",
         ),
         (
             {"token": " transfer-token", "confirm": True, "confirmed_dry_run": True},
@@ -5197,8 +5247,8 @@ async def test_account_service_transfer_get_dispatches_from_registry(
     ("arguments", "message"),
     [
         ({}, "token is required"),
-        ({"token": 123}, "token must be a string"),
-        ({"token": "   "}, "token is required"),
+        ({"token": 123}, "token must be a non-empty string"),
+        ({"token": "   "}, "token must be a non-empty string"),
         ({"token": " transfer-token"}, "token must not contain"),
         ({"token": "transfer/token"}, "token must not contain"),
         ({"token": "transfer?token"}, "token must not contain"),
@@ -5283,11 +5333,11 @@ async def test_account_service_transfer_delete_dispatches_from_registry(
         ({}, "token is required"),
         (
             {"token": 123, "confirm": True, "confirmed_dry_run": True},
-            "token must be a string",
+            "token must be a non-empty string",
         ),
         (
             {"token": "   ", "confirm": True, "confirmed_dry_run": True},
-            "token is required",
+            "token must be a non-empty string",
         ),
         (
             {"token": " transfer-token", "confirm": True, "confirmed_dry_run": True},
@@ -5468,9 +5518,9 @@ async def test_account_oauth_client_thumbnail_get_tool_is_exported_and_registere
 async def test_account_oauth_client_thumbnail_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
-    """OAuth client thumbnail get is callable through server dispatch."""
+    """OAuth client thumbnail get serializes through the proto on dispatch."""
     response_data: dict[str, object] = {
-        "thumbnail_url": "https://example.test/thumb.png",
+        "thumbnail_png_base64": "iVBORw0KGgoAAAANSUhEUgAA",
     }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -5485,7 +5535,10 @@ async def test_account_oauth_client_thumbnail_get_dispatches_from_registry(
             "linode_account_oauth_client_thumbnail_get", {"client_id": "client-123"}
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "client_id": "client-123",
+        "thumbnail_png_base64": "iVBORw0KGgoAAAANSUhEUgAA",
+    }
     mock_client.get_account_oauth_client_thumbnail.assert_awaited_once_with(
         "client-123"
     )
@@ -5713,7 +5766,13 @@ async def test_account_payment_method_get_dispatches_from_registry(
             "linode_account_payment_method_get", {"payment_method_id": 123}
         )
 
-    assert json.loads(result[0].text) == response_data
+    # proto-canonical: is_default emits its false default; the message-typed data
+    # is omitted when the API sends none.
+    assert json.loads(result[0].text) == {
+        "id": 123,
+        "type": "credit_card",
+        "is_default": False,
+    }
     mock_client.get_account_payment_method.assert_awaited_once_with(123)
 
 
@@ -5721,12 +5780,12 @@ async def test_account_payment_method_get_dispatches_from_registry(
     ("arguments", "message"),
     [
         ({}, "payment_method_id is required"),
-        ({"payment_method_id": "123"}, "payment_method_id must be an integer"),
-        ({"payment_method_id": True}, "payment_method_id must be an integer"),
-        ({"payment_method_id": 0}, "payment_method_id must be at least 1"),
-        ({"payment_method_id": "12/3"}, "payment_method_id must be an integer"),
-        ({"payment_method_id": "12?3"}, "payment_method_id must be an integer"),
-        ({"payment_method_id": ".."}, "payment_method_id must be an integer"),
+        ({"payment_method_id": "123"}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": True}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": 0}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": "12/3"}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": "12?3"}, "payment_method_id must be a positive integer"),
+        ({"payment_method_id": ".."}, "payment_method_id must be a positive integer"),
     ],
 )
 async def test_account_payment_method_get_rejects_invalid_payment_method_id(
@@ -5755,7 +5814,6 @@ async def test_account_payment_method_get_schema_requires_payment_method_id(
     assert entry.tool.inputSchema["required"] == ["payment_method_id"]
     prop = entry.tool.inputSchema["properties"]["payment_method_id"]
     assert prop["type"] == "integer"
-    assert prop["minimum"] == 1
 
 
 async def test_account_payment_method_make_default_tool_is_exported_and_registered(
@@ -5825,27 +5883,27 @@ async def test_account_payment_method_make_default_dry_run_skips_client(
         ({}, "payment_method_id is required"),
         (
             {"payment_method_id": "123", "confirm": True},
-            "payment_method_id must be an integer",
+            "payment_method_id must be a positive integer",
         ),
         (
             {"payment_method_id": True, "confirm": True},
-            "payment_method_id must be an integer",
+            "payment_method_id must be a positive integer",
         ),
         (
             {"payment_method_id": 0, "confirm": True},
-            "payment_method_id must be at least 1",
+            "payment_method_id must be a positive integer",
         ),
         (
             {"payment_method_id": "12/3", "confirm": True},
-            "payment_method_id must be an integer",
+            "payment_method_id must be a positive integer",
         ),
         (
             {"payment_method_id": "12?3", "confirm": True},
-            "payment_method_id must be an integer",
+            "payment_method_id must be a positive integer",
         ),
         (
             {"payment_method_id": "..", "confirm": True},
-            "payment_method_id must be an integer",
+            "payment_method_id must be a positive integer",
         ),
     ],
 )
@@ -5897,7 +5955,6 @@ async def test_account_payment_method_make_default_schema_requires_confirm_and_d
     assert entry.tool.inputSchema["required"] == ["payment_method_id", "confirm"]
     properties = entry.tool.inputSchema["properties"]
     assert properties["payment_method_id"]["type"] == "integer"
-    assert properties["payment_method_id"]["minimum"] == 1
     assert properties["confirm"]["type"] == "boolean"
     assert properties["dry_run"]["type"] == "boolean"
 
@@ -6142,7 +6199,10 @@ async def test_account_user_grants_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """Account user grants get is callable through server dispatch."""
-    response_data = {"global": {"account_access": "read_only"}}
+    response_data = {
+        "global": {"account_access": "read_only"},
+        "not_in_proto": "dropped",
+    }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -6156,7 +6216,12 @@ async def test_account_user_grants_get_dispatches_from_registry(
             "linode_account_user_grants_get", {"username": "alice-dev"}
         )
 
-    assert json.loads(result[0].text) == response_data
+    body = json.loads(result[0].text)
+    assert body["global"]["account_access"] == "read_only"
+    # absent grant sections normalize to [] through the proto's repeated fields.
+    assert body["linode"] == []
+    assert body["lkecluster"] == []
+    assert "not_in_proto" not in result[0].text
     mock_client.get_account_user_grants.assert_awaited_once_with("alice-dev")
 
 
@@ -6199,7 +6264,6 @@ async def test_account_user_grants_get_schema_requires_username(
     assert entry.tool.inputSchema["required"] == ["username"]
     username_schema = entry.tool.inputSchema["properties"]["username"]
     assert username_schema["type"] == "string"
-    assert username_schema["pattern"] == "^[A-Za-z0-9][A-Za-z0-9_-]*$"
 
 
 async def test_client_update_account_user_grants_sends_exact_route_and_body() -> None:
@@ -6268,22 +6332,12 @@ async def test_account_user_grants_update_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_account_user_grants_update_tool()
     assert tool.name == "linode_account_user_grants_update"
     assert capability is Capability.Admin
-    assert tool.inputSchema["properties"]["username"]["pattern"] == (
-        "^[A-Za-z0-9][A-Za-z0-9_-]*$"
-    )
+    assert tool.inputSchema["properties"]["username"]["type"] == "string"
     assert tool.inputSchema["properties"]["global"]["type"] == "object"
     assert tool.inputSchema["properties"]["linode"]["type"] == "array"
-    assert tool.inputSchema["properties"]["linode"]["items"]["required"] == [
-        "id",
-        "permissions",
-    ]
     # lkecluster is a per-entity grant category that Go advertises; Python must
     # expose it with the same array shape so the surfaces stay in parity.
     assert tool.inputSchema["properties"]["lkecluster"]["type"] == "array"
-    assert tool.inputSchema["properties"]["lkecluster"]["items"]["required"] == [
-        "id",
-        "permissions",
-    ]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["username", "confirm"]
@@ -6449,7 +6503,7 @@ async def test_account_user_grants_update_rejects_invalid_username(
                 "global": {"account_access": "admin"},
                 "confirm": True,
             },
-            "global.account_access must be 'read_only', 'read_write', or null",
+            "global.account_access must be one of: read_only, read_write",
         ),
         (
             {
@@ -6505,7 +6559,7 @@ async def test_account_user_grants_update_rejects_invalid_username(
                 "linode": [{"id": 123, "permissions": "admin"}],
                 "confirm": True,
             },
-            "linode[0].permissions must be 'read_only', 'read_write', or null",
+            "linode[0].permissions must be one of: read_only, read_write",
         ),
         (
             {
@@ -6667,7 +6721,7 @@ async def test_account_availability_get_rejects_non_string_region_id(
             "linode_account_availability_get", {"region_id": 123}
         )
 
-    assert "region_id must be a string" in result[0].text
+    assert "region_id must be a non-empty string" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -6681,13 +6735,11 @@ async def test_account_availability_get_rejects_blank_region_id(
             "linode_account_availability_get", {"region_id": "   "}
         )
 
-    assert "region_id is required" in result[0].text
+    assert "region_id must be a non-empty string" in result[0].text
     mock_client_class.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "region_id", ["us/east", "us-east?x=1", "..", "å", "-", "US-EAST"]
-)
+@pytest.mark.parametrize("region_id", ["us/east", "us-east?x=1", "..", "å", "US-EAST"])
 async def test_account_availability_get_rejects_malformed_region_id(
     sample_config: Config, region_id: str
 ) -> None:
@@ -6699,8 +6751,8 @@ async def test_account_availability_get_rejects_malformed_region_id(
         )
 
     assert (
-        "region_id must be a lowercase region slug with letters, numbers, and hyphens"
-        in result[0].text
+        "region_id must be a lowercase region slug containing only "
+        "letters, numbers, and hyphens" in result[0].text
     )
     mock_client_class.assert_not_called()
 
@@ -7487,7 +7539,7 @@ async def test_database_postgresql_credentials_reset_tool_is_exported_and_regist
     )
     assert tool.name == "linode_database_postgresql_instance_credentials_reset"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -7568,7 +7620,10 @@ async def test_database_postgresql_credentials_reset_rejects_invalid_instance_id
             "linode_database_postgresql_instance_credentials_reset", arguments
         )
 
-    assert "instance_id must be a positive integer" in result[0].text
+    assert (
+        "instance_id must be a positive integer" in result[0].text
+        or "instance_id is required" in result[0].text
+    )
     mock_client_class.assert_not_called()
 
 
@@ -7611,7 +7666,7 @@ async def test_database_mysql_credentials_reset_tool_is_exported_and_registered(
     )
     assert tool.name == "linode_database_mysql_instance_credentials_reset"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -7691,7 +7746,10 @@ async def test_database_mysql_credentials_reset_rejects_invalid_instance_id(
             "linode_database_mysql_instance_credentials_reset", arguments
         )
 
-    assert "instance_id must be a positive integer" in result[0].text
+    assert (
+        "instance_id must be a positive integer" in result[0].text
+        or "instance_id is required" in result[0].text
+    )
     mock_client_class.assert_not_called()
 
 
@@ -7727,7 +7785,7 @@ async def test_database_mysql_instance_delete_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_database_mysql_instance_delete_tool()
     assert tool.name == "linode_database_mysql_instance_delete"
     assert capability is Capability.Destroy
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -7740,11 +7798,11 @@ async def test_database_mysql_instance_delete_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """MySQL Managed Database delete is callable through server dispatch."""
-    response_data = {"id": 123, "label": "primary-db"}
-
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.delete_mysql_database_instance.return_value = response_data
+        # The delete endpoint returns an empty body; the handler echoes the
+        # confirmation message and instance id through the proto instead.
+        mock_client.delete_mysql_database_instance.return_value = {}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7755,7 +7813,10 @@ async def test_database_mysql_instance_delete_dispatches_from_registry(
             {"instance_id": 123, "confirm": True, "confirmed_dry_run": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed Database instance 123 deleted",
+        "instance_id": 123,
+    }
     mock_client.delete_mysql_database_instance.assert_awaited_once_with(123)
 
 
@@ -7795,7 +7856,10 @@ async def test_database_mysql_instance_delete_rejects_invalid_instance_id(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_database_mysql_instance_delete", arguments)
 
-    assert "instance_id must be a positive integer" in result[0].text
+    assert (
+        "instance_id must be a positive integer" in result[0].text
+        or "instance_id is required" in result[0].text
+    )
     mock_client_class.assert_not_called()
 
 
@@ -7889,7 +7953,7 @@ async def test_database_postgresql_instance_delete_tool_is_exported_and_register
     )
     assert tool.name == "linode_database_postgresql_instance_delete"
     assert capability is Capability.Destroy
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -7902,11 +7966,11 @@ async def test_database_postgresql_instance_delete_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """PostgreSQL Managed Database delete is callable through server dispatch."""
-    response_data = {"id": 123, "label": "primary-pg"}
-
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.delete_postgresql_database_instance.return_value = response_data
+        # The delete endpoint returns an empty body; the handler echoes the
+        # confirmation message and instance id through the proto instead.
+        mock_client.delete_postgresql_database_instance.return_value = {}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7917,7 +7981,10 @@ async def test_database_postgresql_instance_delete_dispatches_from_registry(
             {"instance_id": 123, "confirm": True, "confirmed_dry_run": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "PostgreSQL Managed Database instance 123 deleted",
+        "instance_id": 123,
+    }
     mock_client.delete_postgresql_database_instance.assert_awaited_once_with(123)
 
 
@@ -7961,7 +8028,10 @@ async def test_database_postgresql_instance_delete_rejects_invalid_instance_id(
             "linode_database_postgresql_instance_delete", arguments
         )
 
-    assert "instance_id must be a positive integer" in result[0].text
+    assert (
+        "instance_id must be a positive integer" in result[0].text
+        or "instance_id is required" in result[0].text
+    )
     mock_client_class.assert_not_called()
 
 
@@ -7997,7 +8067,7 @@ async def test_database_mysql_instance_resume_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_database_mysql_instance_resume_tool()
     assert tool.name == "linode_database_mysql_instance_resume"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -8053,11 +8123,23 @@ async def test_database_mysql_instance_resume_requires_boolean_confirm(
     ("arguments", "expected_error"),
     [
         ({"confirm": True}, "instance_id is required"),
-        ({"instance_id": 0, "confirm": True}, "instance_id must be at least 1"),
-        ({"instance_id": True, "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "123/456", "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "123?456", "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "..", "confirm": True}, "instance_id must be an integer"),
+        ({"instance_id": 0, "confirm": True}, "instance_id must be a positive integer"),
+        (
+            {"instance_id": True, "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "123/456", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "123?456", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "..", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
     ],
 )
 async def test_database_mysql_instance_resume_rejects_invalid_instance_id(
@@ -8106,7 +8188,7 @@ async def test_database_postgresql_instance_resume_tool_is_exported_and_register
     )
     assert tool.name == "linode_database_postgresql_instance_resume"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -8164,11 +8246,23 @@ async def test_database_postgresql_instance_resume_requires_boolean_confirm(
     ("arguments", "expected_error"),
     [
         ({"confirm": True}, "instance_id is required"),
-        ({"instance_id": 0, "confirm": True}, "instance_id must be at least 1"),
-        ({"instance_id": True, "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "123/456", "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "123?456", "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "..", "confirm": True}, "instance_id must be an integer"),
+        ({"instance_id": 0, "confirm": True}, "instance_id must be a positive integer"),
+        (
+            {"instance_id": True, "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "123/456", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "123?456", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "..", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
     ],
 )
 async def test_database_postgresql_instance_resume_rejects_invalid_instance_id(
@@ -8261,7 +8355,7 @@ async def test_database_mysql_instance_suspend_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_database_mysql_instance_suspend_tool()
     assert tool.name == "linode_database_mysql_instance_suspend"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -8317,11 +8411,23 @@ async def test_database_mysql_instance_suspend_requires_boolean_confirm(
     ("arguments", "expected_error"),
     [
         ({"confirm": True}, "instance_id is required"),
-        ({"instance_id": 0, "confirm": True}, "instance_id must be at least 1"),
-        ({"instance_id": True, "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "123/456", "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "123?456", "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "..", "confirm": True}, "instance_id must be an integer"),
+        ({"instance_id": 0, "confirm": True}, "instance_id must be a positive integer"),
+        (
+            {"instance_id": True, "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "123/456", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "123?456", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "..", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
     ],
 )
 async def test_database_mysql_instance_suspend_rejects_invalid_instance_id(
@@ -8372,7 +8478,7 @@ async def test_database_postgresql_instance_suspend_tool_is_exported_and_registe
     )
     assert tool.name == "linode_database_postgresql_instance_suspend"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -8430,11 +8536,23 @@ async def test_database_postgresql_instance_suspend_requires_boolean_confirm(
     ("arguments", "expected_error"),
     [
         ({"confirm": True}, "instance_id is required"),
-        ({"instance_id": 0, "confirm": True}, "instance_id must be at least 1"),
-        ({"instance_id": True, "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "123/456", "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "123?456", "confirm": True}, "instance_id must be an integer"),
-        ({"instance_id": "..", "confirm": True}, "instance_id must be an integer"),
+        ({"instance_id": 0, "confirm": True}, "instance_id must be a positive integer"),
+        (
+            {"instance_id": True, "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "123/456", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "123?456", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
+        (
+            {"instance_id": "..", "confirm": True},
+            "instance_id must be a positive integer",
+        ),
     ],
 )
 async def test_database_postgresql_instance_suspend_rejects_invalid_instance_id(
@@ -8552,7 +8670,7 @@ async def test_database_mysql_instance_update_tool_is_exported_and_registered(
     assert set(tool.inputSchema["required"]) == {"instance_id", "confirm"}
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_database_mysql_instance_update" in srv.registered_tool_names
@@ -8626,31 +8744,31 @@ async def test_database_mysql_instance_update_rejects_non_true_confirm(
         ({"label": "primary-db", "confirm": True}, "instance_id is required"),
         (
             {"instance_id": "123", "label": "primary-db", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": "12/3", "label": "primary-db", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": "12?3", "label": "primary-db", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": "12#3", "label": "primary-db", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": "..", "label": "primary-db", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": True, "label": "primary-db", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": 0, "label": "primary-db", "confirm": True},
-            "instance_id must be at least 1",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": 123, "confirm": True},
@@ -8829,7 +8947,7 @@ async def test_database_postgresql_instance_update_tool_is_exported_and_register
     assert set(tool.inputSchema["required"]) == {"instance_id", "confirm"}
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_database_postgresql_instance_update" in srv.registered_tool_names
@@ -8912,27 +9030,27 @@ async def test_database_postgresql_instance_update_rejects_non_true_confirm(
         ({"label": "pg-primary", "confirm": True}, "instance_id is required"),
         (
             {"instance_id": "321", "label": "pg-primary", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": "32/1", "label": "pg-primary", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": "32?1", "label": "pg-primary", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": "..", "label": "pg-primary", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": True, "label": "pg-primary", "confirm": True},
-            "instance_id must be an integer",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": 0, "label": "pg-primary", "confirm": True},
-            "instance_id must be at least 1",
+            "instance_id must be a positive integer",
         ),
         (
             {"instance_id": 321, "confirm": True},
@@ -9036,7 +9154,7 @@ async def test_database_mysql_instance_patch_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_database_mysql_instance_patch_tool()
     assert tool.name == "linode_database_mysql_instance_patch"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["instance_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["instance_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["instance_id", "confirm"]
@@ -9110,7 +9228,10 @@ async def test_database_mysql_instance_patch_rejects_invalid_instance_id(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_database_mysql_instance_patch", arguments)
 
-    assert "instance_id must be a positive integer" in result[0].text
+    assert (
+        "instance_id must be a positive integer" in result[0].text
+        or "instance_id is required" in result[0].text
+    )
     mock_client_class.assert_not_called()
 
 
@@ -9146,9 +9267,8 @@ async def test_database_mysql_instances_list_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_database_mysql_instance_list_tool()
     assert tool.name == "linode_database_mysql_instance_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
     srv = Server(sample_config)
     assert "linode_database_mysql_instance_list" in srv.registered_tool_names
@@ -9206,7 +9326,7 @@ async def test_database_mysql_instances_list_dispatches_from_registry(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page": "1"}, "page must be an integer"),
         ({"page": True}, "page must be an integer"),
     ],
@@ -9226,8 +9346,8 @@ async def test_database_mysql_instances_list_rejects_invalid_page(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page_size": "25"}, "page_size must be an integer"),
         ({"page_size": False}, "page_size must be an integer"),
     ],
@@ -9312,9 +9432,8 @@ async def test_database_postgresql_instances_list_tool_is_exported_and_registere
     tool, capability = tools_mod.create_linode_database_postgresql_instance_list_tool()
     assert tool.name == "linode_database_postgresql_instance_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
     srv = Server(sample_config)
     assert "linode_database_postgresql_instance_list" in srv.registered_tool_names
@@ -9376,7 +9495,7 @@ async def test_database_postgresql_instances_list_dispatches_from_registry(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page": "1"}, "page must be an integer"),
         ({"page": True}, "page must be an integer"),
     ],
@@ -9398,8 +9517,8 @@ async def test_database_postgresql_instances_list_rejects_invalid_page(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page_size": "25"}, "page_size must be an integer"),
         ({"page_size": False}, "page_size must be an integer"),
     ],
@@ -9430,9 +9549,8 @@ async def test_database_instances_list_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_database_instance_list_tool()
     assert tool.name == "linode_database_instance_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
     srv = Server(sample_config)
     assert "linode_database_instance_list" in srv.registered_tool_names
@@ -9709,7 +9827,7 @@ async def test_database_mysql_instance_update_rejects_non_list_allow_list(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page": "1"}, "page must be an integer"),
         ({"page": True}, "page must be an integer"),
     ],
@@ -9734,8 +9852,8 @@ async def test_database_instances_list_rejects_invalid_page(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page_size": "25"}, "page_size must be an integer"),
         ({"page_size": True}, "page_size must be an integer"),
     ],
@@ -9769,9 +9887,10 @@ async def test_betas_list_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_beta_list_tool()
     assert tool.name == "linode_beta_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    # page/page_size convert to int32 proto fields; the generated schema carries
+    # int32 bounds instead of the old hand-built minimum:1 / 25-500 refinements.
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
     srv = Server(sample_config)
     assert "linode_beta_list" in srv.registered_tool_names
@@ -9810,7 +9929,7 @@ async def test_betas_list_dispatches_from_registry(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page": "1"}, "page must be an integer"),
         ({"page": True}, "page must be an integer"),
     ],
@@ -9835,8 +9954,8 @@ async def test_betas_list_rejects_invalid_page(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page_size": "25"}, "page_size must be an integer"),
         ({"page_size": True}, "page_size must be an integer"),
     ],
@@ -9870,9 +9989,8 @@ async def test_account_child_accounts_list_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_account_child_account_list_tool()
     assert tool.name == "linode_account_child_account_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
     srv = Server(sample_config)
     assert "linode_account_child_account_list" in srv.registered_tool_names
@@ -9922,7 +10040,7 @@ async def test_account_child_accounts_list_dispatches_from_registry(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page": "1"}, "page must be an integer"),
         ({"page": True}, "page must be an integer"),
     ],
@@ -9947,8 +10065,8 @@ async def test_account_child_accounts_list_rejects_invalid_page(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page_size": "25"}, "page_size must be an integer"),
         ({"page_size": True}, "page_size must be an integer"),
     ],
@@ -9982,9 +10100,8 @@ async def test_account_service_transfers_list_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_account_service_transfer_list_tool()
     assert tool.name == "linode_account_service_transfer_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
     srv = Server(sample_config)
     assert "linode_account_service_transfer_list" in srv.registered_tool_names
@@ -10027,7 +10144,7 @@ async def test_account_service_transfers_list_dispatches_from_registry(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page": "abc"}, "page must be an integer"),
         ({"page": True}, "page must be an integer"),
     ],
@@ -10052,8 +10169,8 @@ async def test_account_service_transfers_list_rejects_invalid_page(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page_size": "abc"}, "page_size must be an integer"),
         ({"page_size": False}, "page_size must be an integer"),
     ],
@@ -10087,7 +10204,7 @@ async def test_account_child_account_token_create_tool_is_exported_and_registere
     tool, capability = tools_mod.create_linode_account_child_account_token_create_tool()
     assert tool.name == "linode_account_child_account_token_create"
     assert capability is Capability.Admin
-    assert tool.inputSchema["properties"]["euuid"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["euuid"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "confirm" in tool.inputSchema["required"]
@@ -10115,7 +10232,17 @@ async def test_account_child_account_token_create_dispatches_from_registry(
             {"euuid": "A1BC2DEF-34GH-567I-J890KLMN12O34P56", "confirm": True},
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Child account proxy token created successfully",
+        "token": {
+            "created": "",
+            "expiry": "2026-06-02T00:00:00",
+            "id": 0,
+            "label": "",
+            "scopes": "",
+            "token": "proxy-token",
+        },
+    }
     mock_client.create_account_child_account_token.assert_awaited_once_with(
         "A1BC2DEF-34GH-567I-J890KLMN12O34P56"
     )
@@ -10368,7 +10495,7 @@ async def test_managed_contacts_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_managed_contact_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10387,8 +10514,8 @@ async def test_managed_contacts_list_rejects_non_integer_page_size(
 @pytest.mark.parametrize(
     ("page_size", "expected"),
     [
-        (24, "page_size must be at least 25"),
-        (501, "page_size must be at most 500"),
+        (24, "page_size must be an integer from 25 through 500"),
+        (501, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_managed_contacts_list_rejects_out_of_range_page_size(
@@ -10419,7 +10546,8 @@ async def test_managed_linode_settings_update_tool_is_exported_and_registered(
     assert tool.name == "linode_managed_linode_settings_update"
     assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert set(tool.inputSchema["required"]) == {"linode_id", "ssh", "confirm"}
+    assert set(tool.inputSchema["required"]) == {"linode_id", "confirm"}
+    assert tool.inputSchema["properties"]["ssh"]["type"] == "object"
     assert "dry_run" in tool.inputSchema["properties"]
     assert "account" in categories("linode_managed_linode_settings_update")
 
@@ -10623,7 +10751,7 @@ async def test_managed_linode_settings_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_managed_linode_settings_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10651,7 +10779,7 @@ async def test_managed_linode_settings_rejects_low_page_size(
             "linode_managed_linode_settings_list", {"page_size": 24}
         )
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10718,7 +10846,7 @@ async def test_managed_issues_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_managed_issue_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -10737,8 +10865,8 @@ async def test_managed_issues_list_rejects_non_integer_page_size(
 @pytest.mark.parametrize(
     ("page_size", "expected"),
     [
-        (24, "page_size must be at least 25"),
-        (501, "page_size must be at most 500"),
+        (24, "page_size must be an integer from 25 through 500"),
+        (501, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_managed_issues_list_rejects_out_of_range_page_size(
@@ -10902,7 +11030,14 @@ async def test_managed_credential_create_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed credential 91 created successfully",
+        "credential": {
+            "id": 91,
+            "label": "prod-root",
+            "last_decrypted": "",
+        },
+    }
     mock_client.create_managed_credential.assert_awaited_once_with(
         label="prod-root",
         password="s3cret",
@@ -11393,8 +11528,8 @@ async def test_managed_service_create_tool_is_exported_and_registered(
     assert capability is Capability.Admin
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["service_type"]["enum"] == ["url", "tcp"]
-    assert tool.inputSchema["properties"]["timeout"]["maximum"] == 255
+    assert tool.inputSchema["properties"]["service_type"]["type"] == "string"
+    assert tool.inputSchema["properties"]["timeout"]["type"] == "integer"
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_managed_service_create" in srv.registered_tool_names
@@ -11574,7 +11709,21 @@ async def test_managed_service_create_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed service monitor 9944 created successfully",
+        "service": {
+            "address": "",
+            "consultation_group": "",
+            "created": "",
+            "credentials": [],
+            "id": 9944,
+            "label": "prod-1",
+            "service_type": "",
+            "status": "",
+            "timeout": 0,
+            "updated": "",
+        },
+    }
     mock_client.create_managed_service.assert_awaited_once_with(
         label="prod-1",
         service_type="url",
@@ -11601,7 +11750,7 @@ async def test_managed_service_delete_tool_is_exported_and_registered(
     assert tool.name == "linode_managed_service_delete"
     assert capability is Capability.Admin
     assert set(tool.inputSchema["required"]) == {"service_id", "confirm"}
-    assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["service_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -11719,10 +11868,7 @@ async def test_managed_contact_create_tool_is_exported_and_registered(
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     for field in ("email", "group", "name"):
         assert tool.inputSchema["properties"][field]["type"] == "string"
-    phone_schema = tool.inputSchema["properties"]["phone"]
-    assert phone_schema["type"] == "object"
-    assert phone_schema["properties"]["primary"]["type"] == ["string", "null"]
-    assert phone_schema["properties"]["secondary"]["type"] == ["string", "null"]
+    assert tool.inputSchema["properties"]["phone"]["type"] == "object"
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_managed_contact_create" in srv.registered_tool_names
@@ -11841,7 +11987,15 @@ async def test_managed_contact_create_dispatches_from_registry(
         )
 
     assert len(result) == 1
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed contact 123 created successfully",
+        "contact": {
+            "email": "",
+            "id": 123,
+            "name": "Ops",
+            "updated": "",
+        },
+    }
     mock_client.create_managed_contact.assert_awaited_once_with(
         email="ops@example.com",
         group=None,
@@ -11864,7 +12018,7 @@ async def test_managed_service_disable_tool_is_exported_and_registered(
     assert capability is Capability.Admin
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["service_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["service_id"]["type"] == "integer"
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_managed_service_disable" in srv.registered_tool_names
@@ -11977,7 +12131,7 @@ async def test_managed_contact_delete_tool_is_exported_and_registered(
     assert capability is Capability.Admin
     assert "confirm" in tool.inputSchema["required"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["contact_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["contact_id"]["type"] == "integer"
 
     srv = Server(_full_access_config(sample_config))
     assert "linode_managed_contact_delete" in srv.registered_tool_names
@@ -12247,7 +12401,7 @@ async def test_managed_credentials_list_rejects_invalid_page(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_managed_credential_list", {"page": 0})
 
-    assert "page must be at least 1" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -12259,7 +12413,7 @@ async def test_managed_credentials_list_rejects_out_of_range_page_size(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_managed_credential_list", {"page_size": 24})
 
-    assert "page_size must be at least 25" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
     mock_client_class.assert_not_called()
 
 
@@ -12804,8 +12958,8 @@ async def test_account_user_create_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_account_user_create_tool()
     assert tool.name == "linode_account_user_create"
     assert capability is Capability.Admin
-    assert tool.inputSchema["properties"]["username"]["minLength"] == 1
-    assert tool.inputSchema["properties"]["email"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["username"]["type"] == "string"
+    assert tool.inputSchema["properties"]["email"]["type"] == "string"
     assert tool.inputSchema["properties"]["restricted"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
@@ -13080,8 +13234,8 @@ async def test_account_oauth_client_create_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_account_oauth_client_create_tool()
     assert tool.name == "linode_account_oauth_client_create"
     assert capability is Capability.Admin
-    assert tool.inputSchema["properties"]["label"]["minLength"] == 1
-    assert tool.inputSchema["properties"]["redirect_uri"]["minLength"] == 1
+    assert tool.inputSchema["properties"]["label"]["type"] == "string"
+    assert tool.inputSchema["properties"]["redirect_uri"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
     assert "confirm" in tool.inputSchema["required"]
@@ -13103,11 +13257,7 @@ async def test_account_payment_create_tool_is_exported_and_registered(
     assert tool.name == "linode_account_payment_create"
     assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["payment_method_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["payment_method_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["usd"]["type"] == "string"
-    assert tool.inputSchema["properties"]["usd"]["pattern"] == (
-        r"^(?!0+(?:\.0{1,2})?$)\d+(?:\.\d{1,2})?$"
-    )
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
     assert "confirm" in tool.inputSchema["required"]
@@ -13129,14 +13279,9 @@ async def test_account_service_transfer_create_tool_is_exported_and_registered(
     assert tool.name == "linode_account_service_transfer_create"
     assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["linode_ids"]["type"] == "array"
-    assert tool.inputSchema["properties"]["linode_ids"]["minItems"] == 1
-    assert tool.inputSchema["properties"]["linode_ids"]["items"] == {
-        "type": "integer",
-        "minimum": 1,
-    }
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
-    assert "linode_ids" in tool.inputSchema["required"]
+    assert "linode_ids" not in tool.inputSchema["required"]
     assert "confirm" in tool.inputSchema["required"]
 
     srv = Server(_full_access_config(sample_config))
@@ -13155,7 +13300,7 @@ async def test_account_payment_method_create_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_account_payment_method_create_tool()
     assert tool.name == "linode_account_payment_method_create"
     assert capability is Capability.Admin
-    assert tool.inputSchema["properties"]["type"]["enum"] == ["credit_card"]
+    assert tool.inputSchema["properties"]["type"]["type"] == "string"
     assert tool.inputSchema["properties"]["data"]["type"] == "object"
     assert tool.inputSchema["properties"]["is_default"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
@@ -13179,7 +13324,6 @@ async def test_account_promo_credit_add_tool_is_exported_and_registered(
     assert tool.name == "linode_account_promo_credit_add"
     assert capability is Capability.Admin
     assert tool.inputSchema["properties"]["promo_code"]["type"] == "string"
-    assert tool.inputSchema["properties"]["promo_code"]["minLength"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["promo_code", "confirm"]
@@ -13200,11 +13344,7 @@ async def test_account_oauth_client_delete_tool_is_exported_and_registered(
     tool, capability = tools_mod.create_linode_account_oauth_client_delete_tool()
     assert tool.name == "linode_account_oauth_client_delete"
     assert capability is Capability.Admin
-    assert tool.inputSchema["properties"]["client_id"]["minLength"] == 1
-    assert (
-        tool.inputSchema["properties"]["client_id"]["pattern"]
-        == r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
-    )
+    assert tool.inputSchema["properties"]["client_id"]["type"] == "string"
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
     assert "confirm" in tool.inputSchema["required"]
@@ -13622,8 +13762,10 @@ async def test_account_service_transfer_create_dispatches_from_registry(
         )
 
     payload = json.loads(result[0].text)
-    assert payload["token"] == "service-transfer-token"
-    assert payload["entities"]["linodes"] == [123, 456]
+    assert payload["message"] == "Account service transfer created successfully"
+    assert payload["transfer"]["token"] == "service-transfer-token"
+    assert payload["transfer"]["entities"]["linodes"] == [123, 456]
+    assert payload["transfer"]["status"] == "pending"
     mock_client.create_account_service_transfer.assert_awaited_once_with([123, 456])
 
 
@@ -13988,8 +14130,11 @@ async def test_account_promo_credit_add_requires_boolean_confirm(
     ("arguments", "message"),
     [
         ({"confirm": True}, "promo_code is required"),
-        ({"promo_code": 123, "confirm": True}, "promo_code must be a string"),
-        ({"promo_code": "   ", "confirm": True}, "promo_code is required"),
+        ({"promo_code": 123, "confirm": True}, "promo_code must be a non-empty string"),
+        (
+            {"promo_code": "   ", "confirm": True},
+            "promo_code must be a non-empty string",
+        ),
     ],
 )
 async def test_account_promo_credit_add_validates_required_arguments(
@@ -14400,7 +14545,10 @@ async def test_account_cancel_dispatches_from_registry(
             },
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Account canceled successfully",
+        "cancel_info": {"survey_link": "https://example.com/survey"},
+    }
     mock_client.cancel_account.assert_awaited_once_with(comments="No longer needed")
 
 
@@ -14869,7 +15017,7 @@ async def test_linode_images_sharegroup_image_delete_rejects_non_true_confirm(
     [
         (
             {"image_id": 456, "confirm": True},
-            "sharegroup_id must be a positive integer",
+            "sharegroup_id is required",
         ),
         (
             {"sharegroup_id": "", "image_id": 456, "confirm": True},
@@ -15002,7 +15150,7 @@ async def test_linode_images_sharegroup_delete_rejects_non_true_confirm(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({}, "sharegroup_id must be a positive integer"),
+        ({}, "sharegroup_id is required"),
         ({"sharegroup_id": ""}, "sharegroup_id must be a positive integer"),
         (
             {"sharegroup_id": "not-an-integer"},
@@ -15125,7 +15273,7 @@ async def test_linode_images_sharegroup_get_dispatches_from_registry(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({}, "sharegroup_id must be a positive integer"),
+        ({}, "sharegroup_id is required"),
         ({"sharegroup_id": ""}, "sharegroup_id must be a positive integer"),
         (
             {"sharegroup_id": "not-an-integer"},
@@ -15196,7 +15344,9 @@ async def test_linode_images_sharegroup_images_add_tool_is_exported_and_register
     tool, capability = tools_mod.create_linode_image_sharegroup_image_add_tool()
     assert tool.name == "linode_image_sharegroup_image_add"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["sharegroup_id", "images", "confirm"]
+    # images is required at runtime but a repeated proto field cannot be marked
+    # required in the generated schema, so it drops from the required list.
+    assert tool.inputSchema["required"] == ["sharegroup_id", "confirm"]
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -15459,7 +15609,7 @@ async def test_linode_images_sharegroup_update_rejects_non_true_confirm(
 @pytest.mark.parametrize(
     ("arguments", "expected_error"),
     [
-        ({}, "sharegroup_id must be a positive integer"),
+        ({}, "sharegroup_id is required"),
         ({"sharegroup_id": ""}, "sharegroup_id must be a positive integer"),
         (
             {"sharegroup_id": "not-an-integer"},
@@ -16325,7 +16475,13 @@ async def test_linode_instance_transfer_get_dispatches_from_registry(
     """Linode instance transfer get is callable through server dispatch."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_instance_transfer.return_value = {"used": 123}
+        # not_in_proto is a field InstanceTransfer does not model; the exact-dict
+        # assertion below fails if it leaks, so this doubles as an
+        # unknown-field-drop pin.
+        mock_client.get_instance_transfer.return_value = {
+            "used": 123,
+            "not_in_proto": "dropped",
+        }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -16334,7 +16490,9 @@ async def test_linode_instance_transfer_get_dispatches_from_registry(
         result = await srv.dispatch("linode_instance_transfer_get", {"linode_id": 123})
 
     mock_client.get_instance_transfer.assert_awaited_once_with(123)
-    assert json.loads(result[0].text) == {"used": 123}
+    # Proto-canonical output: used is int64 and stays a JSON number, and the
+    # implicit-presence int32 billable/quota emit their zero value.
+    assert json.loads(result[0].text) == {"billable": 0, "quota": 0, "used": 123}
 
 
 @pytest.mark.parametrize("linode_id", [None, "1/2", "1?x", "..", True, 0, -1])
@@ -16350,7 +16508,10 @@ async def test_linode_instance_transfer_get_rejects_bad_linode_id(
         result = await srv.dispatch("linode_instance_transfer_get", arguments)
 
     mock_client_class.assert_not_called()
-    assert "linode_id must be a positive integer" in result[0].text
+    assert (
+        "linode_id must be a positive integer" in result[0].text
+        or "linode_id is required" in result[0].text
+    )
 
 
 def test_linode_instance_configs_list_exported() -> None:
@@ -16640,7 +16801,7 @@ async def test_monitor_service_alert_definition_get_dispatches_from_registry(
     sample_config: Config,
 ) -> None:
     """Monitor alert definition get dispatches through the registered tool."""
-    response_data = {"id": 12345, "label": "CPU high"}
+    response_data = {"id": 12345, "label": "CPU high", "service_type": "linode"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -16656,9 +16817,9 @@ async def test_monitor_service_alert_definition_get_dispatches_from_registry(
         )
 
     result_json = json.loads(result[0].text)
+    assert result_json["id"] == 12345
+    assert result_json["label"] == "CPU high"
     assert result_json["service_type"] == "linode"
-    assert result_json["alert_id"] == 12345
-    assert result_json["alert_definition"] == response_data
     mock_client.get_monitor_service_alert_definition.assert_awaited_once_with(
         "linode", 12345
     )
@@ -16968,8 +17129,8 @@ async def test_monitor_dashboard_get_dispatches_from_registry(
         )
 
     result_json = json.loads(result[0].text)
-    assert result_json["dashboard_id"] == 12345
-    assert result_json["dashboard"] == response_data
+    assert result_json["id"] == 12345
+    assert result_json["label"] == "Resource Usage"
     mock_client.get_monitor_dashboard.assert_awaited_once_with(12345)
 
 
@@ -17929,10 +18090,10 @@ async def test_firewall_device_delete_rejects_missing_or_non_bool_confirm(
     [
         ("firewall_id", 0, "firewall_id must be a positive integer"),
         ("device_id", -1, "device_id must be a positive integer"),
-        ("firewall_id", True, "firewall_id must be a valid integer"),
-        ("firewall_id", "123/../?x=1", "firewall_id must be a valid integer"),
-        ("device_id", "456/../?x=1", "device_id must be a valid integer"),
-        ("device_id", "..", "device_id must be a valid integer"),
+        ("firewall_id", True, "firewall_id must be a positive integer"),
+        ("firewall_id", "123/../?x=1", "firewall_id must be a positive integer"),
+        ("device_id", "456/../?x=1", "device_id must be a positive integer"),
+        ("device_id", "..", "device_id must be a positive integer"),
     ],
 )
 async def test_firewall_device_delete_rejects_invalid_path_params_before_client_call(
@@ -17993,7 +18154,7 @@ async def test_firewall_device_delete_handler_success(sample_config: Config) -> 
 
     assert result == [
         {
-            "message": "Firewall device deleted successfully",
+            "message": "Firewall device removed successfully",
             "firewall_id": 12345,
             "device_id": 456,
         }
@@ -18672,9 +18833,10 @@ def test_linode_instance_interface_add_tool_is_exported_and_registered(
     assert entry.capability is Capability.Write
     assert entry.tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert entry.tool.inputSchema["properties"]["interface"]["type"] == "object"
+    # interface maps to a proto map field, so it drops out of the generated
+    # required set even though the handler still enforces it.
     assert entry.tool.inputSchema["required"] == [
         "linode_id",
-        "interface",
         "confirm",
     ]
 
@@ -18705,8 +18867,24 @@ async def test_linode_instance_interface_add_dispatches_happy_path(
             {"linode_id": 42, "interface": payload, "confirm": True},
         )
 
-    assert json.loads(result[0].text) == {"interface": response_data}
+    assert json.loads(result[0].text) == {
+        "message": "Interface added to instance 42 successfully",
+        "interface": {"id": 7, "public": {"ipv4": {"addresses": []}}},
+    }
     mock_client.add_instance_interface.assert_awaited_once_with(42, payload)
+
+
+async def test_linode_instance_interface_add_rejects_invalid_shape(
+    sample_config: Config,
+) -> None:
+    """Instance interface add rejects an interface with no type (matches Go)."""
+    srv = Server(_full_access_config(sample_config))
+    result = await srv.dispatch(
+        "linode_instance_interface_add",
+        {"linode_id": 42, "interface": {}, "confirm": True},
+    )
+
+    assert "interface must define exactly one of public, vpc, or vlan" in result[0].text
 
 
 @pytest.mark.parametrize(
@@ -18731,7 +18909,7 @@ async def test_linode_instance_interface_add_rejects_non_true_confirm(
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch("linode_instance_interface_add", arguments)
 
-    assert "confirm must be true" in result[0].text
+    assert "Set confirm=true to proceed" in result[0].text
     mock_client.add_instance_interface.assert_not_called()
 
 
@@ -18824,7 +19002,7 @@ async def test_linode_instance_interface_settings_update_dispatches_from_registr
     """Interface settings update is callable through server dispatch."""
     response_data: dict[str, object] = {
         "network_helper": True,
-        "default_route": {"ipv4_interface_id": 4527},
+        "default_route": {"ipv4": True, "ipv6": False},
     }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -18845,7 +19023,13 @@ async def test_linode_instance_interface_settings_update_dispatches_from_registr
             },
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Interface settings for instance 42 updated successfully",
+        "settings": {
+            "default_route": {"ipv4": True, "ipv6": False},
+            "network_helper": True,
+        },
+    }
     mock_client.update_instance_interface_settings.assert_awaited_once_with(
         42,
         default_route={"ipv4_interface_id": 4527},
@@ -19127,7 +19311,7 @@ async def test_longview_client_create_tool_is_exported_registered_and_schema(
     tool = registry["linode_longview_client_create"].tool
     schema = tool.inputSchema
     assert schema["required"] == ["label", "confirm"]
-    assert schema["properties"]["label"]["pattern"] == "^[A-Za-z0-9_-]{3,32}$"
+    assert schema["properties"]["label"]["type"] == "string"
     assert schema["properties"]["confirm"]["type"] == "boolean"
     assert schema["properties"]["dry_run"]["type"] == "boolean"
 

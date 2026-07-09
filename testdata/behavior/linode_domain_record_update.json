@@ -1,0 +1,31 @@
+{
+  "tool": "linode_domain_record_update",
+  "description": "Domain record update requires domain_id and record_id (with confirm), then PUTs only the set fields.",
+  "cases": [
+    {
+      "name": "requires domain_id",
+      "args": { "confirm": true },
+      "expect_error": "domain_id is required"
+    },
+    {
+      "name": "requires record_id",
+      "args": { "confirm": true, "domain_id": 5 },
+      "expect_error": "record_id is required"
+    },
+    {
+      "name": "updates the record name",
+      "args": { "confirm": true, "domain_id": 5, "record_id": 7, "name": "www2" },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/domains/5/records/7",
+        "body": { "name": "www2" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"domain_id": 5, "record_id": 7, "name": "www2"},
+      "expect_error": "This updates a DNS record. Set confirm=true to proceed."
+    }
+  ]
+}

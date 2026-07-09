@@ -24,12 +24,15 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_profile_draft import (
     BuilderUnconfiguredError,
     DraftNameMissingError,
     get_draft_registry,
 )
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -111,23 +114,7 @@ def create_linode_profile_draft_add_tools_tool() -> tuple[Tool, Capability]:
                 "already on the draft are not duplicated and are not "
                 "reported in the response."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_NAME: {
-                        "type": "string",
-                        "description": "Draft name to mutate.",
-                    },
-                    _ARG_TOOLS: {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": (
-                            "List of tool names or wildcard patterns to add."
-                        ),
-                    },
-                },
-                "required": [_ARG_NAME, _ARG_TOOLS],
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileDraftAddToolsInput"),
         ),
         Capability.Meta,
     )
@@ -145,8 +132,11 @@ async def handle_linode_profile_draft_add_tools(
     registry = _require_registry()
     added = registry.add_tools(name, patterns, _resolve_catalog())
 
-    payload = json.dumps({"name": name, "added": added})
-    return [TextContent(type="text", text=payload)]
+    result = serialize_api_response(
+        {"name": name, "added": added},
+        profile_builder_pb2.ProfileDraftAddToolsResponse(),
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def create_linode_profile_draft_remove_tools_tool() -> tuple[Tool, Capability]:
@@ -160,23 +150,7 @@ def create_linode_profile_draft_remove_tools_tool() -> tuple[Tool, Capability]:
                 "Patterns match against the draft's current allowed_tools "
                 "list, not the live catalog."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_NAME: {
-                        "type": "string",
-                        "description": "Draft name to mutate.",
-                    },
-                    _ARG_TOOLS: {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": (
-                            "List of tool names or wildcard patterns to remove."
-                        ),
-                    },
-                },
-                "required": [_ARG_NAME, _ARG_TOOLS],
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileDraftRemoveToolsInput"),
         ),
         Capability.Meta,
     )
@@ -194,8 +168,11 @@ async def handle_linode_profile_draft_remove_tools(
     registry = _require_registry()
     removed = registry.remove_tools(name, patterns)
 
-    payload = json.dumps({"name": name, "removed": removed})
-    return [TextContent(type="text", text=payload)]
+    result = serialize_api_response(
+        {"name": name, "removed": removed},
+        profile_builder_pb2.ProfileDraftRemoveToolsResponse(),
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def create_linode_profile_draft_set_tool() -> tuple[Tool, Capability]:
@@ -210,32 +187,7 @@ def create_linode_profile_draft_set_tool() -> tuple[Tool, Capability]:
                 "required_token_scopes (array of Linode scope strings), "
                 "allow_yolo (boolean opt-in to the yolo execution path)."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_NAME: {
-                        "type": "string",
-                        "description": "Draft name to mutate.",
-                    },
-                    _ARG_ALLOWED_ENVIRONMENTS: {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": ("Replace allowed_environments with this list."),
-                    },
-                    _ARG_REQUIRED_TOKEN_SCOPES: {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": (
-                            "Replace required_token_scopes with this list."
-                        ),
-                    },
-                    _ARG_ALLOW_YOLO: {
-                        "type": "boolean",
-                        "description": "Set the allow_yolo flag.",
-                    },
-                },
-                "required": [_ARG_NAME],
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileDraftSetInput"),
         ),
         Capability.Meta,
     )
@@ -267,8 +219,11 @@ async def handle_linode_profile_draft_set(
         registry.set_allow_yolo(name, yolo)
         changes[_ARG_ALLOW_YOLO] = yolo
 
-    payload = json.dumps({"name": name, "changes": changes})
-    return [TextContent(type="text", text=payload)]
+    result = serialize_api_response(
+        {"name": name, "changes": changes},
+        profile_builder_pb2.ProfileDraftSetResponse(),
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 __all__ = [

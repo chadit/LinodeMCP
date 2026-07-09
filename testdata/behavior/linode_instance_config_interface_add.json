@@ -1,0 +1,31 @@
+{
+  "tool": "linode_instance_config_interface_add",
+  "description": "Pins the shared config_id positive-int rejection, the proto-enum purpose rejection (confirm set so both languages reach it), and the config-interface add POST body. linode_id rejection text still diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive config_id",
+      "args": { "linode_id": 123, "config_id": 0 },
+      "expect_error": "config_id must be a positive integer"
+    },
+    {
+      "name": "rejects an invalid purpose",
+      "args": { "linode_id": 123, "config_id": 7, "confirm": true, "purpose": "bogus" },
+      "expect_error": "purpose must be one of: public, vlan, vpc"
+    },
+    {
+      "name": "adds a public config interface",
+      "args": { "linode_id": 123, "config_id": 7, "confirm": true, "purpose": "public" },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/configs/7/interfaces",
+        "body": { "purpose": "public" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "config_id": 7, "purpose": "public"},
+      "expect_error": "This adds a network interface to the configuration profile. Set confirm=true to proceed."
+    }
+  ]
+}

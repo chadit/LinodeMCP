@@ -22,8 +22,8 @@ func TestLinodeStackScriptCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeStackScriptCreateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -117,8 +117,8 @@ func TestLinodeStackScriptUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeStackScriptUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -209,8 +209,8 @@ func TestLinodeStackScriptDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeStackScriptDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -273,8 +273,8 @@ func TestLinodeStackScriptDeleteToolDryRun(t *testing.T) {
 			t.Error("result.IsError = false, want true")
 		}
 
-		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "stackscript_id must be an integer greater than or equal to 1") {
-			t.Errorf("error text %q does not contain %q", text.Text, "stackscript_id must be an integer greater than or equal to 1")
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "stackscript_id must be a positive integer") {
+			t.Errorf("error text %q does not contain %q", text.Text, "stackscript_id must be a positive integer")
 		}
 	})
 }

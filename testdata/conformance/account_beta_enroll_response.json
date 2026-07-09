@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.AccountBetaEnrollResponse",
+  "description": "Beta enroll id-echo envelope: a confirmation message and the beta program ID (the enroll endpoint returns an empty body).",
+  "input": {
+    "message": "Account beta enrollment requested successfully",
+    "id": "cpu-100-beta"
+  },
+  "canonical": {
+    "message": "Account beta enrollment requested successfully",
+    "id": "cpu-100-beta"
+  }
+}

@@ -1,7 +1,9 @@
 package server_test
 
 import (
+	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
@@ -36,21 +38,29 @@ func TestRegionAvailabilityToolsRegisteredAsRead(t *testing.T) {
 			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 		}
 
-		if _, ok := info.InputSchema.Properties["environment"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "environment")
+		raw := string(info.RawInputSchema)
+		if !strings.Contains(raw, "environment") {
+			t.Errorf("info.RawInputSchema missing key %v", "environment")
 		}
 
-		if _, ok := info.InputSchema.Properties["confirm"]; ok {
-			t.Errorf("info.InputSchema.Properties has unexpected key %v", "confirm")
+		if strings.Contains(raw, "confirm") {
+			t.Errorf("info.RawInputSchema has unexpected key %v", "confirm")
 		}
 
 		if want.wantRegionID {
-			if _, ok := info.InputSchema.Properties["region_id"]; !ok {
-				t.Errorf("info.InputSchema.Properties missing key %v", "region_id")
+			if !strings.Contains(raw, "region_id") {
+				t.Errorf("info.RawInputSchema missing key %v", "region_id")
 			}
 
-			if !slices.Contains(info.InputSchema.Required, "region_id") {
-				t.Errorf("info.InputSchema.Required does not contain %v", "region_id")
+			var parsed struct {
+				Required []string `json:"required"`
+			}
+			if err := json.Unmarshal(info.RawInputSchema, &parsed); err != nil {
+				t.Fatalf("unmarshal RawInputSchema: %v", err)
+			}
+
+			if !slices.Contains(parsed.Required, "region_id") {
+				t.Errorf("info.RawInputSchema required does not contain %v", "region_id")
 			}
 		}
 

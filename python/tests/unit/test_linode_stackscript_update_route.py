@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from linodemcp.linode import Client, NetworkError, RetryableClient, StackScript
+from linodemcp.linode import Client, NetworkError, RetryableClient
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_stackscripts import (
@@ -17,25 +17,6 @@ from linodemcp.tools.linode_stackscripts import (
     handle_linode_stackscript_update,
 )
 from linodemcp.version import FEATURE_TOOLS_LIST
-
-
-def _stackscript() -> StackScript:
-    return StackScript(
-        id=123,
-        label="updated-script",
-        username="test-user",
-        description="updated description",
-        images=["linode/debian12"],
-        is_public=False,
-        mine=True,
-        deployments_total=1,
-        deployments_active=0,
-        created="2026-01-01T00:00:00",
-        updated="2026-01-02T00:00:00",
-        user_gravatar_id="abc123",
-        script="#!/bin/bash\necho ok",
-        user_defined_fields=[],
-    )
 
 
 def _stackscript_json() -> dict[str, Any]:
@@ -182,7 +163,7 @@ def test_create_linode_stackscript_update_tool_schema() -> None:
 async def test_handle_linode_stackscript_update_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.update_stackscript.return_value = _stackscript()
+    mock_linode_client.put_raw.return_value = _stackscript_json()
 
     result = await handle_linode_stackscript_update(
         {
@@ -203,14 +184,16 @@ async def test_handle_linode_stackscript_update_success(
         "StackScript 'updated-script' (ID: 123) updated successfully"
     )
     assert payload["stackscript"]["id"] == 123
-    mock_linode_client.update_stackscript.assert_awaited_once_with(
-        123,
-        label="updated-script",
-        images=["linode/debian12"],
-        script="#!/bin/bash\necho ok",
-        description="updated description",
-        is_public=False,
-        rev_note="route test",
+    mock_linode_client.put_raw.assert_awaited_once_with(
+        "/linode/stackscripts/123",
+        {
+            "label": "updated-script",
+            "images": ["linode/debian12"],
+            "script": "#!/bin/bash\necho ok",
+            "description": "updated description",
+            "is_public": False,
+            "rev_note": "route test",
+        },
     )
 
 
@@ -269,6 +252,7 @@ async def test_handle_linode_stackscript_update_rejects_non_true_confirm(
         {"stackscript_id": 123, "label": 123, "confirm": True},
         {"stackscript_id": 123, "script": 123, "confirm": True},
         {"stackscript_id": 123, "is_public": "false", "confirm": True},
+        {"stackscript_id": 123, "confirm": True},
     ],
 )
 async def test_handle_linode_stackscript_update_rejects_invalid_arguments(
@@ -284,7 +268,7 @@ async def test_handle_linode_stackscript_update_rejects_invalid_arguments(
 async def test_handle_linode_stackscript_update_reports_client_errors(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.update_stackscript.side_effect = NetworkError(
+    mock_linode_client.put_raw.side_effect = NetworkError(
         "UpdateStackScript", httpx.ConnectTimeout("boom")
     )
 
@@ -294,7 +278,7 @@ async def test_handle_linode_stackscript_update_reports_client_errors(
     )
 
     assert result[0].text.startswith("Failed to update StackScript: ")
-    mock_linode_client.update_stackscript.assert_awaited_once()
+    mock_linode_client.put_raw.assert_awaited_once()
 
 
 def test_linode_stackscript_update_registered() -> None:

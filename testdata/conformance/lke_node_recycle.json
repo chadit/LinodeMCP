@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.LKENodeRecycleResponse",
+  "description": "LKE node recycle id-echo: a confirmation message plus the parent cluster ID and the recycled node ID (a string). The endpoint returns an empty body.",
+  "input": {
+    "message": "Node 12345-abc in cluster 6789 recycle initiated successfully",
+    "cluster_id": 6789,
+    "node_id": "12345-abc"
+  },
+  "canonical": {
+    "message": "Node 12345-abc in cluster 6789 recycle initiated successfully",
+    "cluster_id": 6789,
+    "node_id": "12345-abc"
+  }
+}

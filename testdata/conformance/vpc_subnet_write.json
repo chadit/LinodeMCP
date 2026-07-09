@@ -1,0 +1,48 @@
+{
+  "message": "linode.mcp.v1.VpcSubnetWriteResponse",
+  "description": "VPC subnet write envelope: a confirmation message plus the full subnet element.",
+  "input": {
+    "message": "Subnet 'subnet-a' (ID: 777) created in VPC 555",
+    "subnet": {
+      "id": 777,
+      "label": "subnet-a",
+      "ipv4": "10.0.1.0/24",
+      "linodes": [
+        {
+          "id": 999,
+          "interfaces": [
+            {
+              "id": 4001,
+              "active": true,
+              "config_id": 5002
+            }
+          ]
+        }
+      ],
+      "created": "2024-01-02T03:04:05",
+      "updated": "2024-01-03T03:04:05"
+    }
+  },
+  "canonical": {
+    "message": "Subnet 'subnet-a' (ID: 777) created in VPC 555",
+    "subnet": {
+      "id": 777,
+      "label": "subnet-a",
+      "ipv4": "10.0.1.0/24",
+      "linodes": [
+        {
+          "id": 999,
+          "interfaces": [
+            {
+              "id": 4001,
+              "active": true,
+              "config_id": 5002
+            }
+          ]
+        }
+      ],
+      "created": "2024-01-02T03:04:05",
+      "updated": "2024-01-03T03:04:05"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageSSLDeleteResponse",
+  "description": "Object Storage SSL delete echo: a confirmation message plus the region and bucket label whose certificate was removed. The label is keyed \"bucket\" to match the tool's established response shape. The delete endpoint returns an empty body, so the response echoes the target.",
+  "input": {
+    "message": "SSL certificate deleted from bucket 'my-bucket' in region 'us-east-1'",
+    "region": "us-east-1",
+    "bucket": "my-bucket"
+  },
+  "canonical": {
+    "message": "SSL certificate deleted from bucket 'my-bucket' in region 'us-east-1'",
+    "region": "us-east-1",
+    "bucket": "my-bucket"
+  }
+}

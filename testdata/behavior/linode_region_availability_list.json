@@ -1,0 +1,12 @@
+{
+  "tool": "linode_region_availability_list",
+  "description": "Cross-region availability list takes no arguments; only the bare GET is pinned.",
+  "cases": [
+    {
+      "name": "lists availability across regions",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/regions/availability" }
+    }
+  ]
+}

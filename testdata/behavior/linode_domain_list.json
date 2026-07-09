@@ -1,0 +1,12 @@
+{
+  "tool": "linode_domain_list",
+  "description": "Domain list GETs the /domains collection. Label/type filters are applied client-side and do not change the request path.",
+  "cases": [
+    {
+      "name": "lists domains",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/domains" }
+    }
+  ]
+}

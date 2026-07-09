@@ -73,9 +73,10 @@ func TestLinodeMonitorDashboardGetToolSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyID:      monitorDashboardToolID,
-			keyLabel:   monitorDashboardToolLabel,
-			keyWidgets: []map[string]any{{keyLabel: monitorDashboardToolWidget}},
+			keyID:         monitorDashboardToolID,
+			keyLabel:      monitorDashboardToolLabel,
+			keyWidgets:    []map[string]any{{keyLabel: monitorDashboardToolWidget}},
+			keyNotInProto: valNotInProto,
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -111,6 +112,10 @@ func TestLinodeMonitorDashboardGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, monitorDashboardToolWidget) {
 		t.Errorf("textContent.Text does not contain %v", monitorDashboardToolWidget)
+	}
+
+	if strings.Contains(textContent.Text, "not_in_proto") {
+		t.Errorf("textContent.Text unexpectedly contains dropped unknown field: %v", textContent.Text)
 	}
 }
 

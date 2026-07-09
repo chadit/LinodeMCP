@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_child_account_token_create",
+  "description": "Pins the child-account token POST path. Missing-euuid, confirm-gate, and euuid-validation text all diverge, so only the success capture is shared (see report).",
+  "cases": [
+    {
+      "name": "creates a child account proxy token",
+      "args": { "euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/account/child-accounts/A1B2C3D4-E5F6-7890-ABCDEF1234567890/token" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"euuid": "A1B2C3D4-E5F6-7890-ABCDEF1234567890"},
+      "expect_error": "This creates a proxy user token for a child account. Set confirm=true to proceed."
+    }
+  ]
+}

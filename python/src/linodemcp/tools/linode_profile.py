@@ -9,33 +9,24 @@ from linodemcp.genpb.linode.mcp.v1 import account_pb2, common_pb2, profile_pb2
 from linodemcp.linode import RetryableClient, build_profile_security_questions_body
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    ENV_PARAM_SCHEMA,
-    PARAM_DRY_RUN,
     DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
+    required_int_id,
 )
 from linodemcp.tools.proto_response import (
+    raw_str,
     serialize_api_response,
     serialize_list_response,
+    serialize_struct_response,
 )
 from linodemcp.tools.toolschemas import schema
 
 PROFILE_TOKEN_LABEL_MAX_LENGTH = 100
-PROFILE_TOKEN_SECRET_FIELDS = frozenset({"token", "access_token", "secret"})
-
-
-def _redact_profile_token(token: dict[str, Any]) -> dict[str, Any]:
-    """Drop secret token fields from profile token tool output."""
-    return {
-        key: value
-        for key, value in token.items()
-        if key.lower() not in PROFILE_TOKEN_SECRET_FIELDS
-    }
 
 
 def create_linode_profile_get_tool() -> tuple[Tool, Capability]:
@@ -70,12 +61,7 @@ def create_linode_profile_preferences_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_preferences_get",
         description="Gets OAuth client-specific Linode profile preferences.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ProfilePreferencesGetInput"),
     ), Capability.Read
 
 
@@ -85,7 +71,7 @@ async def handle_linode_profile_preferences_get(
     """Handle linode_profile_preferences_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_profile_preferences()
+        return serialize_struct_response(await client.get_profile_preferences())
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode profile preferences", _call
@@ -97,25 +83,7 @@ def create_linode_profile_preferences_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_preferences_update",
         description="Updates OAuth client-specific Linode profile preferences.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "preferences": {
-                    "type": "object",
-                    "description": (
-                        "Preference key/value object to save for this OAuth client"
-                    ),
-                    "additionalProperties": True,
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this preferences update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["preferences", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfilePreferencesUpdateInput"),
     ), Capability.Write
 
 
@@ -124,8 +92,9 @@ async def handle_linode_profile_preferences_update(
 ) -> list[TextContent]:
     """Handle linode_profile_preferences_update tool request."""
     if is_dry_run(arguments):
-        if not isinstance(arguments.get("preferences"), dict):
-            return error_response("preferences must be an object")
+        preferences_arg = arguments.get("preferences")
+        if not isinstance(preferences_arg, dict) or not preferences_arg:
+            return error_response("preferences must be a non-empty object")
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_profile_preferences()
@@ -149,8 +118,8 @@ async def handle_linode_profile_preferences_update(
         )
 
     preferences_arg = arguments.get("preferences")
-    if not isinstance(preferences_arg, dict):
-        return error_response("preferences must be an object")
+    if not isinstance(preferences_arg, dict) or not preferences_arg:
+        return error_response("preferences must be a non-empty object")
     preferences = cast("dict[str, Any]", preferences_arg)
     if arguments.get("confirm") is not True:
         return error_response(
@@ -158,7 +127,14 @@ async def handle_linode_profile_preferences_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_profile_preferences(preferences)
+        updated = await client.update_profile_preferences(preferences)
+        return serialize_api_response(
+            {
+                "message": "Profile preferences updated successfully",
+                "preferences": updated,
+            },
+            profile_pb2.ProfilePreferencesUpdateResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "update Linode profile preferences", _call
@@ -172,18 +148,7 @@ def create_linode_profile_tfa_enable_tool() -> tuple[Tool, Capability]:
         description=(
             "Generates a two-factor authentication secret for the Linode profile."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to generate a profile TFA secret.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileTfaEnableInput"),
     ), Capability.Admin
 
 
@@ -206,8 +171,8 @@ async def handle_linode_profile_tfa_enable(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This generates a profile two-factor authentication secret. "
-            "Set confirm=true to proceed."
+            "This generates a two-factor authentication secret. Set confirm=true to "
+            "proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -236,20 +201,7 @@ def create_linode_profile_tfa_disable_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_tfa_disable",
         description="Disables two-factor authentication for the Linode profile.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to disable profile two-factor authentication."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileTfaDisableInput"),
     ), Capability.Admin
 
 
@@ -270,8 +222,8 @@ async def handle_linode_profile_tfa_disable(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This disables profile two-factor authentication. "
-            "Set confirm=true to proceed."
+            "This disables two-factor authentication for the profile. Set confirm=true "
+            "to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -296,23 +248,7 @@ def create_linode_profile_tfa_enable_confirm_tool() -> tuple[Tool, Capability]:
         description=(
             "Confirms enabling two-factor authentication for the Linode profile."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "tfa_code": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Two-factor authentication code to confirm setup",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this profile update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["tfa_code", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileTfaEnableConfirmInput"),
     ), Capability.Admin
 
 
@@ -340,12 +276,22 @@ async def handle_linode_profile_tfa_enable_confirm(
         return error_response("tfa_code must be a non-empty string")
     if arguments.get("confirm") is not True:
         return error_response(
-            "This confirms profile two-factor authentication. "
-            "Set confirm=true to proceed."
+            "This enables two-factor authentication for the profile. Set confirm=true "
+            "to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.confirm_profile_tfa_enable(tfa_code=tfa_code.strip())
+        confirmed = await client.confirm_profile_tfa_enable(tfa_code=tfa_code.strip())
+        # scratch is the one-time backup code the API returns on confirmation; it
+        # is returned to the user by design (account recovery), not redacted.
+        return serialize_api_response(
+            {
+                "message": ("Profile two-factor authentication enabled successfully"),
+                "scratch": raw_str(confirmed, "scratch"),
+                "expiry": raw_str(confirmed, "expiry"),
+            },
+            profile_pb2.ProfileTfaEnableConfirmResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "confirm profile two-factor authentication", _call
@@ -357,32 +303,7 @@ def create_linode_profile_phone_number_send_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_phone_number_send",
         description="Sends a verification code to a Linode profile phone number.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "iso_code": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": (
-                        "ISO 3166-1 alpha-2 country code for the phone number"
-                    ),
-                },
-                "phone_number": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Phone number to receive the verification code",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to send a verification code to this phone number."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["iso_code", "phone_number", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfilePhoneNumberSendInput"),
     ), Capability.Admin
 
 
@@ -390,9 +311,9 @@ def _profile_required_id(
     arguments: dict[str, Any], name: str
 ) -> int | list[TextContent]:
     """Parse a required positive-integer id, or return an error response."""
-    value = arguments.get(name)
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        return error_response(f"{name} must be a positive integer")
+    value, error = required_int_id(arguments, name)
+    if value is None:
+        return error_response(error)
     return value
 
 
@@ -441,13 +362,16 @@ async def handle_linode_profile_phone_number_send(
     iso_code, phone_number = parsed
     if arguments.get("confirm") is not True:
         return error_response(
-            "This sends a profile phone number verification code. "
-            "Set confirm=true to proceed."
+            "This sends a phone number verification code. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.send_profile_phone_number_verification(
-            iso_code, phone_number
+        # The send endpoint returns no useful resource body, so the response is
+        # a bare confirmation message.
+        await client.send_profile_phone_number_verification(iso_code, phone_number)
+        return serialize_api_response(
+            {"message": "Profile phone number verification code sent successfully"},
+            common_pb2.MessageResponse(),
         )
 
     return await execute_tool(
@@ -460,23 +384,7 @@ def create_linode_profile_phone_number_verify_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_phone_number_verify",
         description="Verifies the Linode profile phone number using an SMS code.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "otp_code": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "One-time code received by SMS",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to verify this profile phone number.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["otp_code", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfilePhoneNumberVerifyInput"),
     ), Capability.Admin
 
 
@@ -506,7 +414,13 @@ async def handle_linode_profile_phone_number_verify(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.verify_profile_phone_number(otp_code.strip())
+        # The verify endpoint returns no useful resource body, so the response
+        # is a bare confirmation message.
+        await client.verify_profile_phone_number(otp_code.strip())
+        return serialize_api_response(
+            {"message": "Profile phone number verified successfully"},
+            common_pb2.MessageResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "verify Linode profile phone number", _call
@@ -518,18 +432,7 @@ def create_linode_profile_phone_number_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_phone_number_delete",
         description="Deletes the verified Linode profile phone number.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to delete this profile phone number.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfilePhoneNumberDeleteInput"),
     ), Capability.Admin
 
 
@@ -548,11 +451,17 @@ async def handle_linode_profile_phone_number_delete(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This deletes a profile phone number. Set confirm=true to proceed."
+            "This deletes the profile phone number. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.delete_profile_phone_number()
+        # The delete endpoint returns no useful resource body, so the response
+        # is a bare confirmation message.
+        await client.delete_profile_phone_number()
+        return serialize_api_response(
+            {"message": "Profile phone number deleted successfully"},
+            common_pb2.MessageResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "delete Linode profile phone number", _call
@@ -564,12 +473,7 @@ def create_linode_profile_security_question_list_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_profile_security_question_list",
         description="Lists available Linode profile security questions.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.SecurityQuestionListInput"),
     ), Capability.Read
 
 
@@ -599,41 +503,7 @@ def create_linode_profile_security_question_answer_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_profile_security_question_answer",
         description="Answers profile security questions for the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "security_questions": {
-                    "type": "array",
-                    "minItems": 3,
-                    "maxItems": 3,
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "question_id": {
-                                "type": "integer",
-                                "minimum": 1,
-                                "description": "ID of the security question",
-                            },
-                            "response": {
-                                "type": "string",
-                                "minLength": 3,
-                                "maxLength": 17,
-                                "description": "Answer for the security question",
-                            },
-                        },
-                        "required": ["question_id", "response"],
-                    },
-                    "description": "Security question answers to save",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to answer profile security questions.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["security_questions", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.SecurityQuestionAnswerInput"),
     ), Capability.Admin
 
 
@@ -657,7 +527,8 @@ async def handle_linode_profile_security_question_answer(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This answers profile security questions. Set confirm=true to proceed."
+            "This submits profile security question answers. Set confirm=true to "
+            "proceed."
         )
 
     security_questions = arguments.get("security_questions")
@@ -669,7 +540,14 @@ async def handle_linode_profile_security_question_answer(
     body_questions = body["security_questions"]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.answer_profile_security_questions(body_questions)
+        # The API echoes the answered questions, but the answers are sensitive
+        # and the Go reference returns only a confirmation message, so the
+        # response body is discarded in favor of a bare message.
+        await client.answer_profile_security_questions(body_questions)
+        return serialize_api_response(
+            {"message": "Profile security questions answered successfully"},
+            common_pb2.MessageResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "answer profile security questions", _call
@@ -681,35 +559,7 @@ def create_linode_profile_token_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_create",
         description="Creates a Linode personal access token.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "expiry": {
-                    "type": "string",
-                    "description": (
-                        "Expiration timestamp for the token. Omit to keep valid "
-                        "until manually revoked."
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": PROFILE_TOKEN_LABEL_MAX_LENGTH,
-                    "description": "Display label for the personal access token",
-                },
-                "scopes": {
-                    "type": "string",
-                    "description": "Space-separated access scopes for the token",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this token creation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileTokenCreateInput"),
     ), Capability.Admin
 
 
@@ -756,7 +606,7 @@ async def handle_linode_profile_token_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates a profile token. Set confirm=true to proceed."
+            "This creates a personal access token. Set confirm=true to proceed."
         )
 
     field_error = _token_create_error(arguments)
@@ -794,23 +644,7 @@ def create_linode_profile_token_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_list",
         description="Lists Linode personal access tokens.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileTokenListInput"),
     ), Capability.Read
 
 
@@ -819,8 +653,8 @@ async def handle_linode_profile_token_list(
 ) -> list[TextContent]:
     """Handle linode_profile_token_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -843,18 +677,7 @@ def create_linode_profile_token_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_get",
         description="Retrieves a Linode personal access token by token ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "token_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "ID of the personal access token to retrieve",
-                },
-            },
-            "required": ["token_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileTokenGetInput"),
     ), Capability.Read
 
 
@@ -862,13 +685,15 @@ async def handle_linode_profile_token_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_profile_token_get tool request."""
-    token_id = arguments.get("token_id")
-    if isinstance(token_id, bool) or not isinstance(token_id, int) or token_id < 1:
-        return error_response("token_id must be a positive integer")
+    token_id, error = required_int_id(arguments, "token_id")
+    if token_id is None:
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        token = await client.get_profile_token(token_id)
-        return _redact_profile_token(token)
+        return serialize_api_response(
+            await client.get_profile_token(token_id),
+            profile_pb2.PersonalAccessToken(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Linode profile token", _call)
 
@@ -878,23 +703,7 @@ def create_linode_profile_login_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_login_list",
         description="Lists recent successful Linode profile logins.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileLoginListInput"),
     ), Capability.Read
 
 
@@ -903,8 +712,8 @@ async def handle_linode_profile_login_list(
 ) -> list[TextContent]:
     """Handle linode_profile_login_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -924,23 +733,7 @@ def create_linode_profile_device_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_device_list",
         description="Lists trusted devices for the Linode profile.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileDeviceListInput"),
     ), Capability.Read
 
 
@@ -949,8 +742,8 @@ async def handle_linode_profile_device_list(
 ) -> list[TextContent]:
     """Handle linode_profile_device_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -997,29 +790,7 @@ def create_linode_profile_token_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_update",
         description="Updates a Linode personal access token label by token ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "token_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "ID of the personal access token to update",
-                },
-                "label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": PROFILE_TOKEN_LABEL_MAX_LENGTH,
-                    "description": "Display label for the personal access token",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this token update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["token_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileTokenUpdateInput"),
     ), Capability.Admin
 
 
@@ -1067,7 +838,7 @@ async def handle_linode_profile_token_update(
         return label_error
     if arguments.get("confirm") is not True:
         return error_response(
-            "This updates a profile token. Set confirm=true to proceed."
+            "This updates a personal access token. Set confirm=true to proceed."
         )
     label_value = cast("str", label)
 
@@ -1081,43 +852,12 @@ async def handle_linode_profile_token_update(
     return await execute_tool(cfg, arguments, "update Linode profile token", _call)
 
 
-def _optional_int_argument(
-    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
-) -> int | None:
-    value = arguments.get(name)
-    if value is None:
-        return None
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise TypeError(f"{name} must be an integer")
-    if value < minimum:
-        raise ValueError(f"{name} must be at least {minimum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{name} must be at most {maximum}")
-    return value
-
-
 def create_linode_profile_app_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_profile_app_list tool."""
     return Tool(
         name="linode_profile_app_list",
         description="Lists OAuth app authorizations from the Linode profile.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileAppListInput"),
     ), Capability.Read
 
 
@@ -1126,8 +866,8 @@ async def handle_linode_profile_app_list(
 ) -> list[TextContent]:
     """Handle linode_profile_app_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1178,23 +918,7 @@ def create_linode_profile_app_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_app_delete",
         description="Revokes OAuth app access from the Linode profile by app ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "app_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "ID of the OAuth app authorization to revoke",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["app_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileAppDeleteInput"),
     ), Capability.Admin
 
 
@@ -1224,7 +948,7 @@ async def handle_linode_profile_app_delete(
         return error_response("app_id must be a positive integer")
     if arguments.get("confirm") is not True:
         return error_response(
-            "This revokes profile OAuth app access. Set confirm=true to proceed."
+            "This revokes OAuth app access. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1247,18 +971,7 @@ def create_linode_profile_device_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_device_get",
         description="Retrieves a trusted device from the Linode profile by device ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "device_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "ID of the trusted device to retrieve",
-                },
-            },
-            "required": ["device_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileDeviceGetInput"),
     ), Capability.Read
 
 
@@ -1271,7 +984,10 @@ async def handle_linode_profile_device_get(
         return error_response("device_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_profile_device(device_id)
+        return serialize_api_response(
+            await client.get_profile_device(device_id),
+            profile_pb2.TrustedDevice(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode profile trusted device", _call
@@ -1283,23 +999,7 @@ def create_linode_profile_device_revoke_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_device_revoke",
         description="Revokes a trusted device from the Linode profile by device ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "device_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "ID of the trusted device to revoke",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["device_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileDeviceRevokeInput"),
     ), Capability.Admin
 
 
@@ -1329,7 +1029,7 @@ async def handle_linode_profile_device_revoke(
         return error_response("device_id must be a positive integer")
     if arguments.get("confirm") is not True:
         return error_response(
-            "This revokes a trusted profile device. Set confirm=true to proceed."
+            "This revokes a trusted device. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1350,23 +1050,7 @@ def create_linode_profile_token_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_delete",
         description="Revokes a Linode personal access token by token ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "token_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "ID of the personal access token to revoke",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["token_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ProfileTokenDeleteInput"),
     ), Capability.Admin
 
 
@@ -1391,16 +1075,22 @@ async def handle_linode_profile_token_delete(
             _fetch,
         )
 
-    token_id = arguments.get("token_id")
-    if isinstance(token_id, bool) or not isinstance(token_id, int) or token_id < 1:
-        return error_response("token_id must be a positive integer")
+    token_id, error = required_int_id(arguments, "token_id")
+    if token_id is None:
+        return error_response(error)
     if arguments.get("confirm") is not True:
         return error_response(
-            "This revokes a profile token. Set confirm=true to proceed."
+            "This revokes a personal access token. Set confirm=true to proceed."
         )
 
-    async def _call(client: RetryableClient) -> dict[str, str]:
+    async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_profile_token(token_id)
-        return {"message": f"Profile token {token_id} revoked successfully"}
+        return serialize_api_response(
+            {
+                "message": f"Profile token {token_id} revoked successfully",
+                "token_id": token_id,
+            },
+            profile_pb2.ProfileTokenIDResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "revoke Linode profile token", _call)

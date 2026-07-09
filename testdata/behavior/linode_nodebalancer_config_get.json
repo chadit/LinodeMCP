@@ -1,0 +1,12 @@
+{
+  "tool": "linode_nodebalancer_config_get",
+  "description": "Pins the config GET path. Missing/invalid id error text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "gets a config by ids",
+      "args": { "nodebalancer_id": 456, "config_id": 7 },
+      "api_response": { "id": 7, "nodebalancer_id": 456, "port": 80, "protocol": "http" },
+      "expect_request": { "method": "GET", "path": "/nodebalancers/456/configs/7" }
+    }
+  ]
+}

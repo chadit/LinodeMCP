@@ -29,3 +29,14 @@ message AccountAvailabilityGetInput {
   // The region slug to inspect (required).
   string region_id = 2;
 }
+
+// AccountAvailabilityListInput is the input contract for
+// linode_account_availability_list.
+message AccountAvailabilityListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}

@@ -16,6 +16,7 @@ from linodemcp.tools.linode_instances import (
     create_linode_instance_stats_month_get_tool,
     handle_linode_instance_stats_month_get,
 )
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -117,15 +118,17 @@ async def test_retryable_get_instance_stats_by_year_month_delegates() -> None:
 
 
 def test_linode_instance_stats_month_get_tool_schema() -> None:
-    """Monthly stats tool schema requires positive numeric path params."""
+    """Monthly stats tool advertises the proto-generated input schema.
+
+    The handler enforces the year/month ranges; the generated schema carries
+    only the proto int32 bounds.
+    """
     tool, capability = create_linode_instance_stats_month_get_tool()
 
     assert tool.name == "linode_instance_stats_month_get"
     assert capability is Capability.Read
+    assert tool.inputSchema == schema("linode.mcp.v1.InstanceStatsMonthGetInput")
     assert tool.inputSchema["required"] == ["linode_id", "year", "month"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["year"]["minimum"] == 1970
-    assert tool.inputSchema["properties"]["month"]["maximum"] == 12
 
 
 async def test_handle_linode_instance_stats_month_get_success(
@@ -134,9 +137,11 @@ async def test_handle_linode_instance_stats_month_get_success(
     """Handler returns monthly stats from the retryable client."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
+        # The real API nests the graphs under a top-level "data" object; the
+        # proto now models that wrapper.
         mock_client.get_instance_stats_by_year_month.return_value = {
-            "cpu": [[1719792000, 1.25]],
-            "io": {},
+            "title": "linode123 stats",
+            "data": {"cpu": [[1719792000, 1.25]], "io": {}},
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -147,7 +152,8 @@ async def test_handle_linode_instance_stats_month_get_success(
         )
 
     payload: dict[str, Any] = json.loads(result[0].text)
-    assert payload["cpu"] == [[1719792000, 1.25]]
+    assert payload["title"] == "linode123 stats"
+    assert payload["data"]["cpu"][0][1] == 1.25
     mock_client.get_instance_stats_by_year_month.assert_awaited_once_with(123, 2024, 7)
 
 

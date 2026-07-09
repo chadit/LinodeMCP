@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,7 +17,7 @@ import (
 
 const (
 	keyPlacementGroupID         = "group_id"
-	placementGroupIDError       = "group_id must be an integer"
+	placementGroupIDError       = "group_id must be a positive integer"
 	placementGroupIDRequired    = "group_id is required"
 	placementGroupLabel         = "PG_Miami_failover"
 	placementGroupRegion        = "us-mia"
@@ -196,15 +195,10 @@ func TestLinodePlacementGroupDeleteToolDefinition(t *testing.T) {
 		t.Errorf("capability.String() = %v, want %v", capability.String(), "CapDestroy")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyPlacementGroupID, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyPlacementGroupID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
 	}
 

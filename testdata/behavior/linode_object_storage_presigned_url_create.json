@@ -1,0 +1,41 @@
+{
+  "tool": "linode_object_storage_presigned_url_create",
+  "description": "Read-capability but POSTs an object-url request. Pins region/label/name-required rejections, the invalid-method rejection, and the success POST body. method is validated against the PresignedURLMethod proto enum (GET/PUT) but is case-insensitive: input is uppercased before the check and the canonical uppercase verb is sent.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": {},
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires name",
+      "args": { "region": "us-east", "label": "my-bucket", "method": "GET" },
+      "expect_error": "name (object key) is required"
+    },
+    {
+      "name": "rejects an invalid method",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "DELETE" },
+      "expect_error": "method must be one of: GET, PUT"
+    },
+    {
+      "name": "generates a presigned url",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "GET" },
+      "api_response": { "url": "https://example.test/signed" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": { "method": "GET", "name": "my-object.txt", "expires_in": 3600 }
+      }
+    },
+    {
+      "name": "accepts a lowercase method and sends the uppercased verb",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "get" },
+      "api_response": { "url": "https://example.test/signed" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": { "method": "GET", "name": "my-object.txt", "expires_in": 3600 }
+      }
+    }
+  ]
+}

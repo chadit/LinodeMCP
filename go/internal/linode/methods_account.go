@@ -613,6 +613,29 @@ func (c *Client) httpGetProfileDevice(ctx context.Context, deviceID int) (*Profi
 	return &device, nil
 }
 
+// httpGetProfileDeviceProto retrieves one trusted device from the profile and
+// decodes it into the TrustedDevice proto element for the proto-backed read path.
+func (c *Client) httpGetProfileDeviceProto(ctx context.Context, deviceID int) (*linodev1.TrustedDevice, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointProfileDevices + "/" + url.PathEscape(strconv.Itoa(deviceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetProfileDevice", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	device := &linodev1.TrustedDevice{}
+	if err := c.handleProtoResponse(resp, device); err != nil {
+		return nil, err
+	}
+
+	return device, nil
+}
+
 // httpDeleteProfileDevice revokes one trusted device from the profile.
 func (c *Client) httpDeleteProfileDevice(ctx context.Context, deviceID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -658,8 +681,12 @@ func (c *Client) httpGetProfileGrants(ctx context.Context) (*Grants, error) {
 	return &grants, nil
 }
 
-// httpGetProfileToken retrieves one personal access token.
-func (c *Client) httpGetProfileToken(ctx context.Context, tokenID int) (*ProfileToken, error) {
+// httpGetProfileTokenProto retrieves one personal access token's metadata and
+// decodes it into the PersonalAccessToken proto element for the proto-backed
+// read path. The element models metadata only (id, label, scopes, created,
+// expiry) and no secret field, so any token value the API returns is dropped by
+// the DiscardUnknown decode.
+func (c *Client) httpGetProfileTokenProto(ctx context.Context, tokenID int) (*linodev1.PersonalAccessToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -672,12 +699,12 @@ func (c *Client) httpGetProfileToken(ctx context.Context, tokenID int) (*Profile
 
 	defer drainClose(resp)
 
-	var token ProfileToken
-	if err := c.handleResponse(resp, &token); err != nil {
+	token := &linodev1.PersonalAccessToken{}
+	if err := c.handleProtoResponse(resp, token); err != nil {
 		return nil, err
 	}
 
-	return &token, nil
+	return token, nil
 }
 
 // httpAnswerProfileSecurityQuestions answers the authenticated user's security questions via POST /v4/profile/security-questions.
@@ -909,6 +936,27 @@ func (c *Client) httpUpdateAccountSettings(ctx context.Context, req *UpdateAccou
 	return &settings, nil
 }
 
+// httpUpdateAccountSettingsProto updates account settings and decodes the
+// response into the proto AccountSettings element.
+func (c *Client) httpUpdateAccountSettingsProto(ctx context.Context, req *UpdateAccountSettingsRequest) (*linodev1.AccountSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointAccountSettings, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateAccountSettings", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	settings := &linodev1.AccountSettings{}
+	if err := c.handleProtoResponse(resp, settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
+}
+
 // httpEnableAccountManaged enables Linode Managed for the account via POST /v4/account/settings/managed-enable.
 func (c *Client) httpEnableAccountManaged(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1027,8 +1075,9 @@ func (c *Client) httpUpdateManagedCredentialUsernamePassword(ctx context.Context
 	return &credential, nil
 }
 
-// httpGetManagedSSHKey retrieves the Managed SSH public key assigned to the account.
-func (c *Client) httpGetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, error) {
+// httpGetManagedSSHKeyProto retrieves the Managed SSH public key assigned to the
+// account and decodes it into the ManagedSSHKey proto element.
+func (c *Client) httpGetManagedSSHKeyProto(ctx context.Context) (*linodev1.ManagedSSHKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -1039,12 +1088,12 @@ func (c *Client) httpGetManagedSSHKey(ctx context.Context) (*ManagedSSHKey, erro
 
 	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
-	var sshKey ManagedSSHKey
-	if err := c.handleResponse(resp, &sshKey); err != nil {
+	sshKey := &linodev1.ManagedSSHKey{}
+	if err := c.handleProtoResponse(resp, sshKey); err != nil {
 		return nil, err
 	}
 
-	return &sshKey, nil
+	return sshKey, nil
 }
 
 // httpCreateManagedCredential creates a stored Managed credential.
@@ -1065,6 +1114,28 @@ func (c *Client) httpCreateManagedCredential(ctx context.Context, request *Creat
 	}
 
 	return &credential, nil
+}
+
+// httpCreateManagedCredentialProto creates a stored Managed credential and decodes
+// the response into the proto element so the write tool emits the same field set
+// as the credential GET/LIST path (the secret is never echoed).
+func (c *Client) httpCreateManagedCredentialProto(ctx context.Context, request *CreateManagedCredentialRequest) (*linodev1.ManagedCredential, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedCredentials, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateManagedCredential", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	credential := &linodev1.ManagedCredential{}
+	if err := c.handleProtoResponse(resp, credential); err != nil {
+		return nil, err
+	}
+
+	return credential, nil
 }
 
 // httpGetManagedCredential retrieves one stored managed credential.
@@ -1641,6 +1712,30 @@ func (c *Client) httpGetAccountPaymentMethod(ctx context.Context, paymentMethodI
 	return &method, nil
 }
 
+// httpGetAccountPaymentMethodProto retrieves one account payment method and
+// decodes it into the proto AccountPaymentMethod element for the proto-backed
+// read path. The polymorphic data object rides through the element's Struct field.
+func (c *Client) httpGetAccountPaymentMethodProto(ctx context.Context, paymentMethodID string) (*linodev1.AccountPaymentMethod, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountPaymentMethods + "/" + url.PathEscape(paymentMethodID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountPaymentMethod", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	method := &linodev1.AccountPaymentMethod{}
+	if err := c.handleProtoResponse(resp, method); err != nil {
+		return nil, err
+	}
+
+	return method, nil
+}
+
 // httpCreateAccountPaymentMethod adds a payment method to the account.
 func (c *Client) httpCreateAccountPaymentMethod(ctx context.Context, req *CreateAccountPaymentMethodRequest) (*AccountPaymentMethod, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1785,6 +1880,29 @@ func (c *Client) httpUpdateOAuthClient(ctx context.Context, clientID string, req
 	}
 
 	return &client, nil
+}
+
+// httpUpdateOAuthClientProto updates one OAuth client and decodes the response
+// into the proto OAuthClient element (the metadata element, no secret).
+func (c *Client) httpUpdateOAuthClientProto(ctx context.Context, clientID string, req *UpdateOAuthClientRequest) (*linodev1.OAuthClient, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateOAuthClient", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	client := &linodev1.OAuthClient{}
+	if err := c.handleProtoResponse(resp, client); err != nil {
+		return nil, err
+	}
+
+	return client, nil
 }
 
 // httpUpdateOAuthClientThumbnail updates one OAuth client's thumbnail by ID.
@@ -2026,6 +2144,31 @@ func (c *Client) httpGetAccountUserGrants(ctx context.Context, username string) 
 	}
 
 	return &grants, nil
+}
+
+// httpGetAccountUserGrantsProto retrieves one account user's grants and decodes
+// them into the proto AccountUserGrants element for the proto-backed read path.
+// The API omits grant sections the user has none of; protojson leaves those
+// repeated fields empty so the canonical output normalizes them to [].
+func (c *Client) httpGetAccountUserGrantsProto(ctx context.Context, username string) (*linodev1.AccountUserGrants, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountUsers + "/" + url.PathEscape(username) + "/grants"
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountUserGrants", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	grants := &linodev1.AccountUserGrants{}
+	if err := c.handleProtoResponse(resp, grants); err != nil {
+		return nil, err
+	}
+
+	return grants, nil
 }
 
 // httpUpdateAccountUserGrants updates one account user's grants by username.
@@ -2647,6 +2790,27 @@ func (c *Client) httpCreateAccountServiceTransfer(ctx context.Context, req *Crea
 	return &transfer, nil
 }
 
+// httpCreateAccountServiceTransferProto creates an account service transfer and
+// decodes the response into the proto AccountEntityTransfer element.
+func (c *Client) httpCreateAccountServiceTransferProto(ctx context.Context, req *CreateAccountServiceTransferRequest) (*linodev1.AccountEntityTransfer, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountServiceTransfers, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateAccountServiceTransfer", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	transfer := &linodev1.AccountEntityTransfer{}
+	if err := c.handleProtoResponse(resp, transfer); err != nil {
+		return nil, err
+	}
+
+	return transfer, nil
+}
+
 // httpGetAccountEvent retrieves one account event by ID.
 func (c *Client) httpGetAccountEvent(ctx context.Context, eventID int) (*AccountEvent, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -2730,6 +2894,31 @@ func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (
 	return &childAccount, nil
 }
 
+// httpGetAccountChildAccountProto retrieves one child-level account by EUUID and
+// decodes it into the proto ChildAccount element for the proto-backed read path.
+// credit_card is a message field, so a null credit_card from the API is omitted
+// rather than rendered as empty strings.
+func (c *Client) httpGetAccountChildAccountProto(ctx context.Context, euuid string) (*linodev1.ChildAccount, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountChildAccounts + "/" + url.PathEscape(euuid)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetAccountChildAccount", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	childAccount := &linodev1.ChildAccount{}
+	if err := c.handleProtoResponse(resp, childAccount); err != nil {
+		return nil, err
+	}
+
+	return childAccount, nil
+}
+
 // httpCreateAccountChildAccountToken creates a proxy user token for one child-level account.
 func (c *Client) httpCreateAccountChildAccountToken(ctx context.Context, euuid string) (*ProxyUserToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -2750,6 +2939,30 @@ func (c *Client) httpCreateAccountChildAccountToken(ctx context.Context, euuid s
 	}
 
 	return &token, nil
+}
+
+// httpCreateAccountChildAccountTokenProto creates a proxy user token for one
+// child-level account and decodes the response into the proto ProxyUserToken
+// element. The token it carries is returned to the user by design.
+func (c *Client) httpCreateAccountChildAccountTokenProto(ctx context.Context, euuid string) (*linodev1.ProxyUserToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointAccountChildAccounts + "/" + url.PathEscape(euuid) + "/token"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateAccountChildAccountToken", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	token := &linodev1.ProxyUserToken{}
+	if err := c.handleProtoResponse(resp, token); err != nil {
+		return nil, err
+	}
+
+	return token, nil
 }
 
 // httpCreateOAuthClient creates an account OAuth client.
@@ -2919,6 +3132,27 @@ func (c *Client) httpCancelAccount(ctx context.Context, req *CancelAccountReques
 	}
 
 	return &cancelResponse, nil
+}
+
+// httpCancelAccountProto cancels the account and decodes the response into the
+// proto AccountCancelResponse element.
+func (c *Client) httpCancelAccountProto(ctx context.Context, req *CancelAccountRequest) (*linodev1.AccountCancelResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountCancel, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CancelAccount", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+
+	cancelResponse := &linodev1.AccountCancelResponse{}
+	if err := c.handleProtoResponse(resp, cancelResponse); err != nil {
+		return nil, err
+	}
+
+	return cancelResponse, nil
 }
 
 // httpUpdateAccount updates account billing/contact fields via PUT /v4/account.

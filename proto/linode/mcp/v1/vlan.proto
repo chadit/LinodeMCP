@@ -12,6 +12,15 @@ message VLAN {
   repeated int32 linodes = 3;
 }
 
+// VLANDeleteResponse is the id-echo envelope linode_vlan_delete returns: a
+// confirmation message plus the region and label identifying the deleted VLAN.
+// The delete endpoint returns an empty body, so the echo confirms the target.
+message VLANDeleteResponse {
+  string message = 1;
+  string region_id = 2;
+  string label = 3;
+}
+
 // VLANListResponse is the linode_vlan_list envelope: count and the full proto
 // VLAN elements. The tool paginates and has no filter param, so filter is
 // omitted.
@@ -19,4 +28,36 @@ message VLANListResponse {
   int32 count = 1;
   optional string filter = 2;
   repeated VLAN vlans = 3;
+}
+
+// VLANListInput is the input contract for linode_vlan_list.
+message VLANListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// VLANDeleteInput is the input contract for linode_vlan_delete.
+message VLANDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The region ID for the VLAN, for example us-east.
+  string region_id = 2;
+  // The VLAN label.
+  string label = 3;
+  // Must be set to true to confirm deleting the VLAN. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 6;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 7;
 }

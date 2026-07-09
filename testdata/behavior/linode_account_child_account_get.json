@@ -1,0 +1,22 @@
+{
+  "tool": "linode_account_child_account_get",
+  "description": "Missing-euuid, path-unsafe euuid rejections, and the child-account GET path. Both languages now share Go's non-empty-string and path-safety texts.",
+  "cases": [
+    {
+      "name": "requires euuid",
+      "args": {},
+      "expect_error": "euuid is required"
+    },
+    {
+      "name": "rejects euuid with path separators",
+      "args": { "euuid": "child/account" },
+      "expect_error": "euuid must not contain path separators, query separators, or traversal segments"
+    },
+    {
+      "name": "gets a child account by euuid",
+      "args": { "euuid": "A1B2C3D4" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/child-accounts/A1B2C3D4" }
+    }
+  ]
+}

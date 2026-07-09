@@ -35,9 +35,10 @@ func TestLinodeImageShareGroupCreateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyLabel, keyImages, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 

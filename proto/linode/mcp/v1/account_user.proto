@@ -2,7 +2,25 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// GrantPermission is the grant level applied to an account user's global
+// account_access and to each per-resource grant. Values are the exact lowercase
+// Linode API strings authored from the live OpenAPI spec. See the enum-wrapper
+// convention in nodebalancer_config.proto. The grants update tool carries the
+// global object and per-resource grant arrays as free-form map/Struct values
+// (so no input field is this enum's type); the handlers validate each parsed
+// grant level against this generated value set. Empty (Go) / null (Python) is
+// also allowed and means "no access", so the handlers treat absence as valid.
+message GrantPermission {
+  enum Value {
+    unspecified = 0;
+    read_only = 1;
+    read_write = 2;
+  }
+}
 
 // AccountUserLastLogin is the most recent login for an account user.
 message AccountUserLastLogin {
@@ -112,4 +130,124 @@ message AccountUserGrants {
 message AccountUserGrantsWriteResponse {
   string message = 1;
   AccountUserGrants grants = 2;
+}
+
+// AccountUserListInput is the input contract for linode_account_user_list.
+message AccountUserListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// AccountUserGrantsGetInput is the input contract for
+// linode_account_user_grants_get.
+message AccountUserGrantsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Account username whose grants should be retrieved (required).
+  string username = 2;
+}
+
+// AccountUserCreateInput is the input contract for linode_account_user_create.
+// username, email, and confirm are required.
+message AccountUserCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Username for the new account user (required).
+  string username = 2;
+  // Email address for the new account user (required).
+  string email = 3;
+  // Whether the new account user is restricted (optional, defaults to false).
+  optional bool restricted = 4;
+  // Must be true to confirm account user creation. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// AccountUserUpdateInput is the input contract for linode_account_user_update.
+// username (the path identifier) and confirm are required; new_username is the
+// body rename field. ssh_keys is a plain string array (repeated fields are
+// never required in the generated schema, matching the optional hand-built
+// param).
+message AccountUserUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Account username to update (required).
+  string username = 2;
+  // New email address for the account user (optional).
+  optional string email = 3;
+  // Whether the account user is restricted (optional).
+  optional bool restricted = 4;
+  // SSH public keys for the account user (optional).
+  repeated string ssh_keys = 5;
+  // New username for the account user (optional).
+  optional string new_username = 6;
+  // Must be true to confirm account user update. Ignored when dry_run=true.
+  bool confirm = 7;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 8;
+}
+
+// AccountUserDeleteInput is the input contract for linode_account_user_delete.
+// Not a two-stage destroy: the ground-truth dump shows no mode/plan_id params.
+message AccountUserDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Account username to delete (required).
+  string username = 2;
+  // Must be true to confirm account user deletion. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// AccountUserGrantsUpdateInput is the input contract for
+// linode_account_user_grants_update. username and confirm are the only required
+// fields. global is a free-form grants object (map -> JSON-schema type
+// "object"); the 12 resource fields are free-form grant arrays (repeated Struct
+// -> JSON-schema type "array"). Neither a map nor a repeated field can land in
+// the generated required array, which matches the hand-built schema where only
+// username and confirm were required.
+message AccountUserGrantsUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Account username whose grants should be updated (required).
+  string username = 2;
+  // Optional global grants object.
+  map<string, google.protobuf.Value> global = 3;
+  // Optional Linode resource grants.
+  repeated google.protobuf.Struct linode = 4;
+  // Optional domain resource grants.
+  repeated google.protobuf.Struct domain = 5;
+  // Optional NodeBalancer resource grants.
+  repeated google.protobuf.Struct nodebalancer = 6;
+  // Optional image resource grants.
+  repeated google.protobuf.Struct image = 7;
+  // Optional Longview resource grants.
+  repeated google.protobuf.Struct longview = 8;
+  // Optional StackScript resource grants.
+  repeated google.protobuf.Struct stackscript = 9;
+  // Optional volume resource grants.
+  repeated google.protobuf.Struct volume = 10;
+  // Optional database resource grants.
+  repeated google.protobuf.Struct database = 11;
+  // Optional firewall resource grants.
+  repeated google.protobuf.Struct firewall = 12;
+  // Optional VPC resource grants.
+  repeated google.protobuf.Struct vpc = 13;
+  // Optional LKE cluster resource grants.
+  repeated google.protobuf.Struct lkecluster = 14;
+  // Must be true to confirm account user grants update. Ignored when
+  // dry_run=true.
+  bool confirm = 15;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 16;
 }

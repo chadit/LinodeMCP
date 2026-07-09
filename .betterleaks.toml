@@ -1,0 +1,19 @@
+# betterleaks (gitleaks-compatible) secret-scanner config.
+# Auto-discovered by `betterleaks dir .` (root Makefile `betterleaks` target,
+# the pre-push make-lint hook, and the CI security job).
+#
+# useDefault keeps the full default gitleaks ruleset for the whole repo, so a
+# real secret committed anywhere still fails the scan. The single allowlist
+# exempts the proto conformance fixtures, which INTENTIONALLY carry synthetic
+# placeholder secret values (access keys, tokens, TFA secrets, install api_keys)
+# because the tools they cover return secret material by design and the fixtures
+# must prove Go and Python serialize it identically. Keep everything under
+# testdata/conformance/ synthetic: a real secret dropped there would be masked.
+# This mirrors the existing `// betterleaks:allow test fixture` inline exemptions
+# used for Go test fixtures (JSON has no comment syntax, hence a path allowlist).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Proto conformance fixtures carry synthetic placeholder secrets by design"
+paths = ['''testdata/conformance/.*\.json$''']

@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.StackScriptDeleteResponse",
+  "description": "StackScript delete id-echo: a confirmation message plus the deleted StackScript's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "StackScript 246 deleted successfully",
+    "stackscript_id": 246
+  },
+  "canonical": {
+    "message": "StackScript 246 deleted successfully",
+    "stackscript_id": 246
+  }
+}

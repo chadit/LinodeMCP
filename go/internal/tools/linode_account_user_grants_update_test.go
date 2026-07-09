@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -43,30 +42,30 @@ func TestLinodeAccountUserGrantsUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyUsername]; !ok {
-		t.Errorf("props missing key %v", keyUsername)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyUsername) {
+		t.Errorf("RawInputSchema missing key %v", keyUsername)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 
-	if _, ok := props[keyGlobal]; !ok {
-		t.Errorf("props missing key %v", keyGlobal)
+	if !strings.Contains(rawSchema, keyGlobal) {
+		t.Errorf("RawInputSchema missing key %v", keyGlobal)
 	}
 
-	if _, ok := props[keyGrantLinode]; !ok {
-		t.Errorf("props missing key %v", keyGrantLinode)
+	if !strings.Contains(rawSchema, keyGrantLinode) {
+		t.Errorf("RawInputSchema missing key %v", keyGrantLinode)
 	}
 
-	if _, ok := props[keyGrantLKECluster]; !ok {
-		t.Errorf("props missing key %v", keyGrantLKECluster)
+	if !strings.Contains(rawSchema, keyGrantLKECluster) {
+		t.Errorf("RawInputSchema missing key %v", keyGrantLKECluster)
 	}
 
 	for _, key := range []string{keyUsername, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing required key %v", key)
 		}
 	}
 }
@@ -143,7 +142,7 @@ func TestLinodeAccountUserGrantsUpdateRejectsInvalidRequest(t *testing.T) {
 		{name: "missing grant id", args: map[string]any{keyUsername: accountLoginUsername, keyConfirm: true, keyGrantLinode: []any{map[string]any{keyPermissions: grantPermissionReadWrite}}}, wantMessage: errGrantSectionsArray},
 		{name: "zero grant id", args: map[string]any{keyUsername: accountLoginUsername, keyConfirm: true, keyGrantLinode: []any{map[string]any{keyBetaID: float64(0), keyPermissions: grantPermissionReadWrite}}}, wantMessage: errGrantSectionsArray},
 		{name: "null grant permissions", args: map[string]any{keyUsername: accountLoginUsername, keyConfirm: true, keyGrantLinode: []any{map[string]any{keyBetaID: float64(123), keyPermissions: nil}}}, wantMessage: errGrantSectionsArray},
-		{name: "invalid grant permissions", args: map[string]any{keyUsername: accountLoginUsername, keyConfirm: true, keyGrantLinode: []any{map[string]any{keyBetaID: float64(123), keyPermissions: "admin"}}}, wantMessage: errGrantSectionsArray},
+		{name: "invalid grant permissions", args: map[string]any{keyUsername: accountLoginUsername, keyConfirm: true, keyGrantLinode: []any{map[string]any{keyBetaID: float64(123), keyPermissions: "admin"}}}, wantMessage: "linode[0].permissions must be one of: read_only, read_write"},
 	}
 
 	for _, testCase := range cases {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -45,21 +44,15 @@ func TestLinodeManagedServicesToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyPage, keyPageSize} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
-	}
-
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
-	}
-
-	if slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required should not contain %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 

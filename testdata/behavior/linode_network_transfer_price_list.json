@@ -1,0 +1,12 @@
+{
+  "tool": "linode_network_transfer_price_list",
+  "description": "Network transfer price list takes no arguments; only the bare GET is pinned.",
+  "cases": [
+    {
+      "name": "lists network transfer prices",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/network-transfer/prices" }
+    }
+  ]
+}

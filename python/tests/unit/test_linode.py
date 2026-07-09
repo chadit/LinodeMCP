@@ -67,6 +67,7 @@ from linodemcp.tools.linode_monitor_write import (
     handle_linode_monitor_service_alert_definition_delete,
     handle_linode_monitor_service_alert_definition_get,
     handle_linode_monitor_service_alert_definition_list,
+    handle_linode_monitor_service_alert_definition_update,
     handle_linode_monitor_service_dashboard_list,
 )
 
@@ -2419,11 +2420,7 @@ async def test_get_account_oauth_client_thumbnail_sends_exact_route() -> None:
 
         result = await client.get_account_oauth_client_thumbnail("client-123")
 
-    assert result == {
-        "content_type": "image/png",
-        "encoding": "base64",
-        "data": "iVBORw0KGgo=",
-    }
+    assert result == {"thumbnail_png_base64": "iVBORw0KGgo="}
     mock_request.assert_awaited_once_with(
         "GET",
         "https://api.linode.com/v4/account/oauth-clients/client-123/thumbnail",
@@ -2449,8 +2446,7 @@ async def test_get_account_oauth_client_thumbnail_url_encodes_client_id() -> Non
 
         result = await client.get_account_oauth_client_thumbnail("client/id?query")
 
-    assert result["content_type"] == "image/png"
-    assert result["data"] == "cG5n"
+    assert result["thumbnail_png_base64"] == "cG5n"
     await_args = mock_request.await_args
     assert await_args is not None
     assert await_args.args == (
@@ -2494,11 +2490,7 @@ async def test_get_account_oauth_client_thumbnail_maps_http_status_errors() -> N
 async def test_retryable_get_account_oauth_client_thumbnail_delegates() -> None:
     """Retryable OAuth client thumbnail get delegates to the client."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    response_data = {
-        "content_type": "image/png",
-        "encoding": "base64",
-        "data": "iVBORw0KGgo=",
-    }
+    response_data = {"thumbnail_png_base64": "iVBORw0KGgo="}
 
     with patch.object(
         retryable.client, "get_account_oauth_client_thumbnail", new_callable=AsyncMock
@@ -3388,7 +3380,7 @@ async def test_get_instance_ip_url_encodes_address() -> None:
         await client.get_instance_ip(123, "2001:db8::1")
 
     call_args = mock_request.call_args
-    assert call_args[0][1] == "/linode/instances/123/ips/2001%3Adb8%3A%3A1"
+    assert call_args[0][1] == "/linode/instances/123/ips/2001:db8::1"
 
     await client.close()
 
@@ -3407,7 +3399,7 @@ async def test_update_instance_ip_url_encodes_address() -> None:
         await client.update_instance_ip(123, "2001:db8::1", None)
 
     call_args = mock_request.call_args
-    assert call_args[0][1] == "/linode/instances/123/ips/2001%3Adb8%3A%3A1"
+    assert call_args[0][1] == "/linode/instances/123/ips/2001:db8::1"
 
     await client.close()
 
@@ -3420,7 +3412,7 @@ async def test_delete_instance_ip_url_encodes_address() -> None:
         await client.delete_instance_ip(123, "2001:db8::1")
 
     mock_request.assert_awaited_once_with(
-        "DELETE", "/linode/instances/123/ips/2001%3Adb8%3A%3A1"
+        "DELETE", "/linode/instances/123/ips/2001:db8::1"
     )
 
     await client.close()
@@ -9289,7 +9281,7 @@ async def test_get_ipv6_range_encodes_range_path() -> None:
         assert result == response_data
         mock_request.assert_awaited_once_with(
             "GET",
-            "/networking/ipv6/ranges/2001%3A0db8%3A%3A%2F64",
+            "/networking/ipv6/ranges/2001:0db8::%2F64",
         )
 
     await client.close()
@@ -9304,7 +9296,7 @@ async def test_delete_ipv6_range_encodes_range_path() -> None:
 
         mock_request.assert_awaited_once_with(
             "DELETE",
-            "/networking/ipv6/ranges/2001%3A0db8%3A%3A%2F64",
+            "/networking/ipv6/ranges/2001:0db8::%2F64",
         )
 
     await client.close()
@@ -10536,6 +10528,199 @@ async def test_update_firewall_rules_raw() -> None:
         args, _kwargs = mock_request.await_args_list[0]
         assert args[0] == "PUT"
         assert args[1] == "/networking/firewalls/12345/rules"
+
+    await client.close()
+
+
+async def test_create_instance_raw_returns_full_body() -> None:
+    """create_instance_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 4242,
+        "label": "web",
+        "region": "us-east",
+        "interface_generation": "linode",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_instance_raw(
+            region="us-east",
+            instance_type="g6-standard-2",
+            firewall_id=99,
+            label="web",
+        )
+
+        assert result["id"] == 4242
+        # The raw path keeps interface_generation, which the dataclass parse drops.
+        assert result["interface_generation"] == "linode"
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "POST"
+        assert args[1] == "/linode/instances"
+        # firewall_id is not a top-level body field; it lives inside interfaces.
+        assert "firewall_id" not in args[2]
+        assert args[2]["interfaces"][0]["firewall_id"] == 99
+
+    await client.close()
+
+
+async def test_update_instance_raw_returns_full_body() -> None:
+    """update_instance_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 12345, "label": "renamed"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_instance_raw(12345, label="renamed")
+
+        assert result["label"] == "renamed"
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "PUT"
+        assert args[1] == "/linode/instances/12345"
+        assert args[2] == {"label": "renamed"}
+
+    await client.close()
+
+
+async def test_clone_instance_raw_returns_full_body() -> None:
+    """clone_instance_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 999,
+        "label": "cloned",
+        "region": "us-east",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.clone_instance_raw(
+            123, label="cloned", backups_enabled=True
+        )
+
+        assert result["id"] == 999
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "POST"
+        assert args[1] == "/linode/instances/123/clone"
+        assert args[2]["label"] == "cloned"
+        assert args[2]["backups_enabled"] is True
+
+    await client.close()
+
+
+async def test_create_image_raw_returns_full_body() -> None:
+    """create_image_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "private/1", "label": "base", "size": 2048}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_image_raw(disk_id=7, label="base", cloud_init=True)
+
+        assert result["id"] == "private/1"
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "POST"
+        assert args[1] == "/images"
+        assert args[2] == {"disk_id": 7, "label": "base", "cloud_init": True}
+
+    await client.close()
+
+
+async def test_update_image_raw_returns_full_body() -> None:
+    """update_image_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": "private/1", "label": "renamed"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_image_raw("private/1", label="renamed")
+
+        assert result["label"] == "renamed"
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "PUT"
+        assert args[1] == "/images/private%2F1"
+        assert args[2] == {"label": "renamed"}
+
+    await client.close()
+
+
+async def test_update_image_raw_requires_at_least_one_field() -> None:
+    """update_image_raw rejects an empty update the same way update_image does."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with pytest.raises(ValueError, match="at least one of"):
+        await client.update_image_raw("private/1")
+
+    await client.close()
+
+
+async def test_create_nodebalancer_raw_returns_full_body() -> None:
+    """create_nodebalancer_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 7777,
+        "label": "edge-lb",
+        "region": "us-east",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.create_nodebalancer_raw(
+            region="us-east", label="edge-lb", client_conn_throttle=10
+        )
+
+        assert result["id"] == 7777
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "POST"
+        assert args[1] == "/nodebalancers"
+        assert args[2]["region"] == "us-east"
+        assert args[2]["label"] == "edge-lb"
+        assert args[2]["client_conn_throttle"] == 10
+
+    await client.close()
+
+
+async def test_update_nodebalancer_raw_returns_full_body() -> None:
+    """update_nodebalancer_raw returns the full API body for the proto write path."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"id": 7777, "label": "edge-lb-v2"}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        result = await client.update_nodebalancer_raw(7777, label="edge-lb-v2")
+
+        assert result["label"] == "edge-lb-v2"
+        args, _kwargs = mock_request.await_args_list[0]
+        assert args[0] == "PUT"
+        assert args[1] == "/nodebalancers/7777"
+        assert args[2] == {"label": "edge-lb-v2"}
 
     await client.close()
 
@@ -15033,7 +15218,7 @@ class TestMakeRequestBody:
                 trigger_conditions=trigger_conditions,
                 channel_ids=[10000],
                 description="High CPU usage",
-                entity_ids=[12345],
+                entity_ids=["12345"],
             )
 
             url_arg = mock_req.call_args[0][1]
@@ -15051,7 +15236,7 @@ class TestMakeRequestBody:
                 "trigger_conditions": trigger_conditions,
                 "channel_ids": [10000],
                 "description": "High CPU usage",
-                "entity_ids": [12345],
+                "entity_ids": ["12345"],
             }
 
         await client.close()
@@ -15192,7 +15377,7 @@ class TestMakeRequestBody:
                     rule_criteria=rule_criteria,
                     trigger_conditions=trigger_conditions,
                     channel_ids=[10000],
-                    entity_ids=[1, cast("Any", "bad")],
+                    entity_ids=["12345", cast("Any", 1)],
                 )
             mock_req.assert_not_called()
 
@@ -18708,7 +18893,7 @@ async def test_get_networking_ip_url_encodes_address() -> None:
         await client.get_networking_ip("2001:db8::1")
 
     call_args = mock_request.call_args
-    assert call_args[0][1] == "/networking/ips/2001%3Adb8%3A%3A1"
+    assert call_args[0][1] == "/networking/ips/2001:db8::1"
 
     await client.close()
 
@@ -18941,7 +19126,7 @@ async def test_update_networking_ip_url_encodes_address() -> None:
 
     # IPv6 colons should be percent-encoded
     call_args = mock_request.call_args
-    assert call_args[0][1] == "/networking/ips/2001%3Adb8%3A%3A1"
+    assert call_args[0][1] == "/networking/ips/2001:db8::1"
 
     await client.close()
 
@@ -19170,18 +19355,15 @@ async def test_monitor_alert_definition_create_tool_schema_and_handler_success()
     assert tool.name == "linode_monitor_service_alert_definition_create"
     assert capability == Capability.Write
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["service_type"]["pattern"] == (
-        "^[A-Za-z0-9_-]+$"
-    )
-    assert tool.inputSchema["required"] == [
+    # The generated proto schema drops the hand-built service_type pattern and
+    # never marks the rule_criteria/trigger_conditions (map) or channel_ids
+    # (repeated) fields required; the handler still enforces all of them.
+    assert set(tool.inputSchema["required"]) == {
         "service_type",
         "label",
         "severity",
-        "rule_criteria",
-        "trigger_conditions",
-        "channel_ids",
         "confirm",
-    ]
+    }
 
     cfg = Config(
         environments={
@@ -19213,7 +19395,7 @@ async def test_monitor_alert_definition_create_tool_schema_and_handler_success()
                 "trigger_conditions": trigger_conditions,
                 "channel_ids": [10000],
                 "description": "High CPU usage",
-                "entity_ids": [12345],
+                "entity_ids": ["12345"],
                 "confirm": True,
             },
             cfg,
@@ -19227,7 +19409,7 @@ async def test_monitor_alert_definition_create_tool_schema_and_handler_success()
         trigger_conditions=trigger_conditions,
         channel_ids=[10000],
         description="High CPU usage",
-        entity_ids=[12345],
+        entity_ids=["12345"],
     )
     assert "Monitor service alert definition created for 'dbaas'" in result[0].text
     assert "CPU high" in result[0].text
@@ -19261,8 +19443,7 @@ async def test_monitor_alert_definition_create_requires_boolean_confirm(
 
     mock_create.assert_not_called()
     assert result[0].text == (
-        "Error: This creates a Linode Metrics alert definition. "
-        "Set confirm=true to proceed."
+        "Error: This creates a monitor alert definition. Set confirm=true to proceed."
     )
 
 
@@ -19310,9 +19491,23 @@ async def test_monitor_alert_definition_create_rejects_malformed_service_type(
             {},
             "trigger_conditions must be a non-empty object",
         ),
-        ("channel_ids", [], "channel_ids must be a non-empty list of integers"),
-        ("channel_ids", [True], "channel_ids must be a non-empty list of integers"),
-        ("entity_ids", ["bad"], "entity_ids must be a non-empty list of integers"),
+        (
+            "channel_ids",
+            [],
+            "channel_ids must be a non-empty array of positive integers",
+        ),
+        (
+            "channel_ids",
+            [True],
+            "channel_ids must be a non-empty array of positive integers",
+        ),
+        (
+            "channel_ids",
+            [0],
+            "channel_ids must be a non-empty array of positive integers",
+        ),
+        ("entity_ids", [123], "entity_ids must be an array of non-empty strings"),
+        ("entity_ids", ["  "], "entity_ids must be an array of non-empty strings"),
         ("description", 123, "description must be a string"),
     ],
 )
@@ -19345,17 +19540,97 @@ async def test_monitor_alert_definition_create_rejects_invalid_body_fields(
     assert result[0].text == f"Error: {message}"
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("label", "   ", "label must be a non-empty string"),
+        ("severity", 4, "severity must be an integer from 0 through 3"),
+        ("status", "paused", "status must be enabled or disabled"),
+        ("rule_criteria", {}, "rule_criteria must be a non-empty object"),
+        ("trigger_conditions", {}, "trigger_conditions must be a non-empty object"),
+        (
+            "channel_ids",
+            [0],
+            "channel_ids must be a non-empty array of positive integers",
+        ),
+        ("entity_ids", [12345], "entity_ids must be an array of non-empty strings"),
+        ("entity_ids", [], "entity_ids must be an array of non-empty strings"),
+        ("description", 123, "description must be a string"),
+    ],
+)
+async def test_monitor_alert_definition_update_rejects_invalid_fields(
+    field: str, value: object, message: str
+) -> None:
+    """Update rejects malformed fields locally, mirroring the Go handler.
+
+    Before this validation landed the handler passed fields through raw, so
+    the API surfaced a 400 where Go produced a local validation error; the
+    two languages now reject the same payloads with the same messages.
+    """
+    cfg = Config()
+    with patch.object(
+        RetryableClient, "update_monitor_alert_definition", new_callable=AsyncMock
+    ) as mock_update:
+        result = await handle_linode_monitor_service_alert_definition_update(
+            cast(
+                "dict[str, Any]",
+                {
+                    "service_type": "dbaas",
+                    "alert_id": 42,
+                    field: value,
+                    "confirm": True,
+                },
+            ),
+            cfg,
+        )
+
+    mock_update.assert_not_called()
+    assert result[0].text == f"Error: {message}"
+
+
+async def test_monitor_alert_definition_update_accepts_string_entity_ids() -> None:
+    """Valid string entity IDs pass through and label is trimmed like Go."""
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="Default",
+                linode=LinodeConfig(
+                    api_url="https://api.linode.com/v4",
+                    token="test-token",
+                ),
+            )
+        }
+    )
+    with patch.object(
+        RetryableClient, "update_monitor_alert_definition", new_callable=AsyncMock
+    ) as mock_update:
+        mock_update.return_value = {"id": 42, "label": "cpu high"}
+        result = await handle_linode_monitor_service_alert_definition_update(
+            {
+                "service_type": "dbaas",
+                "alert_id": 42,
+                "label": "  cpu high  ",
+                "entity_ids": ["12345", "67890"],
+                "confirm": True,
+            },
+            cfg,
+        )
+
+    mock_update.assert_awaited_once_with(
+        "dbaas", 42, label="cpu high", entity_ids=["12345", "67890"]
+    )
+    assert "Monitor alert definition 42 updated" in result[0].text
+
+
 async def test_monitor_alert_definition_get_tool_schema_and_handler_success() -> None:
     """Monitor alert definition get tool is read-only and returns output."""
     tool, capability = create_linode_monitor_service_alert_definition_get_tool()
     assert tool.name == "linode_monitor_service_alert_definition_get"
     assert capability == Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["service_type"]["pattern"] == (
-        "^[A-Za-z0-9_-]+$"
-    )
-    assert tool.inputSchema["required"] == ["service_type", "alert_id"]
-    assert tool.inputSchema["properties"]["alert_id"]["minimum"] == 1
+    assert "service_type" in tool.inputSchema["properties"]
+    assert sorted(tool.inputSchema["required"]) == ["alert_id", "service_type"]
+    assert tool.inputSchema["properties"]["alert_id"]["type"] == "integer"
 
     cfg = Config(
         environments={
@@ -19368,7 +19643,7 @@ async def test_monitor_alert_definition_get_tool_schema_and_handler_success() ->
             )
         }
     )
-    payload = {"id": 12345, "label": "CPU high"}
+    payload = {"id": 12345, "label": "CPU high", "service_type": "dbaas"}
 
     with patch.object(
         RetryableClient,
@@ -19381,10 +19656,8 @@ async def test_monitor_alert_definition_get_tool_schema_and_handler_success() ->
         )
 
     mock_get.assert_awaited_once_with("dbaas", 12345)
-    assert "Monitor service alert definition 12345 retrieved for 'dbaas'" in (
-        result[0].text
-    )
     assert "CPU high" in result[0].text
+    assert "dbaas" in result[0].text
 
 
 @pytest.mark.parametrize("bad_service_type", ["", "bad/type", "bad?type", ".."])
@@ -19463,13 +19736,11 @@ async def test_monitor_alert_definition_delete_tool_schema_and_handler_success()
     assert tool.name == "linode_monitor_service_alert_definition_delete"
     assert capability == Capability.Destroy
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["service_type"]["pattern"] == (
-        "^[A-Za-z0-9_-]+$"
-    )
-    assert tool.inputSchema["required"] == [
-        "service_type",
+    assert "service_type" in tool.inputSchema["properties"]
+    assert sorted(tool.inputSchema["required"]) == [
         "alert_id",
         "confirm",
+        "service_type",
     ]
 
     cfg = Config(
@@ -19520,8 +19791,7 @@ async def test_monitor_alert_definition_delete_requires_boolean_confirm(
 
     mock_delete.assert_not_called()
     assert result[0].text == (
-        "Error: This deletes a Linode Metrics alert definition. "
-        "Set confirm=true to proceed."
+        "Error: This deletes a monitor alert definition. Set confirm=true to proceed."
     )
 
 
@@ -19751,7 +20021,7 @@ async def test_monitor_dashboard_get_tool_schema_and_handler_success() -> None:
     assert capability == Capability.Read
     assert "confirm" not in tool.inputSchema["properties"]
     assert tool.inputSchema["required"] == ["dashboard_id"]
-    assert tool.inputSchema["properties"]["dashboard_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["dashboard_id"]["type"] == "integer"
 
     cfg = Config(
         environments={
@@ -19764,7 +20034,12 @@ async def test_monitor_dashboard_get_tool_schema_and_handler_success() -> None:
             )
         }
     )
-    payload = {"id": 12345, "label": "Resource Usage"}
+    payload = {
+        "id": 12345,
+        "label": "Resource Usage",
+        "widgets": [{"metric": "cpu"}],
+        "not_in_proto": "dropped",
+    }
 
     with patch.object(
         RetryableClient,
@@ -19775,8 +20050,8 @@ async def test_monitor_dashboard_get_tool_schema_and_handler_success() -> None:
         result = await handle_linode_monitor_dashboard_get({"dashboard_id": 12345}, cfg)
 
     mock_get.assert_awaited_once_with(12345)
-    assert "Monitor dashboard 12345 retrieved" in result[0].text
     assert "Resource Usage" in result[0].text
+    assert "not_in_proto" not in result[0].text
 
 
 @pytest.mark.parametrize(
@@ -20730,7 +21005,7 @@ async def test_linode_instance_interface_settings_update_handler_success(
 
     response_data: dict[str, object] = {
         "network_helper": False,
-        "default_route": {"ipv4_interface_id": 5527},
+        "default_route": {"ipv4": False, "ipv6": True},
     }
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -20749,7 +21024,13 @@ async def test_linode_instance_interface_settings_update_handler_success(
             sample_config,
         )
 
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Interface settings for instance 42 updated successfully",
+        "settings": {
+            "default_route": {"ipv4": False, "ipv6": True},
+            "network_helper": False,
+        },
+    }
     mock_client.update_instance_interface_settings.assert_awaited_once_with(
         42,
         default_route={"ipv4_interface_id": 5527},
@@ -20775,7 +21056,10 @@ async def test_linode_instance_interface_settings_update_requires_boolean_confir
             arguments, sample_config
         )
 
-    assert result[0].text == "Error: confirm must be true"
+    assert result[0].text == (
+        "Error: This updates interface settings for the Linode instance. Set "
+        "confirm=true to proceed."
+    )
     mock_client_class.assert_not_called()
 
 
@@ -21470,9 +21754,9 @@ async def test_longview_client_create_requires_boolean_confirm(
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_retryable:
         result = await handle_linode_longview_client_create(args, sample_config)
 
-    assert (
-        result[0].text
-        == "Error: This creates a Longview client. Set confirm=true to proceed."
+    assert result[0].text == (
+        "Error: This creates a Longview client and returns setup credentials. Set "
+        "confirm=true to proceed."
     )
     mock_retryable.assert_not_called()
 

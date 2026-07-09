@@ -40,8 +40,11 @@ from linodemcp.config import (
     ReportFilter,
     parse_duration_seconds,
 )
+from linodemcp.genpb.linode.mcp.v1 import audit_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_audit_summary import audit_sqlite_path
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 # Module bridge for the reports map. main installs the catalog from
 # the loaded config; an unset bridge returns an empty dict (no reports
@@ -73,16 +76,7 @@ def create_linode_audit_report_tool() -> tuple[Tool, Capability]:
                 "summary of counts or a list of matching events depending on "
                 "the report's output mode."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name of the report from audit.reports.",
-                    },
-                },
-                "required": ["name"],
-            },
+            inputSchema=schema("linode.mcp.v1.AuditReportInput"),
         ),
         Capability.Meta,
     )
@@ -105,7 +99,8 @@ async def handle_linode_audit_report(
     except ValueError as exc:
         return [TextContent(type="text", text=str(exc))]
 
-    return [TextContent(type="text", text=json.dumps(payload))]
+    result = serialize_api_response(payload, audit_pb2.AuditReportResponse())
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def _run_report(name: str, report: ReportConfig, now: datetime) -> dict[str, Any]:

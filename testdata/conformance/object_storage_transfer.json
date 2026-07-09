@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageTransfer",
+  "description": "linode_object_storage_transfer_get: the month's outbound bytes as an int64, serialized as a JSON string.",
+  "input": {
+    "used": 5368709120
+  },
+  "canonical": {
+    "used": 5368709120
+  }
+}

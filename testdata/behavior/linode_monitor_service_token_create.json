@@ -1,0 +1,36 @@
+{
+  "tool": "linode_monitor_service_token_create",
+  "description": "Handler-level behavior contract: argument validation and the HTTP request the handler builds. Both language runners replay these cases against the real dispatch path with the HTTP transport faked; no network, no credentials.",
+  "cases": [
+    {
+      "name": "rejects non-positive entity ids",
+      "args": { "service_type": "dbaas", "entity_ids": [0], "confirm": true },
+      "expect_error": "entity_ids must be a non-empty array of positive integers"
+    },
+    {
+      "name": "rejects missing entity ids",
+      "args": { "service_type": "dbaas", "confirm": true },
+      "expect_error": "entity_ids must be a non-empty array of positive integers"
+    },
+    {
+      "name": "rejects string entity ids",
+      "args": { "service_type": "dbaas", "entity_ids": ["10"], "confirm": true },
+      "expect_error": "entity_ids must be a non-empty array of positive integers"
+    },
+    {
+      "name": "posts the token create body",
+      "args": { "service_type": "dbaas", "entity_ids": [10, 20], "confirm": true },
+      "api_response": { "token": "tok_value", "expiry": "2026-08-01T00:00:00" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/token",
+        "body": { "entity_ids": [10, 20] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": { "service_type": "dbaas", "entity_ids": [10, 20] },
+      "expect_error": "This creates a monitor service token. Set confirm=true to proceed."
+    }
+  ]
+}

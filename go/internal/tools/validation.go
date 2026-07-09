@@ -4,13 +4,11 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
-)
 
-const (
-	grantPermissionReadOnly  = "read_only"
-	grantPermissionReadWrite = "read_write"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
 // Limits for input validation across Linode API tool parameters.
@@ -111,6 +109,37 @@ var (
 	validRegionSlugRegex  = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$`)
 )
 
+// isPrivateIPv4 reports whether addr falls in a private or reserved range that
+// CPython's ipaddress.is_private rejects, minus its two public exceptions inside
+// 192.0.0.0/24. Python's DNS A-record validator rejects the same set, so Go
+// mirrors it to keep both languages rejecting identically. net.IP.IsPrivate
+// covers only RFC 1918, which is why documentation and reserved targets used to
+// slip through Go. The list is the IANA special-purpose-address registry: RFC
+// 1918 plus loopback, link-local, documentation (RFC 5737), benchmarking, and
+// reserved blocks. Domain-record validation is a cold path, so the CIDRs are
+// parsed per call rather than held in package-level state.
+func isPrivateIPv4(addr net.IP) bool {
+	// 192.0.0.9 and 192.0.0.10 sit inside 192.0.0.0/24 but are globally routable
+	// (PCP anycast, NAT64/DNS64 discovery), so they stay valid A-record targets.
+	exceptions := []string{"192.0.0.9", "192.0.0.10"}
+	if slices.ContainsFunc(exceptions, func(exc string) bool { return addr.Equal(net.ParseIP(exc)) }) {
+		return false
+	}
+
+	cidrs := []string{
+		"0.0.0.0/8", "10.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16",
+		"172.16.0.0/12", "192.0.0.0/24", "192.0.0.170/31", "192.0.2.0/24",
+		"192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24",
+		"240.0.0.0/4", "255.255.255.255/32",
+	}
+
+	return slices.ContainsFunc(cidrs, func(cidr string) bool {
+		_, network, err := net.ParseCIDR(cidr)
+
+		return err == nil && network.Contains(addr)
+	})
+}
+
 // validateDNSRecordName checks that the DNS record name does not exceed 253 characters
 // and contains only alphanumeric characters, hyphens, and dots per RFC 1035. Empty and "@" are allowed.
 func validateDNSRecordName(name string) error {
@@ -140,7 +169,7 @@ func validateDNSRecordTarget(recordType, target string) error {
 			return ErrDNSTargetInvalidA
 		}
 
-		if ip.IsPrivate() || ip.IsLoopback() {
+		if isPrivateIPv4(ip) {
 			return ErrDNSTargetPrivateIP
 		}
 	case "AAAA":
@@ -152,16 +181,6 @@ func validateDNSRecordTarget(recordType, target string) error {
 		if !validDNSNameRegex.MatchString(target) && target != "@" {
 			return fmt.Errorf("%s record target must be a valid hostname: %w", recordType, ErrDNSNameInvalid)
 		}
-	}
-
-	return nil
-}
-
-// validateFirewallPolicy rejects any policy value other than ACCEPT or DROP.
-func validateFirewallPolicy(policy string) error {
-	upper := strings.ToUpper(policy)
-	if upper != "ACCEPT" && upper != "DROP" {
-		return fmt.Errorf("got '%s': %w", policy, ErrFirewallPolicyInvalid)
 	}
 
 	return nil
@@ -225,7 +244,10 @@ func validateBucketACL(acl string) error {
 	case "private", "public-read", "authenticated-read", "public-read-write":
 		return nil
 	default:
-		return fmt.Errorf("got '%s': %w", acl, ErrBucketACLInvalid)
+		// Return the sentinel unwrapped so the emitted string matches Python
+		// byte-for-byte (no "got '<value>':" prefix), pinned by the shared
+		// objstorage behavior fixtures.
+		return ErrBucketACLInvalid
 	}
 }
 
@@ -247,17 +269,6 @@ const (
 	minExpiresIn = 1
 	maxExpiresIn = 604800
 )
-
-// validatePresignedMethod checks that the HTTP method is GET or PUT (case-insensitive),
-// which are the only methods supported for S3-compatible presigned URLs.
-func validatePresignedMethod(method string) error {
-	upper := strings.ToUpper(method)
-	if upper != "GET" && upper != "PUT" {
-		return fmt.Errorf("got '%s': %w", method, ErrPresignedMethodInvalid)
-	}
-
-	return nil
-}
 
 // validateExpiresIn checks that the presigned URL expiration is between 1 and 604800 seconds (7 days).
 func validateExpiresIn(expiresIn int) error {
@@ -281,11 +292,29 @@ func validateKeyLabel(label string) error {
 	return nil
 }
 
-// validateKeyPermissions rejects any permission value other than read_only or read_write.
-func validateKeyPermissions(permissions string) error {
-	if permissions != grantPermissionReadOnly && permissions != grantPermissionReadWrite {
-		return fmt.Errorf("got '%s': %w", permissions, ErrKeyPermissionsInvalid)
+// keyPermissionsError returns "" when a bucket_access permission is a valid
+// ObjectStorageKeyPermission value, else the enum-sourced rejection. Each entry
+// must carry a permission, so an empty value is rejected too (unlike the
+// optional-field helper). The value set and message order come from the proto
+// enum, so both languages agree.
+func keyPermissionsError(permissions string) string {
+	if _, ok := linodev1.ObjectStorageKeyPermission_Value_value[permissions]; ok && permissions != enumSentinel {
+		return ""
 	}
 
-	return nil
+	return "permissions must be one of: " + strings.Join(enumValueNames(linodev1.ObjectStorageKeyPermission_Value_value), ", ")
+}
+
+// grantPermissionValid reports whether an account-user grant level is empty (no
+// access) or a valid GrantPermission enum value. Empty is allowed because
+// clearing a grant means the user has no access on that resource; the allowed
+// non-empty set comes from the proto enum so it stays in sync with the schema.
+func grantPermissionValid(permission string) bool {
+	if permission == "" {
+		return true
+	}
+
+	_, ok := linodev1.GrantPermission_Value_value[permission]
+
+	return ok && permission != enumSentinel
 }

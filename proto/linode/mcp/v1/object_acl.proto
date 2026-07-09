@@ -11,6 +11,14 @@ message ObjectACL {
   string acl_xml = 2;
 }
 
+// ObjectStorageObjectACLWriteResponse is the {message, acl} envelope the object
+// ACL update tool returns. The update endpoint echoes the new ACL, so acl
+// carries the ObjectACL element decoded from that response.
+message ObjectStorageObjectACLWriteResponse {
+  string message = 1;
+  ObjectACL acl = 2;
+}
+
 // ObjectACLGetInput is the input contract for
 // linode_object_storage_object_acl_get.
 message ObjectACLGetInput {
@@ -22,4 +30,27 @@ message ObjectACLGetInput {
   string label = 3;
   // The object key within the bucket (required).
   string name = 4;
+}
+
+// ObjectACLUpdateInput is the input contract for
+// linode_object_storage_object_acl_update. region, label, name, acl, and
+// confirm are all required.
+message ObjectACLUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
+  string region = 2;
+  // The bucket label (name).
+  string label = 3;
+  // The object key (path/filename within the bucket).
+  string name = 4;
+  // ACL to set: 'private', 'public-read', 'authenticated-read', or
+  // 'public-read-write'.
+  string acl = 5;
+  // Must be true to proceed. This modifies the object's access permissions.
+  // Ignored when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
 }

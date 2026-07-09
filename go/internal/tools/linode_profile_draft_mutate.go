@@ -2,13 +2,15 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/types/known/structpb"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // CatalogSnapshot returns the full tool catalog. The Phase 8.4
@@ -28,24 +30,7 @@ const (
 	argAllowedEnvironments = "allowed_environments"
 	argRequiredTokenScopes = "required_token_scopes"
 	argAllowYolo           = "allow_yolo"
-	// respFieldName is the response JSON key carrying the draft name.
-	// All three mutator handlers echo the name back so the model can
-	// pair responses with the request that produced them.
-	respFieldName = "name"
-	// jsonSchemaTypeKey and jsonSchemaStringType form the
-	// {"type": "string"} item schema used in mcp.Items. Hoisting both
-	// the key and value avoids tripping the goconst linter as the
-	// repetition grows across the three mutator schemas.
-	jsonSchemaTypeKey    = "type"
-	jsonSchemaStringType = "string"
 )
-
-// schemaStringItem returns the mcp.Items schema for a string-typed
-// array element. Returns a fresh map per call so callers cannot
-// share-mutate, and the global-state linter has nothing to flag.
-func schemaStringItem() map[string]any {
-	return map[string]any{jsonSchemaTypeKey: jsonSchemaStringType}
-}
 
 // NewLinodeProfileDraftAddToolsTool returns the
 // linode_profile_draft_add_tools builder tool. Patterns expand
@@ -61,26 +46,14 @@ func NewLinodeProfileDraftAddToolsTool(
 	registry *builder.Registry,
 	catalog CatalogSnapshot,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_draft_add_tools",
-		mcp.WithDescription(
-			"Add tools to a profile draft. Accepts literal tool names and "+
-				"wildcards (shell-glob, only '*' is special). Wildcards "+
-				"expand against the live tool catalog at call time. Names "+
-				"already on the draft are not duplicated and are not "+
-				"reported in the response.",
-		),
-		mcp.WithString(
-			"name",
-			mcp.Description("Draft name to mutate."),
-			mcp.Required(),
-		),
-		mcp.WithArray(
-			argTools,
-			mcp.Description("List of tool names or wildcard patterns to add."),
-			mcp.Required(),
-			mcp.Items(schemaStringItem()),
-		),
+		"Add tools to a profile draft. Accepts literal tool names and "+
+			"wildcards (shell-glob, only '*' is special). Wildcards "+
+			"expand against the live tool catalog at call time. Names "+
+			"already on the draft are not duplicated and are not "+
+			"reported in the response.",
+		toolschemas.Schema("linode.mcp.v1.ProfileDraftAddToolsInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -102,12 +75,10 @@ func NewLinodeProfileDraftAddToolsTool(
 			return nil, fmt.Errorf("add tools to draft %q: %w", name, err)
 		}
 
-		body, err := json.Marshal(map[string]any{respFieldName: name, "added": added})
-		if err != nil {
-			return nil, fmt.Errorf("marshal add result: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.ProfileDraftAddToolsResponse{
+			Name:  name,
+			Added: added,
+		})
 	}
 
 	return tool, profiles.CapMeta, handler
@@ -121,25 +92,13 @@ func NewLinodeProfileDraftAddToolsTool(
 func NewLinodeProfileDraftRemoveToolsTool(
 	registry *builder.Registry,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_draft_remove_tools",
-		mcp.WithDescription(
-			"Remove tools from a profile draft. Accepts literal tool names "+
-				"and wildcards (shell-glob, only '*' is special). Patterns "+
-				"match against the draft's current AllowedTools list, not "+
-				"the live catalog.",
-		),
-		mcp.WithString(
-			"name",
-			mcp.Description("Draft name to mutate."),
-			mcp.Required(),
-		),
-		mcp.WithArray(
-			argTools,
-			mcp.Description("List of tool names or wildcard patterns to remove."),
-			mcp.Required(),
-			mcp.Items(schemaStringItem()),
-		),
+		"Remove tools from a profile draft. Accepts literal tool names "+
+			"and wildcards (shell-glob, only '*' is special). Patterns "+
+			"match against the draft's current AllowedTools list, not "+
+			"the live catalog.",
+		toolschemas.Schema("linode.mcp.v1.ProfileDraftRemoveToolsInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -161,12 +120,10 @@ func NewLinodeProfileDraftRemoveToolsTool(
 			return nil, fmt.Errorf("remove tools from draft %q: %w", name, err)
 		}
 
-		body, err := json.Marshal(map[string]any{respFieldName: name, "removed": removed})
-		if err != nil {
-			return nil, fmt.Errorf("marshal remove result: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.ProfileDraftRemoveToolsResponse{
+			Name:    name,
+			Removed: removed,
+		})
 	}
 
 	return tool, profiles.CapMeta, handler
@@ -179,34 +136,14 @@ func NewLinodeProfileDraftRemoveToolsTool(
 func NewLinodeProfileDraftSetTool(
 	registry *builder.Registry,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_draft_set",
-		mcp.WithDescription(
-			"Set draft settings. Each field is optional; missing fields are "+
-				"left unchanged. Settable: allowed_environments (array of "+
-				"environment names), required_token_scopes (array of Linode "+
-				"scope strings), allow_yolo (boolean opt-in to the yolo "+
-				"execution path).",
-		),
-		mcp.WithString(
-			"name",
-			mcp.Description("Draft name to mutate."),
-			mcp.Required(),
-		),
-		mcp.WithArray(
-			argAllowedEnvironments,
-			mcp.Description("Replace allowed_environments with this list."),
-			mcp.Items(schemaStringItem()),
-		),
-		mcp.WithArray(
-			argRequiredTokenScopes,
-			mcp.Description("Replace required_token_scopes with this list."),
-			mcp.Items(schemaStringItem()),
-		),
-		mcp.WithBoolean(
-			argAllowYolo,
-			mcp.Description("Set the allow_yolo flag."),
-		),
+		"Set draft settings. Each field is optional; missing fields are "+
+			"left unchanged. Settable: allowed_environments (array of "+
+			"environment names), required_token_scopes (array of Linode "+
+			"scope strings), allow_yolo (boolean opt-in to the yolo "+
+			"execution path).",
+		toolschemas.Schema("linode.mcp.v1.ProfileDraftSetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -230,7 +167,7 @@ func NewLinodeProfileDraftSetTool(
 				return nil, fmt.Errorf("set allowed_environments on draft %q: %w", name, err)
 			}
 
-			changes[argAllowedEnvironments] = envs
+			changes[argAllowedEnvironments] = stringsToAnySlice(envs)
 		}
 
 		if _, present := args[argRequiredTokenScopes]; present {
@@ -239,7 +176,7 @@ func NewLinodeProfileDraftSetTool(
 				return nil, fmt.Errorf("set required_token_scopes on draft %q: %w", name, err)
 			}
 
-			changes[argRequiredTokenScopes] = scopes
+			changes[argRequiredTokenScopes] = stringsToAnySlice(scopes)
 		}
 
 		if _, present := args[argAllowYolo]; present {
@@ -251,15 +188,29 @@ func NewLinodeProfileDraftSetTool(
 			changes[argAllowYolo] = yolo
 		}
 
-		body, err := json.Marshal(map[string]any{respFieldName: name, "changes": changes})
+		changesStruct, err := structpb.NewStruct(changes)
 		if err != nil {
-			return nil, fmt.Errorf("marshal set result: %w", err)
+			return nil, fmt.Errorf("convert set changes: %w", err)
 		}
 
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.ProfileDraftSetResponse{
+			Name:    name,
+			Changes: changesStruct.GetFields(),
+		})
 	}
 
 	return tool, profiles.CapMeta, handler
+}
+
+// stringsToAnySlice widens a string slice to []any so it can pass through
+// structpb.NewStruct, which accepts only JSON-native value types.
+func stringsToAnySlice(values []string) []any {
+	out := make([]any, len(values))
+	for i, v := range values {
+		out[i] = v
+	}
+
+	return out
 }
 
 // stringArrayArg pulls a string-array argument out of the request,

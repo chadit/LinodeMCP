@@ -7,7 +7,9 @@ contract, and the missing-directory error.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,7 +18,6 @@ from linodemcp.audit import RetentionSweeper
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
 
 def _write_rotated_file(directory: Path, name: str) -> Path:
@@ -95,3 +96,86 @@ def test_sweep_missing_dir_raises(tmp_path: Path) -> None:
 
     with pytest.raises(OSError, match="does-not-exist"):
         sweeper.sweep()
+
+
+def test_sweep_skips_subdirectories(tmp_path: Path) -> None:
+    """A subdirectory named like a rotated log is ignored (not a regular file)."""
+    now = datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC)
+    lookalike_dir = tmp_path / "audit-2020-01-01.log"
+    lookalike_dir.mkdir()
+    expired = _write_rotated_file(tmp_path, "audit-2020-02-02.log.gz")
+
+    sweeper = RetentionSweeper(str(tmp_path), 14, clock=_fixed_clock(now))
+    removed = sweeper.sweep()
+
+    assert removed == 1
+    assert not expired.exists(), "the expired regular file must be removed"
+    assert lookalike_dir.is_dir(), "a directory must never be swept"
+
+
+def test_sweep_logs_and_continues_when_unlink_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A file that fails to unlink is logged and skipped; the rest still go."""
+    now = datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC)
+    blocked = _write_rotated_file(tmp_path, "audit-2020-01-01.log")
+    deletable = _write_rotated_file(tmp_path, "audit-2020-02-02.log")
+
+    real_unlink = Path.unlink
+
+    def _selective_unlink(self: Path) -> None:
+        if self.name == "audit-2020-01-01.log":
+            msg = "permission denied"
+            raise OSError(msg)
+        real_unlink(self)
+
+    monkeypatch.setattr(Path, "unlink", _selective_unlink)
+
+    sweeper = RetentionSweeper(str(tmp_path), 14, clock=_fixed_clock(now))
+    removed = sweeper.sweep()
+
+    assert removed == 1, "only the file that unlinked cleanly counts"
+    assert blocked.exists(), "the file that raised on unlink must remain"
+    assert not deletable.exists(), "the file that unlinked cleanly must be gone"
+
+
+async def test_run_sweeps_in_background_then_exits_on_cancel(tmp_path: Path) -> None:
+    """run() sweeps on start and returns cleanly once the task is cancelled."""
+    now = datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC)
+    expired = _write_rotated_file(tmp_path, "audit-2020-01-01.log.gz")
+
+    sweeper = RetentionSweeper(
+        str(tmp_path), 14, interval_seconds=0.01, clock=_fixed_clock(now)
+    )
+    task = asyncio.create_task(sweeper.run())
+
+    for _ in range(50):
+        await asyncio.sleep(0.01)
+        if not expired.exists():
+            break
+
+    assert not expired.exists(), "the background sweep should remove the expired file"
+
+    task.cancel()
+    await task
+    assert task.done()
+
+
+async def test_run_swallows_directory_error_and_keeps_looping(
+    tmp_path: Path,
+) -> None:
+    """A directory-level sweep error is logged; the loop stays alive."""
+    now = datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC)
+    missing = tmp_path / "not-created-yet"
+
+    sweeper = RetentionSweeper(
+        str(missing), 14, interval_seconds=0.01, clock=_fixed_clock(now)
+    )
+    task = asyncio.create_task(sweeper.run())
+
+    await asyncio.sleep(0.05)
+    assert not task.done(), "the missing-directory error must not kill the loop"
+
+    task.cancel()
+    await task

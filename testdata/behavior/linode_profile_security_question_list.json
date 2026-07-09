@@ -1,0 +1,12 @@
+{
+  "tool": "linode_profile_security_question_list",
+  "description": "Pins the bare security-questions GET path both languages issue.",
+  "cases": [
+    {
+      "name": "lists profile security questions",
+      "args": {},
+      "api_response": { "security_questions": [] },
+      "expect_request": { "method": "GET", "path": "/profile/security-questions" }
+    }
+  ]
+}

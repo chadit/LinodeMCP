@@ -1,0 +1,17 @@
+{
+  "tool": "linode_object_storage_cancel",
+  "description": "Write-capability account-level cancel. No local field validation; pins the cancel POST. The confirm-gate message text diverges, so the success case carries confirm:true.",
+  "cases": [
+    {
+      "name": "cancels object storage",
+      "args": { "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/object-storage/cancel" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {},
+      "expect_error": "This operation cancels Object Storage service for the account. Set confirm=true to proceed."
+    }
+  ]
+}

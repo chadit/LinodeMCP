@@ -1,0 +1,17 @@
+{
+  "tool": "linode_placement_group_delete",
+  "description": "Destroy-capability. Pins the confirm-alone destroy gate and the bypassed delete DELETE. The group_id-required message diverges (Go 'group_id is required' vs Python 'group_id must be a positive integer'), so it is not pinned (see report).",
+  "cases": [
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": { "group_id": 123, "confirm": true },
+      "expect_error": "linode_placement_group_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the placement group",
+      "args": { "group_id": 123, "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/placement/groups/123" }
+    }
+  ]
+}

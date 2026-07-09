@@ -6,38 +6,22 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // NewLinodeInstanceBootTool creates a tool for booting a Linode instance.
 func NewLinodeInstanceBootTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_boot",
-		mcp.WithDescription("Boots a Linode instance that is currently offline. If the instance is already running, this has no effect."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"instance_id",
-			mcp.Required(),
-			mcp.Description("The ID of the Linode instance to boot"),
-		),
-		mcp.WithNumber(
-			"config_id",
-			mcp.Description("The ID of the configuration profile to boot with (optional)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm booting the instance. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Boots a Linode instance that is currently offline. If the instance is already running, this has no effect.",
+		toolschemas.Schema("linode.mcp.v1.InstanceBootInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -93,15 +77,10 @@ func handleInstancePowerAction(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to %s instance %d: %v", verb, instanceID, err)), nil
 	}
 
-	response := struct {
-		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstancePowerActionResponse{
 		Message:    fmt.Sprintf("Instance %d %s initiated successfully", instanceID, verb),
-		InstanceID: instanceID,
-	}
-
-	return MarshalToolResponse(response)
+		InstanceId: linodeIDToInt32(instanceID),
+	})
 }
 
 func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -117,28 +96,10 @@ func handleLinodeInstanceBootRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeInstanceRebootTool creates a tool for rebooting a Linode instance.
 func NewLinodeInstanceRebootTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_reboot",
-		mcp.WithDescription("Reboots a running Linode instance. This is equivalent to pressing the reset button on a physical computer."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"instance_id",
-			mcp.Required(),
-			mcp.Description("The ID of the Linode instance to reboot"),
-		),
-		mcp.WithNumber(
-			"config_id",
-			mcp.Description("The ID of the configuration profile to boot with after reboot (optional)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm rebooting the instance. This causes a brief outage. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Reboots a running Linode instance. This is equivalent to pressing the reset button on a physical computer.",
+		toolschemas.Schema("linode.mcp.v1.InstanceRebootInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -161,24 +122,10 @@ func handleLinodeInstanceRebootRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeInstanceShutdownTool creates a tool for shutting down a Linode instance.
 func NewLinodeInstanceShutdownTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_shutdown",
-		mcp.WithDescription("Gracefully shuts down a running Linode instance. The instance will attempt to shut down cleanly."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"instance_id",
-			mcp.Required(),
-			mcp.Description("The ID of the Linode instance to shut down"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm shutting down the instance. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Gracefully shuts down a running Linode instance. The instance will attempt to shut down cleanly.",
+		toolschemas.Schema("linode.mcp.v1.InstanceShutdownInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -204,66 +151,10 @@ func handleLinodeInstanceShutdownRequest(ctx context.Context, request *mcp.CallT
 
 // NewLinodeInstanceCreateTool creates a tool for creating a new Linode instance.
 func NewLinodeInstanceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_create",
-		mcp.WithDescription("Creates a new Linode instance under the current Linode Interfaces generation. WARNING: Billing starts immediately upon creation. Requires firewall_id (get one from linode_firewall_list or create with linode_firewall_create). Note: VPC attachment via the current interface model is not yet supported by this tool; use linode_vpc_* tools after create."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Required(),
-			mcp.Description("The region where the instance will be created (e.g., 'us-east')"),
-		),
-		mcp.WithString(
-			"type",
-			mcp.Required(),
-			mcp.Description("The Linode plan type (e.g., 'g6-nanode-1')"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Description("A label for the instance (optional)"),
-		),
-		mcp.WithString(
-			"image",
-			mcp.Description("The image ID to deploy (e.g., 'linode/debian11'). Required for provisioned instances."),
-		),
-		mcp.WithString(
-			"root_pass",
-			mcp.Description("The root password for the instance. Required if image is provided."),
-		),
-		mcp.WithNumber(
-			"firewall_id",
-			mcp.Required(),
-			mcp.Description("Cloud Firewall ID to attach to the public interface. Required under the current Linode Interfaces generation."),
-		),
-		mcp.WithBoolean(
-			"route_ipv4",
-			mcp.Description("Whether the public interface owns the IPv4 default route (optional, default: true)"),
-		),
-		mcp.WithBoolean(
-			"route_ipv6",
-			mcp.Description("Whether the public interface owns the IPv6 default route (optional, default: true)"),
-		),
-		mcp.WithBoolean(
-			"backups_enabled",
-			mcp.Description("Enable backups for this instance (optional, default: false)"),
-		),
-		mcp.WithArray(
-			"authorized_keys",
-			mcp.Description("SSH public keys to install for the root user (optional). Requires an image."),
-		),
-		mcp.WithBoolean(
-			"booted",
-			mcp.Description("Whether to boot the instance after creation (optional, defaults to true when an image is provided)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm instance creation. This operation incurs billing charges. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Creates a new Linode instance under the current Linode Interfaces generation. WARNING: Billing starts immediately upon creation. Requires firewall_id (get one from linode_firewall_list or create with linode_firewall_create). Note: VPC attachment via the current interface model is not yet supported by this tool; use linode_vpc_* tools after create.",
+		toolschemas.Schema("linode.mcp.v1.InstanceCreateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -397,31 +288,15 @@ const toolInstanceUpdate = "linode_instance_update"
 
 // NewLinodeInstanceUpdateTool creates a tool for updating editable fields on a Linode instance.
 func NewLinodeInstanceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		toolInstanceUpdate,
 		"Updates editable fields on a Linode instance. Pass dry_run=true to preview without updating.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("instance_id", mcp.Required(),
-				mcp.Description("The ID of the instance to update (required)")),
-			mcp.WithString("label",
-				mcp.Description("New Linode label (optional)")),
-			mcp.WithString("group",
-				mcp.Description("Deprecated group label (optional)")),
-			mcp.WithArray("tags",
-				mcp.Description("Tags to assign to the Linode (optional)")),
-			mcp.WithObject("alerts",
-				mcp.Description("Alert threshold settings (optional)")),
-			mcp.WithString("maintenance_policy",
-				mcp.Description("Maintenance policy, such as linode/migrate (optional)")),
-			mcp.WithBoolean("watchdog_enabled",
-				mcp.Description("Whether Lassie shutdown watchdog is enabled (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm the update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeInstanceUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeInstanceUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -582,11 +457,10 @@ func instanceUpdateAlertsFromArg(raw any) (*linode.Alerts, string) {
 
 // NewLinodeInstanceDeleteTool creates a tool for deleting a Linode instance.
 func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := newDeleteByIDTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_delete",
-		"Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost. Pass dry_run=true to preview without deleting.",
-		"instance_id",
-		"The ID of the Linode instance to delete",
+		"Deletes a Linode instance. WARNING: This action is irreversible and all data will be permanently lost. Pass dry_run=true to preview without deleting."+twoStageNote,
+		toolschemas.Schema("linode.mcp.v1.InstanceDeleteInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -596,6 +470,16 @@ func NewLinodeInstanceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 	return tool, profiles.CapDestroy, handler
 }
 
+// instanceDeleteProto builds the proto-canonical id-echo body for a successful
+// instance delete, keeping the proto literal off the handler's struct literal
+// so the delete handlers stay below the dupl threshold.
+func instanceDeleteProto(id int) proto.Message {
+	return &linodev1.InstanceDeleteResponse{
+		Message:    fmt.Sprintf("Instance %d removed successfully", id),
+		InstanceId: linodeIDToInt32(id),
+	}
+}
+
 func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
 		ToolName:       "linode_instance_delete",
@@ -603,7 +487,7 @@ func handleLinodeInstanceDeleteRequest(ctx context.Context, request *mcp.CallToo
 		Method:         httpMethodDelete,
 		PathPattern:    "/linode/instances/%d",
 		ConfirmMessage: "This operation is destructive and irreversible. Set confirm=true to proceed.",
-		SuccessFormat:  "Instance %d removed successfully",
+		SuccessProto:   instanceDeleteProto,
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetInstance(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteInstance(ctx, id) },
 		DependencyWalk: instanceDeleteDependencyWalk,
@@ -617,28 +501,16 @@ const toolInstanceResize = "linode_instance_resize"
 
 // NewLinodeInstanceResizeTool creates a tool for resizing a Linode instance.
 func NewLinodeInstanceResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		toolInstanceResize,
 		"Resizes a Linode instance to a new plan. WARNING: This causes downtime during the migration process and may affect billing."+
 			" Pass dry_run=true to preview without resizing."+twoStageOptInNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("instance_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance to resize")),
-			mcp.WithString("type", mcp.Required(),
-				mcp.Description("The new Linode plan type (e.g., 'g6-standard-1')")),
-			mcp.WithBoolean("allow_auto_disk_resize",
-				mcp.Description("Automatically resize disks when resizing to a larger plan (optional, default: false)")),
-			mcp.WithString("migration_type",
-				mcp.Description("Migration type: 'cold' (default) or 'warm' (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm resize. This operation causes downtime. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleLinodeInstanceResizeRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceResizeInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeInstanceResizeRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -719,11 +591,11 @@ func newInstanceResizeAction(instanceID int, instanceType string, req linode.Res
 		Execute: func(ctx context.Context, c *linode.Client) error {
 			return c.ResizeInstance(ctx, instanceID, req)
 		},
-		Success: func() any {
-			return map[string]any{
-				responseKeyMessage: fmt.Sprintf("Instance %d resize to %s initiated successfully", instanceID, instanceType),
-				"instance_id":      instanceID,
-				"new_type":         instanceType,
+		Success: func() proto.Message {
+			return &linodev1.InstanceResizeWriteResponse{
+				Message:    fmt.Sprintf("Instance %d resize to %s initiated successfully", instanceID, instanceType),
+				InstanceId: linodeIDToInt32(instanceID),
+				NewType:    instanceType,
 			}
 		},
 		DependencyWalk: func(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
@@ -789,15 +661,9 @@ func handleLinodeInstanceResizeRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to resize instance %d: %v", instanceID, err)), nil
 	}
 
-	response := struct {
-		Message    string `json:"message"`
-		InstanceID int    `json:"instance_id"`
-		NewType    string `json:"new_type"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceResizeWriteResponse{
 		Message:    fmt.Sprintf("Instance %d resize to %s initiated successfully", instanceID, instanceType),
-		InstanceID: instanceID,
+		InstanceId: linodeIDToInt32(instanceID),
 		NewType:    instanceType,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }

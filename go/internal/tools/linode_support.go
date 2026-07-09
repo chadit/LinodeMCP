@@ -56,15 +56,16 @@ func handleLinodeSupportTicketGetRequest(ctx context.Context, request *mcp.CallT
 }
 
 func supportTicketIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	return requiredPositiveIntArgument(request, supportTicketIDParam, errSupportTicketIDMissing, errSupportTicketIDPositive)
+	return requiredIDArgument(request, supportTicketIDParam)
 }
 
 // NewLinodeSupportTicketsTool creates a tool for listing support tickets.
 func NewLinodeSupportTicketsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_support_ticket_list",
 		"Lists support tickets for the authenticated account.",
+		"linode.mcp.v1.SupportTicketListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.SupportTicket, error) {
@@ -84,17 +85,15 @@ func supportTicketListResponse(items []*linodev1.SupportTicket, count int32, fil
 
 // NewLinodeSupportTicketCloseTool creates a tool for closing one support ticket.
 func NewLinodeSupportTicketCloseTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_support_ticket_close",
 		"Closes one support ticket by ID. Pass dry_run=true to preview without closing.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(supportTicketIDParam, mcp.Required(), mcp.Description("Support ticket ID to close.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm closing the support ticket. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeSupportTicketCloseRequest,
+		toolschemas.Schema("linode.mcp.v1.SupportTicketCloseInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeSupportTicketCloseRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -158,10 +157,11 @@ func closeSupportTicketErrorMessage(ctx context.Context, client *linode.Client, 
 
 // NewLinodeSupportTicketRepliesTool creates a tool for listing replies for one support ticket.
 func NewLinodeSupportTicketRepliesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	tool, handler := newProtoListToolSubresourcePaginatedRawSchema(
 		cfg,
 		supportTicketRepliesToolName,
 		"Lists replies for one support ticket by ticket_id.",
+		"linode.mcp.v1.SupportTicketReplyListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		protoListPathID{

@@ -187,6 +187,28 @@ func TestBuildDryRunResponseOmitsEmptyEnvironment(t *testing.T) {
 	}
 }
 
+// assertDryRunRequest checks the would_execute preview of a decoded dry-run or
+// plan body carries the expected method and path. The dry-run and plan
+// envelopes serialize through protojson now, which varies colon spacing, so the
+// tests that used byte-exact `"method": "POST"` substrings decode the JSON and
+// assert on values through this helper instead.
+func assertDryRunRequest(t *testing.T, body map[string]any, method, path string) {
+	t.Helper()
+
+	would, ok := body["would_execute"].(map[string]any)
+	if !ok {
+		t.Fatalf("would_execute is not an object: %v", body["would_execute"])
+	}
+
+	if would["method"] != method {
+		t.Errorf("would_execute.method = %v, want %v", would["method"], method)
+	}
+
+	if would["path"] != path {
+		t.Errorf("would_execute.path = %v, want %v", would["path"], path)
+	}
+}
+
 // dryRunResultText pulls the first text-content body off an MCP tool
 // result. Local to this test file rather than shared with
 // tools_test.go because the tests here decode JSON; the existing

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_config_get",
+  "description": "Pins the config-get GET. linode_id/config_id rejection text diverges between languages (see report), so only the success path is shared.",
+  "cases": [
+    {
+      "name": "gets a config profile",
+      "args": { "linode_id": 123, "config_id": 7 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/configs/7" }
+    }
+  ]
+}

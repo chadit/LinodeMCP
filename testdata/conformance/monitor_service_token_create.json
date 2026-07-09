@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.MonitorServiceTokenCreateResponse",
+  "description": "Monitor service token create body: the bare token object the Monitor API returns, passed through unwrapped so the caller can capture the token and expiry for the metrics query host.",
+  "input": {
+    "token": "synthetic-monitor-jwe-token-for-conformance-testing",
+    "expiry": "2026-08-01T00:00:00"
+  },
+  "canonical": {
+    "token": "synthetic-monitor-jwe-token-for-conformance-testing",
+    "expiry": "2026-08-01T00:00:00"
+  }
+}

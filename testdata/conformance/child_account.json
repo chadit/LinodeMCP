@@ -1,0 +1,58 @@
+{
+  "message": "linode.mcp.v1.ChildAccount",
+  "description": "Child account element: 18 scalar fields plus the nested credit_card message.",
+  "input": {
+    "active_since": "2023-01-01T00:00:00",
+    "address_1": "123 Main St",
+    "address_2": "",
+    "balance": 0,
+    "balance_uninvoiced": 12.5,
+    "billing_source": "external",
+    "capabilities": [
+      "Linodes",
+      "NodeBalancers"
+    ],
+    "city": "Philadelphia",
+    "company": "Child Co",
+    "country": "US",
+    "credit_card": {
+      "expiry": "12/2027",
+      "last_four": "1234"
+    },
+    "email": "child@example.com",
+    "euuid": "E1AF5EEC-0000-0000-0000-000000000000",
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "phone": "555-1212",
+    "state": "PA",
+    "tax_id": "",
+    "zip": "19106"
+  },
+  "canonical": {
+    "active_since": "2023-01-01T00:00:00",
+    "address_1": "123 Main St",
+    "balance_uninvoiced": 12.5,
+    "billing_source": "external",
+    "capabilities": [
+      "Linodes",
+      "NodeBalancers"
+    ],
+    "city": "Philadelphia",
+    "company": "Child Co",
+    "country": "US",
+    "credit_card": {
+      "expiry": "12/2027",
+      "last_four": "1234"
+    },
+    "email": "child@example.com",
+    "euuid": "E1AF5EEC-0000-0000-0000-000000000000",
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "phone": "555-1212",
+    "state": "PA",
+    "zip": "19106",
+    "address_2": "",
+    "balance": 0.0,
+    "tax_id": ""
+  }
+}

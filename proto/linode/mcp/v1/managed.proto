@@ -2,7 +2,20 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// ManagedServiceType is the Managed monitored-service protocol. Values are the
+// exact lowercase API strings, authored from the live OpenAPI spec. See the
+// enum-wrapper convention in nodebalancer_config.proto.
+message ManagedServiceType {
+  enum Value {
+    unspecified = 0;
+    tcp = 1;
+    url = 2;
+  }
+}
 
 // ManagedService mirrors a Linode Managed monitored service. body, notes, and
 // region are nullable (omitted when unset); credentials is repeated (emitted as []).
@@ -36,6 +49,127 @@ message ManagedServiceGetInput {
   optional string environment = 1;
   // The ID of the Managed service to retrieve (required).
   int32 service_id = 2;
+}
+
+// ManagedServiceListInput is the input contract for
+// linode_managed_service_list.
+message ManagedServiceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// ManagedServiceCreateInput is the input contract for
+// linode_managed_service_create. address, label, service_type, timeout, and
+// confirm are required.
+message ManagedServiceCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Label for the Managed service.
+  string label = 2;
+  // Monitor type: tcp or url.
+  ManagedServiceType.Value service_type = 3;
+  // URL or address monitored by the service.
+  string address = 4;
+  // Timeout in seconds, 1-255.
+  int32 timeout = 5;
+  // Expected response body text for URL monitors.
+  optional string body = 6;
+  // Managed contact group to consult when an issue is detected.
+  optional string consultation_group = 7;
+  // Managed credential IDs used when resolving service issues.
+  repeated int32 credentials = 8;
+  // Notes for responders.
+  optional string notes = 9;
+  // Region for private IP services.
+  optional string region = 10;
+  // Must be true to confirm Managed service creation. Ignored when
+  // dry_run=true.
+  bool confirm = 11;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 12;
+}
+
+// ManagedServiceUpdateInput is the input contract for
+// linode_managed_service_update. service_id and confirm are required; all
+// mutable fields are optional.
+message ManagedServiceUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The numeric Managed service monitor ID to update.
+  int32 service_id = 2;
+  // Updated label for the Managed service.
+  optional string label = 3;
+  // Updated monitor type: tcp or url.
+  optional ManagedServiceType.Value service_type = 4;
+  // Updated URL or address monitored by the service.
+  optional string address = 5;
+  // Updated timeout in seconds, 1-255.
+  optional int32 timeout = 6;
+  // Updated expected response body text for URL monitors.
+  optional string body = 7;
+  // Updated Managed contact group to consult when an issue is detected.
+  optional string consultation_group = 8;
+  // Updated Managed credential IDs used when resolving service issues.
+  repeated int32 credentials = 9;
+  // Updated notes for responders.
+  optional string notes = 10;
+  // Updated region for private IP services.
+  optional string region = 11;
+  // Must be true to confirm Managed service update. Ignored when dry_run=true.
+  bool confirm = 12;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 13;
+}
+
+// ManagedServiceDeleteInput is the input contract for
+// linode_managed_service_delete. Plain confirm destroy.
+message ManagedServiceDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Managed service monitor ID to delete.
+  int32 service_id = 2;
+  // Must be true to confirm Managed service deletion. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// ManagedServiceDisableInput is the input contract for
+// linode_managed_service_disable.
+message ManagedServiceDisableInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Managed service monitor ID to disable.
+  int32 service_id = 2;
+  // Must be true to confirm disabling Managed service monitoring. Ignored
+  // when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// ManagedServiceEnableInput is the input contract for
+// linode_managed_service_enable.
+message ManagedServiceEnableInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Managed service monitor ID to enable.
+  int32 service_id = 2;
+  // Must be true to confirm enabling Managed service monitoring. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
 }
 
 // ManagedLinodeSettingsSSH is the SSH access block nested in Managed Linode
@@ -72,6 +206,40 @@ message ManagedLinodeSettingsGetInput {
   int32 linode_id = 2;
 }
 
+// ManagedLinodeSettingsListInput is the input contract for
+// linode_managed_linode_settings_list.
+message ManagedLinodeSettingsListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// ManagedLinodeSettingsUpdateInput is the input contract for
+// linode_managed_linode_settings_update. linode_id and confirm are required.
+// The ssh param is a required object { access: bool, ip: string, port: int
+// (1-65535), user: string }; it is rendered here as
+// map<string, google.protobuf.Value> (top-level object), which drops the
+// required flag and the inner detail. The handler still enforces presence and
+// at least one mutable SSH setting.
+message ManagedLinodeSettingsUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The numeric Linode ID whose Managed settings should be updated.
+  int32 linode_id = 2;
+  // SSH settings object: { access: bool, ip: string, port: int (1-65535),
+  // user: string }.
+  map<string, google.protobuf.Value> ssh = 3;
+  // Must be true to confirm updating Managed Linode settings. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
 // ManagedContactPhone is the phone block nested in a Managed contact. primary and
 // secondary are nullable (omitted when unset).
 message ManagedContactPhone {
@@ -106,6 +274,101 @@ message ManagedContactGetInput {
   int32 contact_id = 2;
 }
 
+// ManagedContactListInput is the input contract for
+// linode_managed_contact_list.
+message ManagedContactListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// ManagedContactCreateInput is the input contract for
+// linode_managed_contact_create. Only confirm is required. The phone param is
+// an object { primary: string, secondary: string }; it is rendered as
+// map<string, google.protobuf.Value> (top-level object), which drops the inner
+// detail (the handler still parses primary/secondary).
+message ManagedContactCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Name for the Managed contact (optional).
+  optional string name = 2;
+  // Email address for the Managed contact (optional).
+  optional string email = 3;
+  // Display grouping for the Managed contact (optional).
+  optional string group = 4;
+  // Phone numbers object: { primary: string, secondary: string } (optional).
+  map<string, google.protobuf.Value> phone = 5;
+  // Must be true to confirm Managed contact creation. Ignored when
+  // dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+}
+
+// ManagedContactUpdateInput is the input contract for
+// linode_managed_contact_update. contact_id and confirm are required. The
+// phone param is an object { primary: string, secondary: string }; it is
+// rendered as map<string, google.protobuf.Value> (top-level object), which
+// drops the inner detail (the handler still parses primary/secondary).
+message ManagedContactUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The numeric Managed contact ID to update.
+  int32 contact_id = 2;
+  // Updated contact name (optional).
+  optional string name = 3;
+  // Updated contact email address (optional).
+  optional string email = 4;
+  // Updated contact group (optional).
+  optional string group = 5;
+  // Updated phone numbers object: { primary: string, secondary: string }
+  // (optional).
+  map<string, google.protobuf.Value> phone = 6;
+  // Must be true to confirm updating the Managed contact. Ignored when
+  // dry_run=true.
+  bool confirm = 7;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 8;
+}
+
+// ManagedContactDeleteInput is the input contract for
+// linode_managed_contact_delete. Plain confirm destroy.
+message ManagedContactDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Managed contact ID to delete.
+  int32 contact_id = 2;
+  // Must be true to confirm Managed contact deletion. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// ManagedSSHKey mirrors GET /managed/credentials/sshkey: the public SSH key the
+// Managed service installs on monitored Linodes.
+message ManagedSSHKey {
+  string ssh_key = 1;
+}
+
+// ManagedSSHKeyGetInput is the input contract for linode_managed_sshkey_get.
+message ManagedSSHKeyGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// ManagedStatsGetInput is the input contract for linode_managed_stats_get.
+message ManagedStatsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
 // ManagedCredential mirrors a Linode Managed credential (the secret is write-only
 // and never returned).
 message ManagedCredential {
@@ -131,6 +394,89 @@ message ManagedCredentialGetInput {
   int32 credential_id = 2;
   // Preview the request without retrieving it (optional).
   optional bool dry_run = 3;
+}
+
+// ManagedCredentialListInput is the input contract for
+// linode_managed_credential_list.
+message ManagedCredentialListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// ManagedCredentialCreateInput is the input contract for
+// linode_managed_credential_create. label, password, and confirm are required.
+message ManagedCredentialCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Label for the Managed credential.
+  string label = 2;
+  // Password to store for the Managed credential.
+  string password = 3;
+  // Username to store for the Managed credential.
+  optional string username = 4;
+  // Must be true to confirm creating a stored Managed credential. Ignored
+  // when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// ManagedCredentialUpdateInput is the input contract for
+// linode_managed_credential_update. credential_id, label, and confirm are
+// required.
+message ManagedCredentialUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The numeric Managed credential ID to update.
+  int32 credential_id = 2;
+  // Updated credential label.
+  string label = 3;
+  // Must be true to confirm updating the Managed credential. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// ManagedCredentialUsernamePasswordUpdateInput is the input contract for
+// linode_managed_credential_username_password_update. credential_id, password,
+// and confirm are required; username is optional.
+message ManagedCredentialUsernamePasswordUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Managed credential ID to update.
+  int32 credential_id = 2;
+  // Updated password to store for the Managed credential.
+  string password = 3;
+  // Updated username to store for the Managed credential.
+  optional string username = 4;
+  // Must be true to confirm updating a stored Managed credential's username
+  // and password. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// ManagedCredentialRevokeInput is the input contract for
+// linode_managed_credential_revoke.
+message ManagedCredentialRevokeInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Managed credential ID to revoke.
+  int32 credential_id = 2;
+  // Must be true to confirm revoking the stored Managed credential. Ignored
+  // when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
 }
 
 // ManagedCredentialWriteResponse is the {message, credential} envelope the
@@ -169,6 +515,14 @@ message ManagedContactIDResponse {
 message ManagedServiceIDResponse {
   string message = 1;
   int32 service_id = 2;
+}
+
+// ManagedServiceWriteResponse is the {message, service} envelope the
+// linode_managed_service_create and linode_managed_service_update tools return
+// after a successful write.
+message ManagedServiceWriteResponse {
+  string message = 1;
+  ManagedService service = 2;
 }
 
 // ManagedLinodeSettingsWriteResponse is the {message, settings} envelope the

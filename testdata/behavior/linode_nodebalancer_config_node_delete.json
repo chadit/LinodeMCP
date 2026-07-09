@@ -1,0 +1,32 @@
+{
+  "tool": "linode_nodebalancer_config_node_delete",
+  "description": "Pins the shared id-required rejections, the destroy bypass gate, and the node-delete DELETE. Confirm text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing nodebalancer_id",
+      "args": {},
+      "expect_error": "nodebalancer_id is required"
+    },
+    {
+      "name": "rejects missing config_id",
+      "args": { "nodebalancer_id": 5 },
+      "expect_error": "config_id is required"
+    },
+    {
+      "name": "rejects missing node_id",
+      "args": { "nodebalancer_id": 5, "config_id": 7 },
+      "expect_error": "node_id is required"
+    },
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "confirm": true },
+      "expect_error": "linode_nodebalancer_config_node_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the node",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/nodebalancers/5/configs/7/nodes/9" }
+    }
+  ]
+}

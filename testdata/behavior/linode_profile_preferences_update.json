@@ -1,0 +1,26 @@
+{
+  "tool": "linode_profile_preferences_update",
+  "description": "Preferences update: the PUT body once confirmed, and the non-empty-object rejection now agrees in both languages (Python gained Go's check and message).",
+  "cases": [
+    {
+      "name": "rejects an empty preferences object",
+      "args": { "preferences": {} },
+      "expect_error": "preferences must be a non-empty object"
+    },
+    {
+      "name": "updates profile preferences",
+      "args": { "preferences": { "theme": "dark" }, "confirm": true },
+      "api_response": { "theme": "dark" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/profile/preferences",
+        "body": { "theme": "dark" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"preferences": {"theme": "dark"}},
+      "expect_error": "This updates profile preferences. Set confirm=true to proceed."
+    }
+  ]
+}

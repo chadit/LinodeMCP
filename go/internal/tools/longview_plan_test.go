@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -76,6 +75,7 @@ func TestLinodeLongviewPlanToolSuccess(t *testing.T) {
 			keyID:              "longview-10",
 			keyLabel:           longviewSubscriptionLabel,
 			keyPrice:           map[string]float64{keyHourly: 0.06, keyMonthly: 40},
+			keyNotInProto:      valNotInProto,
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -111,6 +111,10 @@ func TestLinodeLongviewPlanToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, longviewSubscriptionLabel) {
 		t.Errorf("textContent.Text does not contain %v", longviewSubscriptionLabel)
+	}
+
+	if strings.Contains(textContent.Text, keyNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 
@@ -185,15 +189,10 @@ func TestLinodeLongviewPlanUpdateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyLongviewSubscription, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyLongviewSubscription, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -388,6 +387,7 @@ func TestLinodeLongviewPlanUpdateToolValidationRejectsBeforeClient(t *testing.T)
 		{name: "empty subscription", args: map[string]any{keyLongviewSubscription: "", keyConfirm: true}, want: errLongviewSubscriptionRequired},
 		{name: "whitespace subscription", args: map[string]any{keyLongviewSubscription: blankString, keyConfirm: true}, want: errLongviewSubscriptionRequired},
 		{name: "numeric subscription", args: map[string]any{keyLongviewSubscription: 123, keyConfirm: true}, want: errLongviewSubscriptionRequired},
+		{name: "non-plan subscription", args: map[string]any{keyLongviewSubscription: "not-a-plan", keyConfirm: true}, want: "longview_subscription must be a Longview plan ID like longview-10"},
 	}
 
 	for _, testCase := range cases {

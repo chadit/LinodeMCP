@@ -8,13 +8,12 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import monitor_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    PARAM_DRY_RUN,
     build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
 )
 from linodemcp.tools.proto_response import (
     serialize_api_response,
@@ -30,37 +29,12 @@ if TYPE_CHECKING:
 _SERVICE_TYPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-def _optional_int_argument(
-    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
-) -> int | None:
-    value = arguments.get(name)
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"{name} must be an integer")
-    if value < minimum:
-        raise ValueError(f"{name} must be at least {minimum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{name} must be at most {maximum}")
-    return value
-
-
 def create_linode_monitor_service_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_monitor_service_list tool."""
     return Tool(
         name="linode_monitor_service_list",
         description="Lists supported Linode Metrics service types.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceListInput"),
     ), Capability.Read
 
 
@@ -78,25 +52,7 @@ def create_linode_monitor_service_metric_query_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_monitor_service_metric_query",
         description=("Reads metrics for a Linode Metrics service entity type."),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                },
-            },
-            "required": ["service_type"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceMetricQueryInput"),
     ), Capability.Read
 
 
@@ -105,28 +61,7 @@ def create_linode_monitor_dashboard_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_monitor_dashboard_list",
         description="Lists Linode Metrics dashboards.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorDashboardListInput"),
     ), Capability.Read
 
 
@@ -135,28 +70,7 @@ def create_linode_monitor_alert_definition_list_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_monitor_alert_definition_list",
         description="Lists Linode Metrics alert definitions.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorAlertDefinitionListInput"),
     ), Capability.Read
 
 
@@ -165,28 +79,7 @@ def create_linode_monitor_alert_channel_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_monitor_alert_channel_list",
         description="Lists Linode Metrics alert channels.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorAlertChannelListInput"),
     ), Capability.Read
 
 
@@ -195,25 +88,7 @@ def create_linode_monitor_service_dashboard_list_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_monitor_service_dashboard_list",
         description=("Lists dashboards for a Linode Metrics service type."),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                },
-            },
-            "required": ["service_type"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceDashboardListInput"),
     ), Capability.Read
 
 
@@ -222,23 +97,7 @@ def create_linode_monitor_dashboard_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_monitor_dashboard_get",
         description="Gets a Linode Metrics dashboard by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "dashboard_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Dashboard ID to get (required)",
-                },
-            },
-            "required": ["dashboard_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorDashboardGetInput"),
     ), Capability.Read
 
 
@@ -249,25 +108,7 @@ def create_linode_monitor_service_metric_definition_list_tool() -> tuple[
     return Tool(
         name="linode_monitor_service_metric_definition_list",
         description=("Lists metric definitions for a Linode Metrics service type."),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                },
-            },
-            "required": ["service_type"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceMetricDefinitionListInput"),
     ), Capability.Read
 
 
@@ -278,25 +119,7 @@ def create_linode_monitor_service_alert_definition_list_tool() -> tuple[
     return Tool(
         name="linode_monitor_service_alert_definition_list",
         description=("Lists alert definitions for a Linode Metrics service type."),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                },
-            },
-            "required": ["service_type"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionListInput"),
     ), Capability.Read
 
 
@@ -309,38 +132,7 @@ def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]
             "entities. The token is returned only once and cannot be retrieved "
             "later; capture both `token` and `expiry` from the response."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                },
-                "entity_ids": {
-                    "type": "array",
-                    "items": {"type": "integer"},
-                    "minItems": 1,
-                    "description": (
-                        "Non-empty list of entity IDs the token will grant access "
-                        "to (required)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["service_type", "entity_ids", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceTokenCreateInput"),
     ), Capability.Write
 
 
@@ -351,64 +143,7 @@ def create_linode_monitor_service_alert_definition_create_tool() -> tuple[
     return Tool(
         name="linode_monitor_service_alert_definition_create",
         description="Creates an alert definition for a Linode Metrics service type.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                },
-                "label": {"type": "string", "description": "Alert label (required)"},
-                "severity": {
-                    "type": "integer",
-                    "description": "Alert severity value (required)",
-                },
-                "rule_criteria": {
-                    "type": "object",
-                    "description": "Alert rule criteria (required)",
-                },
-                "trigger_conditions": {
-                    "type": "object",
-                    "description": "Alert trigger conditions (required)",
-                },
-                "channel_ids": {
-                    "type": "array",
-                    "items": {"type": "integer"},
-                    "minItems": 1,
-                    "description": "Notification channel IDs (required)",
-                },
-                "description": {"type": "string", "description": "Alert description"},
-                "entity_ids": {
-                    "type": "array",
-                    "items": {"type": "integer"},
-                    "minItems": 1,
-                    "description": "Optional service entity IDs",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "service_type",
-                "label",
-                "severity",
-                "rule_criteria",
-                "trigger_conditions",
-                "channel_ids",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionCreateInput"),
     ), Capability.Write
 
 
@@ -419,30 +154,7 @@ def create_linode_monitor_service_alert_definition_get_tool() -> tuple[
     return Tool(
         name="linode_monitor_service_alert_definition_get",
         description="Gets an alert definition for a Linode Metrics service type.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                },
-                "alert_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Alert definition ID to get (required)",
-                },
-            },
-            "required": ["service_type", "alert_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorAlertDefinitionGetInput"),
     ), Capability.Read
 
 
@@ -456,34 +168,7 @@ def create_linode_monitor_service_alert_definition_delete_tool() -> tuple[
             "Deletes an alert definition for a Linode Metrics service type."
             " Pass dry_run=true to preview without deleting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": (
-                        "Metrics service type, e.g. 'dbaas' or 'linode' (required)"
-                    ),
-                    "pattern": "^[A-Za-z0-9_-]+$",
-                },
-                "alert_id": {
-                    "type": "integer",
-                    "description": "Alert definition ID to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["service_type", "alert_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorAlertDefinitionDeleteInput"),
     ), Capability.Destroy
 
 
@@ -560,8 +245,8 @@ async def handle_linode_monitor_dashboard_list(
 ) -> list[TextContent]:
     """Handle linode_monitor_dashboard_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -581,8 +266,8 @@ async def handle_linode_monitor_alert_definition_list(
 ) -> list[TextContent]:
     """Handle linode_monitor_alert_definition_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -604,8 +289,8 @@ async def handle_linode_monitor_alert_channel_list(
 ) -> list[TextContent]:
     """Handle linode_monitor_alert_channel_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -654,12 +339,10 @@ async def handle_linode_monitor_dashboard_get(
     dashboard_id = raw_dashboard_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.get_monitor_dashboard(dashboard_id)
-        return {
-            "message": f"Monitor dashboard {dashboard_id} retrieved",
-            "dashboard_id": dashboard_id,
-            "dashboard": data,
-        }
+        return serialize_api_response(
+            await client.get_monitor_dashboard(dashboard_id),
+            monitor_pb2.MonitorDashboard(),
+        )
 
     return await execute_tool(cfg, arguments, "get monitor dashboard", _call)
 
@@ -712,10 +395,12 @@ async def handle_linode_monitor_service_alert_definition_list(
     )
 
 
-def _coerce_entity_ids(raw: object) -> list[int] | None:
-    """Return raw as a list of ints, or None if any element is not an int.
+def _coerce_positive_ids(raw: object) -> list[int] | None:
+    """Return raw as a list of positive ints, or None on any invalid element.
 
-    Typed `object` rather than `Any`; the inner cast satisfies pyright strict
+    Mirrors Go's intArrayArgument / monitorServiceTokenEntityIDsFromTool:
+    the list must be non-empty and every element a positive integer. Typed
+    `object` rather than `Any`; the inner cast satisfies pyright strict
     mode by giving each iterated item a known type to narrow from.
     """
     if not isinstance(raw, list) or not raw:
@@ -726,7 +411,25 @@ def _coerce_entity_ids(raw: object) -> list[int] | None:
     result: list[int] = []
     for item in items:
         # bool is a subclass of int; reject it explicitly to avoid `True` -> 1.
-        if isinstance(item, bool) or not isinstance(item, int):
+        if isinstance(item, bool) or not isinstance(item, int) or item <= 0:
+            return None
+        result.append(item)
+    return result
+
+
+def _coerce_entity_id_strings(raw: object) -> list[str] | None:
+    """Return raw as a list of non-blank strings, or None on any invalid element.
+
+    Alert-definition entity_ids are strings in the Linode Metrics API (and in
+    the shared proto contract); this mirrors Go's optionalStringArrayArgument,
+    which accepts an empty array but rejects non-string or blank elements.
+    """
+    if not isinstance(raw, list):
+        return None
+    items = cast("list[object]", raw)
+    result: list[str] = []
+    for item in items:
+        if not isinstance(item, str) or not item.strip():
             return None
         result.append(item)
     return result
@@ -751,17 +454,19 @@ def _build_alert_definition_create_args(
     raw_severity = arguments.get("severity")
     rule_criteria = arguments.get("rule_criteria")
     trigger_conditions = arguments.get("trigger_conditions")
-    channel_ids = _coerce_entity_ids(arguments.get("channel_ids"))
+    channel_ids = _coerce_positive_ids(arguments.get("channel_ids"))
     description = arguments.get("description")
-    entity_ids = None
+    entity_ids: list[str] | None = None
+    entity_ids_invalid = False
     if "entity_ids" in arguments:
-        entity_ids = _coerce_entity_ids(arguments.get("entity_ids"))
+        coerced = _coerce_entity_id_strings(arguments.get("entity_ids"))
+        entity_ids_invalid = coerced is None
+        # An empty entity_ids array is accepted but omitted from the request
+        # body, matching Go's omitempty encoding of the same field.
+        entity_ids = coerced or None
 
     if require_confirm and arguments.get("confirm") is not True:
-        error = (
-            "This creates a Linode Metrics alert definition. "
-            "Set confirm=true to proceed."
-        )
+        error = "This creates a monitor alert definition. Set confirm=true to proceed."
     elif service_type is None:
         error = (
             "service_type is required and must contain only letters, "
@@ -778,9 +483,9 @@ def _build_alert_definition_create_args(
     elif not isinstance(trigger_conditions, dict) or not trigger_conditions:
         error = "trigger_conditions must be a non-empty object"
     elif channel_ids is None:
-        error = "channel_ids must be a non-empty list of integers"
-    elif "entity_ids" in arguments and entity_ids is None:
-        error = "entity_ids must be a non-empty list of integers"
+        error = "channel_ids must be a non-empty array of positive integers"
+    elif entity_ids_invalid:
+        error = "entity_ids must be an array of non-empty strings"
     elif description is not None and not isinstance(description, str):
         error = "description must be a string"
     else:
@@ -806,9 +511,11 @@ async def handle_linode_monitor_service_token_create(
     if not service_type or not isinstance(service_type, str):
         return error_response("service_type is required")
 
-    entity_ids = _coerce_entity_ids(arguments.get("entity_ids"))
+    entity_ids = _coerce_positive_ids(arguments.get("entity_ids"))
     if entity_ids is None:
-        return error_response("entity_ids must be a non-empty list of integers")
+        return error_response(
+            "entity_ids must be a non-empty array of positive integers"
+        )
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -821,17 +528,14 @@ async def handle_linode_monitor_service_token_create(
 
     if not arguments.get("confirm"):
         return error_response(
-            "This creates a Linode Metrics service token. Set confirm=true to proceed."
+            "This creates a monitor service token. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.create_monitor_service_token(service_type, entity_ids)
-        # Emit the bare token object to match the Go implementation's shape
-        # ({"token": ..., "expiry": ...}), not a {message, ...} envelope.
-        return {
-            "token": data.get("token"),
-            "expiry": data.get("expiry"),
-        }
+        return serialize_api_response(
+            data, monitor_pb2.MonitorServiceTokenCreateResponse()
+        )
 
     return await execute_tool(cfg, arguments, "create monitor service token", _call)
 
@@ -906,16 +610,10 @@ async def handle_linode_monitor_service_alert_definition_get(
     alert_id = raw_alert_id
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.get_monitor_service_alert_definition(service_type, alert_id)
-        return {
-            "message": (
-                f"Monitor service alert definition {alert_id} "
-                f"retrieved for '{service_type}'"
-            ),
-            "service_type": service_type,
-            "alert_id": alert_id,
-            "alert_definition": data,
-        }
+        return serialize_api_response(
+            await client.get_monitor_service_alert_definition(service_type, alert_id),
+            monitor_pb2.MonitorAlertDefinition(),
+        )
 
     return await execute_tool(
         cfg, arguments, "get monitor service alert definition", _call
@@ -958,8 +656,7 @@ async def handle_linode_monitor_service_alert_definition_delete(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This deletes a Linode Metrics alert definition. "
-            "Set confirm=true to proceed."
+            "This deletes a monitor alert definition. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -991,39 +688,7 @@ def create_linode_monitor_service_alert_definition_update_tool() -> tuple[
             "Updates a Linode Metrics alert definition for a service type."
             " Pass dry_run=true to preview without modifying."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "service_type": {
-                    "type": "string",
-                    "description": "Monitor service type.",
-                },
-                "alert_id": {
-                    "type": "integer",
-                    "description": "Alert definition ID.",
-                },
-                "channel_ids": {"type": "array", "items": {"type": "integer"}},
-                "description": {"type": "string"},
-                "entity_ids": {"type": "array", "items": {"type": "integer"}},
-                "label": {"type": "string"},
-                "rule_criteria": {"type": "object"},
-                "severity": {"type": "integer", "enum": [0, 1, 2, 3]},
-                "status": {"type": "string", "enum": ["enabled", "disabled"]},
-                "trigger_conditions": {"type": "object"},
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["service_type", "alert_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionUpdateInput"),
     ), Capability.Write
 
 
@@ -1053,6 +718,47 @@ def _validate_alert_target(
     return service_type, raw_alert_id, None
 
 
+def _validate_alert_update_fields(fields: dict[str, Any]) -> str | None:
+    """Validate the present alert-definition update fields, trimming label.
+
+    Mirrors Go's monitorServiceAlertDefinitionUpdateRequestFromTool so both
+    languages reject the same malformed update payloads locally instead of
+    passing them through to the API. Only fields present in the payload are
+    checked; entity_ids must be a non-empty array of non-blank strings on
+    update (unlike create, where an empty array is accepted and omitted).
+    """
+    error: str | None = None
+    label = fields.get("label")
+    if "label" in fields and (not isinstance(label, str) or not label.strip()):
+        error = "label must be a non-empty string"
+    elif "severity" in fields and (
+        type(fields["severity"]) is not int or fields["severity"] not in {0, 1, 2, 3}
+    ):
+        error = "severity must be an integer from 0 through 3"
+    elif "status" in fields and fields["status"] not in {"enabled", "disabled"}:
+        error = "status must be enabled or disabled"
+    elif "rule_criteria" in fields and (
+        not isinstance(fields["rule_criteria"], dict) or not fields["rule_criteria"]
+    ):
+        error = "rule_criteria must be a non-empty object"
+    elif "trigger_conditions" in fields and (
+        not isinstance(fields["trigger_conditions"], dict)
+        or not fields["trigger_conditions"]
+    ):
+        error = "trigger_conditions must be a non-empty object"
+    elif (
+        "channel_ids" in fields and _coerce_positive_ids(fields["channel_ids"]) is None
+    ):
+        error = "channel_ids must be a non-empty array of positive integers"
+    elif "entity_ids" in fields and not _coerce_entity_id_strings(fields["entity_ids"]):
+        error = "entity_ids must be an array of non-empty strings"
+    elif "description" in fields and not isinstance(fields["description"], str):
+        error = "description must be a string"
+    elif isinstance(label, str):
+        fields["label"] = label.strip()
+    return error
+
+
 async def handle_linode_monitor_service_alert_definition_update(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -1079,8 +785,7 @@ async def handle_linode_monitor_service_alert_definition_update(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This updates a Linode Metrics alert definition. "
-            "Set confirm=true to proceed."
+            "This updates a monitor alert definition. Set confirm=true to proceed."
         )
     payload_keys = (
         "channel_ids",
@@ -1099,6 +804,10 @@ async def handle_linode_monitor_service_alert_definition_update(
     }
     if not fields:
         return error_response("at least one update field is required")
+
+    validation_error = _validate_alert_update_fields(fields)
+    if validation_error is not None:
+        return error_response(validation_error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         data = await client.update_monitor_alert_definition(

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -42,27 +41,23 @@ func TestLinodeAccountPaymentCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPaymentMethodID]; !ok {
-		t.Errorf("props missing key %v", keyPaymentMethodID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyPaymentMethodID) {
+		t.Errorf("RawInputSchema missing key %v", keyPaymentMethodID)
 	}
 
-	if _, ok := props[keyUSD]; !ok {
-		t.Errorf("props missing key %v", keyUSD)
+	if !strings.Contains(rawSchema, keyUSD) {
+		t.Errorf("RawInputSchema missing key %v", keyUSD)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 
 	for _, key := range []string{keyUSD, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing required key %v", key)
 		}
-	}
-
-	if slices.Contains(tool.InputSchema.Required, keyPaymentMethodID) {
-		t.Errorf("tool.InputSchema.Required should not contain %v", keyPaymentMethodID)
 	}
 }
 

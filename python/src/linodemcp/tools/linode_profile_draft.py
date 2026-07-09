@@ -21,12 +21,15 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
 from linodemcp.profiles import Capability
 from linodemcp.profiles.builder import (
     Draft,
     DraftExistsError,
     Registry,
 )
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -161,28 +164,7 @@ def create_linode_profile_draft_new_tool() -> tuple[Tool, Capability]:
                 "linode_profile_draft_save (Phase 8.5) to write it to "
                 "the config file."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_NAME: {
-                        "type": "string",
-                        "description": (
-                            "Name for the new draft. Must be unique "
-                            "within the registry."
-                        ),
-                    },
-                    _ARG_CLONE_FROM: {
-                        "type": "string",
-                        "description": (
-                            "Optional profile name to seed the draft "
-                            "from. Resolves against built-ins and "
-                            "user-defined profiles; user-defined shadow "
-                            "built-ins by name."
-                        ),
-                    },
-                },
-                "required": [_ARG_NAME],
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileDraftNewInput"),
         ),
         Capability.Meta,
     )
@@ -219,8 +201,10 @@ async def handle_linode_profile_draft_new(
     registry = _require_registry()
     draft = registry.create(name, source)
 
-    payload = json.dumps(_draft_to_payload(draft))
-    return [TextContent(type="text", text=payload)]
+    result = serialize_api_response(
+        _draft_to_payload(draft), profile_builder_pb2.ProfileDraftResponse()
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def create_linode_profile_draft_show_tool() -> tuple[Tool, Capability]:
@@ -234,16 +218,7 @@ def create_linode_profile_draft_show_tool() -> tuple[Tool, Capability]:
                 "environments, required token scopes, and the "
                 "allow_yolo flag."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_NAME: {
-                        "type": "string",
-                        "description": "Draft name to show.",
-                    },
-                },
-                "required": [_ARG_NAME],
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileDraftShowInput"),
         ),
         Capability.Meta,
     )
@@ -267,8 +242,10 @@ async def handle_linode_profile_draft_show(
     if draft is None:
         raise DraftNotFoundError(name)
 
-    payload = json.dumps(_draft_to_payload(draft))
-    return [TextContent(type="text", text=payload)]
+    result = serialize_api_response(
+        _draft_to_payload(draft), profile_builder_pb2.ProfileDraftResponse()
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def create_linode_profile_draft_discard_tool() -> tuple[Tool, Capability]:
@@ -282,16 +259,7 @@ def create_linode_profile_draft_discard_tool() -> tuple[Tool, Capability]:
                 "(no error), so the model can call it from cleanup "
                 "paths without first checking existence."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_NAME: {
-                        "type": "string",
-                        "description": "Draft name to discard.",
-                    },
-                },
-                "required": [_ARG_NAME],
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileDraftDiscardInput"),
         ),
         Capability.Meta,
     )
@@ -315,8 +283,11 @@ async def handle_linode_profile_draft_discard(
     registry = _require_registry()
     removed = registry.discard(name)
 
-    payload = json.dumps({"name": name, "discarded": removed})
-    return [TextContent(type="text", text=payload)]
+    result = serialize_api_response(
+        {"name": name, "discarded": removed},
+        profile_builder_pb2.ProfileDraftDiscardResponse(),
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 # Re-export DraftExistsError so tests can match without importing from

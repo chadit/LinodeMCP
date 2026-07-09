@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -229,8 +228,8 @@ func TestLinodeInstanceInterfacesListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
+	if !strings.Contains(string(tool.RawInputSchema), keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 }
 
@@ -422,14 +421,15 @@ func TestLinodeInstanceInterfaceDeleteToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyInterfaceID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 

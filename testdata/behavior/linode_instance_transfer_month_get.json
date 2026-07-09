@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_transfer_month_get",
+  "description": "GETs a specific month's network transfer totals. The linode_id/year/month rejection texts diverge between the languages, so only the success request is fixtured (see report).",
+  "cases": [
+    {
+      "name": "gets a month of transfer totals with a plain GET",
+      "args": { "linode_id": 123, "year": 2024, "month": 1 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/transfer/2024/1" }
+    }
+  ]
+}

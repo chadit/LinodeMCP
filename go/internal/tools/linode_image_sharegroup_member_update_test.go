@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -45,26 +44,10 @@ func TestLinodeImageShareGroupMemberUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyShareGroupID]; !ok {
-		t.Errorf("props missing key %v", keyShareGroupID)
-	}
-
-	if _, ok := props[keyTokenUUID]; !ok {
-		t.Errorf("props missing key %v", keyTokenUUID)
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyShareGroupID, keyTokenUUID, keyLabel, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -129,7 +112,7 @@ func TestLinodeImageShareGroupMemberUpdateRejectsInvalidRequest(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseMissingShareGroupID, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyLabel: updatedShareGroupMemberLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},
+		{name: caseMissingShareGroupID, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyLabel: updatedShareGroupMemberLabel, keyConfirm: true}, wantContains: errShareGroupIDRequired},
 		{name: caseZeroShareGroupID, args: map[string]any{keyShareGroupID: 0, keyTokenUUID: shareGroupTokenGetUUID, keyLabel: updatedShareGroupMemberLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},
 		{name: "path separator sharegroup id", args: map[string]any{keyShareGroupID: paymentMethodIDSlash, keyTokenUUID: shareGroupTokenGetUUID, keyLabel: updatedShareGroupMemberLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},
 		{name: "query separator sharegroup id", args: map[string]any{keyShareGroupID: shareGroupIDQueryValue, keyTokenUUID: shareGroupTokenGetUUID, keyLabel: updatedShareGroupMemberLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},

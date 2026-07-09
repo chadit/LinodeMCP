@@ -1,0 +1,17 @@
+{
+  "tool": "linode_instance_interface_upgrade",
+  "description": "Pins the interface-upgrade POST. linode_id, config_id, and api_dry_run rejection text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "upgrades legacy interfaces",
+      "args": { "linode_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/linode/instances/123/upgrade-interfaces" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123},
+      "expect_error": "This irreversibly upgrades Linode network interfaces. Set confirm=true to proceed."
+    }
+  ]
+}

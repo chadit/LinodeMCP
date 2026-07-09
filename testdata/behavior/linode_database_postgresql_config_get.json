@@ -1,0 +1,12 @@
+{
+  "tool": "linode_database_postgresql_config_get",
+  "description": "No local validation on this tool; pins the bare config GET the handler issues.",
+  "cases": [
+    {
+      "name": "gets postgresql advanced parameters",
+      "args": {},
+      "api_response": { "pg": {} },
+      "expect_request": { "method": "GET", "path": "/databases/postgresql/config" }
+    }
+  ]
+}

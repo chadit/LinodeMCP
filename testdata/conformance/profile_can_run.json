@@ -1,0 +1,56 @@
+{
+  "message": "linode.mcp.v1.ProfileCanRunResponse",
+  "description": "Can-run verdict body: per-call rows (reason/remedy omitted when allowed) plus the summary counts.",
+  "input": {
+    "active_profile": "readonly-full",
+    "results": [
+      {
+        "tool": "linode_instance_list",
+        "allowed": true
+      },
+      {
+        "tool": "linode_instance_delete",
+        "allowed": false,
+        "reason": "tool is not in the active profile (CapDestroy)",
+        "remedy": "switch to a profile that permits linode_instance_delete, or use yolo on a profile that allows it"
+      }
+    ],
+    "summary": {
+      "total": 2,
+      "allowed": 1,
+      "blocked": 1,
+      "blocked_by_reason": {
+        "capability": 1,
+        "env_block": 0,
+        "profile_block": 0,
+        "unregistered": 0
+      }
+    }
+  },
+  "canonical": {
+    "active_profile": "readonly-full",
+    "results": [
+      {
+        "tool": "linode_instance_list",
+        "allowed": true
+      },
+      {
+        "tool": "linode_instance_delete",
+        "allowed": false,
+        "reason": "tool is not in the active profile (CapDestroy)",
+        "remedy": "switch to a profile that permits linode_instance_delete, or use yolo on a profile that allows it"
+      }
+    ],
+    "summary": {
+      "total": 2,
+      "allowed": 1,
+      "blocked": 1,
+      "blocked_by_reason": {
+        "capability": 1,
+        "env_block": 0,
+        "profile_block": 0,
+        "unregistered": 0
+      }
+    }
+  }
+}

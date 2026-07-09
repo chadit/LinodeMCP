@@ -1,0 +1,12 @@
+{
+  "tool": "linode_profile_preferences_get",
+  "description": "Pins the bare profile-preferences GET path both languages issue.",
+  "cases": [
+    {
+      "name": "gets profile preferences",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/profile/preferences" }
+    }
+  ]
+}

@@ -44,7 +44,7 @@ def test_longview_client_delete_tool_schema() -> None:
     assert tool.name == "linode_longview_client_delete"
     assert capability is Capability.Destroy
     properties = tool.inputSchema["properties"]
-    assert properties["client_id"]["minimum"] == 1
+    assert properties["client_id"]["type"] == "integer"
     assert properties["confirm"]["type"] == "boolean"
     assert properties["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["required"] == ["client_id", "confirm"]
@@ -212,9 +212,8 @@ def test_longview_clients_list_tool_schema() -> None:
     assert tool.name == "linode_longview_client_list"
     assert capability is Capability.Read
     properties = tool.inputSchema["properties"]
-    assert properties["page"]["minimum"] == 1
-    assert properties["page_size"]["minimum"] == 25
-    assert properties["page_size"]["maximum"] == 500
+    assert properties["page"]["type"] == "integer"
+    assert properties["page_size"]["type"] == "integer"
     assert "required" not in tool.inputSchema
 
 
@@ -246,9 +245,8 @@ def test_longview_subscriptions_list_tool_schema() -> None:
     assert tool.name == "linode_longview_subscription_list"
     assert capability is Capability.Read
     properties = tool.inputSchema["properties"]
-    assert properties["page"]["minimum"] == 1
-    assert properties["page_size"]["minimum"] == 25
-    assert properties["page_size"]["maximum"] == 500
+    assert properties["page"]["type"] == "integer"
+    assert properties["page_size"]["type"] == "integer"
     assert "required" not in tool.inputSchema
 
 
@@ -278,9 +276,9 @@ async def test_longview_subscriptions_list_handler_calls_client_with_pagination(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"page": 0}, "page must be at least 1"),
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page": "2"}, "page must be an integer"),
         ({"page_size": True}, "page_size must be an integer"),
     ],
@@ -326,6 +324,15 @@ async def test_longview_plan_get_handler_calls_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake = _FakeClient()
+    # The handler routes the raw plan through the LongviewSubscription proto, so a
+    # field the proto does not model must drop, proving proto-canonical output.
+    fake.get_longview_plan.return_value = {
+        "id": "longview-100",
+        "label": "Longview Pro",
+        "clients_included": 40,
+        "price": {"hourly": 0.06, "monthly": 40.0},
+        "not_in_proto": "dropped",
+    }
 
     async def fake_execute_tool(
         cfg: object, arguments: dict[str, Any], action: str, call: Any
@@ -340,16 +347,18 @@ async def test_longview_plan_get_handler_calls_client(
     )
 
     fake.get_longview_plan.assert_awaited_once_with()
-    assert "Longview Pro" in _text(result)
+    text = _text(result)
+    assert "Longview Pro" in text
+    assert "not_in_proto" not in text
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"page": 0}, "page must be at least 1"),
-        ({"page_size": 24}, "page_size must be at least 25"),
-        ({"page_size": 501}, "page_size must be at most 500"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
         ({"page": "2"}, "page must be an integer"),
         ({"page_size": True}, "page_size must be an integer"),
     ],

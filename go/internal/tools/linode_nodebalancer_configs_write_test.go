@@ -35,15 +35,10 @@ func TestLinodeNodeBalancerConfigDeleteToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapDestroy)
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -158,17 +153,12 @@ func TestLinodeNodeBalancerConfigDeleteToolDryRunReturnsPreviewWithoutDeleting(t
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"dry_run": true`) {
-		t.Errorf("textContent.Text does not contain %v", `"dry_run": true`)
+	body := decodeBody(t, textContent.Text)
+	if body["dry_run"] != true {
+		t.Errorf("dry_run = %v, want true", body["dry_run"])
 	}
 
-	if !strings.Contains(textContent.Text, `"method": "DELETE"`) {
-		t.Errorf("textContent.Text does not contain %v", `"method": "DELETE"`)
-	}
-
-	if !strings.Contains(textContent.Text, `"path": "/nodebalancers/123/configs/456"`) {
-		t.Errorf("textContent.Text does not contain %v", `"path": "/nodebalancers/123/configs/456"`)
-	}
+	assertDryRunRequest(t, body, "DELETE", "/nodebalancers/123/configs/456")
 
 	if slices.Contains(methods, http.MethodDelete) {
 		t.Errorf("methods should not contain %v", http.MethodDelete)

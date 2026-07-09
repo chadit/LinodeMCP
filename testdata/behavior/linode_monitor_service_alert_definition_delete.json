@@ -1,0 +1,17 @@
+{
+  "tool": "linode_monitor_service_alert_definition_delete",
+  "description": "Destroy tool. Pins the confirm-alone destroy gate and the bypassed DELETE. No-confirm rejections diverge: Go's gate returns its confirm message before validating service_type/alert_id, while Python validates path args first, and the two confirm messages differ (see report).",
+  "cases": [
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": { "service_type": "dbaas", "alert_id": 42, "confirm": true },
+      "expect_error": "linode_monitor_service_alert_definition_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the monitor service alert definition",
+      "args": { "service_type": "dbaas", "alert_id": 42, "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/monitor/services/dbaas/alert-definitions/42" }
+    }
+  ]
+}

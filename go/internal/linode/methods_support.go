@@ -1,9 +1,14 @@
 package linode
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -96,14 +101,22 @@ func (c *Client) httpGetSupportTicketProto(ctx context.Context, ticketID int) (*
 	return ticket, nil
 }
 
-// httpCreateSupportTicketAttachment creates an attachment for a support ticket.
+// httpCreateSupportTicketAttachment uploads a local file as an attachment for a
+// support ticket. The endpoint consumes multipart/form-data (not JSON), so the
+// file is read from request.File and sent under the "file" form field, mirroring
+// Python's make_file_request.
 func (c *Client) httpCreateSupportTicketAttachment(ctx context.Context, ticketID int, request *CreateSupportTicketAttachmentRequest) (*SupportTicketAttachment, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
+	body, contentType, err := supportTicketAttachmentBody(request.File)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateSupportTicketAttachment", Err: err}
+	}
+
 	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/attachments"
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	resp, err := c.makeRequestWithContentType(ctx, http.MethodPost, endpoint, body, contentType)
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateSupportTicketAttachment", Err: err}
 	}
@@ -116,6 +129,35 @@ func (c *Client) httpCreateSupportTicketAttachment(ctx context.Context, ticketID
 	}
 
 	return &attachment, nil
+}
+
+// supportTicketAttachmentBody reads the file at path into a multipart/form-data
+// body under the "file" field and returns the body plus the content type that
+// carries the boundary. The filename is the base name, matching Python's
+// make_file_request (files={"file": (path.name, handle)}).
+func supportTicketAttachmentBody(path string) (*bytes.Buffer, string, error) {
+	content, err := os.ReadFile(path) // #nosec G304 -- path is the user-selected local file to upload; reading it is the tool's purpose (mirrors Python make_file_request)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read attachment file: %w", err)
+	}
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	part, err := writer.CreateFormFile("file", filepath.Base(path))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to build attachment form field: %w", err)
+	}
+
+	if _, err := part.Write(content); err != nil {
+		return nil, "", fmt.Errorf("failed to write attachment content: %w", err)
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, "", fmt.Errorf("failed to finalize attachment body: %w", err)
+	}
+
+	return body, writer.FormDataContentType(), nil
 }
 
 // httpCreateSupportTicketReply creates a reply for an existing support ticket.

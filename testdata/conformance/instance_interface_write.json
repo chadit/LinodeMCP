@@ -1,0 +1,44 @@
+{
+  "message": "linode.mcp.v1.InstanceInterfaceWriteResponse",
+  "description": "Current-generation interface write envelope (add, update): a confirmation message plus the affected Linode network interface, exercising the vpc oneof arm with a nested ipv4 address, the default_route message, and every optional scalar.",
+  "input": {
+    "message": "Interface added to instance 123 successfully",
+    "interface": {
+      "id": 456,
+      "vpc": {
+        "subnet_id": 12,
+        "ipv4": {
+          "addresses": [
+            {"address": "10.0.0.5", "primary": true}
+          ]
+        }
+      },
+      "default_route": {"ipv4": true, "ipv6": false},
+      "firewall_id": 99,
+      "mac_address": "22:00:AB:CD:EF:02",
+      "created": "2024-01-01T00:00:00",
+      "updated": "2024-01-02T00:00:00",
+      "version": 1
+    }
+  },
+  "canonical": {
+    "message": "Interface added to instance 123 successfully",
+    "interface": {
+      "id": 456,
+      "vpc": {
+        "subnet_id": 12,
+        "ipv4": {
+          "addresses": [
+            {"address": "10.0.0.5", "primary": true}
+          ]
+        }
+      },
+      "default_route": {"ipv4": true, "ipv6": false},
+      "firewall_id": 99,
+      "mac_address": "22:00:AB:CD:EF:02",
+      "created": "2024-01-01T00:00:00",
+      "updated": "2024-01-02T00:00:00",
+      "version": 1
+    }
+  }
+}

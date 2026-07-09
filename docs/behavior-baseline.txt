@@ -1,0 +1,7 @@
+# Behavior-conformance coverage: tools with no shared behavior fixture in
+# testdata/behavior/. One line per uncovered tool. Ratchet: add a fixture
+# file exercising the tool's validation and outgoing request in both
+# language runners, then remove its line; never add a line by hand.
+# Regenerate:
+#   python scripts/verify_behavior.py --update-baseline
+

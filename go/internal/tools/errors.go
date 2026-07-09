@@ -11,12 +11,15 @@ var (
 	ErrLinodeIDRequired       = errors.New("linode_id is required")
 	ErrLinodeIDInvalid        = errors.New("linode_id must be a valid integer")
 	errUnexpectedTrailingJSON = errors.New("unexpected trailing JSON")
-	ErrBackupIDRequired       = errors.New("backup_id is required")
-	ErrBackupIDInvalid        = errors.New("backup_id must be a valid integer")
-	ErrConfigIDRequired       = errors.New("config_id is required")
-	ErrInterfaceIDRequired    = errors.New("interface_id is required")
-	ErrDiskIDRequired         = errors.New("disk_id is required")
-	ErrDiskIDInvalid          = errors.New("disk_id must be a valid integer")
+	// errUnexpectedKeyToken reports a non-string object key, which valid
+	// JSON never produces; it guards the widenObject type assertion.
+	errUnexpectedKeyToken  = errors.New("unexpected object key token")
+	ErrBackupIDRequired    = errors.New("backup_id is required")
+	ErrBackupIDInvalid     = errors.New("backup_id must be a valid integer")
+	ErrConfigIDRequired    = errors.New("config_id is required")
+	ErrInterfaceIDRequired = errors.New("interface_id is required")
+	ErrDiskIDRequired      = errors.New("disk_id is required")
+	ErrDiskIDInvalid       = errors.New("disk_id must be a valid integer")
 )
 
 // Sentinel errors for image share group validation.
@@ -51,11 +54,6 @@ var (
 	ErrDNSTargetInvalidAAAA = errors.New("aaaa record target must be a valid IPv6 address")
 )
 
-// Sentinel errors for firewall validation.
-var (
-	ErrFirewallPolicyInvalid = errors.New("firewall policy must be 'ACCEPT' or 'DROP'")
-)
-
 // Sentinel errors for volume validation.
 var (
 	ErrVolumeSizeTooSmall = errors.New("volume size must be at least 10 GB")
@@ -85,14 +83,12 @@ var (
 	ErrKeyLabelRequired        = errors.New("label is required")
 	ErrKeyLabelTooLong         = errors.New("access key label must not exceed 50 characters")
 	ErrKeyIDRequired           = errors.New("key_id is required and must be a positive integer")
-	ErrKeyPermissionsInvalid   = errors.New("bucket_access permissions must be 'read_only' or 'read_write'")
 	ErrKeyBucketNameRequired   = errors.New("bucket_access entries must include bucket_name")
 	ErrKeyBucketRegionRequired = errors.New("bucket_access entries must include region")
 )
 
 // Sentinel errors for presigned URL validation.
 var (
-	ErrPresignedMethodInvalid  = errors.New("method must be 'GET' or 'PUT'")
 	ErrPresignedExpiresInvalid = errors.New("expires_in must be between 1 and 604800 seconds (7 days)")
 	ErrObjectNameRequired      = errors.New("name (object key) is required")
 )
@@ -104,7 +100,6 @@ var (
 	ErrLKEPoolIDRequired    = errors.New("pool_id is required")
 	ErrLKEPoolIDInvalid     = errors.New("pool_id must be a valid integer")
 	ErrLKETierRequired      = errors.New("tier is required")
-	ErrLKETierInvalid       = errors.New("tier must be 'standard' or 'enterprise'")
 )
 
 // Sentinel errors for VPC validation.

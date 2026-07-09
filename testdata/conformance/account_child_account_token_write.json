@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.AccountChildAccountTokenWriteResponse",
+  "description": "Child account proxy token create envelope: a confirmation message and the full ProxyUserToken element (the token is returned by design).",
+  "input": {
+    "message": "Child account proxy token created successfully",
+    "token": {
+      "created": "2024-05-01T00:01:01",
+      "expiry": "2024-05-01T00:16:01",
+      "id": 918,
+      "label": "proxy-token",
+      "scopes": "*",
+      "token": "abcdefghijklmnop"
+    }
+  },
+  "canonical": {
+    "message": "Child account proxy token created successfully",
+    "token": {
+      "created": "2024-05-01T00:01:01",
+      "expiry": "2024-05-01T00:16:01",
+      "id": 918,
+      "label": "proxy-token",
+      "scopes": "*",
+      "token": "abcdefghijklmnop"
+    }
+  }
+}

@@ -7,16 +7,15 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from mcp.types import TextContent, Tool
 
-from linodemcp.genpb.linode.mcp.v1 import lke_pool_pb2
+from linodemcp.genpb.linode.mcp.v1 import (
+    lke_kubeconfig_pb2,
+    lke_node_pb2,
+    lke_pb2,
+    lke_pool_pb2,
+)
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -25,8 +24,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
-from linodemcp.tools.linode_lke import lke_cluster_to_response_dict
 from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -34,71 +33,13 @@ if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
 
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-
-_CLUSTER_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the LKE cluster (required)",
-}
-
-_CONFIRM_PROP: dict[str, Any] = {
-    "type": "boolean",
-    "description": "Must be true to confirm this operation.",
-}
-
 
 def create_linode_lke_cluster_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_lke_cluster_create tool."""
     return Tool(
         name="linode_lke_cluster_create",
         description="Creates a new LKE (Kubernetes) cluster",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "Label for the cluster (required)",
-                },
-                "region": {
-                    "type": "string",
-                    "description": "Region for the cluster (required)",
-                },
-                "k8s_version": {
-                    "type": "string",
-                    "description": "Kubernetes version (required)",
-                },
-                "node_pools": {
-                    "type": "array",
-                    "description": (
-                        "Node pools: [{type, count, autoscaler?, tags?}] (required)"
-                    ),
-                    "items": {"type": "object"},
-                },
-                "tags": {
-                    "type": "array",
-                    "description": "Tags for the cluster",
-                    "items": {"type": "string"},
-                },
-                "control_plane": {
-                    "type": "object",
-                    "description": "Control plane config: {high_availability: bool}",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. This incurs billing."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "region", "k8s_version", "node_pools", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEClusterCreateInput"),
     ), Capability.Write
 
 
@@ -146,15 +87,9 @@ async def handle_linode_lke_cluster_create(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text=(
-                    "Error: This creates a billable resource. "
-                    "Set confirm=true to proceed."
-                ),
-            )
-        ]
+        return error_response(
+            "This creates billable Kubernetes resources. Set confirm=true to proceed."
+        )
 
     label = arguments.get("label", "")
     region = arguments.get("region", "")
@@ -172,15 +107,18 @@ async def handle_linode_lke_cluster_create(
             tags=tags,
             control_plane=control_plane,
         )
-        return {
-            "message": (
-                f"LKE cluster '{cluster.get('label', '')}' "
-                f"(ID: {cluster.get('id', 0)}) created in "
-                f"{cluster.get('region', '')} with Kubernetes "
-                f"{cluster.get('k8s_version', '')}"
-            ),
-            "cluster": lke_cluster_to_response_dict(cluster),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"LKE cluster '{cluster.get('label', '')}' "
+                    f"(ID: {cluster.get('id', 0)}) created in "
+                    f"{cluster.get('region', '')} with Kubernetes "
+                    f"{cluster.get('k8s_version', '')}"
+                ),
+                "cluster": cluster,
+            },
+            lke_pb2.LKEClusterWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create LKE cluster", _call)
 
@@ -193,33 +131,7 @@ def create_linode_lke_cluster_update_tool() -> tuple[Tool, Capability]:
             "Updates an existing LKE cluster."
             " Pass dry_run=true to preview without modifying."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "New label for the cluster",
-                },
-                "k8s_version": {
-                    "type": "string",
-                    "description": "New Kubernetes version",
-                },
-                "tags": {
-                    "type": "array",
-                    "description": "New tags for the cluster",
-                    "items": {"type": "string"},
-                },
-                "control_plane": {
-                    "type": "object",
-                    "description": "Control plane config: {high_availability: bool}",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEClusterUpdateInput"),
     ), Capability.Write
 
 
@@ -282,7 +194,9 @@ async def handle_linode_lke_cluster_update(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This modifies the LKE cluster configuration. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         cluster = await client.update_lke_cluster(
@@ -292,10 +206,13 @@ async def handle_linode_lke_cluster_update(
             tags=arguments.get("tags"),
             control_plane=arguments.get("control_plane"),
         )
-        return {
-            "message": f"LKE cluster {cluster_id} modified successfully",
-            "cluster": lke_cluster_to_response_dict(cluster),
-        }
+        return serialize_api_response(
+            {
+                "message": f"LKE cluster {cluster_id} modified successfully",
+                "cluster": cluster,
+            },
+            lke_pb2.LKEClusterWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update LKE cluster", _call)
 
@@ -309,24 +226,7 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["cluster_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEClusterDeleteInput"),
     ), Capability.Destroy
 
 
@@ -381,10 +281,13 @@ async def _lke_cluster_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_cluster(cluster_id)
-        return {
-            "message": f"LKE cluster {cluster_id} removed successfully",
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"LKE cluster {cluster_id} removed successfully",
+                "cluster_id": cluster_id,
+            },
+            lke_pb2.LKEClusterDeleteResponse(),
+        )
 
     async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
         return await _lke_cluster_delete_dependency_walk(client, cluster_id)
@@ -438,19 +341,20 @@ async def handle_linode_lke_cluster_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This is irreversible. All node pools, nodes, and associated resources "
+            "will be deleted. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_cluster(cluster_id)
-        return {
-            "message": f"LKE cluster {cluster_id} removed successfully",
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"LKE cluster {cluster_id} removed successfully",
+                "cluster_id": cluster_id,
+            },
+            lke_pb2.LKEClusterDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete LKE cluster", _call)
 
@@ -463,16 +367,7 @@ def create_linode_lke_cluster_recycle_tool() -> tuple[Tool, Capability]:
             "Recycles all nodes in an LKE cluster."
             " Pass dry_run=true to preview without recycling."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEClusterRecycleInput"),
     ), Capability.Destroy
 
 
@@ -504,14 +399,20 @@ async def handle_linode_lke_cluster_recycle(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "Recycles all nodes in the cluster. This causes temporary disruption. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_cluster(cluster_id)
-        return {
-            "message": f"LKE cluster {cluster_id} recycle initiated successfully",
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"LKE cluster {cluster_id} recycle initiated successfully",
+                "cluster_id": cluster_id,
+            },
+            lke_pb2.LKEClusterActionResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "recycle LKE cluster", _call)
 
@@ -524,16 +425,7 @@ def create_linode_lke_cluster_regenerate_tool() -> tuple[Tool, Capability]:
             "Regenerates the service token for an LKE cluster."
             " Pass dry_run=true to preview without regenerating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEClusterRegenerateInput"),
     ), Capability.Destroy
 
 
@@ -566,16 +458,23 @@ async def handle_linode_lke_cluster_regenerate(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This regenerates the cluster service token. Existing tokens will stop "
+            "working. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.regenerate_lke_cluster(cluster_id)
-        return {
-            "message": (
-                f"Service token for LKE cluster {cluster_id} regenerated successfully"
-            ),
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Service token for LKE cluster {cluster_id} "
+                    "regenerated successfully"
+                ),
+                "cluster_id": cluster_id,
+            },
+            lke_pb2.LKEClusterActionResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "regenerate LKE cluster", _call)
 
@@ -585,39 +484,7 @@ def create_linode_lke_pool_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_pool_create",
         description="Creates a new node pool in an LKE cluster",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "type": {
-                    "type": "string",
-                    "description": "Linode type for pool nodes (required)",
-                },
-                "count": {
-                    "type": "integer",
-                    "description": "Number of nodes in the pool (required)",
-                },
-                "autoscaler": {
-                    "type": "object",
-                    "description": "Autoscaler config: {enabled, min, max}",
-                },
-                "tags": {
-                    "type": "array",
-                    "description": "Tags for the node pool",
-                    "items": {"type": "string"},
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. This incurs billing."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "type", "count", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKENodePoolCreateInput"),
     ), Capability.Write
 
 
@@ -673,15 +540,9 @@ async def handle_linode_lke_pool_create(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text=(
-                    "Error: This creates a billable resource. "
-                    "Set confirm=true to proceed."
-                ),
-            )
-        ]
+        return error_response(
+            "This creates billable compute resources. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         pool = await client.create_lke_node_pool(
@@ -711,34 +572,7 @@ def create_linode_lke_pool_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_pool_update",
         description="Updates a node pool in an LKE cluster",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "pool_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the node pool (required)",
-                },
-                "count": {
-                    "type": "integer",
-                    "description": "New number of nodes in the pool",
-                },
-                "autoscaler": {
-                    "type": "object",
-                    "description": "Autoscaler config: {enabled, min, max}",
-                },
-                "tags": {
-                    "type": "array",
-                    "description": "New tags for the node pool",
-                    "items": {"type": "string"},
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "pool_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKENodePoolUpdateInput"),
     ), Capability.Write
 
 
@@ -794,7 +628,9 @@ async def handle_linode_lke_pool_update(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This modifies the node pool configuration. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         pool = await client.update_lke_node_pool(
@@ -826,29 +662,7 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "pool_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the node pool (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["cluster_id", "pool_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKENodePoolDeleteInput"),
     ), Capability.Destroy
 
 
@@ -923,11 +737,17 @@ async def _lke_pool_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_node_pool(cluster_id, pool_id)
-        return {
-            "message": f"Node pool {pool_id} deleted from cluster {cluster_id}",
-            "cluster_id": cluster_id,
-            "pool_id": pool_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Node pool {pool_id} deleted from cluster "
+                    f"{cluster_id} successfully"
+                ),
+                "cluster_id": cluster_id,
+                "pool_id": pool_id,
+            },
+            lke_pool_pb2.LKENodePoolDeleteResponse(),
+        )
 
     async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
         return _lke_pool_delete_dependency_walk(state)
@@ -978,20 +798,23 @@ async def handle_linode_lke_pool_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This deletes the node pool and all its nodes. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_node_pool(cluster_id, pool_id)
-        return {
-            "message": f"Node pool {pool_id} deleted from cluster {cluster_id}",
-            "cluster_id": cluster_id,
-            "pool_id": pool_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Node pool {pool_id} deleted from cluster "
+                    f"{cluster_id} successfully"
+                ),
+                "cluster_id": cluster_id,
+                "pool_id": pool_id,
+            },
+            lke_pool_pb2.LKENodePoolDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete LKE node pool", _call)
 
@@ -1004,21 +827,7 @@ def create_linode_lke_pool_recycle_tool() -> tuple[Tool, Capability]:
             "Recycles all nodes in a node pool."
             " Pass dry_run=true to preview without recycling."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "pool_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the node pool (required)",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "pool_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEPoolRecycleInput"),
     ), Capability.Destroy
 
 
@@ -1047,18 +856,24 @@ async def handle_linode_lke_pool_recycle(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This recycles all nodes in the pool, causing temporary disruption. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_node_pool(cluster_id, pool_id)
-        return {
-            "message": (
-                f"Node pool {pool_id} in cluster {cluster_id}"
-                " recycle initiated successfully"
-            ),
-            "cluster_id": cluster_id,
-            "pool_id": pool_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Node pool {pool_id} in cluster {cluster_id}"
+                    " recycle initiated successfully"
+                ),
+                "cluster_id": cluster_id,
+                "pool_id": pool_id,
+            },
+            lke_pool_pb2.LKEPoolRecycleResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "recycle LKE node pool", _call)
 
@@ -1072,28 +887,7 @@ def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "node_id": {
-                    "type": "string",
-                    "description": "The ID of the node (required, string)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["cluster_id", "node_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKENodeDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1158,11 +952,16 @@ async def _lke_node_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_node(cluster_id, node_id)
-        return {
-            "message": f"Node {node_id} deleted from cluster {cluster_id}",
-            "cluster_id": cluster_id,
-            "node_id": node_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Node {node_id} deleted from cluster {cluster_id} successfully"
+                ),
+                "cluster_id": cluster_id,
+                "node_id": node_id,
+            },
+            lke_node_pb2.LKENodeDeleteResponse(),
+        )
 
     async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
         return _lke_node_delete_dependency_walk(state)
@@ -1213,20 +1012,22 @@ async def handle_linode_lke_node_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This deletes the specified node. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_node(cluster_id, node_id)
-        return {
-            "message": f"Node {node_id} deleted from cluster {cluster_id}",
-            "cluster_id": cluster_id,
-            "node_id": node_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Node {node_id} deleted from cluster {cluster_id} successfully"
+                ),
+                "cluster_id": cluster_id,
+                "node_id": node_id,
+            },
+            lke_node_pb2.LKENodeDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete LKE node", _call)
 
@@ -1239,20 +1040,7 @@ def create_linode_lke_node_recycle_tool() -> tuple[Tool, Capability]:
             "Recycles a specific node in an LKE cluster."
             " Pass dry_run=true to preview without recycling."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "node_id": {
-                    "type": "string",
-                    "description": "The ID of the node (required, string)",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "node_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKENodeRecycleInput"),
     ), Capability.Destroy
 
 
@@ -1281,17 +1069,24 @@ async def handle_linode_lke_node_recycle(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This recycles the specified node, replacing it with a new one. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.recycle_lke_node(cluster_id, node_id)
-        return {
-            "message": (
-                f"Node {node_id} in cluster {cluster_id} recycle initiated successfully"
-            ),
-            "cluster_id": cluster_id,
-            "node_id": node_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Node {node_id} in cluster {cluster_id} "
+                    "recycle initiated successfully"
+                ),
+                "cluster_id": cluster_id,
+                "node_id": node_id,
+            },
+            lke_node_pb2.LKENodeRecycleResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "recycle LKE node", _call)
 
@@ -1305,18 +1100,7 @@ def create_linode_lke_kubeconfig_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without regenerating."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["cluster_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEKubeconfigDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1334,10 +1118,16 @@ async def _lke_kubeconfig_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_kubeconfig(cluster_id)
-        return {
-            "message": f"Kubeconfig for cluster {cluster_id} regenerated",
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Kubeconfig for LKE cluster {cluster_id} deleted and "
+                    f"regenerated successfully"
+                ),
+                "cluster_id": cluster_id,
+            },
+            lke_kubeconfig_pb2.LKEKubeconfigDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -1384,14 +1174,23 @@ async def handle_linode_lke_kubeconfig_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This deletes the kubeconfig. Existing kubeconfig files will stop working. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_kubeconfig(cluster_id)
-        return {
-            "message": f"Kubeconfig for cluster {cluster_id} regenerated",
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Kubeconfig for LKE cluster {cluster_id} deleted and "
+                    f"regenerated successfully"
+                ),
+                "cluster_id": cluster_id,
+            },
+            lke_kubeconfig_pb2.LKEKubeconfigDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete LKE kubeconfig", _call)
 
@@ -1405,18 +1204,7 @@ def create_linode_lke_service_token_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["cluster_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEServiceTokenDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1434,10 +1222,16 @@ async def _lke_service_token_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_service_token(cluster_id)
-        return {
-            "message": f"Service token for cluster {cluster_id} deleted",
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Service token for LKE cluster {cluster_id} deleted and "
+                    f"regenerated successfully"
+                ),
+                "cluster_id": cluster_id,
+            },
+            lke_pb2.LKEServiceTokenDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -1484,14 +1278,23 @@ async def handle_linode_lke_service_token_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This deletes the service token. Existing tokens will stop working. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_service_token(cluster_id)
-        return {
-            "message": f"Service token for cluster {cluster_id} deleted",
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Service token for LKE cluster {cluster_id} deleted and "
+                    f"regenerated successfully"
+                ),
+                "cluster_id": cluster_id,
+            },
+            lke_pb2.LKEServiceTokenDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete LKE service token", _call)
 
@@ -1504,23 +1307,7 @@ def create_linode_lke_acl_update_tool() -> tuple[Tool, Capability]:
             "Updates the control plane ACL for an LKE cluster."
             " Pass dry_run=true to preview without modifying."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "acl": {
-                    "type": "object",
-                    "description": (
-                        "ACL config: {enabled: bool, addresses: "
-                        "{ipv4: [...], ipv6: [...]}}"
-                    ),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "acl", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEACLUpdateInput"),
     ), Capability.Write
 
 
@@ -1600,7 +1387,10 @@ async def handle_linode_lke_acl_update(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This modifies the control plane ACL, which controls API server access. "
+            "Set confirm=true to proceed."
+        )
 
     parsed = _parse_acl_update(arguments)
     if isinstance(parsed, list):
@@ -1608,7 +1398,20 @@ async def handle_linode_lke_acl_update(
     cluster_id, acl = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_lke_control_plane_acl(cluster_id, acl)
+        raw = await client.update_lke_control_plane_acl(cluster_id, acl)
+        inner_raw = raw.get("acl", raw)
+        inner_acl: dict[str, Any] = (
+            cast("dict[str, Any]", inner_raw) if isinstance(inner_raw, dict) else {}
+        )
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Control plane ACL for cluster {cluster_id} modified successfully"
+                ),
+                "acl": inner_acl,
+            },
+            lke_pb2.LKEACLWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update LKE control plane ACL", _call)
 
@@ -1621,22 +1424,7 @@ def create_linode_lke_acl_delete_tool() -> tuple[Tool, Capability]:
             "Deletes the control plane ACL for an LKE cluster."
             " Pass dry_run=true to preview without deleting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "cluster_id": _CLUSTER_ID_PROP,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["cluster_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.LKEACLDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1668,18 +1456,21 @@ async def handle_linode_lke_acl_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This removes all IP restrictions from the API server. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_lke_control_plane_acl(cluster_id)
-        return {
-            "message": f"Control plane ACL for cluster {cluster_id} deleted",
-            "cluster_id": cluster_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Control plane ACL for cluster {cluster_id} removed successfully"
+                ),
+                "cluster_id": cluster_id,
+            },
+            lke_pb2.LKEACLDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete LKE control plane ACL", _call)

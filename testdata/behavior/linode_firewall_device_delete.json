@@ -1,0 +1,39 @@
+{
+  "tool": "linode_firewall_device_delete",
+  "description": "Firewall device delete removes one device assignment via DELETE when authorized. The id-validation messages and the destroy confirm gate diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": {
+        "firewall_id": 5,
+        "device_id": 10,
+        "confirm": true
+      },
+      "expect_error": "linode_firewall_device_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "rejects a non-positive firewall_id",
+      "args": {
+        "firewall_id": -1,
+        "device_id": 10,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "firewall_id must be a positive integer"
+    },
+    {
+      "name": "removes a device assignment when authorized",
+      "args": {
+        "firewall_id": 5,
+        "device_id": 10,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/networking/firewalls/5/devices/10"
+      }
+    }
+  ]
+}

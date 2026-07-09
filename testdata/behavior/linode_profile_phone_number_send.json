@@ -1,0 +1,31 @@
+{
+  "tool": "linode_profile_phone_number_send",
+  "description": "Shared iso_code/phone_number rejections and the send POST body. Confirm text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing iso_code",
+      "args": {},
+      "expect_error": "iso_code must be a non-empty string"
+    },
+    {
+      "name": "rejects missing phone_number",
+      "args": { "iso_code": "US" },
+      "expect_error": "phone_number must be a non-empty string"
+    },
+    {
+      "name": "sends a phone verification code",
+      "args": { "iso_code": "US", "phone_number": "5551234567", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/phone-number",
+        "body": { "iso_code": "US", "phone_number": "5551234567" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"iso_code": "US", "phone_number": "5551234567"},
+      "expect_error": "This sends a phone number verification code. Set confirm=true to proceed."
+    }
+  ]
+}

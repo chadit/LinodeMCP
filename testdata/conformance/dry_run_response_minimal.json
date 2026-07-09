@@ -1,0 +1,25 @@
+{
+  "message": "linode.mcp.v1.DryRunResponse",
+  "description": "Dry-run preview for a create tool with no dependency walk: environment is absent (optional, unset), current_state is JSON null because the resource does not exist yet, and the empty dependency-walk repeated fields serialize as [] on both languages.",
+  "input": {
+    "dry_run": true,
+    "tool": "linode_volume_create",
+    "would_execute": {
+      "method": "POST",
+      "path": "/linode/volumes"
+    },
+    "current_state": null
+  },
+  "canonical": {
+    "dry_run": true,
+    "tool": "linode_volume_create",
+    "would_execute": {
+      "method": "POST",
+      "path": "/linode/volumes"
+    },
+    "current_state": null,
+    "dependencies": [],
+    "side_effects": [],
+    "warnings": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_region_availability_get",
+  "description": "Per-region availability. Both missing and invalid region_id error texts diverge (see report), so only the success GET is pinned.",
+  "cases": [
+    {
+      "name": "gets availability for one region",
+      "args": { "region_id": "us-east" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/regions/us-east/availability" }
+    }
+  ]
+}

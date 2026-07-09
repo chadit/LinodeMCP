@@ -8,18 +8,17 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewHelloTool creates a hello tool for smoke testing.
 func NewHelloTool(_ *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"hello",
-		mcp.WithDescription("Responds with a friendly greeting from LinodeMCP"),
-		mcp.WithString(
-			"name",
-			mcp.Description("Name to include in the greeting (optional)"),
-		),
+		"Responds with a friendly greeting from LinodeMCP",
+		toolschemas.Schema("linode.mcp.v1.HelloInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -30,9 +29,10 @@ func NewHelloTool(_ *config.Config) (mcp.Tool, profiles.Capability, func(ctx con
 		}
 
 		name := request.GetString("name", "World")
-		message := fmt.Sprintf("Hello, %s! LinodeMCP server is running and ready.", name)
 
-		return mcp.NewToolResultText(message), nil
+		return MarshalProtoToolResponse(&linodev1.HelloResponse{
+			Message: fmt.Sprintf("Hello, %s! LinodeMCP server is running and ready.", name),
+		})
 	}
 
 	return tool, profiles.CapMeta, handler

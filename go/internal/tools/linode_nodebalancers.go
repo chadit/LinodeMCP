@@ -3,9 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
-	"slices"
+	"math"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -17,45 +18,39 @@ import (
 )
 
 const (
-	nodeBalancerNodeErrAddressRequired     = "address is required"
-	nodeBalancerConfigPortMax              = 65535
-	nodeBalancerConfigKeyPort              = "port"
-	nodeBalancerConfigKeyProtocol          = "protocol"
-	nodeBalancerConfigKeySSLCert           = "ssl_cert"
-	nodeBalancerConfigKeySSLKey            = "ssl_key"
-	nodeBalancerConfigKeyProxyProtocol     = "proxy_protocol"
-	nodeBalancerConfigKeyUDPCheckPort      = "udp_check_port"
-	nodeBalancerConfigKeyNodes             = "nodes"
-	nodeBalancerNodeKeySubnetID            = "subnet_id"
-	nodeBalancerConfigProtocolHTTP         = "http"
-	nodeBalancerConfigProtocolHTTPS        = "https"
-	nodeBalancerConfigProtocolTCP          = "tcp"
-	nodeBalancerConfigAlgorithmRoundRobin  = "roundrobin"
-	nodeBalancerConfigAlgorithmLeastConn   = "leastconn"
-	nodeBalancerConfigAlgorithmSource      = "source"
-	nodeBalancerConfigStickinessNone       = "none"
-	nodeBalancerConfigStickinessTable      = "table"
-	nodeBalancerConfigStickinessHTTPCookie = "http_cookie"
-	nodeBalancerConfigCheckNone            = "none"
-	nodeBalancerConfigCheckConnection      = "connection"
-	nodeBalancerConfigCheckHTTP            = "http"
-	nodeBalancerConfigCheckHTTPBody        = "http_body"
-	nodeBalancerConfigCipherRecommended    = "recommended"
-	nodeBalancerConfigCipherLegacy         = "legacy"
-	nodeBalancerConfigNodesPageSizeMin     = 25
-	nodeBalancerConfigNodesPageSizeMax     = 500
-	nodeBalancerKeyID                      = "nodebalancer_id"
-	nodeBalancerKeyConfigID                = "config_id"
-	nodeBalancerKeyVPCConfigID             = "vpc_config_id"
-	nodeBalancerKeyNodeID                  = "node_id"
+	nodeBalancerNodeErrAddressRequired = "address is required"
+	nodeBalancerNodeLabelMin           = 3
+	nodeBalancerNodeLabelMax           = 32
+	nodeBalancerNodeWeightMax          = 255
+	nodeBalancerConfigPortMax          = 65535
+	nodeBalancerConfigKeyPort          = "port"
+	nodeBalancerConfigKeyProtocol      = "protocol"
+	nodeBalancerConfigKeySSLCert       = "ssl_cert"
+	nodeBalancerConfigKeySSLKey        = "ssl_key"
+	nodeBalancerConfigKeyProxyProtocol = "proxy_protocol"
+	nodeBalancerConfigKeyUDPCheckPort  = "udp_check_port"
+	nodeBalancerConfigKeyNodes         = "nodes"
+	nodeBalancerNodeKeySubnetID        = "subnet_id"
+	// nodeBalancerConfigProtocolHTTPS gates the ssl_cert/ssl_key requirement; the
+	// protocol/algorithm/stickiness/check/cipher_suite choice sets now come from
+	// the generated proto enums (linodev1.NodeBalancer*_Value_value), not
+	// hand-maintained constants.
+	nodeBalancerConfigProtocolHTTPS    = "https"
+	nodeBalancerConfigNodesPageSizeMin = 25
+	nodeBalancerConfigNodesPageSizeMax = 500
+	nodeBalancerKeyID                  = "nodebalancer_id"
+	nodeBalancerKeyConfigID            = "config_id"
+	nodeBalancerKeyVPCConfigID         = "vpc_config_id"
+	nodeBalancerKeyNodeID              = "node_id"
 )
 
 // NewLinodeNodeBalancerTypesTool creates a tool for listing available NodeBalancer types.
 func NewLinodeNodeBalancerTypesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_nodebalancer_type_list",
 		"Lists available NodeBalancer types.",
+		"linode.mcp.v1.NodeBalancerTypeListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.LinodeType, error) {
 			return client.ListNodeBalancerTypesProto(ctx)
 		},
@@ -72,10 +67,11 @@ func nodeBalancerTypeListResponse(items []*linodev1.LinodeType, count int32, fil
 
 // NewLinodeNodeBalancerListTool creates a tool for listing NodeBalancers.
 func NewLinodeNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_nodebalancer_list",
 		"Lists all NodeBalancers on your account. Can filter by region or label.",
+		"linode.mcp.v1.NodeBalancerListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.NodeBalancer, error) {
 			return client.ListNodeBalancersProto(ctx)
 		},
@@ -97,7 +93,10 @@ func nodeBalancerListResponse(items []*linodev1.NodeBalancer, count int32, filte
 
 // NewLinodeInstanceNodeBalancerListTool creates a tool for listing NodeBalancers assigned to a Linode instance.
 func NewLinodeInstanceNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	// The raw-schema tool advertises the generated InstanceNodeBalancerListInput;
+	// the list helper still builds the fetch/serialize handler, which is
+	// schema-source independent.
+	_, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_instance_nodebalancer_list",
 		"Lists NodeBalancers assigned to a Linode instance.",
@@ -113,15 +112,22 @@ func NewLinodeInstanceNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profil
 		nodeBalancerListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_nodebalancer_list",
+		"Lists NodeBalancers assigned to a Linode instance.",
+		toolschemas.Schema("linode.mcp.v1.InstanceNodeBalancerListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeNodeBalancerFirewallListTool creates a tool for listing Cloud Firewalls assigned to a NodeBalancer.
 func NewLinodeNodeBalancerFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	tool, handler := newProtoListToolSubresourcePaginatedRawSchema(
 		cfg,
 		"linode_nodebalancer_firewall_list",
 		"Lists Cloud Firewalls assigned to a specific NodeBalancer by its ID.",
+		"linode.mcp.v1.NodeBalancerFirewallListInput",
 		"Page number to retrieve",
 		"Number of results per page, from 25 through 500",
 		protoListPathID{
@@ -142,33 +148,26 @@ func NewLinodeNodeBalancerFirewallListTool(cfg *config.Config) (mcp.Tool, profil
 
 // NewLinodeNodeBalancerFirewallUpdateTool creates a tool for replacing Cloud Firewall assignments on a NodeBalancer.
 func NewLinodeNodeBalancerFirewallUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_firewall_update",
 		"Replaces the Cloud Firewall assignments for a specific NodeBalancer. Pass an empty firewall_ids list to remove all assignments.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer whose Cloud Firewall assignments should be replaced")),
-			mcp.WithArray("firewall_ids", mcp.Required(),
-				mcp.Description("Complete list of firewall IDs to assign to the NodeBalancer. Use an empty list to remove all firewall assignments.")),
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm firewall assignment changes. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerFirewallUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerFirewallUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerFirewallUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeNodeBalancerVPCListTool creates a tool for listing VPC configurations on a NodeBalancer.
 func NewLinodeNodeBalancerVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	tool, handler := newProtoListToolSubresourcePaginatedRawSchema(
 		cfg,
 		"linode_nodebalancer_vpc_config_list",
 		"Lists VPC configurations for a specific NodeBalancer by its ID.",
+		"linode.mcp.v1.NodeBalancerVPCConfigListInput",
 		"Page number to retrieve",
 		"Number of results per page, from 25 through 500",
 		protoListPathID{
@@ -193,10 +192,11 @@ func nodeBalancerVPCConfigListResponse(items []*linodev1.NodeBalancerVPCConfig, 
 
 // NewLinodeNodeBalancerConfigListTool creates a tool for listing configs on a NodeBalancer.
 func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	tool, handler := newProtoListToolSubresourcePaginatedRawSchema(
 		cfg,
 		"linode_nodebalancer_config_list",
 		"Lists configs for a specific NodeBalancer by its ID.",
+		"linode.mcp.v1.NodeBalancerConfigListInput",
 		"Page number to retrieve",
 		"Number of results per page, from 25 through 500",
 		protoListPathID{
@@ -221,10 +221,11 @@ func nodeBalancerConfigListResponse(items []*linodev1.NodeBalancerConfig, count 
 
 // NewLinodeNodeBalancerConfigNodesListTool creates a tool for listing nodes on a NodeBalancer config.
 func NewLinodeNodeBalancerConfigNodesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource2Paginated(
+	tool, handler := newProtoListToolSubresource2PaginatedRawSchema(
 		cfg,
 		"linode_nodebalancer_config_node_list",
 		"Lists backend nodes for a specific NodeBalancer config.",
+		"linode.mcp.v1.NodeBalancerConfigNodeListInput",
 		"Page number to retrieve",
 		"Number of results per page, from 25 through 500",
 		protoListPathID{
@@ -284,208 +285,105 @@ func NewLinodeNodeBalancerConfigNodeGetTool(cfg *config.Config) (mcp.Tool, profi
 
 // NewLinodeNodeBalancerConfigCreateTool creates a tool for creating a config on a NodeBalancer.
 func NewLinodeNodeBalancerConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_config_create",
 		"Creates a config for a specific NodeBalancer by its ID. Pass dry_run=true to preview without creating.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer that should receive a new config")),
-			mcp.WithNumber(nodeBalancerConfigKeyPort, mcp.Required(),
-				mcp.Description("The TCP port this config listens on, from 1 through 65535")),
-			mcp.WithString(nodeBalancerConfigKeyProtocol,
-				mcp.Description("Optional protocol: http, https, or tcp")),
-			mcp.WithString("algorithm",
-				mcp.Description("Optional balancing algorithm: roundrobin, leastconn, or source")),
-			mcp.WithString("stickiness",
-				mcp.Description("Optional session stickiness: none, table, or http_cookie")),
-			mcp.WithString("check",
-				mcp.Description("Optional health check mode: none, connection, http, or http_body")),
-			mcp.WithNumber("check_interval", mcp.Description("Optional health check interval in seconds")),
-			mcp.WithNumber("check_timeout", mcp.Description("Optional health check timeout in seconds")),
-			mcp.WithNumber("check_attempts", mcp.Description("Optional health check attempt count")),
-			mcp.WithString("check_path", mcp.Description("Optional HTTP health check path")),
-			mcp.WithString("check_body", mcp.Description("Optional expected HTTP health check body")),
-			mcp.WithBoolean("check_passive", mcp.Description("Optionally enable passive health checks")),
-			mcp.WithString("cipher_suite", mcp.Description("Optional HTTPS cipher suite")),
-			mcp.WithString(nodeBalancerConfigKeySSLCert, mcp.Description("Optional HTTPS certificate PEM")),
-			mcp.WithString(nodeBalancerConfigKeySSLKey, mcp.Description("Optional HTTPS private key PEM")),
-			mcp.WithString(nodeBalancerConfigKeyProxyProtocol,
-				mcp.Description("Optional proxy protocol version for TCP configs: none, v1, or v2")),
-			mcp.WithNumber(nodeBalancerConfigKeyUDPCheckPort,
-				mcp.Description("Optional health check port for UDP configs, from 1 through 65535")),
-			mcp.WithArray(nodeBalancerConfigKeyNodes,
-				mcp.Description("Optional backend nodes to attach to this config, each an object with label, address, and optional weight, mode, and subnet_id")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm NodeBalancer config creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerConfigCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerConfigCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerConfigCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeNodeBalancerNodeCreateTool creates a tool for creating a node on a NodeBalancer config.
 func NewLinodeNodeBalancerNodeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_config_node_create",
 		"Creates a backend node for a specific NodeBalancer config. Pass dry_run=true to preview without creating.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer that owns the config")),
-			mcp.WithNumber(nodeBalancerKeyConfigID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config that should receive a new node")),
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("Label for the backend node")),
-			mcp.WithString("address", mcp.Required(),
-				mcp.Description("Backend node address, including port, for example 192.0.2.10:80")),
-			mcp.WithNumber("weight", mcp.Description("Optional traffic weight for this node")),
-			mcp.WithString("mode", mcp.Description("Optional node mode: accept, reject, drain, or backup")),
-			mcp.WithNumber(nodeBalancerNodeKeySubnetID,
-				mcp.Description("Optional VPC subnet ID for VPC backend nodes")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm NodeBalancer node creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerNodeCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerConfigNodeCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerNodeCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeNodeBalancerNodeDeleteTool creates a tool for deleting a node from a NodeBalancer config.
 func NewLinodeNodeBalancerNodeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_config_node_delete",
 		"Deletes a backend node from a specific NodeBalancer config. WARNING: This removes the node from load balancing.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("nodebalancer_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer that owns the config")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config that owns the node")),
-			mcp.WithNumber("node_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config node to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm NodeBalancer node deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerNodeDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerConfigNodeDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerNodeDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 // NewLinodeNodeBalancerNodeUpdateTool creates a tool for updating a node on a NodeBalancer config.
 func NewLinodeNodeBalancerNodeUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_config_node_update",
 		"Updates a backend node for a specific NodeBalancer config. Pass dry_run=true to preview without updating.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer that owns the config")),
-			mcp.WithNumber(nodeBalancerKeyConfigID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config that owns the node")),
-			mcp.WithNumber(nodeBalancerKeyNodeID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config node to update")),
-			mcp.WithString("label",
-				mcp.Description("Optional new label for the backend node")),
-			mcp.WithString("address",
-				mcp.Description("Optional backend node address, including port, for example 192.0.2.10:80")),
-			mcp.WithNumber("weight", mcp.Description("Optional traffic weight for this node")),
-			mcp.WithString("mode", mcp.Description("Optional node mode: accept, reject, drain, or backup")),
-			mcp.WithNumber(nodeBalancerNodeKeySubnetID,
-				mcp.Description("Optional VPC subnet ID for VPC backend nodes")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm NodeBalancer node update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerNodeUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerConfigNodeUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerNodeUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeNodeBalancerConfigUpdateTool creates a tool for updating a config on a NodeBalancer.
 func NewLinodeNodeBalancerConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_config_update",
 		"Updates a config for a specific NodeBalancer by NodeBalancer and config ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer whose config should be updated")),
-			mcp.WithNumber(nodeBalancerKeyConfigID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config to update")),
-			mcp.WithNumber(nodeBalancerConfigKeyPort,
-				mcp.Description("Optional TCP port this config listens on, from 1 through 65535")),
-			mcp.WithString(nodeBalancerConfigKeyProtocol,
-				mcp.Description("Optional protocol: http, https, or tcp")),
-			mcp.WithString("algorithm",
-				mcp.Description("Optional balancing algorithm: roundrobin, leastconn, or source")),
-			mcp.WithString("stickiness",
-				mcp.Description("Optional session stickiness: none, table, or http_cookie")),
-			mcp.WithString("check",
-				mcp.Description("Optional health check mode: none, connection, http, or http_body")),
-			mcp.WithNumber("check_interval", mcp.Description("Optional health check interval in seconds")),
-			mcp.WithNumber("check_timeout", mcp.Description("Optional health check timeout in seconds")),
-			mcp.WithNumber("check_attempts", mcp.Description("Optional health check attempt count")),
-			mcp.WithString("check_path", mcp.Description("Optional HTTP health check path")),
-			mcp.WithString("check_body", mcp.Description("Optional expected HTTP health check body")),
-			mcp.WithBoolean("check_passive", mcp.Description("Optionally enable passive health checks")),
-			mcp.WithString("cipher_suite", mcp.Description("Optional HTTPS cipher suite")),
-			mcp.WithString(nodeBalancerConfigKeySSLCert, mcp.Description("Optional HTTPS certificate PEM")),
-			mcp.WithString(nodeBalancerConfigKeySSLKey, mcp.Description("Optional HTTPS private key PEM")),
-			mcp.WithString(nodeBalancerConfigKeyProxyProtocol,
-				mcp.Description("Optional proxy protocol version for TCP configs: none, v1, or v2")),
-			mcp.WithNumber(nodeBalancerConfigKeyUDPCheckPort,
-				mcp.Description("Optional health check port for UDP configs, from 1 through 65535")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm NodeBalancer config update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerConfigUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerConfigUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerConfigUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeNodeBalancerConfigRebuildTool creates a tool for rebuilding a config on a NodeBalancer.
 func NewLinodeNodeBalancerConfigRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_config_rebuild",
 		"Rebuilds a config for a specific NodeBalancer by NodeBalancer and config ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("nodebalancer_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer whose config should be rebuilt")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer config to rebuild")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm NodeBalancer config rebuild. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerConfigRebuildRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerConfigRebuildInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerConfigRebuildRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeNodeBalancerStatsGetTool creates a tool for retrieving NodeBalancer statistics.
 func NewLinodeNodeBalancerStatsGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_stats_get",
 		"Gets traffic and connection statistics for a specific NodeBalancer by its ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer whose statistics should be retrieved")),
-		},
-		handleLinodeNodeBalancerStatsGetRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerStatsGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerStatsGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -557,20 +455,22 @@ func handleLinodeNodeBalancerFirewallUpdateRequest(ctx context.Context, request 
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	firewalls, err := client.UpdateNodeBalancerFirewalls(ctx, nodeBalancerID, page, pageSize, &linode.UpdateNodeBalancerFirewallsRequest{FirewallIDs: firewallIDs})
+	firewalls, err := client.UpdateNodeBalancerFirewallsProto(ctx, nodeBalancerID, page, pageSize, &linode.UpdateNodeBalancerFirewallsRequest{FirewallIDs: firewallIDs})
 	if err != nil {
 		return mcp.NewToolResultError(formatNodeBalancerFirewallsUpdateError(nodeBalancerID, err)), nil
 	}
 
-	response := struct {
-		Count     int               `json:"count"`
-		Firewalls []linode.Firewall `json:"firewalls"`
-	}{
-		Count:     len(firewalls),
+	var count int32
+	if n := len(firewalls); n <= math.MaxInt32 {
+		count = int32(n)
+	}
+
+	response := &linodev1.FirewallListResponse{
+		Count:     count,
 		Firewalls: firewalls,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 func formatNodeBalancerFirewallsUpdateError(nodeBalancerID int, err error) string {
@@ -940,23 +840,27 @@ func nodeBalancerConfigCreateRequestFromTool(request *mcp.CallToolRequest) (lino
 	req := linode.CreateNodeBalancerConfigRequest{Port: port}
 
 	var message string
-	if req.Protocol, message = optionalNodeBalancerConfigChoice(request, nodeBalancerConfigKeyProtocol, []string{nodeBalancerConfigProtocolHTTP, nodeBalancerConfigProtocolHTTPS, nodeBalancerConfigProtocolTCP}); message != "" {
+	if req.Protocol, message = optionalEnumChoice(request, nodeBalancerConfigKeyProtocol, linodev1.NodeBalancerProtocol_Value_value); message != "" {
 		return linode.CreateNodeBalancerConfigRequest{}, message
 	}
 
-	if req.Algorithm, message = optionalNodeBalancerConfigChoice(request, "algorithm", []string{nodeBalancerConfigAlgorithmRoundRobin, nodeBalancerConfigAlgorithmLeastConn, nodeBalancerConfigAlgorithmSource}); message != "" {
+	if req.Algorithm, message = optionalEnumChoice(request, "algorithm", linodev1.NodeBalancerAlgorithm_Value_value); message != "" {
 		return linode.CreateNodeBalancerConfigRequest{}, message
 	}
 
-	if req.Stickiness, message = optionalNodeBalancerConfigChoice(request, "stickiness", []string{nodeBalancerConfigStickinessNone, nodeBalancerConfigStickinessTable, nodeBalancerConfigStickinessHTTPCookie}); message != "" {
+	if req.Stickiness, message = optionalEnumChoice(request, "stickiness", linodev1.NodeBalancerStickiness_Value_value); message != "" {
 		return linode.CreateNodeBalancerConfigRequest{}, message
 	}
 
-	if req.Check, message = optionalNodeBalancerConfigChoice(request, "check", []string{nodeBalancerConfigCheckNone, nodeBalancerConfigCheckConnection, nodeBalancerConfigCheckHTTP, nodeBalancerConfigCheckHTTPBody}); message != "" {
+	if req.Check, message = optionalEnumChoice(request, "check", linodev1.NodeBalancerCheck_Value_value); message != "" {
 		return linode.CreateNodeBalancerConfigRequest{}, message
 	}
 
-	if req.CipherSuite, message = optionalNodeBalancerConfigChoice(request, "cipher_suite", []string{nodeBalancerConfigCipherRecommended, nodeBalancerConfigCipherLegacy}); message != "" {
+	if req.CipherSuite, message = optionalEnumChoice(request, "cipher_suite", linodev1.NodeBalancerCipherSuite_Value_value); message != "" {
+		return linode.CreateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.ProxyProtocol, message = optionalEnumChoice(request, nodeBalancerConfigKeyProxyProtocol, linodev1.NodeBalancerProxyProtocol_Value_value); message != "" {
 		return linode.CreateNodeBalancerConfigRequest{}, message
 	}
 
@@ -991,8 +895,6 @@ func nodeBalancerConfigCreateRequestFromTool(request *mcp.CallToolRequest) (lino
 		req.CheckPassive = &v
 	}
 
-	req.ProxyProtocol = request.GetString(nodeBalancerConfigKeyProxyProtocol, "")
-
 	if req.UDPCheckPort, message = optionalNodeBalancerConfigInt(args, nodeBalancerConfigKeyUDPCheckPort); message != "" {
 		return linode.CreateNodeBalancerConfigRequest{}, message
 	}
@@ -1023,23 +925,27 @@ func nodeBalancerConfigUpdateRequestFromTool(request *mcp.CallToolRequest) (lino
 	}
 
 	var message string
-	if req.Protocol, message = optionalNodeBalancerConfigChoice(request, nodeBalancerConfigKeyProtocol, []string{nodeBalancerConfigProtocolHTTP, nodeBalancerConfigProtocolHTTPS, nodeBalancerConfigProtocolTCP}); message != "" {
+	if req.Protocol, message = optionalEnumChoice(request, nodeBalancerConfigKeyProtocol, linodev1.NodeBalancerProtocol_Value_value); message != "" {
 		return linode.UpdateNodeBalancerConfigRequest{}, message
 	}
 
-	if req.Algorithm, message = optionalNodeBalancerConfigChoice(request, "algorithm", []string{nodeBalancerConfigAlgorithmRoundRobin, nodeBalancerConfigAlgorithmLeastConn, nodeBalancerConfigAlgorithmSource}); message != "" {
+	if req.Algorithm, message = optionalEnumChoice(request, "algorithm", linodev1.NodeBalancerAlgorithm_Value_value); message != "" {
 		return linode.UpdateNodeBalancerConfigRequest{}, message
 	}
 
-	if req.Stickiness, message = optionalNodeBalancerConfigChoice(request, "stickiness", []string{nodeBalancerConfigStickinessNone, nodeBalancerConfigStickinessTable, nodeBalancerConfigStickinessHTTPCookie}); message != "" {
+	if req.Stickiness, message = optionalEnumChoice(request, "stickiness", linodev1.NodeBalancerStickiness_Value_value); message != "" {
 		return linode.UpdateNodeBalancerConfigRequest{}, message
 	}
 
-	if req.Check, message = optionalNodeBalancerConfigChoice(request, "check", []string{nodeBalancerConfigCheckNone, nodeBalancerConfigCheckConnection, nodeBalancerConfigCheckHTTP, nodeBalancerConfigCheckHTTPBody}); message != "" {
+	if req.Check, message = optionalEnumChoice(request, "check", linodev1.NodeBalancerCheck_Value_value); message != "" {
 		return linode.UpdateNodeBalancerConfigRequest{}, message
 	}
 
-	if req.CipherSuite, message = optionalNodeBalancerConfigChoice(request, "cipher_suite", []string{nodeBalancerConfigCipherRecommended, nodeBalancerConfigCipherLegacy}); message != "" {
+	if req.CipherSuite, message = optionalEnumChoice(request, "cipher_suite", linodev1.NodeBalancerCipherSuite_Value_value); message != "" {
+		return linode.UpdateNodeBalancerConfigRequest{}, message
+	}
+
+	if req.ProxyProtocol, message = optionalEnumChoice(request, nodeBalancerConfigKeyProxyProtocol, linodev1.NodeBalancerProxyProtocol_Value_value); message != "" {
 		return linode.UpdateNodeBalancerConfigRequest{}, message
 	}
 
@@ -1073,8 +979,6 @@ func nodeBalancerConfigUpdateRequestFromTool(request *mcp.CallToolRequest) (lino
 		req.CheckPassive = &v
 	}
 
-	req.ProxyProtocol = request.GetString(nodeBalancerConfigKeyProxyProtocol, "")
-
 	if req.UDPCheckPort, message = optionalNodeBalancerConfigInt(args, nodeBalancerConfigKeyUDPCheckPort); message != "" {
 		return linode.UpdateNodeBalancerConfigRequest{}, message
 	}
@@ -1094,73 +998,20 @@ func optionalNodeBalancerConfigInt(args map[string]any, key string) (int, string
 	return optionalPaginationInt(args, key, 1, 0)
 }
 
-func optionalNodeBalancerConfigChoice(request *mcp.CallToolRequest, key string, allowed []string) (string, string) {
-	value := request.GetString(key, "")
-	if value == "" {
-		return "", ""
-	}
-
-	if slices.Contains(allowed, value) {
-		return value, ""
-	}
-
-	return "", fmt.Sprintf("%s must be one of: %s", key, strings.Join(allowed, ", "))
-}
-
 func nodeBalancerVPCConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args[nodeBalancerKeyVPCConfigID]; !exists {
-		return 0, "vpc_config_id is required"
-	}
-
-	vpcConfigID, validationMessage := optionalPaginationInt(args, nodeBalancerKeyVPCConfigID, 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	return vpcConfigID, ""
+	return requiredIDArgument(request, nodeBalancerKeyVPCConfigID)
 }
 
 func nodeBalancerConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args[nodeBalancerKeyConfigID]; !exists {
-		return 0, "config_id is required"
-	}
-
-	configID, validationMessage := optionalPaginationInt(args, nodeBalancerKeyConfigID, 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	return configID, ""
+	return requiredIDArgument(request, nodeBalancerKeyConfigID)
 }
 
 func nodeBalancerConfigNodeIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args[nodeBalancerKeyNodeID]; !exists {
-		return 0, "node_id is required"
-	}
-
-	nodeID, validationMessage := optionalPaginationInt(args, nodeBalancerKeyNodeID, 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	return nodeID, ""
+	return requiredIDArgument(request, nodeBalancerKeyNodeID)
 }
 
 func nodeBalancerIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args[nodeBalancerKeyID]; !exists {
-		return 0, "nodebalancer_id is required"
-	}
-
-	nodeBalancerID, validationMessage := optionalPaginationInt(args, nodeBalancerKeyID, 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	return nodeBalancerID, ""
+	return requiredIDArgument(request, nodeBalancerKeyID)
 }
 
 func nodeBalancerListPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -1267,7 +1118,7 @@ func handleLinodeNodeBalancerNodeDeleteRequest(ctx context.Context, request *mcp
 		)
 	}
 
-	if result := RequireConfirm(request, "This deletes a NodeBalancer node. Set confirm=true to proceed."); result != nil {
+	if result := requireDestroyConfirmation(ctx, request, "linode_nodebalancer_config_node_delete", "This deletes a NodeBalancer node. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -1281,19 +1132,12 @@ func handleLinodeNodeBalancerNodeDeleteRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError("Failed to delete node " + strconv.Itoa(nodeID) + " from NodeBalancer " + strconv.Itoa(nodeBalancerID) + " config " + strconv.Itoa(configID) + ": " + deleteFailureMessage), nil
 	}
 
-	response := struct {
-		Message        string `json:"message"`
-		NodeBalancerID int    `json:"nodebalancer_id"`
-		ConfigID       int    `json:"config_id"`
-		NodeID         int    `json:"node_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.NodeBalancerConfigNodeDeleteResponse{
 		Message:        "NodeBalancer node " + strconv.Itoa(nodeID) + " removed successfully from NodeBalancer " + strconv.Itoa(nodeBalancerID) + " config " + strconv.Itoa(configID),
-		NodeBalancerID: nodeBalancerID,
-		ConfigID:       configID,
-		NodeID:         nodeID,
-	}
-
-	return MarshalToolResponse(response)
+		NodebalancerId: linodeIDToInt32(nodeBalancerID),
+		ConfigId:       linodeIDToInt32(configID),
+		NodeId:         linodeIDToInt32(nodeID),
+	})
 }
 
 func fetchNodeBalancerConfigNodeForDryRun(ctx context.Context, client *linode.Client, nodeBalancerID, configID, nodeID int) (*linode.NodeBalancerConfigNode, string) {
@@ -1324,6 +1168,11 @@ func nodeBalancerNodeUpdateRequestFromTool(request *mcp.CallToolRequest) (linode
 			return linode.UpdateNodeBalancerNodeRequest{}, errLabelRequired
 		}
 
+		// Python bounds the node label to 3-32 characters; match it here.
+		if runes := utf8.RuneCountInString(label); runes < nodeBalancerNodeLabelMin || runes > nodeBalancerNodeLabelMax {
+			return linode.UpdateNodeBalancerNodeRequest{}, errLabel3To32Chars
+		}
+
 		req.Label = label
 	}
 
@@ -1342,13 +1191,17 @@ func nodeBalancerNodeUpdateRequestFromTool(request *mcp.CallToolRequest) (linode
 			return linode.UpdateNodeBalancerNodeRequest{}, message
 		}
 
+		// Python caps the node weight at 255; enforce the same maximum.
+		if weight > nodeBalancerNodeWeightMax {
+			return linode.UpdateNodeBalancerNodeRequest{}, "weight must be at most 255"
+		}
+
 		req.Weight = weight
 	}
 
-	if req.Mode = request.GetString("mode", ""); req.Mode != "" {
-		if !slices.Contains([]string{"accept", "reject", "drain", "backup"}, req.Mode) {
-			return linode.UpdateNodeBalancerNodeRequest{}, "mode must be one of: accept, reject, drain, backup"
-		}
+	var modeMessage string
+	if req.Mode, modeMessage = optionalEnumChoice(request, "mode", linodev1.NodeBalancerNodeMode_Value_value); modeMessage != "" {
+		return linode.UpdateNodeBalancerNodeRequest{}, modeMessage
 	}
 
 	if _, exists := args[nodeBalancerNodeKeySubnetID]; exists {
@@ -1373,6 +1226,12 @@ func nodeBalancerNodeCreateRequestFromTool(request *mcp.CallToolRequest) (linode
 		return linode.CreateNodeBalancerNodeRequest{}, errLabelRequired
 	}
 
+	// Python bounds the node label to 3-32 characters; enforce the same range so
+	// both languages reject identically.
+	if runes := utf8.RuneCountInString(label); runes < nodeBalancerNodeLabelMin || runes > nodeBalancerNodeLabelMax {
+		return linode.CreateNodeBalancerNodeRequest{}, errLabel3To32Chars
+	}
+
 	address := strings.TrimSpace(request.GetString("address", ""))
 	if address == "" {
 		return linode.CreateNodeBalancerNodeRequest{}, nodeBalancerNodeErrAddressRequired
@@ -1387,13 +1246,17 @@ func nodeBalancerNodeCreateRequestFromTool(request *mcp.CallToolRequest) (linode
 			return linode.CreateNodeBalancerNodeRequest{}, message
 		}
 
+		// Python caps the node weight at 255; enforce the same maximum.
+		if weight > nodeBalancerNodeWeightMax {
+			return linode.CreateNodeBalancerNodeRequest{}, "weight must be at most 255"
+		}
+
 		req.Weight = weight
 	}
 
-	if req.Mode = request.GetString("mode", ""); req.Mode != "" {
-		if !slices.Contains([]string{"accept", "reject", "drain", "backup"}, req.Mode) {
-			return linode.CreateNodeBalancerNodeRequest{}, "mode must be one of: accept, reject, drain, backup"
-		}
+	var modeMessage string
+	if req.Mode, modeMessage = optionalEnumChoice(request, "mode", linodev1.NodeBalancerNodeMode_Value_value); modeMessage != "" {
+		return linode.CreateNodeBalancerNodeRequest{}, modeMessage
 	}
 
 	if _, exists := args[nodeBalancerNodeKeySubnetID]; exists {
@@ -1419,12 +1282,12 @@ func handleLinodeNodeBalancerStatsGetRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	stats, err := client.GetNodeBalancerStats(ctx, nodeBalancerID)
+	stats, err := client.GetNodeBalancerStatsProto(ctx, nodeBalancerID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve NodeBalancer %d stats: %v", nodeBalancerID, err)), nil
 	}
 
-	return MarshalToolResponse(stats)
+	return MarshalProtoToolResponse(stats)
 }
 
 func handleLinodeNodeBalancerGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

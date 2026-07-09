@@ -1,0 +1,22 @@
+{
+  "tool": "linode_lke_pool_get",
+  "description": "Pins the cluster_id/pool_id-required rejections (checked in order) and the single GET. Non-integer id text diverges (Go appends ': <raw>'), see report.",
+  "cases": [
+    {
+      "name": "rejects missing cluster_id",
+      "args": {},
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "rejects missing pool_id",
+      "args": { "cluster_id": "12345" },
+      "expect_error": "pool_id is required"
+    },
+    {
+      "name": "gets a node pool",
+      "args": { "cluster_id": "12345", "pool_id": "7" },
+      "api_response": { "id": 7, "type": "g6-standard-1", "count": 3 },
+      "expect_request": { "method": "GET", "path": "/lke/clusters/12345/pools/7" }
+    }
+  ]
+}

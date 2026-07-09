@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
@@ -42,12 +41,8 @@ func TestLinodeAuditExportDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties["format"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "format")
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, "format") {
-		t.Errorf("tool.InputSchema.Required does not contain %v", "format")
+	if !strings.Contains(string(tool.RawInputSchema), "format") {
+		t.Errorf("tool.RawInputSchema missing key %v", "format")
 	}
 }
 

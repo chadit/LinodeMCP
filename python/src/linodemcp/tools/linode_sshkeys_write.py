@@ -7,12 +7,6 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import sshkey_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -22,6 +16,7 @@ from linodemcp.tools.helpers import (
     is_dry_run,
 )
 from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -38,34 +33,7 @@ def create_linode_sshkey_create_tool() -> tuple[Tool, Capability]:
             "Creates a new SSH key and adds it to your Linode profile."
             " Pass dry_run=true to preview without creating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "A label for the SSH key (required)",
-                },
-                "ssh_key": {
-                    "type": "string",
-                    "description": "The public SSH key (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "ssh_key", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.SSHKeyCreateInput"),
     ), Capability.Write
 
 
@@ -100,7 +68,7 @@ async def handle_linode_sshkey_create(
 
     if not arguments.get("confirm"):
         return error_response(
-            "This creates an SSH key on your profile. Set confirm=true to proceed."
+            "This adds an SSH key to your Linode profile. Set confirm=true to proceed."
         )
 
     fields_error = _sshkey_create_fields_error(label, ssh_key)
@@ -137,43 +105,24 @@ def create_linode_sshkey_update_tool() -> tuple[Tool, Capability]:
             "Updates the label for an SSH key in your Linode profile."
             " Pass dry_run=true to preview without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "ssh_key_id": {
-                    "type": "integer",
-                    "description": "The ID of the SSH key to update (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The new label for the SSH key (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["ssh_key_id", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.SSHKeyUpdateInput"),
     ), Capability.Write
 
 
 def _sshkey_update_fields_error(
     ssh_key_id: Any, label: str
 ) -> list[TextContent] | None:
-    """Validate required update fields; return an error response or None."""
-    if not ssh_key_id:
-        return error_response("ssh_key_id is required")
+    """Validate required update fields; return an error response or None.
+
+    bool is a subclass of int; one message for missing/wrong-type/non-positive
+    matches the Go parser exactly and stops negative ids reaching the API.
+    """
+    if (
+        isinstance(ssh_key_id, bool)
+        or not isinstance(ssh_key_id, int)
+        or ssh_key_id <= 0
+    ):
+        return error_response("ssh_key_id must be a positive integer")
     if not label:
         return error_response("label is required")
     return None
@@ -223,7 +172,10 @@ async def handle_linode_sshkey_update(
         )
 
     if not arguments.get("confirm"):
-        return error_response("This updates an SSH key. Set confirm=true to proceed.")
+        return error_response(
+            "This updates an SSH key in your Linode profile. Set confirm=true to "
+            "proceed."
+        )
 
     fields_error = _sshkey_update_fields_error(ssh_key_id, label)
     if fields_error is not None:
@@ -260,32 +212,7 @@ def create_linode_sshkey_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "ssh_key_id": {
-                    "type": "integer",
-                    "description": "The ID of the SSH key to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["ssh_key_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.SSHKeyDeleteInput"),
     ), Capability.Destroy
 
 
@@ -301,10 +228,13 @@ async def _sshkey_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ssh_key(ssh_key_id_int)
-        return {
-            "message": f"SSH key {ssh_key_id_int} removed successfully",
-            "ssh_key_id": ssh_key_id_int,
-        }
+        return serialize_api_response(
+            {
+                "message": f"SSH key {ssh_key_id_int} removed successfully",
+                "ssh_key_id": ssh_key_id_int,
+            },
+            sshkey_pb2.SSHKeyDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -348,13 +278,19 @@ async def handle_linode_sshkey_delete(
         )
 
     if not arguments.get("confirm"):
-        return error_response("This deletes an SSH key. Set confirm=true to proceed.")
+        return error_response(
+            "This removes an SSH key from your Linode profile. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ssh_key(ssh_key_id_int)
-        return {
-            "message": f"SSH key {ssh_key_id_int} removed successfully",
-            "ssh_key_id": ssh_key_id_int,
-        }
+        return serialize_api_response(
+            {
+                "message": f"SSH key {ssh_key_id_int} removed successfully",
+                "ssh_key_id": ssh_key_id_int,
+            },
+            sshkey_pb2.SSHKeyDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete SSH key", _call)

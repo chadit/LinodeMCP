@@ -1,0 +1,22 @@
+{
+  "tool": "linode_vpc_subnet_get",
+  "description": "VPC subnet get requires vpc_id and subnet_id (string ids), then GETs the subnet.",
+  "cases": [
+    {
+      "name": "requires vpc_id",
+      "args": {},
+      "expect_error": "vpc_id is required"
+    },
+    {
+      "name": "requires subnet_id",
+      "args": { "vpc_id": "5" },
+      "expect_error": "subnet_id is required"
+    },
+    {
+      "name": "gets the subnet",
+      "args": { "vpc_id": "5", "subnet_id": "7" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/vpcs/5/subnets/7" }
+    }
+  ]
+}

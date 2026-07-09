@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 import dataclasses
+import ipaddress
 import json
 import logging
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
 import httpx
 from mcp.types import TextContent
 
 from linodemcp.config import EnvironmentConfig, EnvironmentNotFoundError
+from linodemcp.genpb.linode.mcp.v1 import dryrun_pb2
 from linodemcp.linode import (
     APIError,
     NetworkError,
     RetryableClient,
     RetryConfig,
 )
+from linodemcp.tools.proto_response import serialize_preview_envelope
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -140,40 +143,47 @@ def build_dry_run_response(
     warnings: list[str] | None = None,
     request_body: Any | None = None,
 ) -> list[TextContent]:
-    """Build the v0 dry-run wire shape and wrap it as MCP text content.
+    """Build the dry-run wire shape and wrap it as MCP text content.
 
     Tool handlers call this from their dry_run branch after fetching
-    current_state. The wire shape mirrors the Go-side
-    ``BuildDryRunResponse``; cross-language parity is asserted by
-    test_tools_dryrun. The optional keyword-only fields carry Phase 2
-    per-tool dependency-walk output; each is emitted only when non-empty,
-    so tools without a walk produce the unchanged v0 shape.
+    current_state. The envelope serializes through the DryRunResponse proto so
+    it is proto-canonical on both languages: current_state routes through a
+    google.protobuf.Value (JSON null when None, sorted object keys otherwise),
+    and the empty dependency-walk fields serialize as ``[]`` the same way the Go
+    builder emits them. Cross-language parity is asserted by test_tools_dryrun
+    and the conformance corpus.
     """
-    body: dict[str, Any] = {
+    would_execute: dict[str, Any] = {"method": method, "path": path}
+    if request_body is not None:
+        would_execute["body"] = request_body
+
+    raw: dict[str, Any] = {
         "dry_run": True,
         "tool": tool_name,
-        "would_execute": {"method": method, "path": path},
+        "would_execute": would_execute,
         "current_state": current_state,
     }
     if environment:
-        body["environment"] = environment
+        raw["environment"] = environment
     if dependencies:
-        body["dependencies"] = dependencies
+        raw["dependencies"] = dependencies
     if side_effects:
-        body["side_effects"] = side_effects
+        raw["side_effects"] = side_effects
     if billing_delta:
-        body["billing_delta"] = billing_delta
+        raw["billing_delta"] = billing_delta
     if warnings:
-        body["warnings"] = warnings
-    if request_body is not None:
-        body["would_execute"]["body"] = request_body
+        raw["warnings"] = warnings
 
-    return [
-        TextContent(
-            type="text",
-            text=json.dumps(body, indent=2, default=_dataclass_json_default),
-        )
-    ]
+    # Round-trip through JSON first so a dataclass current_state (the read
+    # sibling model a walk fetches) becomes the plain dict ParseDict accepts,
+    # mirroring the Go builder's json.Marshal into a structpb.Value.
+    plain = cast(
+        "dict[str, Any]",
+        json.loads(json.dumps(raw, default=_dataclass_json_default)),
+    )
+    result = serialize_preview_envelope(plain, dryrun_pb2.DryRunResponse())
+
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def truncate_string(value: str, limit: int) -> str:
@@ -382,3 +392,65 @@ async def execute_tool_list(
 def error_response(message: str) -> list[TextContent]:
     """Return a single-element TextContent error list."""
     return [TextContent(type="text", text=f"Error: {message}")]
+
+
+def required_int_id(arguments: dict[str, Any], name: str) -> tuple[int | None, str]:
+    """Validate a required positive-integer id path argument (Option B).
+
+    Returns ``(id, "")`` on success and ``(None, message)`` on failure, mirroring
+    the Go requiredIDArgument helper's ``(int, string)`` pair so callers can guard
+    with ``if id is None:`` and still hand the message straight to
+    ``error_response``. Absent key -> ``"<name> is required"``; present but not a
+    positive integer (bool, non-int, zero, negative) -> ``"<name> must be a
+    positive integer"``. A present-but-null value is treated as invalid (matches
+    Go, which reaches its numeric parser for an explicit null).
+    """
+    if name not in arguments:
+        return None, f"{name} is required"
+    value = arguments[name]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None, f"{name} must be a positive integer"
+    return value, ""
+
+
+def valid_ipv6_prefix(value: str) -> bool:
+    """Return whether value is a masked IPv6 CIDR prefix.
+
+    Mirrors Go's ipv6RangeFromTool (netip.ParsePrefix + Is6 + prefix==Masked):
+    the value must carry an explicit ``/bits`` suffix, parse as an IPv6 network,
+    and have no host bits set below the prefix length (strict). Ported so both
+    languages reject a malformed range locally instead of sending it on the wire.
+    """
+    if "/" not in value:
+        return False
+    try:
+        network = ipaddress.ip_network(value, strict=True)
+    except ValueError:
+        return False
+    return isinstance(network, ipaddress.IPv6Network)
+
+
+def pagination_int_argument(
+    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
+) -> int | None:
+    """Parse an optional pagination integer with Go-aligned range messages.
+
+    Returns None when the argument is absent (pagination is optional). A non-int
+    raises ``TypeError("<name> must be an integer")``; an out-of-range value
+    raises ``ValueError`` with Go's ranged text: "greater than or equal to
+    {minimum}" when there is no upper bound, "from {minimum} through {maximum}"
+    otherwise. Mirrors the Go optionalPaginationInt helper.
+    """
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        msg = f"{name} must be an integer"
+        raise TypeError(msg)
+    if value < minimum or (maximum is not None and value > maximum):
+        if maximum is not None:
+            msg = f"{name} must be an integer from {minimum} through {maximum}"
+        else:
+            msg = f"{name} must be an integer greater than or equal to {minimum}"
+        raise ValueError(msg)
+    return value

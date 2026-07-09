@@ -1,0 +1,17 @@
+{
+  "tool": "linode_profile_phone_number_delete",
+  "description": "Deletes the profile phone number with a single DELETE once confirmed. Confirm text diverges (see report).",
+  "cases": [
+    {
+      "name": "deletes the profile phone number",
+      "args": { "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/profile/phone-number" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {},
+      "expect_error": "This deletes the profile phone number. Set confirm=true to proceed."
+    }
+  ]
+}

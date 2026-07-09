@@ -1,0 +1,47 @@
+{
+  "tool": "linode_sshkey_update",
+  "description": "Shared label-required rejection and the update PUT body once confirmed. Missing-ssh_key_id text and confirm text diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects negative ssh_key_id",
+      "args": {
+        "ssh_key_id": -1,
+        "label": "k",
+        "confirm": true
+      },
+      "expect_error": "ssh_key_id must be a positive integer"
+    },
+    {
+      "name": "requires label",
+      "args": {
+        "ssh_key_id": 123,
+        "confirm": true
+      },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "updates an SSH key label",
+      "args": {
+        "ssh_key_id": 123,
+        "label": "renamed-key",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "renamed-key"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/profile/sshkeys/123",
+        "body": {
+          "label": "renamed-key"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"ssh_key_id": 123, "label": "renamed-key"},
+      "expect_error": "This updates an SSH key in your Linode profile. Set confirm=true to proceed."
+    }
+  ]
+}

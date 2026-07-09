@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -11,6 +12,7 @@ import (
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -20,7 +22,10 @@ const (
 
 // NewLinodeInstanceFirewallListTool creates a tool for listing Cloud Firewalls assigned to a Linode instance.
 func NewLinodeInstanceFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	// The raw-schema tool advertises the generated InstanceFirewallListInput; the
+	// list helper still builds the fetch/paginate/serialize handler, which is
+	// schema-source independent.
+	_, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_instance_firewall_list",
 		"Lists Cloud Firewalls assigned to a Linode instance with optional pagination.",
@@ -39,6 +44,12 @@ func NewLinodeInstanceFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.C
 		instanceFirewallListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_firewall_list",
+		"Lists Cloud Firewalls assigned to a Linode instance with optional pagination.",
+		toolschemas.Schema("linode.mcp.v1.InstanceFirewallListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -48,7 +59,7 @@ func instanceFirewallListResponse(items []*linodev1.Firewall, count int32, filte
 
 // NewLinodeInstanceInterfaceFirewallsListTool creates a tool for listing Cloud Firewalls assigned to a Linode interface.
 func NewLinodeInstanceInterfaceFirewallsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource2(
+	_, handler := newProtoListToolSubresource2(
 		cfg,
 		"linode_instance_interface_firewall_list",
 		"Lists Cloud Firewalls assigned to a specific Linode interface.",
@@ -69,28 +80,26 @@ func NewLinodeInstanceInterfaceFirewallsListTool(cfg *config.Config) (mcp.Tool, 
 		instanceFirewallListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_interface_firewall_list",
+		"Lists Cloud Firewalls assigned to a specific Linode interface.",
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceFirewallListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeInstanceFirewallsUpdateTool creates a tool for replacing firewall assignments on a Linode instance.
 func NewLinodeInstanceFirewallsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_firewall_update",
 		"Replaces the Cloud Firewall assignments for a Linode instance. Pass an empty firewall_ids list to remove all assignments.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithArray("firewall_ids", mcp.Required(),
-				mcp.Description("Complete list of firewall IDs to assign to the Linode. Use an empty list to remove all firewall assignments.")),
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm firewall assignment changes. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceFirewallsUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceFirewallUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceFirewallsUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -132,20 +141,20 @@ func handleInstanceFirewallsUpdateRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	firewalls, err := client.UpdateInstanceFirewalls(ctx, linodeID, page, pageSize, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: firewallIDs})
+	firewalls, err := client.UpdateInstanceFirewallsProto(ctx, linodeID, page, pageSize, &linode.UpdateInstanceFirewallsRequest{FirewallIDs: firewallIDs})
 	if err != nil {
 		return mcp.NewToolResultError(formatInstanceFirewallsUpdateError(linodeID, err)), nil
 	}
 
-	response := struct {
-		Count     int               `json:"count"`
-		Firewalls []linode.Firewall `json:"firewalls"`
-	}{
-		Count:     len(firewalls),
-		Firewalls: firewalls,
+	var count int32
+	if n := len(firewalls); n <= math.MaxInt32 {
+		count = int32(n)
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.FirewallListResponse{
+		Count:     count,
+		Firewalls: firewalls,
+	})
 }
 
 func formatInstanceFirewallsUpdateError(linodeID int, err error) string {

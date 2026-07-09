@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_oauth_client_thumbnail_get",
+  "description": "OAuth client thumbnail get: missing client_id agrees; success pins the thumbnail GET path.",
+  "cases": [
+    {
+      "name": "requires client_id",
+      "args": {},
+      "expect_error": "client_id is required"
+    },
+    {
+      "name": "gets an OAuth client thumbnail",
+      "args": { "client_id": "abc123" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/oauth-clients/abc123/thumbnail" }
+    }
+  ]
+}

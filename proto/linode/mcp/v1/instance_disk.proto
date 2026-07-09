@@ -14,3 +14,142 @@ message InstanceDiskGetInput {
   // The ID of the disk to retrieve (required).
   int32 disk_id = 3;
 }
+
+// InstanceDiskListInput is the input contract for linode_instance_disk_list.
+message InstanceDiskListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+}
+
+// InstanceDiskCreateInput is the input contract for
+// linode_instance_disk_create. linode_id, label, size, and confirm are
+// required. authorized_keys/authorized_users are comma-separated strings here
+// (unlike the array form on instance create/rebuild), matching the hand-built
+// schema.
+message InstanceDiskCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Label for the disk (required).
+  string label = 3;
+  // Size of the disk in MB (required).
+  int32 size = 4;
+  // Filesystem type: raw, swap, ext3, ext4, initrd (defaults to ext4)
+  // (optional).
+  optional string filesystem = 5;
+  // Image ID to deploy to the disk, e.g. linode/ubuntu22.04 (optional).
+  optional string image = 6;
+  // Root password for the disk. Required when deploying an image (min 12 chars
+  // with upper/lower/digits) (optional).
+  optional string root_pass = 7;
+  // Comma-separated list of SSH public keys to install (optional).
+  optional string authorized_keys = 8;
+  // Comma-separated list of Linode usernames whose SSH keys to install
+  // (optional).
+  optional string authorized_users = 9;
+  // Must be true to confirm disk creation. Ignored when dry_run=true.
+  bool confirm = 10;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 11;
+}
+
+// InstanceDiskUpdateInput is the input contract for
+// linode_instance_disk_update. linode_id, disk_id, and confirm are required.
+message InstanceDiskUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the disk to update (required).
+  int32 disk_id = 3;
+  // New label for the disk (optional).
+  optional string label = 4;
+  // Must be true to confirm disk update. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// InstanceDiskDeleteInput is the input contract for
+// linode_instance_disk_delete, a two-stage destroy: linode_id, disk_id, and
+// confirm are required, and mode/plan_id drive the plan/apply flow.
+message InstanceDiskDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the disk to delete (required).
+  int32 disk_id = 3;
+  // Must be true to confirm deletion. This action is irreversible and all disk
+  // data will be lost. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 6;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 7;
+}
+
+// InstanceDiskCloneInput is the input contract for linode_instance_disk_clone.
+// linode_id, disk_id, and confirm are required.
+message InstanceDiskCloneInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the disk to clone (required).
+  int32 disk_id = 3;
+  // Must be true to confirm disk clone. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceDiskResizeInput is the input contract for
+// linode_instance_disk_resize. linode_id, disk_id, size, and confirm are
+// required.
+message InstanceDiskResizeInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the disk to resize (required).
+  int32 disk_id = 3;
+  // New size for the disk in MB (required).
+  int32 size = 4;
+  // Must be true to confirm disk resize. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// InstanceDiskPasswordResetInput is the input contract for
+// linode_instance_disk_password_reset. linode_id, disk_id, password, and
+// confirm are required.
+message InstanceDiskPasswordResetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the disk (required).
+  int32 disk_id = 3;
+  // New disk root password (min 12 chars, must include upper, lower, and
+  // digits).
+  string password = 4;
+  // Must be true to confirm disk password reset. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}

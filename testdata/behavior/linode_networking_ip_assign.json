@@ -1,0 +1,26 @@
+{
+  "tool": "linode_networking_ip_assign",
+  "description": "Networking IP assign gates on confirm with the same text in both languages, then POSTs the region/assignments to the generic assign endpoint. Post-confirm arg validation diverges (see report).",
+  "cases": [
+    {
+      "name": "requires confirm before assigning",
+      "args": { "region": "us-east", "assignments": [ { "address": "192.0.2.1", "linode_id": 123 } ] },
+      "expect_error": "This assigns IP addresses to Linodes. Set confirm=true to proceed."
+    },
+    {
+      "name": "assigns IPs to linodes",
+      "args": { "confirm": true, "region": "us-east", "assignments": [ { "address": "192.0.2.1", "linode_id": 123 } ] },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/ips/assign",
+        "body": { "region": "us-east", "assignments": [ { "address": "192.0.2.1", "linode_id": 123 } ] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"region": "us-east", "assignments": [{"address": "192.0.2.1", "linode_id": 123}]},
+      "expect_error": "This assigns IP addresses to Linodes. Set confirm=true to proceed."
+    }
+  ]
+}

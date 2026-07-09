@@ -1,0 +1,26 @@
+{
+  "tool": "linode_account_cancel",
+  "description": "Shared non-string comments rejection and the cancel POST. Confirm-gate text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-string comments",
+      "args": { "comments": 123 },
+      "expect_error": "comments must be a string"
+    },
+    {
+      "name": "cancels the account",
+      "args": { "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/cancel",
+        "body": {}
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {},
+      "expect_error": "This cancels the active account. Set confirm=true to proceed."
+    }
+  ]
+}

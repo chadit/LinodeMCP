@@ -41,8 +41,8 @@ func TestLinodeInstanceNodeBalancersListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
+	if !strings.Contains(string(tool.RawInputSchema), keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 }
 

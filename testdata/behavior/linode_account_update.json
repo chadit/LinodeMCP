@@ -1,0 +1,21 @@
+{
+  "tool": "linode_account_update",
+  "description": "Pins the account PUT body. Confirm-gate and empty-field text diverge, so only the success capture is shared (see report).",
+  "cases": [
+    {
+      "name": "updates account contact information",
+      "args": { "email": "user@example.com", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/account",
+        "body": { "email": "user@example.com" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"email": "user@example.com"},
+      "expect_error": "This updates account billing/contact information. Set confirm=true to proceed."
+    }
+  ]
+}

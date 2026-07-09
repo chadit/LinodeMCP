@@ -6,6 +6,42 @@ import "google/protobuf/struct.proto";
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+// ConfigInterfacePurpose is the legacy config-profile network interface purpose.
+// Values are the exact lowercase Linode API strings, authored from the live
+// OpenAPI spec. See the enum-wrapper convention in nodebalancer_config.proto.
+message ConfigInterfacePurpose {
+  enum Value {
+    unspecified = 0;
+    public = 1;
+    vlan = 2;
+    vpc = 3;
+  }
+}
+
+// ConfigRunLevel is the boot run level of a config profile. Values are the exact
+// lowercase Linode API strings, authored from the live OpenAPI spec (POST/PUT
+// /linode/instances/{linodeId}/configs). See the enum-wrapper convention in
+// nodebalancer_config.proto.
+message ConfigRunLevel {
+  enum Value {
+    unspecified = 0;
+    default = 1;
+    single = 2;
+    binbash = 3;
+  }
+}
+
+// ConfigVirtMode is the virtualization mode of a config profile. Values are the
+// exact lowercase Linode API strings, authored from the live OpenAPI spec
+// (POST/PUT /linode/instances/{linodeId}/configs).
+message ConfigVirtMode {
+  enum Value {
+    unspecified = 0;
+    paravirt = 1;
+    fullvirt = 2;
+  }
+}
+
 // Instance mirrors the Linode instance object returned by
 // GET /linode/instances/{linodeId}. Field order and JSON names match the
 // shape both implementations emit today, so the generated protojson output is
@@ -358,6 +394,15 @@ message InstanceWriteResponse {
   Instance instance = 2;
 }
 
+// InstanceDeleteResponse is the id-echo envelope linode_instance_delete
+// returns: a confirmation message plus the deleted instance's ID. The delete
+// endpoint returns an empty body, so the id echo confirms the target. The field
+// is instance_id (not linode_id) to match the existing tool output key.
+message InstanceDeleteResponse {
+  string message = 1;
+  int32 instance_id = 2;
+}
+
 // InstanceConfigWriteResponse is the {message, config} envelope the config-profile
 // write tools (create, update) return: a confirmation plus the affected profile.
 message InstanceConfigWriteResponse {
@@ -371,6 +416,33 @@ message InstanceConfigWriteResponse {
 message ConfigInterfaceWriteResponse {
   string message = 1;
   ConfigInterfaceResponse interface = 2;
+}
+
+// InstanceInterfaceWriteResponse is the {message, interface} envelope the
+// current-generation interface write tools (add, update) return: a confirmation
+// plus the affected Linode network interface.
+message InstanceInterfaceWriteResponse {
+  string message = 1;
+  InstanceInterface interface = 2;
+}
+
+// InstanceInterfaceSettingsWriteResponse is the {message, settings} envelope
+// linode_instance_interface_settings_update returns: a confirmation plus the
+// updated interface settings.
+message InstanceInterfaceSettingsWriteResponse {
+  string message = 1;
+  InstanceInterfaceSettings settings = 2;
+}
+
+// InstanceInterfaceUpgradeWriteResponse is the {message, ...body} envelope
+// linode_instance_interface_upgrade returns. The upgrade endpoint returns a body
+// of its own (config_id, dry_run, interfaces), so these wrap that body under a
+// confirmation message.
+message InstanceInterfaceUpgradeWriteResponse {
+  string message = 1;
+  int32 config_id = 2;
+  bool dry_run = 3;
+  repeated InstanceInterface interfaces = 4;
 }
 
 // InstanceDiskWriteResponse is the {message, disk} envelope the instance disk
@@ -409,11 +481,51 @@ message InstanceBackupRestoreWriteResponse {
 }
 
 // InstanceActionWriteResponse is the {message, linode_id} echo the instance
-// action tools whose endpoints return no resource body (mutate, firewall apply)
-// return: a confirmation plus the affected Linode id.
+// action tools whose endpoints return no resource body (mutate, firewall apply,
+// rescue, backups enable/cancel, password reset) return: a confirmation plus the
+// affected Linode id.
 message InstanceActionWriteResponse {
   string message = 1;
   int32 linode_id = 2;
+}
+
+// InstancePowerActionResponse is the {message, instance_id} echo the instance
+// power tools (boot, reboot, shutdown) return. These endpoints return no
+// resource body, so the id echoes the request. The id field is instance_id
+// (not linode_id) to match the power tools' input schema and legacy output.
+message InstancePowerActionResponse {
+  string message = 1;
+  int32 instance_id = 2;
+}
+
+// InstanceMigrateWriteResponse is the {message, linode_id, region?} echo
+// linode_instance_migrate returns. The migrate endpoint returns no resource
+// body, so these echo the request: the affected Linode and, when the caller
+// picked a destination, the target region. region is explicit-presence so it is
+// omitted from the output when the caller let Linode pick the region.
+message InstanceMigrateWriteResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  optional string region = 3;
+}
+
+// InstanceResizeWriteResponse is the {message, instance_id, new_type} echo
+// linode_instance_resize returns. The resize endpoint returns no resource body,
+// so these echo the request: the affected Linode and the plan type it is
+// resizing to.
+message InstanceResizeWriteResponse {
+  string message = 1;
+  int32 instance_id = 2;
+  string new_type = 3;
+}
+
+// InstanceDiskActionResponse is the {message, linode_id, disk_id} echo the
+// instance disk action tools whose endpoints return no resource body (disk
+// password reset) return: a confirmation plus the affected Linode and disk ids.
+message InstanceDiskActionResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  int32 disk_id = 3;
 }
 
 // InstanceGetInput is the input contract for linode_instance_get. The generated
@@ -434,4 +546,872 @@ message InstanceListInput {
   optional string environment = 1;
   // Filter instances by status (running, stopped, etc.).
   optional string status = 2;
+}
+
+// InstanceBootInput is the input contract for linode_instance_boot.
+// instance_id and confirm are required.
+message InstanceBootInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to boot (required).
+  int32 instance_id = 2;
+  // The ID of the configuration profile to boot with (optional).
+  optional int32 config_id = 3;
+  // Must be set to true to confirm booting the instance. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceRebootInput is the input contract for linode_instance_reboot.
+// instance_id and confirm are required.
+message InstanceRebootInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to reboot (required).
+  int32 instance_id = 2;
+  // The ID of the configuration profile to boot with after reboot (optional).
+  optional int32 config_id = 3;
+  // Must be set to true to confirm rebooting the instance. This causes a brief
+  // outage. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceShutdownInput is the input contract for linode_instance_shutdown.
+// instance_id and confirm are required.
+message InstanceShutdownInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to shut down (required).
+  int32 instance_id = 2;
+  // Must be set to true to confirm shutting down the instance. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// InstanceCreateInput is the input contract for linode_instance_create.
+// region, type, firewall_id, and confirm are required.
+message InstanceCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The region where the instance will be created (e.g., 'us-east').
+  string region = 2;
+  // The Linode plan type (e.g., 'g6-nanode-1').
+  string type = 3;
+  // A label for the instance (optional).
+  optional string label = 4;
+  // The image ID to deploy (e.g., 'linode/debian11'). Required for provisioned
+  // instances.
+  optional string image = 5;
+  // The root password for the instance. Required if image is provided.
+  optional string root_pass = 6;
+  // Cloud Firewall ID to attach to the public interface. Required under the
+  // current Linode Interfaces generation.
+  int32 firewall_id = 7;
+  // Whether the public interface owns the IPv4 default route (optional,
+  // default: true).
+  optional bool route_ipv4 = 8;
+  // Whether the public interface owns the IPv6 default route (optional,
+  // default: true).
+  optional bool route_ipv6 = 9;
+  // Enable backups for this instance (optional, default: false).
+  optional bool backups_enabled = 10;
+  // SSH public keys to install for the root user (optional). Requires an
+  // image.
+  repeated string authorized_keys = 11;
+  // Whether to boot the instance after creation (optional, defaults to true
+  // when an image is provided).
+  optional bool booted = 12;
+  // Must be set to true to confirm instance creation. This operation incurs
+  // billing charges. Ignored when dry_run=true.
+  bool confirm = 13;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 14;
+}
+
+// InstanceUpdateInput is the input contract for linode_instance_update.
+// instance_id and confirm are required. alerts is a free-form threshold object
+// and tags is a string array, both optional.
+message InstanceUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the instance to update (required).
+  int32 instance_id = 2;
+  // New Linode label (optional).
+  optional string label = 3;
+  // Deprecated group label (optional).
+  optional string group = 4;
+  // Tags to assign to the Linode (optional).
+  repeated string tags = 5;
+  // Alert threshold settings (optional).
+  map<string, google.protobuf.Value> alerts = 6;
+  // Maintenance policy, such as linode/migrate (optional).
+  optional string maintenance_policy = 7;
+  // Whether the Lassie shutdown watchdog is enabled (optional).
+  optional bool watchdog_enabled = 8;
+  // Must be set to true to confirm the update. Ignored when dry_run=true.
+  bool confirm = 9;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 10;
+}
+
+// InstanceDeleteInput is the input contract for linode_instance_delete, a
+// two-stage destroy: instance_id and confirm are required, and mode/plan_id
+// drive the plan/apply flow.
+message InstanceDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to delete (required).
+  int32 instance_id = 2;
+  // Must be set to true to confirm deletion. This action is irreversible.
+  // Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
+  // plan_id re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// InstanceCloneInput is the input contract for linode_instance_clone.
+// linode_id and confirm are required.
+message InstanceCloneInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to clone (required).
+  int32 linode_id = 2;
+  // Region for the cloned instance (optional, defaults to same region).
+  optional string region = 3;
+  // Instance type for the clone (optional, defaults to same type).
+  optional string type = 4;
+  // Label for the cloned instance (optional).
+  optional string label = 5;
+  // Enable backups on the cloned instance (optional).
+  optional bool backups_enabled = 6;
+  // Config profile IDs to clone (optional). Defaults to all configs when
+  // omitted.
+  repeated int32 configs = 7;
+  // Disk IDs to clone (optional). Defaults to all disks when omitted.
+  repeated int32 disks = 8;
+  // Must be true to confirm instance cloning. This creates a billable
+  // resource. Ignored when dry_run=true.
+  bool confirm = 9;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 10;
+}
+
+// InstanceMigrateInput is the input contract for linode_instance_migrate.
+// linode_id and confirm are required.
+message InstanceMigrateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to migrate (required).
+  int32 linode_id = 2;
+  // Target region for migration (optional, Linode picks if omitted).
+  optional string region = 3;
+  // Must be true to confirm migration. The instance will be shut down during
+  // migration. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceMutateInput is the input contract for linode_instance_mutate.
+// linode_id and confirm are required.
+message InstanceMutateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to upgrade (required).
+  int32 linode_id = 2;
+  // Automatically resize disks during the upgrade when possible (optional,
+  // API default: true).
+  optional bool allow_auto_disk_resize = 3;
+  // Must be true to confirm the instance upgrade. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceRebuildInput is the input contract for linode_instance_rebuild, a
+// two-stage destroy: linode_id, image, root_pass, and confirm are required,
+// and mode/plan_id drive the plan/apply flow.
+message InstanceRebuildInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to rebuild (required).
+  int32 linode_id = 2;
+  // The image to rebuild with (e.g. 'linode/ubuntu24.04'). Use
+  // linode_image_list to find valid values.
+  string image = 3;
+  // Root password for the rebuilt instance (min 12 chars, must include upper,
+  // lower, and digits).
+  string root_pass = 4;
+  // SSH public keys to add to root's authorized_keys (optional).
+  repeated string authorized_keys = 5;
+  // Linode usernames whose SSH keys to add (optional).
+  repeated string authorized_users = 6;
+  // Whether to boot the instance after rebuild (optional, defaults to true).
+  optional bool booted = 7;
+  // Must be true to confirm rebuild. WARNING: This destroys ALL existing data.
+  // Ignored when dry_run=true.
+  bool confirm = 8;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 9;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
+  // plan_id re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 10;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 11;
+}
+
+// InstancePasswordResetInput is the input contract for
+// linode_instance_password_reset, a two-stage destroy: linode_id, root_pass,
+// and confirm are required, and mode/plan_id drive the plan/apply flow.
+message InstancePasswordResetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // New root password (min 12 chars, must include upper, lower, and digits).
+  string root_pass = 3;
+  // Must be true to confirm password reset. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
+  // plan_id re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 6;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 7;
+}
+
+// InstanceResizeInput is the input contract for linode_instance_resize, an
+// opt-in two-stage write: instance_id, type, and confirm are required, and
+// mode/plan_id drive the plan/apply flow when enabled in the two_stage config.
+message InstanceResizeInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to resize (required).
+  int32 instance_id = 2;
+  // The new Linode plan type (e.g., 'g6-standard-1').
+  string type = 3;
+  // Automatically resize disks when resizing to a larger plan (optional,
+  // default: false).
+  optional bool allow_auto_disk_resize = 4;
+  // Migration type: 'cold' (default) or 'warm' (optional).
+  optional string migration_type = 5;
+  // Must be set to true to confirm resize. This operation causes downtime.
+  // Ignored when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
+  // plan_id re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 8;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 9;
+}
+
+// InstanceRescueInput is the input contract for linode_instance_rescue.
+// linode_id and confirm are required. devices is a free-form slot-to-disk map,
+// optional.
+message InstanceRescueInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to boot into rescue mode (required).
+  int32 linode_id = 2;
+  // Object mapping device slots to disk/volume IDs, e.g.
+  // {"sda":{"disk_id":123},"sdb":{"volume_id":456}} (optional).
+  map<string, google.protobuf.Value> devices = 3;
+  // Must be true to confirm booting into rescue mode. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceFirewallApplyInput is the input contract for
+// linode_instance_firewall_apply. linode_id and confirm are required.
+message InstanceFirewallApplyInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Must be true to confirm reapplying firewalls to this Linode. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// InstanceTransferGetInput is the input contract for
+// linode_instance_transfer_get.
+message InstanceTransferGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+}
+
+// InstanceTransferMonthGetInput is the input contract for
+// linode_instance_transfer_month_get. All three fields are required.
+message InstanceTransferMonthGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The year for the transfer stats, for example 2024 (required).
+  int32 year = 3;
+  // The month for the transfer stats, 1 through 12 (required).
+  int32 month = 4;
+}
+
+// InstanceConfigGetInput is the input contract for linode_instance_config_get.
+message InstanceConfigGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile to retrieve (required).
+  int32 config_id = 3;
+}
+
+// InstanceConfigListInput is the input contract for
+// linode_instance_config_list.
+message InstanceConfigListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
+}
+
+// InstanceConfigCreateInput is the input contract for
+// linode_instance_config_create. linode_id, label, devices, and confirm are
+// required at the handler level, but devices is an open device-slot map so it
+// becomes a map<string, Value> whose required flag the generator drops from the
+// advertised schema (runtime still enforces presence). helpers and interfaces
+// are JSON-encoded strings on this tool.
+message InstanceConfigCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Label for the configuration profile (required).
+  string label = 3;
+  // Object mapping device slots to disk/volume IDs, e.g. {"sda":{"disk_id":123}}
+  // (required at the handler level).
+  map<string, google.protobuf.Value> devices = 4;
+  // Kernel ID to boot, e.g. linode/latest-64bit (optional).
+  optional string kernel = 5;
+  // Optional comments for the configuration profile.
+  optional string comments = 6;
+  // Optional memory limit in MB.
+  optional int32 memory_limit = 7;
+  // Root device to boot, e.g. /dev/sda (optional).
+  optional string root_device = 8;
+  // Run level: default, single, or binbash (optional).
+  optional ConfigRunLevel.Value run_level = 9;
+  // Virtualization mode: paravirt or fullvirt (optional).
+  optional ConfigVirtMode.Value virt_mode = 10;
+  // Optional helpers as a JSON object string.
+  optional string helpers = 11;
+  // Optional interfaces as a JSON array string.
+  optional string interfaces = 12;
+  // Must be true to confirm configuration profile creation. Ignored when
+  // dry_run=true.
+  bool confirm = 13;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 14;
+}
+
+// InstanceConfigUpdateInput is the input contract for
+// linode_instance_config_update. linode_id, config_id, and confirm are
+// required. devices and helpers are open objects (map<string, Value>), and
+// interfaces is a bare object array (repeated Struct); none carried inner item
+// detail in the hand-built schema.
+message InstanceConfigUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile (required).
+  int32 config_id = 3;
+  // Updated label for the configuration profile (optional).
+  optional string label = 4;
+  // Object mapping device slots to disk/volume IDs (optional).
+  map<string, google.protobuf.Value> devices = 5;
+  // Kernel ID to boot, e.g. linode/latest-64bit (optional).
+  optional string kernel = 6;
+  // Optional comments for the configuration profile.
+  optional string comments = 7;
+  // Optional memory limit in MB.
+  optional int32 memory_limit = 8;
+  // Root device to boot, e.g. /dev/sda (optional).
+  optional string root_device = 9;
+  // Run level: default, single, or binbash (optional).
+  optional ConfigRunLevel.Value run_level = 10;
+  // Virtualization mode: paravirt or fullvirt (optional).
+  optional ConfigVirtMode.Value virt_mode = 11;
+  // Optional helpers object.
+  map<string, google.protobuf.Value> helpers = 12;
+  // Optional array of interface objects.
+  repeated google.protobuf.Struct interfaces = 13;
+  // Must be true to confirm configuration profile update. Ignored when
+  // dry_run=true.
+  bool confirm = 14;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 15;
+}
+
+// InstanceConfigDeleteInput is the input contract for
+// linode_instance_config_delete. linode_id, config_id, and confirm are
+// required. This destroy is single-step (no mode/plan_id in the registered
+// schema).
+message InstanceConfigDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile to delete (required).
+  int32 config_id = 3;
+  // Must be true to confirm deletion. This action is irreversible. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceConfigInterfaceListInput is the input contract for
+// linode_instance_config_interface_list.
+message InstanceConfigInterfaceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile (required).
+  int32 config_id = 3;
+}
+
+// InstanceConfigInterfaceAddInput is the input contract for
+// linode_instance_config_interface_add. linode_id, config_id, purpose, and
+// confirm are required. purpose is a generated ConfigInterfacePurpose enum
+// (public/vlan/vpc) in the schema and the handler validates the same set.
+// ipv4/ipv6 are open objects (map<string, Value>), ip_ranges is a string array.
+message InstanceConfigInterfaceAddInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile (required).
+  int32 config_id = 3;
+  // The interface purpose: public, vlan, or vpc (required).
+  ConfigInterfacePurpose.Value purpose = 4;
+  // Interface label. Required for vlan interfaces (optional).
+  optional string label = 5;
+  // Private CIDR address for vlan interfaces (optional).
+  optional string ipam_address = 6;
+  // Whether this is the primary non-vlan interface (optional).
+  optional bool primary = 7;
+  // The VPC subnet ID. Required for vpc interfaces (optional).
+  optional int32 subnet_id = 8;
+  // IPv4 CIDR VPC subnet ranges routed to this interface (optional).
+  repeated string ip_ranges = 9;
+  // VPC IPv4 configuration for this interface (optional).
+  map<string, google.protobuf.Value> ipv4 = 10;
+  // VPC IPv6 configuration for this interface (optional).
+  map<string, google.protobuf.Value> ipv6 = 11;
+  // Must be true to confirm configuration profile interface creation. Ignored
+  // when dry_run=true.
+  bool confirm = 12;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 13;
+}
+
+// InstanceConfigInterfaceUpdateInput is the input contract for
+// linode_instance_config_interface_update. linode_id, config_id, interface_id,
+// and confirm are required. ip_ranges is a string array and ipv4 is an open
+// object (map<string, Value>).
+message InstanceConfigInterfaceUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile (required).
+  int32 config_id = 3;
+  // The ID of the configuration profile interface (required).
+  int32 interface_id = 4;
+  // Whether this is the primary interface (optional).
+  optional bool primary = 5;
+  // IPv4 ranges routed to this interface (optional).
+  repeated string ip_ranges = 6;
+  // IPv4 configuration for this interface (optional).
+  map<string, google.protobuf.Value> ipv4 = 7;
+  // Must be true to confirm configuration profile interface update. Ignored
+  // when dry_run=true.
+  bool confirm = 8;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 9;
+}
+
+// InstanceConfigInterfaceDeleteInput is the input contract for
+// linode_instance_config_interface_delete. All three IDs and confirm are
+// required. Single-step destroy (no mode/plan_id in the registered schema).
+message InstanceConfigInterfaceDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile (required).
+  int32 config_id = 3;
+  // The ID of the configuration profile interface to delete (required).
+  int32 interface_id = 4;
+  // Must be true to confirm configuration profile interface deletion. Ignored
+  // when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// InstanceConfigInterfaceReorderInput is the input contract for
+// linode_instance_config_interface_reorder. linode_id, config_id, ids, and
+// confirm are required at the handler level, but ids is an int array so its
+// required flag is dropped from the generated schema (runtime still enforces
+// presence).
+message InstanceConfigInterfaceReorderInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the configuration profile (required).
+  int32 config_id = 3;
+  // Existing configuration profile interface IDs in the desired order, e.g.
+  // [101,102,103] (required at the handler level).
+  repeated int32 ids = 4;
+  // Must be true to confirm configuration interface reorder. Ignored when
+  // dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// InstanceInterfaceListInput is the input contract for
+// linode_instance_interface_list.
+message InstanceInterfaceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+}
+
+// InstanceInterfaceAddInput is the input contract for
+// linode_instance_interface_add. linode_id, interface, and confirm are required
+// at the handler level, but interface is an open object (exactly one of
+// public/vpc/vlan) so its required flag is dropped from the generated schema
+// (runtime still enforces presence).
+message InstanceInterfaceAddInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Object defining exactly one interface type: public, vpc, or vlan (required
+  // at the handler level).
+  map<string, google.protobuf.Value> interface = 3;
+  // Must be true to confirm interface creation. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceInterfaceDeleteInput is the input contract for
+// linode_instance_interface_delete. linode_id, interface_id, and confirm are
+// required. Single-step destroy (no mode/plan_id in the registered schema).
+message InstanceInterfaceDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the Linode interface to delete (required).
+  int32 interface_id = 3;
+  // Must be true to confirm interface deletion. This action is irreversible.
+  // Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceInterfaceUpdateInput is the input contract for
+// linode_instance_interface_update. linode_id, interface_id, and confirm are
+// required. default_route/public/vlan/vpc are open objects (map<string,
+// Value>) with exactly-one-of union validation in the handler.
+message InstanceInterfaceUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The ID of the Linode interface (required).
+  int32 interface_id = 3;
+  // Default route settings for the interface (optional).
+  map<string, google.protobuf.Value> default_route = 4;
+  // Public interface settings. Set exactly one of public, vpc, or vlan
+  // (optional).
+  map<string, google.protobuf.Value> public = 5;
+  // VLAN interface settings. Set exactly one of public, vpc, or vlan
+  // (optional).
+  map<string, google.protobuf.Value> vlan = 6;
+  // VPC interface settings. Set exactly one of public, vpc, or vlan (optional).
+  map<string, google.protobuf.Value> vpc = 7;
+  // Must be true to confirm interface update. Ignored when dry_run=true.
+  bool confirm = 8;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 9;
+}
+
+// InstanceInterfaceSettingsUpdateInput is the input contract for
+// linode_instance_interface_settings_update. linode_id and confirm are
+// required. default_route is an open object (map<string, Value>).
+message InstanceInterfaceSettingsUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Enable or disable Network Helper (optional).
+  optional bool network_helper = 3;
+  // Default route interface IDs (ipv4_interface_id and/or ipv6_interface_id)
+  // (optional).
+  map<string, google.protobuf.Value> default_route = 4;
+  // Must be true to confirm interface settings update. Ignored when
+  // dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// InstanceInterfaceUpgradeInput is the input contract for
+// linode_instance_interface_upgrade. linode_id and confirm are required.
+// api_dry_run is the Linode API's own validation flag, distinct from the MCP
+// dry_run preview.
+message InstanceInterfaceUpgradeInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Optional configuration profile ID to upgrade.
+  optional int32 config_id = 3;
+  // Pass dry_run to the Linode API to validate the upgrade without applying it
+  // (optional).
+  optional bool api_dry_run = 4;
+  // Must be true to confirm the interface upgrade request. Ignored when
+  // dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// InstanceInterfaceHistoryListInput is the input contract for
+// linode_instance_interface_history_list.
+message InstanceInterfaceHistoryListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
+}
+
+// InstanceBackupListInput is the input contract for
+// linode_instance_backup_list.
+message InstanceBackupListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+}
+
+// InstanceBackupCreateInput is the input contract for
+// linode_instance_backup_create. linode_id and confirm are required.
+message InstanceBackupCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance to snapshot (required).
+  int32 linode_id = 2;
+  // Label for the manual snapshot (optional).
+  optional string label = 3;
+  // Must be true to confirm snapshot creation. This overwrites any existing
+  // manual snapshot. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// InstanceBackupRestoreInput is the input contract for
+// linode_instance_backup_restore. linode_id, backup_id, target_linode_id, and
+// confirm are required.
+message InstanceBackupRestoreInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance that owns the backup (required).
+  int32 linode_id = 2;
+  // The ID of the backup to restore (required).
+  int32 backup_id = 3;
+  // The ID of the Linode instance to restore the backup to (required).
+  int32 target_linode_id = 4;
+  // If true, deletes all disks and configs on the target before restoring.
+  // Defaults to false (optional).
+  optional bool overwrite = 5;
+  // Must be true to confirm restore. With overwrite=true, all existing data on
+  // the target is destroyed. Ignored when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+}
+
+// InstanceBackupsEnableInput is the input contract for
+// linode_instance_backups_enable. linode_id and confirm are required.
+message InstanceBackupsEnableInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Must be true to confirm enabling backups. This adds a recurring billing
+  // charge. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// InstanceBackupsCancelInput is the input contract for
+// linode_instance_backups_cancel, a two-stage destroy: linode_id and confirm
+// are required, and mode/plan_id drive the plan/apply flow.
+message InstanceBackupsCancelInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Must be true to confirm cancellation. All existing backups will be
+  // permanently deleted. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// InstanceDiskDeleteResponse is the id-echo envelope linode_instance_disk_delete
+// returns: a confirmation message plus the parent instance and deleted disk IDs.
+// The delete endpoint returns an empty body, so the echo confirms the target.
+message InstanceDiskDeleteResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  int32 disk_id = 3;
+}
+
+// InstanceConfigDeleteResponse is the id-echo envelope
+// linode_instance_config_delete returns: a confirmation message plus the parent
+// instance and deleted configuration-profile IDs.
+message InstanceConfigDeleteResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  int32 config_id = 3;
+}
+
+// InstanceConfigInterfaceDeleteResponse is the id-echo envelope
+// linode_instance_config_interface_delete returns: a confirmation message plus
+// the instance, configuration-profile, and deleted interface IDs.
+message InstanceConfigInterfaceDeleteResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  int32 config_id = 3;
+  int32 interface_id = 4;
+}
+
+// InstanceConfigInterfaceReorderResponse is the echo envelope
+// linode_instance_config_interface_reorder returns: a confirmation message, the
+// instance and configuration-profile IDs, and the interface IDs in their new
+// order. The reorder endpoint returns an empty body, so the echo confirms the
+// applied order.
+message InstanceConfigInterfaceReorderResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  int32 config_id = 3;
+  repeated int32 ids = 4;
+}
+
+// InstanceInterfaceDeleteResponse is the id-echo envelope
+// linode_instance_interface_delete returns: a confirmation message plus the
+// parent instance and deleted interface IDs.
+message InstanceInterfaceDeleteResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  int32 interface_id = 3;
+}
+
+// InstanceTransfer mirrors GET /linode/instances/{linodeId}/transfer, the
+// current billing month's network transfer pool. used is bytes and exceeds
+// int32, so it is int64; every field emits as a JSON number.
+message InstanceTransfer {
+  int32 billable = 1;
+  int32 quota = 2;
+  int64 used = 3;
+}
+
+// InstanceTransferMonth mirrors GET
+// /linode/instances/{linodeId}/transfer/{year}/{month}, a specific month's
+// totals. This is a distinct shape from InstanceTransfer: the month endpoint
+// returns bytes_in/bytes_out/bytes_total (int64 byte counts that exceed int32,
+// emitted as JSON numbers), not billable/quota/used.
+message InstanceTransferMonth {
+  int64 bytes_in = 1;
+  int64 bytes_out = 2;
+  int64 bytes_total = 3;
 }

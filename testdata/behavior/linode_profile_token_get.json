@@ -1,0 +1,22 @@
+{
+  "tool": "linode_profile_token_get",
+  "description": "Shared token_id-required rejection and the token GET path.",
+  "cases": [
+    {
+      "name": "rejects missing token_id",
+      "args": {},
+      "expect_error": "token_id is required"
+    },
+    {
+      "name": "gets a personal access token by id",
+      "args": {
+        "token_id": 123
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "GET",
+        "path": "/profile/tokens/123"
+      }
+    }
+  ]
+}

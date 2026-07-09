@@ -3,10 +3,8 @@ package linode_test
 import (
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -15,12 +13,6 @@ import (
 
 func TestClientGetInstanceTransferSuccess(t *testing.T) {
 	t.Parallel()
-
-	transfer := linode.InstanceTransfer{
-		Billable: 0,
-		Quota:    2000,
-		Used:     22956600198,
-	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -41,7 +33,7 @@ func TestClientGetInstanceTransferSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(transfer); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{"billable": 0, "quota": 2000, "used": 22956600198}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -49,7 +41,7 @@ func TestClientGetInstanceTransferSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.GetInstanceTransfer(t.Context(), 123)
+	result, err := client.GetInstanceTransferProto(t.Context(), 123)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -58,16 +50,16 @@ func TestClientGetInstanceTransferSuccess(t *testing.T) {
 		t.Fatal("result is nil")
 	}
 
-	if result.Billable != 0 {
-		t.Errorf("result.Billable = %v, want %v", result.Billable, 0)
+	if result.GetBillable() != 0 {
+		t.Errorf("result.GetBillable() = %v, want %v", result.GetBillable(), 0)
 	}
 
-	if result.Quota != 2000 {
-		t.Errorf("result.Quota = %v, want %v", result.Quota, 2000)
+	if result.GetQuota() != 2000 {
+		t.Errorf("result.GetQuota() = %v, want %v", result.GetQuota(), 2000)
 	}
 
-	if result.Used != int64(22956600198) {
-		t.Errorf("result.Used = %v, want %v", result.Used, int64(22956600198))
+	if result.GetUsed() != int64(22956600198) {
+		t.Errorf("result.GetUsed() = %v, want %v", result.GetUsed(), int64(22956600198))
 	}
 }
 
@@ -76,7 +68,7 @@ func TestClientGetInstanceTransferRejectsInvalidLinodeID(t *testing.T) {
 
 	client := linode.NewClient("http://example.invalid", "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetInstanceTransfer(t.Context(), 0)
+	_, err := client.GetInstanceTransferProto(t.Context(), 0)
 
 	if !errors.Is(err, linode.ErrLinodeIDPositive) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
@@ -107,7 +99,7 @@ func TestClientGetInstanceTransferAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetInstanceTransfer(t.Context(), 123)
+	_, err := client.GetInstanceTransferProto(t.Context(), 123)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -149,7 +141,7 @@ func TestClientGetInstanceTransferRetriesTransientError(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.InstanceTransfer{Used: 123}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{"used": 123}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -157,7 +149,7 @@ func TestClientGetInstanceTransferRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	result, err := client.GetInstanceTransfer(t.Context(), 123)
+	result, err := client.GetInstanceTransferProto(t.Context(), 123)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -166,8 +158,8 @@ func TestClientGetInstanceTransferRetriesTransientError(t *testing.T) {
 		t.Fatal("result is nil")
 	}
 
-	if result.Used != int64(123) {
-		t.Errorf("result.Used = %v, want %v", result.Used, int64(123))
+	if result.GetUsed() != int64(123) {
+		t.Errorf("result.GetUsed() = %v, want %v", result.GetUsed(), int64(123))
 	}
 
 	if calls.Load() < int32(2) {
@@ -177,8 +169,6 @@ func TestClientGetInstanceTransferRetriesTransientError(t *testing.T) {
 
 func TestClientGetInstanceTransferByYearMonthSuccess(t *testing.T) {
 	t.Parallel()
-
-	transfer := linode.Transfer{In: 1.5, Out: 2.5, Total: 4}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -199,7 +189,11 @@ func TestClientGetInstanceTransferByYearMonthSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(transfer); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"bytes_in":    30471077120,
+			"bytes_out":   22956600198,
+			"bytes_total": 53427677318,
+		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -207,7 +201,7 @@ func TestClientGetInstanceTransferByYearMonthSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.GetInstanceTransferByYearMonth(t.Context(), 123, 2024, 1)
+	result, err := client.GetInstanceTransferByYearMonthProto(t.Context(), 123, 2024, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -216,8 +210,16 @@ func TestClientGetInstanceTransferByYearMonthSuccess(t *testing.T) {
 		t.Fatal("result is nil")
 	}
 
-	if !reflect.DeepEqual(*result, transfer) {
-		t.Errorf("*result = %v, want %v", *result, transfer)
+	if result.GetBytesIn() != int64(30471077120) {
+		t.Errorf("result.GetBytesIn() = %v, want %v", result.GetBytesIn(), int64(30471077120))
+	}
+
+	if result.GetBytesOut() != int64(22956600198) {
+		t.Errorf("result.GetBytesOut() = %v, want %v", result.GetBytesOut(), int64(22956600198))
+	}
+
+	if result.GetBytesTotal() != int64(53427677318) {
+		t.Errorf("result.GetBytesTotal() = %v, want %v", result.GetBytesTotal(), int64(53427677318))
 	}
 }
 
@@ -245,7 +247,7 @@ func TestClientGetInstanceTransferByYearMonthAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetInstanceTransferByYearMonth(t.Context(), 123, 2024, 1)
+	_, err := client.GetInstanceTransferByYearMonthProto(t.Context(), 123, 2024, 1)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -298,7 +300,7 @@ func TestClientGetInstanceTransferByYearMonthRetriesTransientError(t *testing.T)
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.Transfer{Total: 4}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{"bytes_total": 4}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -306,7 +308,7 @@ func TestClientGetInstanceTransferByYearMonthRetriesTransientError(t *testing.T)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	result, err := client.GetInstanceTransferByYearMonth(t.Context(), 123, 2024, 1)
+	result, err := client.GetInstanceTransferByYearMonthProto(t.Context(), 123, 2024, 1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -315,8 +317,8 @@ func TestClientGetInstanceTransferByYearMonthRetriesTransientError(t *testing.T)
 		t.Fatal("result is nil")
 	}
 
-	if math.Abs(result.Total-float64(4)) > 0.001 {
-		t.Errorf("result.Total = %v, want %v", result.Total, float64(4))
+	if result.GetBytesTotal() != int64(4) {
+		t.Errorf("result.GetBytesTotal() = %v, want %v", result.GetBytesTotal(), int64(4))
 	}
 
 	if attempts.Load() != int32(2) {
@@ -346,7 +348,7 @@ func TestClientGetInstanceTransferByYearMonthValidatesPathParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := client.GetInstanceTransferByYearMonth(t.Context(), tt.id, tt.year, tt.mon)
+			_, err := client.GetInstanceTransferByYearMonthProto(t.Context(), tt.id, tt.year, tt.mon)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("error = %v, want %v", err, tt.wantErr)
 			}

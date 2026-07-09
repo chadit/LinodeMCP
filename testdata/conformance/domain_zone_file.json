@@ -1,0 +1,18 @@
+{
+  "message": "linode.mcp.v1.DomainZoneFile",
+  "description": "Domain zone file: the rendered zone lines ride through the repeated zone_file field.",
+  "input": {
+    "zone_file": [
+      "; example.com [123]",
+      "$TTL 86400",
+      "@  IN  SOA  ns1.linode.com. admin.example.com. 2024010101 14400 14400 1209600 86400"
+    ]
+  },
+  "canonical": {
+    "zone_file": [
+      "; example.com [123]",
+      "$TTL 86400",
+      "@  IN  SOA  ns1.linode.com. admin.example.com. 2024010101 14400 14400 1209600 86400"
+    ]
+  }
+}

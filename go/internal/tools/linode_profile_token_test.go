@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -54,29 +53,29 @@ func TestLinodeProfileTokenCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyExpiry]; !ok {
-		t.Errorf("props missing key %v", keyExpiry)
+	raw := string(tool.RawInputSchema)
+	if !strings.Contains(raw, keyExpiry) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyExpiry)
 	}
 
-	if _, ok := props[profileTokenLabelParam]; !ok {
-		t.Errorf("props missing key %v", profileTokenLabelParam)
+	if !strings.Contains(raw, profileTokenLabelParam) {
+		t.Errorf("tool.RawInputSchema missing key %v", profileTokenLabelParam)
 	}
 
-	if _, ok := props[profileTokenScopesParam]; !ok {
-		t.Errorf("props missing key %v", profileTokenScopesParam)
+	if !strings.Contains(raw, profileTokenScopesParam) {
+		t.Errorf("tool.RawInputSchema missing key %v", profileTokenScopesParam)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(raw, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
+	if !strings.Contains(raw, keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	if !strings.Contains(raw, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 

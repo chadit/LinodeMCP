@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
@@ -29,20 +30,11 @@ func TestVolumeCloneToolRegisteredAsWrite(t *testing.T) {
 			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapWrite)
 		}
 
-		if _, ok := info.InputSchema.Properties["volume_id"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "volume_id")
-		}
-
-		if _, ok := info.InputSchema.Properties["label"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "label")
-		}
-
-		if _, ok := info.InputSchema.Properties["confirm"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "confirm")
-		}
-
-		if _, ok := info.InputSchema.Properties["dry_run"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "dry_run")
+		raw := string(info.RawInputSchema)
+		for _, key := range []string{"volume_id", "label", "confirm", "dry_run"} {
+			if !strings.Contains(raw, key) {
+				t.Errorf("info.RawInputSchema missing key %v", key)
+			}
 		}
 
 		return

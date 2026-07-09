@@ -1,0 +1,32 @@
+{
+  "tool": "linode_stackscript_delete",
+  "description": "StackScript delete (Capability Destroy). Missing stackscript_id, the confirm-only bypass gate, and the success bypass agree across languages; the plain no-confirm message diverges (see report).",
+  "cases": [
+    {
+      "name": "requires stackscript_id",
+      "args": {},
+      "expect_error": "stackscript_id is required"
+    },
+    {
+      "name": "confirm alone requires a bypass assertion",
+      "args": {
+        "stackscript_id": 123,
+        "confirm": true
+      },
+      "expect_error": "linode_stackscript_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes a StackScript once confirmed with bypass",
+      "args": {
+        "stackscript_id": 123,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/linode/stackscripts/123"
+      }
+    }
+  ]
+}

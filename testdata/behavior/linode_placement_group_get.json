@@ -1,0 +1,12 @@
+{
+  "tool": "linode_placement_group_get",
+  "description": "Placement group get: the single GET by ID. group_id validation text diverges across both languages, so only the success path is pinned (see report).",
+  "cases": [
+    {
+      "name": "gets a placement group",
+      "args": { "group_id": 123 },
+      "api_response": { "id": 123, "label": "my-group", "region": "us-east" },
+      "expect_request": { "method": "GET", "path": "/placement/groups/123" }
+    }
+  ]
+}

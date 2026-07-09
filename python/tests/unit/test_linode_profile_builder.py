@@ -65,16 +65,20 @@ def install_fixture_catalog() -> Iterator[None]:
     set_tool_catalog_provider(None)
 
 
-def _parse_json_list(payload: str) -> list[dict[str, object]]:
-    """Deserialize a JSON-encoded list-of-dicts with explicit typing.
+def _parse_envelope_list(payload: str, key: str) -> list[dict[str, object]]:
+    """Deserialize a {count, <key>} envelope and return its entry list.
 
     json.loads returns Any, which pyright (strict) widens to Unknown
     through subsequent operations. The cast collapses that ambiguity
     in one place so call sites can reason about the result statically.
     """
     parsed: object = json.loads(payload)
-    assert isinstance(parsed, list)
-    return cast("list[dict[str, object]]", parsed)
+    assert isinstance(parsed, dict)
+    entries = cast("dict[str, object]", parsed)[key]
+    assert isinstance(entries, list)
+    typed = cast("list[dict[str, object]]", entries)
+    assert parsed["count"] == len(typed)
+    return typed
 
 
 async def _call_list_tools(args: dict[str, str]) -> list[dict[str, object]]:
@@ -84,7 +88,7 @@ async def _call_list_tools(args: dict[str, str]) -> list[dict[str, object]]:
     """
     response = await handle_linode_profile_list_tools(args)
     assert len(response) == 1, "handler must return exactly one TextContent"
-    return _parse_json_list(response[0].text)
+    return _parse_envelope_list(response[0].text, "tools")
 
 
 def test_list_tools_registration() -> None:
@@ -221,7 +225,7 @@ async def test_list_tools_empty_catalog_returns_empty_array() -> None:
 
     response = await handle_linode_profile_list_tools({})
 
-    assert response[0].text == "[]"
+    assert _parse_envelope_list(response[0].text, "tools") == []
 
 
 @pytest.mark.asyncio
@@ -236,7 +240,7 @@ async def test_list_tools_no_bridge_returns_empty() -> None:
 
     response = await handle_linode_profile_list_tools({})
 
-    assert response[0].text == "[]"
+    assert _parse_envelope_list(response[0].text, "tools") == []
 
 
 def test_list_categories_registration() -> None:
@@ -259,7 +263,7 @@ async def test_list_categories_returns_deduplicated_counts() -> None:
     expectations differ from the Go-side test by design.
     """
     response = await handle_linode_profile_list_categories({})
-    parsed = json.loads(response[0].text)
+    parsed = _parse_envelope_list(response[0].text, "categories")
     counts = {str(e["name"]): e["tool_count"] for e in parsed}
 
     assert counts["compute"] == 1
@@ -279,7 +283,7 @@ async def test_list_categories_sorted_by_name() -> None:
     comparison.
     """
     response = await handle_linode_profile_list_categories({})
-    parsed = json.loads(response[0].text)
+    parsed = _parse_envelope_list(response[0].text, "categories")
     names = [str(e["name"]) for e in parsed]
 
     assert names == sorted(names)
@@ -292,4 +296,4 @@ async def test_list_categories_empty_catalog_returns_empty_array() -> None:
 
     response = await handle_linode_profile_list_categories({})
 
-    assert response[0].text == "[]"
+    assert _parse_envelope_list(response[0].text, "categories") == []

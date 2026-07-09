@@ -1,0 +1,20 @@
+{
+  "message": "linode.mcp.v1.FirewallSettings",
+  "description": "Default firewall assignments; all IDs present including zero-valued ones (implicit-presence int32 emits 0).",
+  "input": {
+    "default_firewall_ids": {
+      "linode": 123,
+      "nodebalancer": 0,
+      "public_interface": 123,
+      "vpc_interface": 0
+    }
+  },
+  "canonical": {
+    "default_firewall_ids": {
+      "linode": 123,
+      "public_interface": 123,
+      "nodebalancer": 0,
+      "vpc_interface": 0
+    }
+  }
+}

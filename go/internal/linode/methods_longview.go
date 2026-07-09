@@ -28,6 +28,28 @@ func (c *Client) httpGetLongviewPlan(ctx context.Context) (*LongviewSubscription
 	return &plan, nil
 }
 
+// httpGetLongviewPlanProto retrieves the account Longview subscription plan and
+// decodes it into the proto LongviewSubscription element for the proto-backed
+// read path.
+func (c *Client) httpGetLongviewPlanProto(ctx context.Context) (*linodev1.LongviewSubscription, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLongviewPlan, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLongviewPlan", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	plan := &linodev1.LongviewSubscription{}
+	if err := c.handleProtoResponse(resp, plan); err != nil {
+		return nil, err
+	}
+
+	return plan, nil
+}
+
 // httpListLongviewTypes retrieves the available Longview subscription types.
 func (c *Client) httpListLongviewTypes(ctx context.Context) (*PaginatedResponse[LongviewType], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

@@ -1,0 +1,26 @@
+{
+  "tool": "linode_database_mysql_instance_update",
+  "description": "Confirm-gated update PUT body and the unsupported-argument rejection now enforced in both languages (Go gained Python's allowlist). The unsupported case sets confirm:true so both reach the check.",
+  "cases": [
+    {
+      "name": "rejects an unsupported argument",
+      "args": { "instance_id": 123, "label": "renamed-db", "bogus_field": "x", "confirm": true },
+      "expect_error": "unsupported argument: bogus_field"
+    },
+    {
+      "name": "updates a mysql instance label",
+      "args": { "instance_id": 123, "label": "renamed-db", "confirm": true },
+      "api_response": { "id": 123, "label": "renamed-db" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/databases/mysql/instances/123",
+        "body": { "label": "renamed-db" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": { "instance_id": 123, "label": "renamed-db" },
+      "expect_error": "This updates a Managed Database instance. Set confirm=true to proceed."
+    }
+  ]
+}

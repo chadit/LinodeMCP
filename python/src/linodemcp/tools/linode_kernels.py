@@ -9,7 +9,11 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import kernel_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import (
+    error_response,
+    execute_tool,
+    pagination_int_argument,
+)
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -20,46 +24,12 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-def _optional_int_argument(
-    arguments: dict[str, Any],
-    name: str,
-    minimum: int,
-    maximum: int | None = None,
-) -> int | None:
-    value = arguments.get(name)
-    if value is None:
-        return None
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise TypeError(f"{name} must be an integer")
-    if value < minimum:
-        raise ValueError(f"{name} must be at least {minimum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{name} must be at most {maximum}")
-    return value
-
-
 def create_linode_kernel_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_kernel_list tool."""
     return Tool(
         name="linode_kernel_list",
         description="Lists available Linode kernels.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Page size for results",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.KernelListInput"),
     ), Capability.Read
 
 
@@ -68,8 +38,8 @@ async def handle_linode_kernel_list(
 ) -> list[TextContent]:
     """Handle linode_kernel_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 

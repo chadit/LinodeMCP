@@ -1,0 +1,12 @@
+{
+  "tool": "linode_nodebalancer_list",
+  "description": "Filters are client-side; pins the single GET the list handler issues.",
+  "cases": [
+    {
+      "name": "lists nodebalancers",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/nodebalancers" }
+    }
+  ]
+}

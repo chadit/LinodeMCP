@@ -1,0 +1,27 @@
+{
+  "tool": "linode_managed_service_disable",
+  "description": "Service disable: shared missing-id rejection, confirm gate, and the disable POST.",
+  "cases": [
+    {
+      "name": "requires service_id",
+      "args": {},
+      "expect_error": "service_id is required"
+    },
+    {
+      "name": "requires confirm before disabling",
+      "args": { "service_id": 4 },
+      "expect_error": "This disables a Managed service monitor. Set confirm=true to proceed."
+    },
+    {
+      "name": "disables a managed service",
+      "args": { "service_id": 4, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/managed/services/4/disable" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"service_id": 4},
+      "expect_error": "This disables a Managed service monitor. Set confirm=true to proceed."
+    }
+  ]
+}

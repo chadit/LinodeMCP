@@ -1,0 +1,17 @@
+{
+  "tool": "linode_longview_client_get",
+  "description": "Pins the missing-client_id rejection both languages share and the get GET. The 0/negative/non-integer client_id messages diverge (Go pagination-style vs Python 'positive integer'), so only the missing case is fixtured (see report).",
+  "cases": [
+    {
+      "name": "rejects missing client_id",
+      "args": {},
+      "expect_error": "client_id is required"
+    },
+    {
+      "name": "gets the longview client",
+      "args": { "client_id": 5 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/longview/clients/5" }
+    }
+  ]
+}

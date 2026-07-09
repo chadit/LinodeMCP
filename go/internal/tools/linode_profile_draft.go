@@ -2,13 +2,14 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // ProfileResolver returns a Profile by name across both built-in and
@@ -17,42 +18,18 @@ import (
 // (zero, false) means "no such profile".
 type ProfileResolver func(name string) (profiles.Profile, bool)
 
-// draftJSONShape is the wire shape for a draft response. The JSON tags
-// match the Python side so both implementations produce identical
-// payloads. Fields mirror builder.Draft except Name comes first for
-// readability.
-type draftJSONShape struct {
-	Name                string   `json:"name"`
-	Description         string   `json:"description"`
-	AllowedTools        []string `json:"allowed_tools"`
-	AllowedEnvironments []string `json:"allowed_environments"`
-	RequiredTokenScopes []string `json:"required_token_scopes"`
-	AllowYolo           bool     `json:"allow_yolo"`
-}
-
-// draftJSON serializes a builder.Draft into the wire shape. The empty
-// slice substitution (nil to []) keeps the JSON output as “[]“ not
-// “null“ so the model's parser doesn't have to handle both.
-func draftJSON(draft *builder.Draft) draftJSONShape {
-	return draftJSONShape{
+// draftProto converts a builder.Draft into its response message. The
+// canonical serializer emits empty repeated fields as “[]“ not “null“,
+// preserving the draft JSON contract of arrays over null.
+func draftProto(draft *builder.Draft) *linodev1.ProfileDraftResponse {
+	return &linodev1.ProfileDraftResponse{
 		Name:                draft.Name,
 		Description:         draft.Description,
-		AllowedTools:        emptyIfNil(draft.AllowedTools),
-		AllowedEnvironments: emptyIfNil(draft.AllowedEnvironments),
-		RequiredTokenScopes: emptyIfNil(draft.RequiredTokenScopes),
+		AllowedTools:        draft.AllowedTools,
+		AllowedEnvironments: draft.AllowedEnvironments,
+		RequiredTokenScopes: draft.RequiredTokenScopes,
 		AllowYolo:           draft.AllowYolo,
 	}
-}
-
-// emptyIfNil ensures a slice marshals to “[]“ rather than “null“.
-// Builder.Draft starts with nil slices when constructed without a
-// clone source; the JSON contract promises arrays.
-func emptyIfNil(s []string) []string {
-	if s == nil {
-		return []string{}
-	}
-
-	return s
 }
 
 // NewLinodeProfileDraftNewTool returns the linode_profile_draft_new
@@ -70,25 +47,15 @@ func NewLinodeProfileDraftNewTool(
 	registry *builder.Registry,
 	resolver ProfileResolver,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_draft_new",
-		mcp.WithDescription(
-			"Start a new profile draft in the server's in-memory builder "+
-				"registry. Optional clone_from seeds the draft from an "+
-				"existing built-in or user-defined profile. The draft "+
-				"persists only for this server's lifetime; use "+
-				"linode_profile_draft_save (Phase 8.5) to write it to "+
-				"the config file.",
-		),
-		mcp.WithString(
-			"name",
-			mcp.Description("Name for the new draft. Must be unique within the registry."),
-			mcp.Required(),
-		),
-		mcp.WithString(
-			"clone_from",
-			mcp.Description("Optional profile name to seed the draft from. Resolves against built-ins and user-defined profiles; user-defined shadow built-ins by name."),
-		),
+		"Start a new profile draft in the server's in-memory builder "+
+			"registry. Optional clone_from seeds the draft from an "+
+			"existing built-in or user-defined profile. The draft "+
+			"persists only for this server's lifetime; use "+
+			"linode_profile_draft_save (Phase 8.5) to write it to "+
+			"the config file.",
+		toolschemas.Schema("linode.mcp.v1.ProfileDraftNewInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -121,12 +88,7 @@ func NewLinodeProfileDraftNewTool(
 			return nil, fmt.Errorf("create draft %q: %w", name, err)
 		}
 
-		body, err := json.Marshal(draftJSON(draft))
-		if err != nil {
-			return nil, fmt.Errorf("marshal draft: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(draftProto(draft))
 	}
 
 	return tool, profiles.CapMeta, handler
@@ -139,18 +101,12 @@ func NewLinodeProfileDraftNewTool(
 func NewLinodeProfileDraftShowTool(
 	registry *builder.Registry,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_draft_show",
-		mcp.WithDescription(
-			"Show the current state of a profile draft. Returns name, "+
-				"description, allowed tools, allowed environments, "+
-				"required token scopes, and the allow_yolo flag.",
-		),
-		mcp.WithString(
-			"name",
-			mcp.Description("Draft name to show."),
-			mcp.Required(),
-		),
+		"Show the current state of a profile draft. Returns name, "+
+			"description, allowed tools, allowed environments, "+
+			"required token scopes, and the allow_yolo flag.",
+		toolschemas.Schema("linode.mcp.v1.ProfileDraftShowInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -170,12 +126,7 @@ func NewLinodeProfileDraftShowTool(
 			return nil, fmt.Errorf("draft %q: %w", name, builder.ErrDraftNotFound)
 		}
 
-		body, err := json.Marshal(draftJSON(draft))
-		if err != nil {
-			return nil, fmt.Errorf("marshal draft: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(draftProto(draft))
 	}
 
 	return tool, profiles.CapMeta, handler
@@ -189,19 +140,13 @@ func NewLinodeProfileDraftShowTool(
 func NewLinodeProfileDraftDiscardTool(
 	registry *builder.Registry,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_draft_discard",
-		mcp.WithDescription(
-			"Discard a profile draft. Idempotent: returns "+
-				`{"discarded": false} when the draft does not exist `+
-				"(no error), so the model can call it from cleanup "+
-				"paths without first checking existence.",
-		),
-		mcp.WithString(
-			"name",
-			mcp.Description("Draft name to discard."),
-			mcp.Required(),
-		),
+		"Discard a profile draft. Idempotent: returns "+
+			`{"discarded": false} when the draft does not exist `+
+			"(no error), so the model can call it from cleanup "+
+			"paths without first checking existence.",
+		toolschemas.Schema("linode.mcp.v1.ProfileDraftDiscardInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -218,12 +163,10 @@ func NewLinodeProfileDraftDiscardTool(
 
 		removed := registry.Discard(name)
 
-		body, err := json.Marshal(map[string]any{"name": name, "discarded": removed})
-		if err != nil {
-			return nil, fmt.Errorf("marshal discard result: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.ProfileDraftDiscardResponse{
+			Name:      name,
+			Discarded: removed,
+		})
 	}
 
 	return tool, profiles.CapMeta, handler

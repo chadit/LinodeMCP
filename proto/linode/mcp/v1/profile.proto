@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 // Profile mirrors the authenticated user's Linode profile.
@@ -168,4 +170,286 @@ message SecurityQuestionListResponse {
   int32 count = 1;
   optional string filter = 2;
   repeated SecurityQuestion security_questions = 3;
+}
+
+// ProfilePreferencesUpdateResponse is the {message, preferences} envelope the
+// preferences update tool returns. Preferences are per-OAuth-client, free-form
+// key/value data (the API round-trips whatever the caller stores), so
+// preferences is a google.protobuf.Struct rather than a fixed schema.
+message ProfilePreferencesUpdateResponse {
+  string message = 1;
+  google.protobuf.Struct preferences = 2;
+}
+
+// ProfileTfaEnableConfirmResponse is the {message, scratch, expiry} envelope the
+// TFA enable-confirm tool returns. scratch is the one-time backup code the API
+// hands back on confirmation; it is returned to the user by design (it is the
+// account-recovery code) and is not output-redacted. expiry is echoed when the
+// API includes it.
+message ProfileTfaEnableConfirmResponse {
+  string message = 1;
+  string scratch = 2;
+  string expiry = 3;
+}
+
+// ProfilePreferencesGetInput is the input contract for
+// linode_profile_preferences_get (singular preferences object, no resource ID).
+message ProfilePreferencesGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// ProfilePreferencesUpdateInput is the input contract for
+// linode_profile_preferences_update. preferences is a free-form key/value object
+// the API round-trips, so it maps to a google.protobuf.Value map. It is required
+// at runtime but a map field cannot be marked required in the generated schema,
+// so the required flag is dropped (the handler still enforces presence).
+message ProfilePreferencesUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Free-form user preferences to store. Required at runtime, though the
+  // generated schema cannot mark a map field required.
+  map<string, google.protobuf.Value> preferences = 2;
+  // Must be true to confirm updating profile preferences. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// ProfileAppListInput is the input contract for linode_profile_app_list.
+message ProfileAppListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// ProfileAppDeleteInput is the input contract for linode_profile_app_delete.
+message ProfileAppDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Profile authorized app ID to revoke.
+  int32 app_id = 2;
+  // Must be true to confirm revoking OAuth app access. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// ProfileDeviceListInput is the input contract for linode_profile_device_list.
+message ProfileDeviceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// ProfileDeviceGetInput is the input contract for linode_profile_device_get.
+message ProfileDeviceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Profile trusted device ID.
+  int32 device_id = 2;
+}
+
+// ProfileDeviceRevokeInput is the input contract for
+// linode_profile_device_revoke.
+message ProfileDeviceRevokeInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Profile trusted device ID to revoke.
+  int32 device_id = 2;
+  // Must be true to confirm revoking a trusted device. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// ProfileTokenListInput is the input contract for linode_profile_token_list.
+message ProfileTokenListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// ProfileTokenGetInput is the input contract for linode_profile_token_get.
+message ProfileTokenGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Personal access token ID to retrieve.
+  int32 token_id = 2;
+}
+
+// ProfileTokenCreateInput is the input contract for linode_profile_token_create.
+message ProfileTokenCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Token expiry timestamp (optional).
+  optional string expiry = 2;
+  // Token label (optional).
+  optional string label = 3;
+  // Token scopes string (optional).
+  optional string scopes = 4;
+  // Must be true to confirm personal access token creation. Ignored when
+  // dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// ProfileTokenUpdateInput is the input contract for linode_profile_token_update.
+message ProfileTokenUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Personal access token ID.
+  int32 token_id = 2;
+  // Token label. The label is the only field a token update can change.
+  optional string label = 3;
+  // Must be true to confirm updating a personal access token. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// ProfileTokenDeleteInput is the input contract for linode_profile_token_delete
+// (revoke; single-stage, no mode/plan_id in the hand-built schema).
+message ProfileTokenDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The personal access token ID to revoke.
+  int32 token_id = 2;
+  // Must be true to confirm personal access token revocation. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// ProfileTfaEnableInput is the input contract for linode_profile_tfa_enable.
+message ProfileTfaEnableInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Must be true to confirm generating a two-factor authentication secret.
+  // Ignored when dry_run=true.
+  bool confirm = 2;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 3;
+}
+
+// ProfileTfaDisableInput is the input contract for linode_profile_tfa_disable.
+message ProfileTfaDisableInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Must be true to confirm disabling profile two-factor authentication.
+  // Ignored when dry_run=true.
+  bool confirm = 2;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 3;
+}
+
+// ProfileTfaEnableConfirmInput is the input contract for
+// linode_profile_tfa_enable_confirm.
+message ProfileTfaEnableConfirmInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Two-factor authentication code to confirm enablement.
+  string tfa_code = 2;
+  // Must be true to confirm enabling profile two-factor authentication.
+  // Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// ProfilePhoneNumberSendInput is the input contract for
+// linode_profile_phone_number_send.
+message ProfilePhoneNumberSendInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // ISO 3166-1 alpha-2 country code for the phone number.
+  string iso_code = 2;
+  // Phone number that should receive the verification code.
+  string phone_number = 3;
+  // Must be true to confirm sending the verification code. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// ProfilePhoneNumberDeleteInput is the input contract for
+// linode_profile_phone_number_delete (the profile has one phone number, so
+// there is no resource ID).
+message ProfilePhoneNumberDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Must be true to confirm deleting the profile phone number. Ignored when
+  // dry_run=true.
+  bool confirm = 2;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 3;
+}
+
+// ProfilePhoneNumberVerifyInput is the input contract for
+// linode_profile_phone_number_verify.
+message ProfilePhoneNumberVerifyInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // One-time SMS code sent to the profile phone number.
+  string otp_code = 2;
+  // Must be true to confirm verifying the phone number. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// SecurityQuestionListInput is the input contract for
+// linode_profile_security_question_list (pairs with
+// SecurityQuestionListResponse; the endpoint is not paginated).
+message SecurityQuestionListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// SecurityQuestionAnswerInput is the input contract for
+// linode_profile_security_question_answer. security_questions is a required
+// array of {question_id, response} objects the handler validates; a repeated
+// field cannot be marked required in the generated schema, so the required flag
+// is dropped (the handler still enforces presence). The item detail (per-object
+// question_id/response) is not carried in the generated schema either.
+message SecurityQuestionAnswerInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The security question answers to submit. Each entry is an object with a
+  // question_id and a response. Required at runtime, though the generated schema
+  // cannot mark a repeated field required.
+  repeated google.protobuf.Struct security_questions = 2;
+  // Must be true to confirm answering security questions. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
 }

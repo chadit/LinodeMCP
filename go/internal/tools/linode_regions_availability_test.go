@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -37,12 +36,13 @@ func TestLinodeRegionAvailabilityListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[canRunKeyEnv]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", canRunKeyEnv)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, canRunKeyEnv) {
+		t.Errorf("RawInputSchema missing key %v", canRunKeyEnv)
 	}
 
-	if _, ok := tool.InputSchema.Properties["confirm"]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", "confirm")
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -168,18 +168,19 @@ func TestLinodeRegionAvailabilityGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyRegionID, canRunKeyEnv} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyRegionID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyRegionID)
+	if !strings.Contains(rawSchema, `"required"`) || !strings.Contains(rawSchema, keyRegionID) {
+		t.Errorf("RawInputSchema does not mark %v required", keyRegionID)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -201,7 +202,7 @@ func TestLinodeRegionAvailabilityGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true}}}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true, keyNotInProto: valNotInProto}}}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -228,12 +229,24 @@ func TestLinodeRegionAvailabilityGetToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
+	if !strings.Contains(textContent.Text, `"region_availabilities"`) {
+		t.Errorf("textContent.Text does not contain %v", `"region_availabilities"`)
+	}
+
+	if got := listResponseCount(t, textContent.Text); got != 1 {
+		t.Errorf("listResponseCount = %d, want 1", got)
+	}
+
 	if !strings.Contains(textContent.Text, "g6-standard-1") {
 		t.Errorf("textContent.Text does not contain %v", "g6-standard-1")
 	}
 
 	if !strings.Contains(textContent.Text, regionUSEast) {
 		t.Errorf("textContent.Text does not contain %v", regionUSEast)
+	}
+
+	if strings.Contains(textContent.Text, "not_in_proto") {
+		t.Errorf("textContent.Text unexpectedly contains dropped unknown field: %v", textContent.Text)
 	}
 }
 

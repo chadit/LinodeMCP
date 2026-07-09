@@ -1,0 +1,12 @@
+{
+  "tool": "linode_nodebalancer_vpc_config_get",
+  "description": "Pins the VPC-config GET path. Missing/invalid id error text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "gets a vpc config by ids",
+      "args": { "nodebalancer_id": 456, "vpc_config_id": 3 },
+      "api_response": { "id": 3, "nodebalancer_id": 456, "vpc_id": 12 },
+      "expect_request": { "method": "GET", "path": "/nodebalancers/456/vpcs/3" }
+    }
+  ]
+}

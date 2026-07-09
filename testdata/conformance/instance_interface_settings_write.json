@@ -1,0 +1,18 @@
+{
+  "message": "linode.mcp.v1.InstanceInterfaceSettingsWriteResponse",
+  "description": "Interface settings write envelope (settings update): a confirmation message plus the updated interface settings, with the default_route booleans and network_helper present.",
+  "input": {
+    "message": "Interface settings for instance 123 updated successfully",
+    "settings": {
+      "default_route": {"ipv4": true, "ipv6": false},
+      "network_helper": true
+    }
+  },
+  "canonical": {
+    "message": "Interface settings for instance 123 updated successfully",
+    "settings": {
+      "default_route": {"ipv4": true, "ipv6": false},
+      "network_helper": true
+    }
+  }
+}

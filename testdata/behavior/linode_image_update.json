@@ -1,0 +1,22 @@
+{
+  "tool": "linode_image_update",
+  "description": "With confirm set both languages reach the image_id check. The update PUT sends only the provided fields.",
+  "cases": [
+    {
+      "name": "rejects missing image_id",
+      "args": { "confirm": true },
+      "expect_error": "image_id must be a non-empty string"
+    },
+    {
+      "name": "updates the label",
+      "args": { "image_id": "private/123", "label": "new-label", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "PUT", "path": "/images/private%2F123", "body": { "label": "new-label" } }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"image_id": "private/123", "label": "new-label"},
+      "expect_error": "This updates image metadata. Set confirm=true to proceed."
+    }
+  ]
+}

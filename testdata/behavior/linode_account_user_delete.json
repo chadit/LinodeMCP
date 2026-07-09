@@ -1,0 +1,27 @@
+{
+  "tool": "linode_account_user_delete",
+  "description": "Account user delete: missing username agrees, confirm gate, and the single DELETE once confirmed.",
+  "cases": [
+    {
+      "name": "requires username",
+      "args": {},
+      "expect_error": "username is required"
+    },
+    {
+      "name": "requires confirm before deleting",
+      "args": { "username": "alice" },
+      "expect_error": "This deletes an account user. Set confirm=true to proceed."
+    },
+    {
+      "name": "deletes an account user",
+      "args": { "username": "alice", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/account/users/alice" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"username": "alice"},
+      "expect_error": "This deletes an account user. Set confirm=true to proceed."
+    }
+  ]
+}

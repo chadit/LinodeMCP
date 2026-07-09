@@ -1,0 +1,84 @@
+{
+  "message": "linode.mcp.v1.DryRunResponse",
+  "description": "Dry-run preview envelope a mutating tool returns for dry_run:true, with the full Phase 2 enrichment: an environment, a sanitized request body, current_state as a google.protobuf.Value object (protojson sorts its keys), dependencies, side_effects, a billing_delta, and warnings.",
+  "input": {
+    "dry_run": true,
+    "tool": "linode_instance_delete",
+    "environment": "prod",
+    "would_execute": {
+      "method": "DELETE",
+      "path": "/linode/instances/123",
+      "body": {
+        "confirm_token": "abc"
+      }
+    },
+    "current_state": {
+      "id": 123,
+      "label": "web-01",
+      "status": "running"
+    },
+    "dependencies": [
+      {
+        "kind": "volume",
+        "id": 456,
+        "action": "detached",
+        "note": "will detach"
+      },
+      {
+        "kind": "public_ip",
+        "label": "203.0.113.5",
+        "action": "released"
+      }
+    ],
+    "side_effects": [
+      "backups will be deleted"
+    ],
+    "billing_delta": {
+      "monthly_change_usd": "-20.00",
+      "note": "estimate"
+    },
+    "warnings": [
+      "this is irreversible"
+    ]
+  },
+  "canonical": {
+    "dry_run": true,
+    "tool": "linode_instance_delete",
+    "environment": "prod",
+    "would_execute": {
+      "method": "DELETE",
+      "path": "/linode/instances/123",
+      "body": {
+        "confirm_token": "abc"
+      }
+    },
+    "current_state": {
+      "id": 123,
+      "label": "web-01",
+      "status": "running"
+    },
+    "dependencies": [
+      {
+        "kind": "volume",
+        "id": 456,
+        "action": "detached",
+        "note": "will detach"
+      },
+      {
+        "kind": "public_ip",
+        "label": "203.0.113.5",
+        "action": "released"
+      }
+    ],
+    "side_effects": [
+      "backups will be deleted"
+    ],
+    "billing_delta": {
+      "monthly_change_usd": "-20.00",
+      "note": "estimate"
+    },
+    "warnings": [
+      "this is irreversible"
+    ]
+  }
+}

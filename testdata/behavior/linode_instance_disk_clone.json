@@ -1,0 +1,27 @@
+{
+  "tool": "linode_instance_disk_clone",
+  "description": "Pins the shared missing-linode_id and missing-disk_id rejections and the disk-clone POST.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects missing disk_id",
+      "args": { "linode_id": 123, "confirm": true },
+      "expect_error": "disk_id is required"
+    },
+    {
+      "name": "clones a disk",
+      "args": { "linode_id": 123, "disk_id": 5, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/linode/instances/123/disks/5/clone" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "disk_id": 5},
+      "expect_error": "This clones a disk, consuming additional storage on the instance. Set confirm=true to proceed."
+    }
+  ]
+}

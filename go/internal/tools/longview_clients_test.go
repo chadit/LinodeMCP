@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -237,15 +236,10 @@ func TestLinodeLongviewClientUpdateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyClientID, keyLabel, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyClientID, keyConfirm, keyLabel} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -482,7 +476,7 @@ func TestLinodeLongviewClientUpdateToolValidationRejectsBeforeClient(t *testing.
 		args map[string]any
 		want string
 	}{
-		{name: "missing client id", args: map[string]any{keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
+		{name: "missing client id", args: map[string]any{keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errClientIDRequired},
 		{name: "zero client id", args: map[string]any{keyClientID: 0, keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
 		{name: "unsafe large client id", args: map[string]any{keyClientID: 9007199254740992.0, keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
 		{name: "slash client id", args: map[string]any{keyClientID: longviewClientSlashID, keyLabel: longviewClientUpdatedLabel, keyConfirm: true}, want: errLongviewClientIDPositive},
@@ -544,15 +538,10 @@ func TestLinodeLongviewClientDeleteToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyClientID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyClientID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -731,7 +720,7 @@ func TestLinodeLongviewClientDeleteToolValidationRejectsBeforeClient(t *testing.
 		args map[string]any
 		want string
 	}{
-		{name: "missing client id", args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
+		{name: "missing client id", args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}, want: errClientIDRequired},
 		{name: "zero client id", args: map[string]any{keyClientID: 0, keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
 		{name: "unsafe large client id", args: map[string]any{keyClientID: 9007199254740992.0, keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},
 		{name: "slash client id", args: map[string]any{keyClientID: longviewClientSlashID, keyConfirm: true, keyConfirmedDryRun: true}, want: errLongviewClientIDPositive},

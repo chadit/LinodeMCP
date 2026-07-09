@@ -1,0 +1,12 @@
+{
+  "tool": "linode_managed_stats_get",
+  "description": "Managed stats: the bare stats GET (no local validation).",
+  "cases": [
+    {
+      "name": "gets managed stats",
+      "args": {},
+      "api_response": { "data": {} },
+      "expect_request": { "method": "GET", "path": "/managed/stats" }
+    }
+  ]
+}

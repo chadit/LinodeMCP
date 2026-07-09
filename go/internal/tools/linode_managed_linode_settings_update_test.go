@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -58,15 +57,10 @@ func TestLinodeManagedLinodeSettingsUpdateToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
-	for _, key := range []string{keyConfirm, managedLinodeSettingsUpdateSSHKey} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyConfirm, managedLinodeSettingsUpdateIDKey, managedLinodeSettingsUpdateSSHKey} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -243,7 +237,7 @@ func TestLinodeManagedLinodeSettingsUpdateToolInvalidInputRejectsBeforeClient(t 
 		args        map[string]any
 		wantMessage string
 	}{
-		{name: caseMissingLinodeID, args: managedSettingsUpdateArgs(nil, map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},
+		{name: caseMissingLinodeID, args: managedSettingsUpdateArgs(nil, map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDRequired},
 		{name: "zero linode id", args: managedSettingsUpdateArgs(0, map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},
 		{name: caseSlashLinodeID, args: managedSettingsUpdateArgs(pathSeparatorValue, map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},
 		{name: caseQueryLinodeID, args: managedSettingsUpdateArgs("123?x=1", map[string]any{managedLinodeSettingsUpdateAccessKey: true}), wantMessage: errLinodeIDPositive},

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_region_get",
+  "description": "Region get by slug. Both missing and invalid region_id error texts diverge (see report), so only the success GET is pinned.",
+  "cases": [
+    {
+      "name": "gets one region by slug",
+      "args": { "region_id": "us-east" },
+      "api_response": { "id": "us-east", "country": "us" },
+      "expect_request": { "method": "GET", "path": "/regions/us-east" }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# Cross-language confirm-message divergences the extractors can see.
+# One line per divergent tool: <tool>\t<go_text>\t<py_text>. Ratchet:
+# align the Python text to Go's, then remove the line; never add a line
+# by hand. Regenerate:
+#   python scripts/verify_messages.py --update-baseline
+

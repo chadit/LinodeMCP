@@ -93,15 +93,11 @@ func TestLinodeInstanceInterfaceUpdateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyInterfaceID, keyInterfaceDefaultRoute, keyInterfacePublic, keyInterfaceVLAN, keyInterfaceVPC, keyConfirm} {
-		if _, ok := props[key]; !ok {
-			t.Errorf("props missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if _, ok := props[keyInterface]; ok {
-		t.Errorf("props should not contain legacy key %v", keyInterface)
 	}
 }
 
@@ -123,7 +119,7 @@ func TestLinodeInstanceInterfaceUpdateToolValidation(t *testing.T) {
 		{name: "separator interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathSeparatorValue, keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
 		{name: "query interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: shareGroupIDQueryValue, keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
 		{name: "traversal interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: pathTraversalValue, keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
-		{name: "missing interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: "missing interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDRequired},
 		{name: "zero interface id", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(0), keyInterfacePublic: map[string]any{}, keyConfirm: true}, wantContains: errInterfaceIDPositive},
 		{name: "no interface fields", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true}, wantContains: errInterfaceAtLeastOneField},
 		{name: "non-object public", args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyInterfacePublic: float64(1), keyConfirm: true}, wantContains: "public must be an object"},

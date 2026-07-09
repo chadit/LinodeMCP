@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ProfileDraftDiscardResponse",
+  "description": "Draft discard echo: idempotent, discarded false when no draft existed.",
+  "input": {
+    "name": "ops-lite",
+    "discarded": true
+  },
+  "canonical": {
+    "name": "ops-lite",
+    "discarded": true
+  }
+}

@@ -8,20 +8,16 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import stackscript_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DESCRIPTION_TRUNCATE_LIMIT,
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
     execute_tool,
     is_dry_run,
+    required_int_id,
 )
 from linodemcp.tools.proto_response import (
+    raw_int,
+    raw_str,
     serialize_api_response,
     serialize_list_response,
 )
@@ -42,34 +38,7 @@ def create_linode_stackscript_list_tool() -> tuple[Tool, Capability]:
             "Lists StackScripts. By default returns your own StackScripts. "
             "Can filter by public status, ownership, or label."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "is_public": {
-                    "type": "string",
-                    "description": "Filter by public status (true, false)",
-                },
-                "mine": {
-                    "type": "string",
-                    "description": (
-                        "Filter by ownership - only your own StackScripts (true, false)"
-                    ),
-                },
-                "label_contains": {
-                    "type": "string",
-                    "description": (
-                        "Filter StackScripts by label containing this string "
-                        "(case-insensitive)"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.StackScriptListInput"),
     ), Capability.Read
 
 
@@ -123,26 +92,13 @@ def create_linode_stackscript_get_tool() -> tuple[Tool, Capability]:
     ), Capability.Read
 
 
-def _parse_stackscript_id(value: object) -> int | None:
-    """Return a positive integer StackScript ID, or None when invalid."""
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int) and value > 0:
-        return value
-    if isinstance(value, str) and value.isdecimal():
-        stackscript_id = int(value)
-        if stackscript_id > 0:
-            return stackscript_id
-    return None
-
-
 async def handle_linode_stackscript_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_stackscript_get tool request."""
-    stackscript_id = _parse_stackscript_id(arguments.get("stackscript_id"))
+    stackscript_id, error = required_int_id(arguments, "stackscript_id")
     if stackscript_id is None:
-        return error_response("stackscript_id must be a positive integer")
+        return error_response(error)
 
     encoded_stackscript_id = quote(str(stackscript_id), safe="")
 
@@ -162,30 +118,7 @@ def create_linode_stackscript_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_stackscript_delete",
         description="Deletes a StackScript by ID." + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "stackscript_id": {
-                    "type": "integer",
-                    "description": "StackScript ID to delete (required)",
-                    "minimum": 1,
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["stackscript_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.StackScriptDeleteInput"),
     ), Capability.Destroy
 
 
@@ -201,10 +134,13 @@ async def _stackscript_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_stackscript(stackscript_id)
-        return {
-            "message": f"StackScript {stackscript_id} deleted successfully",
-            "stackscript_id": stackscript_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"StackScript {stackscript_id} deleted successfully",
+                "stackscript_id": stackscript_id,
+            },
+            stackscript_pb2.StackScriptDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -222,9 +158,9 @@ async def handle_linode_stackscript_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_stackscript_delete tool request."""
-    stackscript_id = _parse_stackscript_id(arguments.get("stackscript_id"))
+    stackscript_id, error = required_int_id(arguments, "stackscript_id")
     if stackscript_id is None:
-        return error_response("stackscript_id must be a positive integer")
+        return error_response(error)
 
     two_stage = await _stackscript_delete_two_stage(arguments, cfg, stackscript_id)
     if two_stage is not None:
@@ -241,15 +177,18 @@ async def handle_linode_stackscript_delete(
         )
     if arguments.get("confirm") is not True:
         return error_response(
-            "This deletes a StackScript. Set confirm=true to proceed."
+            "This operation is destructive. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_stackscript(stackscript_id)
-        return {
-            "message": f"StackScript {stackscript_id} deleted successfully",
-            "stackscript_id": stackscript_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"StackScript {stackscript_id} deleted successfully",
+                "stackscript_id": stackscript_id,
+            },
+            stackscript_pb2.StackScriptDeleteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"delete StackScript {stackscript_id}", _call
@@ -264,53 +203,7 @@ def create_linode_stackscript_create_tool() -> tuple[Tool, Capability]:
             "Creates a StackScript for deploying configured Linodes."
             " Pass dry_run=true to preview without creating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Display label for the StackScript (required)",
-                },
-                "images": {
-                    "type": "array",
-                    "description": (
-                        "Image IDs deployable with this StackScript (required)"
-                    ),
-                    "items": {"type": "string"},
-                },
-                "script": {
-                    "type": "string",
-                    "description": "Script executed during provisioning (required)",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Description for the StackScript",
-                },
-                "is_public": {
-                    "type": "boolean",
-                    "description": "Whether other users can use this StackScript",
-                },
-                "rev_note": {
-                    "type": "string",
-                    "description": "Notes for this StackScript revision",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "images", "script", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.StackScriptCreateInput"),
     ), Capability.Write
 
 
@@ -347,7 +240,8 @@ async def handle_linode_stackscript_create(
 
     if not arguments.get("confirm"):
         return error_response(
-            "This creates a StackScript. Set confirm=true to proceed."
+            "This creates a new StackScript in your account. Set confirm=true to "
+            "proceed."
         )
 
     validation = _stackscript_create_error(arguments)
@@ -358,34 +252,26 @@ async def handle_linode_stackscript_create(
     images = cast("list[str]", arguments.get("images", []))
     script = arguments.get("script", "")
 
+    body: dict[str, Any] = {"label": label, "images": images, "script": script}
+    if arguments.get("description") is not None:
+        body["description"] = arguments["description"]
+    if arguments.get("is_public") is not None:
+        body["is_public"] = arguments["is_public"]
+    if arguments.get("rev_note") is not None:
+        body["rev_note"] = arguments["rev_note"]
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        stackscript = await client.create_stackscript(
-            label=label,
-            images=images,
-            script=script,
-            description=arguments.get("description"),
-            is_public=arguments.get("is_public"),
-            rev_note=arguments.get("rev_note"),
-        )
-        return {
-            "message": (
-                f"StackScript '{stackscript.label}' "
-                f"(ID: {stackscript.id}) created successfully"
-            ),
-            "stackscript": {
-                "id": stackscript.id,
-                "label": stackscript.label,
-                "username": stackscript.username,
-                "description": truncate_string(
-                    stackscript.description, DESCRIPTION_TRUNCATE_LIMIT
+        raw = await client.post_raw("/linode/stackscripts", body)
+        return serialize_api_response(
+            {
+                "message": (
+                    f"StackScript '{raw_str(raw, 'label')}' "
+                    f"(ID: {raw_int(raw, 'id')}) created successfully"
                 ),
-                "images": stackscript.images,
-                "is_public": stackscript.is_public,
-                "mine": stackscript.mine,
-                "created": stackscript.created,
-                "updated": stackscript.updated,
+                "stackscript": raw,
             },
-        }
+            stackscript_pb2.StackScriptWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create StackScript", _call)
 
@@ -398,76 +284,30 @@ def create_linode_stackscript_update_tool() -> tuple[Tool, Capability]:
             "Updates an existing StackScript. Pass dry_run=true to preview "
             "without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "stackscript_id": {
-                    "type": "integer",
-                    "description": "StackScript ID to update (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Display label for the StackScript",
-                },
-                "images": {
-                    "type": "array",
-                    "description": "Image IDs deployable with this StackScript",
-                    "items": {"type": "string"},
-                },
-                "script": {
-                    "type": "string",
-                    "description": "Script executed during provisioning",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Description for the StackScript",
-                },
-                "is_public": {
-                    "type": "boolean",
-                    "description": "Whether other users can use this StackScript",
-                },
-                "rev_note": {
-                    "type": "string",
-                    "description": "Notes for this StackScript revision",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["stackscript_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.StackScriptUpdateInput"),
     ), Capability.Write
 
 
-def _stackscript_id_error(value: object) -> str | None:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-        return "stackscript_id must be a positive integer"
+def _stackscript_images_error(images_arg: object) -> str | None:
+    """Validate the optional images list; return an error message or None."""
+    if images_arg is None:
+        return None
+    if not isinstance(images_arg, list) or not images_arg:
+        return "images must be a non-empty list"
+    for image in cast("list[object]", images_arg):
+        if not isinstance(image, str) or not image:
+            return "images must contain non-empty strings"
     return None
 
 
 def _stackscript_update_error(arguments: dict[str, Any]) -> list[TextContent] | None:
     """Validate update fields; return an error response or None."""
-    id_error = _stackscript_id_error(arguments.get("stackscript_id"))
-    if id_error is not None:
+    _, id_error = required_int_id(arguments, "stackscript_id")
+    if id_error:
         return error_response(id_error)
-    images_arg: object = arguments.get("images")
-    if images_arg is not None:
-        if not isinstance(images_arg, list) or not images_arg:
-            return error_response("images must be a non-empty list")
-        for image in cast("list[object]", images_arg):
-            if not isinstance(image, str) or not image:
-                return error_response("images must contain non-empty strings")
+    images_error = _stackscript_images_error(arguments.get("images"))
+    if images_error is not None:
+        return error_response(images_error)
     for field in ("label", "script", "description", "rev_note"):
         value = arguments.get(field)
         if value is not None and not isinstance(value, str):
@@ -475,6 +315,9 @@ def _stackscript_update_error(arguments: dict[str, Any]) -> list[TextContent] | 
     is_public = arguments.get("is_public")
     if is_public is not None and not isinstance(is_public, bool):
         return error_response("is_public must be a boolean")
+    editable = ("label", "images", "script", "description", "is_public", "rev_note")
+    if not any(field in arguments for field in editable):
+        return error_response("at least one editable field is required")
     return None
 
 
@@ -509,44 +352,22 @@ async def handle_linode_stackscript_update(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This updates a StackScript. Set confirm=true to proceed."
+            "This updates a StackScript in your account. Set confirm=true to proceed."
         )
+
+    body = _stackscript_update_body(arguments)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        stackscript = await client.update_stackscript(
-            stackscript_id,
-            label=arguments.get("label"),
-            images=arguments.get("images"),
-            script=arguments.get("script"),
-            description=arguments.get("description"),
-            is_public=arguments.get("is_public"),
-            rev_note=arguments.get("rev_note"),
-        )
-        return {
-            "message": (
-                f"StackScript '{stackscript.label}' "
-                f"(ID: {stackscript.id}) updated successfully"
-            ),
-            "stackscript": {
-                "id": stackscript.id,
-                "label": stackscript.label,
-                "username": stackscript.username,
-                "description": truncate_string(
-                    stackscript.description, DESCRIPTION_TRUNCATE_LIMIT
+        raw = await client.put_raw(f"/linode/stackscripts/{stackscript_id}", body)
+        return serialize_api_response(
+            {
+                "message": (
+                    f"StackScript '{raw_str(raw, 'label')}' "
+                    f"(ID: {raw_int(raw, 'id')}) updated successfully"
                 ),
-                "images": stackscript.images,
-                "is_public": stackscript.is_public,
-                "mine": stackscript.mine,
-                "created": stackscript.created,
-                "updated": stackscript.updated,
+                "stackscript": raw,
             },
-        }
+            stackscript_pb2.StackScriptWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update StackScript", _call)
-
-
-def truncate_string(value: str, limit: int) -> str:
-    """Truncate a string with ellipsis if it exceeds the limit."""
-    if len(value) > limit:
-        return value[:limit] + "..."
-    return value

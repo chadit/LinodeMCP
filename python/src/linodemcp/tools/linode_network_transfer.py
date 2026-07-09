@@ -10,6 +10,7 @@ from linodemcp.genpb.linode.mcp.v1 import type_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
 from linodemcp.tools.proto_response import serialize_list_response
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
@@ -21,17 +22,7 @@ def create_linode_network_transfer_price_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_network_transfer_price_list",
         description="Gets network transfer prices.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.NetworkTransferPriceListInput"),
     ), Capability.Read
 
 

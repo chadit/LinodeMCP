@@ -83,11 +83,6 @@ type PresignedURLRequest struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
-// PresignedURLResponse represents the response from generating a presigned URL.
-type PresignedURLResponse struct {
-	URL string `json:"url"`
-}
-
 // ObjectACL represents the ACL of an object in Object Storage.
 type ObjectACL struct {
 	ACL    string `json:"acl"`

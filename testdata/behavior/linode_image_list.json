@@ -1,0 +1,12 @@
+{
+  "tool": "linode_image_list",
+  "description": "Filters are applied client-side, so the request is always a bare GET /images.",
+  "cases": [
+    {
+      "name": "lists all images",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/images" }
+    }
+  ]
+}

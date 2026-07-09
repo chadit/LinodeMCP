@@ -1,0 +1,17 @@
+{
+  "tool": "linode_database_engine_get",
+  "description": "Shared traversal/query rejection and the engine GET path (slash in engine_id percent-encoded). Missing/format error text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "rejects query, fragment, or traversal segments",
+      "args": { "engine_id": "mysql/8?bad" },
+      "expect_error": "engine_id must not contain query, fragment, or traversal segments"
+    },
+    {
+      "name": "gets a database engine by id",
+      "args": { "engine_id": "mysql/8" },
+      "api_response": { "id": "mysql/8", "engine": "mysql", "version": "8" },
+      "expect_request": { "method": "GET", "path": "/databases/engines/mysql%2F8" }
+    }
+  ]
+}

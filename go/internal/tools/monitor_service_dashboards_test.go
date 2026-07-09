@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -38,8 +37,8 @@ func TestLinodeMonitorServiceDashboardsToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, monitorServiceTypeParam) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", monitorServiceTypeParam)
+	if !strings.Contains(string(tool.RawInputSchema), monitorServiceTypeParam) {
+		t.Errorf("tool.RawInputSchema missing key %v", monitorServiceTypeParam)
 	}
 
 	if handler == nil {

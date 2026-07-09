@@ -1,0 +1,82 @@
+{
+  "message": "linode.mcp.v1.AccountWriteResponse",
+  "description": "Account write envelope: a confirmation message plus the full account element (contact, balances, promotions).",
+  "input": {
+    "message": "Account updated successfully",
+    "account": {
+      "first_name": "Ada",
+      "last_name": "Lovelace",
+      "email": "ada@example.com",
+      "company": "Analytical Engines",
+      "address_1": "100 Mathematics Ln",
+      "address_2": "Suite 1843",
+      "city": "London",
+      "state": "ENG",
+      "zip": "EC1A 1BB",
+      "country": "GB",
+      "phone": "+44-20-7946-0958",
+      "balance": 12.5,
+      "balance_uninvoiced": 3.75,
+      "capabilities": [
+        "Linodes",
+        "NodeBalancers",
+        "Block Storage",
+        "Object Storage"
+      ],
+      "active_since": "2018-01-01T00:00:00",
+      "euuid": "E1AF5EEC-0000-0000-0000-000000000000",
+      "billing_source": "akamai",
+      "active_promotions": [
+        {
+          "description": "Free credit for new accounts",
+          "summary": "Welcome credit",
+          "credit_monthly_cap": "10.00",
+          "credit_remaining": "7.50",
+          "expire_dt": "2026-12-31T23:59:59",
+          "image_url": "https://example.com/promo.png",
+          "service_type": "all",
+          "this_month_credit_remaining": "2.50"
+        }
+      ]
+    }
+  },
+  "canonical": {
+    "message": "Account updated successfully",
+    "account": {
+      "first_name": "Ada",
+      "last_name": "Lovelace",
+      "email": "ada@example.com",
+      "company": "Analytical Engines",
+      "address_1": "100 Mathematics Ln",
+      "address_2": "Suite 1843",
+      "city": "London",
+      "state": "ENG",
+      "zip": "EC1A 1BB",
+      "country": "GB",
+      "phone": "+44-20-7946-0958",
+      "balance": 12.5,
+      "balance_uninvoiced": 3.75,
+      "capabilities": [
+        "Linodes",
+        "NodeBalancers",
+        "Block Storage",
+        "Object Storage"
+      ],
+      "active_since": "2018-01-01T00:00:00",
+      "euuid": "E1AF5EEC-0000-0000-0000-000000000000",
+      "billing_source": "akamai",
+      "active_promotions": [
+        {
+          "description": "Free credit for new accounts",
+          "summary": "Welcome credit",
+          "credit_monthly_cap": "10.00",
+          "credit_remaining": "7.50",
+          "expire_dt": "2026-12-31T23:59:59",
+          "image_url": "https://example.com/promo.png",
+          "service_type": "all",
+          "this_month_credit_remaining": "2.50"
+        }
+      ]
+    }
+  }
+}

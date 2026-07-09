@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -43,6 +42,7 @@ const (
 	databaseInstanceID                        = 123
 	databaseInstanceIDParam                   = "instance_id"
 	databaseInstanceIDMessage                 = "instance_id must be a positive integer"
+	databaseInstanceIDRequiredMessage         = "instance_id is required"
 	databaseInstancePath                      = "/databases/mysql/instances/123"
 	databasePostgreSQLInstancePath            = "/databases/postgresql/instances/123"
 	databasePostgreSQLInstancePatchPath       = "/databases/postgresql/instances/123/patch"
@@ -119,17 +119,17 @@ func TestLinodeDatabaseEngineListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyPage) {
+		t.Errorf("rawSchema missing key %v", keyPage)
 	}
 
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
+	if !strings.Contains(rawSchema, keyPageSize) {
+		t.Errorf("rawSchema missing key %v", keyPageSize)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -339,17 +339,17 @@ func TestLinodeDatabaseTypeListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyPage) {
+		t.Errorf("rawSchema missing key %v", keyPage)
 	}
 
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
+	if !strings.Contains(rawSchema, keyPageSize) {
+		t.Errorf("rawSchema missing key %v", keyPageSize)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -758,9 +758,9 @@ func TestLinodeDatabaseMySQLConfigGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	rawSchema := string(tool.RawInputSchema)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -830,6 +830,42 @@ func TestLinodeDatabaseMySQLConfigGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "requires_restart") {
 		t.Errorf("textContent.Text does not contain %v", "requires_restart")
+	}
+}
+
+func TestLinodeDatabaseMySQLConfigGetToolSortsKeys(t *testing.T) {
+	t.Parallel()
+
+	// The config descriptor serializes through a bare Struct, so protojson sorts
+	// the keys on both languages. Feeding keys out of order proves the Go handler
+	// emits them alphabetically, the property that makes the Go and Python output
+	// byte-identical (pre-proto, Go alpha-sorted map keys while Python kept the
+	// API's insertion order). The same MarshalStructToolResponse path backs
+	// profile preferences and managed stats.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{"zebra": 1, "alpha": 2}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
+	_, _, handler := tools.NewLinodeDatabaseMySQLConfigGetTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatal("ok = false, want true")
+	}
+
+	if strings.Index(textContent.Text, "alpha") > strings.Index(textContent.Text, "zebra") {
+		t.Error("Struct keys not alphabetically sorted; output would diverge from Python")
 	}
 }
 
@@ -923,9 +959,9 @@ func TestLinodeDatabasePostgreSQLConfigGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	rawSchema := string(tool.RawInputSchema)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -1088,17 +1124,17 @@ func TestLinodeDatabaseInstanceListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyPage) {
+		t.Errorf("rawSchema missing key %v", keyPage)
 	}
 
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
+	if !strings.Contains(rawSchema, keyPageSize) {
+		t.Errorf("rawSchema missing key %v", keyPageSize)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -1308,17 +1344,17 @@ func TestLinodeDatabasePostgreSQLInstanceListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyPage) {
+		t.Errorf("rawSchema missing key %v", keyPage)
 	}
 
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
+	if !strings.Contains(rawSchema, keyPageSize) {
+		t.Errorf("rawSchema missing key %v", keyPageSize)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -1528,13 +1564,13 @@ func TestLinodeDatabaseInstanceGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, databaseInstanceIDParam) {
+		t.Errorf("rawSchema missing key %v", databaseInstanceIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -1560,7 +1596,16 @@ func TestLinodeDatabaseInstanceGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive}); err != nil {
+		body := struct {
+			linode.DatabaseInstance
+
+			NotInProto string `json:"not_in_proto"`
+		}{
+			DatabaseInstance: linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive},
+			NotInProto:       valNotInProto,
+		}
+
+		if err := json.NewEncoder(w).Encode(body); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -1595,6 +1640,10 @@ func TestLinodeDatabaseInstanceGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, databaseEngineName) {
 		t.Errorf("textContent.Text does not contain %v", databaseEngineName)
+	}
+
+	if strings.Contains(textContent.Text, "not_in_proto") {
+		t.Errorf("textContent.Text unexpectedly contains dropped unknown field: %v", textContent.Text)
 	}
 }
 
@@ -1710,8 +1759,13 @@ func TestLinodeDatabaseInstanceGetToolInstanceIdValidation(t *testing.T) {
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -1739,13 +1793,13 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, databaseInstanceIDParam) {
+		t.Errorf("rawSchema missing key %v", databaseInstanceIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 
@@ -1771,7 +1825,16 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseVersion, Status: statusActive}); err != nil {
+		body := struct {
+			linode.DatabaseInstance
+
+			NotInProto string `json:"not_in_proto"`
+		}{
+			DatabaseInstance: linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseVersion, Status: statusActive},
+			NotInProto:       valNotInProto,
+		}
+
+		if err := json.NewEncoder(w).Encode(body); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -1806,6 +1869,10 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "postgresql") {
 		t.Errorf("textContent.Text does not contain %v", "postgresql")
+	}
+
+	if strings.Contains(textContent.Text, "not_in_proto") {
+		t.Errorf("textContent.Text unexpectedly contains dropped unknown field: %v", textContent.Text)
 	}
 }
 
@@ -1899,8 +1966,13 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolInstanceIdValidation(t *testing.
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -2110,8 +2182,13 @@ func TestLinodeDatabaseInstanceSSLGetToolInstanceIdValidation(t *testing.T) {
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -2319,8 +2396,13 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolInstanceIdValidation(t *testi
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -2348,13 +2430,13 @@ func TestLinodeDatabaseInstanceCredentialsGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, databaseInstanceIDParam) {
+		t.Errorf("rawSchema missing key %v", databaseInstanceIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -2530,8 +2612,13 @@ func TestLinodeDatabaseInstanceCredentialsGetToolInstanceIdValidation(t *testing
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -2559,17 +2646,13 @@ func TestLinodeDatabaseInstanceCredentialsResetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, databaseInstanceIDParam) {
+		t.Errorf("rawSchema missing key %v", databaseInstanceIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -2801,8 +2884,13 @@ func TestLinodeDatabaseInstanceCredentialsResetToolInstanceIdValidation(t *testi
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -2830,17 +2918,11 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolDefinition(t *testi
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("rawSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3062,8 +3144,13 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolInstanceIdValidatio
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -3091,29 +3178,11 @@ func TestLinodeDatabaseInstanceCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyType]; !ok {
-		t.Errorf("props missing key %v", keyType)
-	}
-
-	if _, ok := props[databaseEngineParam]; !ok {
-		t.Errorf("props missing key %v", databaseEngineParam)
-	}
-
-	if _, ok := props[keyRegion]; !ok {
-		t.Errorf("props missing key %v", keyRegion)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyConfirm, keyLabel, keyType, databaseEngineParam, keyRegion} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3263,6 +3332,7 @@ func TestLinodeDatabaseInstanceCreateToolRequiredFieldValidation(t *testing.T) {
 		{name: "invalid fork", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "fork": invalidJSON, keyConfirm: true}, wantMessage: "fork must be an object"},
 		{name: caseInvalidPrivateNetwork, args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databasePrivateNetworkParam: invalidJSON, keyConfirm: true}, wantMessage: databasePrivateNetworkNotObject},
 		{name: "invalid ssl bool", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, databaseSSLConnectionParam: boolStringTrue, keyConfirm: true}, wantMessage: "ssl_connection must be a boolean"},
+		{name: "unsupported argument", args: map[string]any{keyLabel: databaseInstanceLabel, keyType: databaseInstanceType, databaseEngineParam: databaseEngineID, keyRegion: regionUSEast, "bogus_field": true, keyConfirm: true}, wantMessage: "unsupported argument: bogus_field"},
 	}
 
 	for _, testCase := range cases {
@@ -3360,29 +3430,11 @@ func TestLinodeDatabasePostgreSQLInstanceCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyType]; !ok {
-		t.Errorf("props missing key %v", keyType)
-	}
-
-	if _, ok := props[databaseEngineParam]; !ok {
-		t.Errorf("props missing key %v", databaseEngineParam)
-	}
-
-	if _, ok := props[keyRegion]; !ok {
-		t.Errorf("props missing key %v", keyRegion)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyConfirm, keyLabel, keyType, databaseEngineParam, keyRegion} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3622,35 +3674,11 @@ func TestLinodeDatabaseInstanceUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{databaseInstanceIDParam, keyConfirm, keyLabel, keyType, databaseUpdatesParam, databaseVersionParam} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyType]; !ok {
-		t.Errorf("props missing key %v", keyType)
-	}
-
-	if _, ok := props[databaseUpdatesParam]; !ok {
-		t.Errorf("props missing key %v", databaseUpdatesParam)
-	}
-
-	if _, ok := props[databaseVersionParam]; !ok {
-		t.Errorf("props missing key %v", databaseVersionParam)
 	}
 }
 
@@ -3948,7 +3976,7 @@ func TestLinodeDatabaseInstanceUpdateToolInputValidation(t *testing.T) {
 		args        map[string]any
 		wantMessage string
 	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
+		{name: caseMissingInstanceID, args: map[string]any{keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDRequiredMessage},
 		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
 		{name: "empty update", args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyConfirm: true}, wantMessage: "at least one update field must be provided"},
 		{name: caseMissingLabel, args: map[string]any{databaseInstanceIDParam: databaseInstanceID, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
@@ -4061,35 +4089,11 @@ func TestLinodeDatabasePostgreSQLInstanceUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{databaseInstanceIDParam, keyConfirm, keyLabel, keyType, databaseUpdatesParam, databaseVersionParam} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyType]; !ok {
-		t.Errorf("props missing key %v", keyType)
-	}
-
-	if _, ok := props[databaseUpdatesParam]; !ok {
-		t.Errorf("props missing key %v", databaseUpdatesParam)
-	}
-
-	if _, ok := props[databaseVersionParam]; !ok {
-		t.Errorf("props missing key %v", databaseVersionParam)
 	}
 }
 
@@ -4245,7 +4249,7 @@ func TestLinodeDatabasePostgreSQLInstanceUpdateToolInputValidation(t *testing.T)
 		args        map[string]any
 		wantMessage string
 	}{
-		{name: caseMissingInstanceID, args: map[string]any{keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
+		{name: caseMissingInstanceID, args: map[string]any{keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDRequiredMessage},
 		{name: caseSlashInstanceID, args: map[string]any{databaseInstanceIDParam: "/", keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
 		{name: caseQueryInstanceID, args: map[string]any{databaseInstanceIDParam: databaseInvalidInstanceIDQuery, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
 		{name: caseTraversalInstanceID, args: map[string]any{databaseInstanceIDParam: pathTraversalValue, keyLabel: databaseInstanceLabel, keyConfirm: true}, wantMessage: databaseInstanceIDMessage},
@@ -4352,18 +4356,10 @@ func TestLinodeDatabaseInstanceDeleteToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("rawSchema missing key %v", key)
 		}
 	}
 }
@@ -4519,8 +4515,13 @@ func TestLinodeDatabaseInstanceDeleteToolInputValidation(t *testing.T) {
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -4575,8 +4576,8 @@ func TestLinodeDatabaseInstanceDeleteToolDryRunSchemaAdvertisesDryRun(t *testing
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeDatabaseInstanceDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -4673,8 +4674,8 @@ func TestLinodeDatabaseInstanceDeleteToolDryRunStillValidatesInstanceId(t *testi
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, databaseInstanceIDMessage) {
-		t.Errorf("error text %q does not contain %q", text.Text, databaseInstanceIDMessage)
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, databaseInstanceIDRequiredMessage) {
+		t.Errorf("error text %q does not contain %q", text.Text, databaseInstanceIDRequiredMessage)
 	}
 }
 
@@ -4700,18 +4701,10 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("rawSchema missing key %v", key)
 		}
 	}
 }
@@ -4867,8 +4860,13 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolInputValidation(t *testing.T)
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -4923,8 +4921,8 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRunSchemaAdvertisesDryRun(
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -5017,8 +5015,8 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolDryRunStillValidatesInstanceI
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, databaseInstanceIDMessage) {
-		t.Errorf("error text %q does not contain %q", text.Text, databaseInstanceIDMessage)
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, databaseInstanceIDRequiredMessage) {
+		t.Errorf("error text %q does not contain %q", text.Text, databaseInstanceIDRequiredMessage)
 	}
 }
 
@@ -5044,18 +5042,10 @@ func TestLinodeDatabaseInstancePatchToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("rawSchema missing key %v", key)
 		}
 	}
 }
@@ -5211,8 +5201,13 @@ func TestLinodeDatabaseInstancePatchToolInputValidation(t *testing.T) {
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -5284,18 +5279,10 @@ func TestLinodeDatabaseInstanceSuspendToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("rawSchema missing key %v", key)
 		}
 	}
 }
@@ -5451,8 +5438,13 @@ func TestLinodeDatabaseInstanceSuspendToolInputValidation(t *testing.T) {
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -5524,18 +5516,10 @@ func TestLinodeDatabaseInstanceResumeToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("rawSchema missing key %v", key)
 		}
 	}
 }
@@ -5691,8 +5675,13 @@ func TestLinodeDatabaseInstanceResumeToolInputValidation(t *testing.T) {
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -5764,18 +5753,10 @@ func TestLinodeDatabasePostgreSQLInstanceSuspendToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("rawSchema missing key %v", key)
 		}
 	}
 }
@@ -5931,8 +5912,13 @@ func TestLinodeDatabasePostgreSQLInstanceSuspendToolInputValidation(t *testing.T
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}
@@ -6004,18 +5990,10 @@ func TestLinodeDatabasePostgreSQLInstanceResumeToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[databaseInstanceIDParam]; !ok {
-		t.Errorf("props missing key %v", databaseInstanceIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{databaseInstanceIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("rawSchema missing key %v", key)
 		}
 	}
 }
@@ -6171,8 +6149,13 @@ func TestLinodeDatabasePostgreSQLInstanceResumeToolInputValidation(t *testing.T)
 				t.Fatal("ok = false, want true")
 			}
 
-			if !strings.Contains(textContent.Text, databaseInstanceIDMessage) {
-				t.Errorf("textContent.Text does not contain %v", databaseInstanceIDMessage)
+			wantInstanceIDMessage := databaseInstanceIDMessage
+			if testCase.name == caseMissingInstanceID {
+				wantInstanceIDMessage = databaseInstanceIDRequiredMessage
+			}
+
+			if !strings.Contains(textContent.Text, wantInstanceIDMessage) {
+				t.Errorf("textContent.Text does not contain %v", wantInstanceIDMessage)
 			}
 		})
 	}

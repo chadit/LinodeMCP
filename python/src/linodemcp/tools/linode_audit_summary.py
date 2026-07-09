@@ -30,7 +30,10 @@ from linodemcp.audit import (
     summarize,
     validate_group_by,
 )
+from linodemcp.genpb.linode.mcp.v1 import audit_pb2
 from linodemcp.profiles import Capability
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 # Module bridge for the SQLite path. main installs the path when the
 # SQLite sink is enabled; empty string (the default) selects the JSONL
@@ -69,32 +72,7 @@ def create_linode_audit_summary_tool() -> tuple[Tool, Capability]:
                 "columns) over a time window. Reads SQLite when enabled, else "
                 "the JSONL log."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_SINCE: {
-                        "type": "string",
-                        "description": (
-                            "Only count events at or after this RFC 3339 timestamp."
-                        ),
-                    },
-                    _ARG_GROUP_BY: {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": (
-                            "Columns to group by. Allowed: tool, status, "
-                            "capability, profile, environment. Defaults to "
-                            "[tool, status]."
-                        ),
-                    },
-                    _ARG_INCLUDE_META: {
-                        "type": "boolean",
-                        "description": (
-                            "Include audit/profile meta-tool events. Default false."
-                        ),
-                    },
-                },
-            },
+            inputSchema=schema("linode.mcp.v1.AuditSummaryInput"),
         ),
         Capability.Meta,
     )
@@ -128,7 +106,8 @@ async def handle_linode_audit_summary(
         "total_events": len(events),
         "rows": [asdict(row) for row in rows],
     }
-    return [TextContent(type="text", text=json.dumps(payload))]
+    result = serialize_api_response(payload, audit_pb2.AuditSummaryResponse())
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def _parse_optional_time(value: str) -> datetime | None:

@@ -52,10 +52,28 @@ func TestLinodeMonitorServiceTokenCreateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	for _, key := range []string{monitorServiceTypeParam, keyEntityIDs, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	var parsed struct {
+		Required   []string                   `json:"required"`
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.RawInputSchema, &parsed); err != nil {
+		t.Fatalf("unmarshal RawInputSchema: %v", err)
+	}
+
+	for _, key := range []string{monitorServiceTypeParam, keyConfirm} {
+		if !slices.Contains(parsed.Required, key) {
+			t.Errorf("RawInputSchema required does not contain %v", key)
 		}
+	}
+
+	// entity_ids converts to a repeated proto field, which the generator never
+	// marks required; the handler enforces its presence at runtime instead.
+	if slices.Contains(parsed.Required, keyEntityIDs) {
+		t.Errorf("RawInputSchema required unexpectedly contains %v", keyEntityIDs)
+	}
+
+	if _, ok := parsed.Properties[keyEntityIDs]; !ok {
+		t.Errorf("RawInputSchema properties missing %v", keyEntityIDs)
 	}
 
 	if handler == nil {

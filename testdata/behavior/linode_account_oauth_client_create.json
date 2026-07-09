@@ -1,0 +1,31 @@
+{
+  "tool": "linode_account_oauth_client_create",
+  "description": "OAuth client create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires label",
+      "args": {},
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires redirect_uri",
+      "args": { "label": "my-app" },
+      "expect_error": "redirect_uri is required"
+    },
+    {
+      "name": "creates an OAuth client",
+      "args": { "label": "my-app", "redirect_uri": "https://example.com/callback", "confirm": true },
+      "api_response": { "id": "abc123", "label": "my-app", "redirect_uri": "https://example.com/callback", "secret": "shh" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/oauth-clients",
+        "body": { "label": "my-app", "redirect_uri": "https://example.com/callback" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "my-app", "redirect_uri": "https://example.com/callback"},
+      "expect_error": "This creates an OAuth client. The secret is only shown once. Set confirm=true to proceed."
+    }
+  ]
+}

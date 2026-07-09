@@ -1,0 +1,22 @@
+{
+  "tool": "linode_managed_contact_delete",
+  "description": "Contact delete: shared confirm gate and the DELETE (Admin, not Destroy). Id missing/invalid text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires confirm before deleting",
+      "args": { "contact_id": 4 },
+      "expect_error": "This deletes a Managed contact. Set confirm=true to proceed."
+    },
+    {
+      "name": "deletes a managed contact",
+      "args": { "contact_id": 4, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/managed/contacts/4" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"contact_id": 4},
+      "expect_error": "This deletes a Managed contact. Set confirm=true to proceed."
+    }
+  ]
+}

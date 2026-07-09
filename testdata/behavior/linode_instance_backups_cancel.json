@@ -1,0 +1,22 @@
+{
+  "tool": "linode_instance_backups_cancel",
+  "description": "Destroy tool: rejects missing linode_id, enforces the destroy-bypass gate on confirm-alone, and POSTs the cancel endpoint when confirm+confirm_bypass_dry_run are set.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "confirm alone hits the destroy-bypass gate",
+      "args": { "linode_id": 123, "confirm": true },
+      "expect_error": "linode_instance_backups_cancel is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "cancels backups when authorized to bypass the preview",
+      "args": { "linode_id": 123, "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/linode/instances/123/backups/cancel" }
+    }
+  ]
+}

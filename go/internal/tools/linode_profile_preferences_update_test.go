@@ -39,9 +39,10 @@ func TestLinodeProfilePreferencesUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyPreferences, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -125,8 +126,19 @@ func TestLinodeProfilePreferencesUpdateToolSuccess(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "dark") {
-		t.Errorf("textContent.Text does not contain %v", "dark")
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &payload); err != nil {
+		t.Fatalf("unexpected error unmarshaling result: %v", err)
+	}
+
+	want := map[string]any{
+		"message": "Profile preferences updated successfully",
+		"preferences": map[string]any{
+			profilePreferenceKeyTheme: profilePreferenceValueDark,
+		},
+	}
+	if !reflect.DeepEqual(payload, want) {
+		t.Errorf("payload = %v, want %v", payload, want)
 	}
 }
 

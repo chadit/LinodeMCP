@@ -1,0 +1,71 @@
+{
+  "tool": "linode_volume_attach",
+  "description": "Volume attach: volume_id and linode_id rejections (confirm set so Go reaches them), the confirm gate, and the attach POST. Both languages omit persist_across_boots unless the caller sets it true (API applies its own default); a true value is sent.",
+  "cases": [
+    {
+      "name": "requires volume_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "volume_id is required"
+    },
+    {
+      "name": "requires linode_id",
+      "args": {
+        "confirm": true,
+        "volume_id": 123
+      },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "volume_id": 5,
+        "linode_id": 42
+      },
+      "expect_error": "This attaches a block storage volume to an instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "attaches a volume with the API default persistence",
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "linode_id": 456
+      },
+      "api_response": {
+        "id": 123,
+        "label": "my-vol",
+        "linode_id": 456
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes/123/attach",
+        "body": {
+          "linode_id": 456
+        }
+      }
+    },
+    {
+      "name": "attaches a volume with persistence enabled",
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "linode_id": 456,
+        "persist_across_boots": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "my-vol",
+        "linode_id": 456
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes/123/attach",
+        "body": {
+          "linode_id": 456,
+          "persist_across_boots": true
+        }
+      }
+    }
+  ]
+}

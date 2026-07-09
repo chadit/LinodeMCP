@@ -1,0 +1,41 @@
+{
+  "tool": "linode_account_payment_method_create",
+  "description": "Account payment method create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires type",
+      "args": {},
+      "expect_error": "type is required"
+    },
+    {
+      "name": "requires data",
+      "args": { "type": "credit_card" },
+      "expect_error": "data is required"
+    },
+    {
+      "name": "requires is_default boolean",
+      "args": { "type": "credit_card", "data": { "card_token": "tok_123" } },
+      "expect_error": "is_default must be a boolean"
+    },
+    {
+      "name": "rejects non-credit_card type",
+      "args": { "type": "paypal", "data": { "card_token": "tok_123" }, "is_default": false },
+      "expect_error": "type must be credit_card"
+    },
+    {
+      "name": "creates a payment method",
+      "args": { "type": "credit_card", "data": { "card_token": "tok_123" }, "is_default": false, "confirm": true },
+      "api_response": { "id": 123, "type": "credit_card", "is_default": false, "data": {} },
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/payment-methods",
+        "body": { "type": "credit_card", "data": { "card_token": "tok_123" }, "is_default": false }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"type": "credit_card", "data": {"card_token": "tok_123"}, "is_default": false},
+      "expect_error": "This creates a payment method. Set confirm=true to proceed."
+    }
+  ]
+}

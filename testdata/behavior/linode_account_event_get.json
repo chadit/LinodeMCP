@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_event_get",
+  "description": "Shared non-positive event_id rejection and the event GET path. Missing-event_id text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive event_id",
+      "args": { "event_id": 0 },
+      "expect_error": "event_id must be a positive integer"
+    },
+    {
+      "name": "gets an account event by id",
+      "args": { "event_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/events/123" }
+    }
+  ]
+}

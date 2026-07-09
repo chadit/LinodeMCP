@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// NodeBalancerStats is the response for linode_nodebalancer_stats_get
+// (GET /nodebalancers/{nodeBalancerId}/stats). Like the instance-stats
+// endpoints, the Linode API nests the graphs under a top-level "data" object
+// beside "title", so the graphs live in NodeBalancerStatsData. The pre-proto Go
+// struct was flat and diverged from the Python raw pass-through here too.
+message NodeBalancerStats {
+  string title = 1;
+  NodeBalancerStatsData data = 2;
+}
+
+// NodeBalancerStatsData holds the connection and traffic graphs. Each series is
+// a list of [timestamp_ms, value] pairs held as ListValue so the leaf numbers
+// stay JSON numbers.
+message NodeBalancerStatsData {
+  repeated google.protobuf.ListValue connections = 1;
+  NodeBalancerTrafficStats traffic = 2;
+}
+
+// NodeBalancerTrafficStats holds the inbound and outbound traffic graphs, each a
+// list of [timestamp_ms, value] pairs.
+message NodeBalancerTrafficStats {
+  repeated google.protobuf.ListValue in = 1;
+  repeated google.protobuf.ListValue out = 2;
+}
+
+// NodeBalancerStatsGetInput is the input contract for
+// linode_nodebalancer_stats_get.
+message NodeBalancerStatsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer whose statistics should be retrieved.
+  int32 nodebalancer_id = 2;
+}

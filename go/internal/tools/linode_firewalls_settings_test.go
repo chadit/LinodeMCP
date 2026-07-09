@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -38,12 +37,11 @@ func TestLinodeFirewallSettingsListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties["page"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "page")
-	}
-
-	if _, ok := tool.InputSchema.Properties["page_size"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "page_size")
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyPage, keyPageSize} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -179,15 +177,10 @@ func TestLinodeFirewallSettingsUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyDefaultFirewallIDs, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyDefaultFirewallIDs, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }

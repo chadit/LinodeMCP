@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.VpcSubnetDeleteResponse",
+  "description": "VPC subnet delete id-echo: a confirmation message plus the parent VPC and deleted subnet IDs. The delete endpoint returns an empty body, so the response echoes the IDs.",
+  "input": {
+    "message": "Subnet 321 deleted from VPC 654 successfully",
+    "vpc_id": 654,
+    "subnet_id": 321
+  },
+  "canonical": {
+    "message": "Subnet 321 deleted from VPC 654 successfully",
+    "vpc_id": 654,
+    "subnet_id": 321
+  }
+}

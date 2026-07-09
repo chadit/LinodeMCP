@@ -1,0 +1,36 @@
+{
+  "tool": "linode_account_promo_credit_add",
+  "description": "Missing-promo_code, surrounding-whitespace rejections, confirm gate, and the promo POST body. Both languages now share Go's whitespace check and texts.",
+  "cases": [
+    {
+      "name": "requires promo_code",
+      "args": {},
+      "expect_error": "promo_code is required"
+    },
+    {
+      "name": "rejects promo_code with surrounding whitespace",
+      "args": { "promo_code": " PROMO123 " },
+      "expect_error": "promo_code must not include leading or trailing whitespace"
+    },
+    {
+      "name": "requires confirm before applying",
+      "args": { "promo_code": "PROMO123" },
+      "expect_error": "This applies a promo credit to the account. Set confirm=true to proceed."
+    },
+    {
+      "name": "applies a promo credit",
+      "args": { "promo_code": "PROMO123", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/promo-codes",
+        "body": { "promo_code": "PROMO123" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"promo_code": "PROMO123"},
+      "expect_error": "This applies a promo credit to the account. Set confirm=true to proceed."
+    }
+  ]
+}

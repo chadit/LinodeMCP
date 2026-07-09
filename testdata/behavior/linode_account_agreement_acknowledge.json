@@ -1,0 +1,36 @@
+{
+  "tool": "linode_account_agreement_acknowledge",
+  "description": "Shared non-boolean rejection, the false-value rejection (Python now mirrors Go's must-be-true check), confirm gate, and the acknowledge POST body. The empty-field message still differs in leading case (see report).",
+  "cases": [
+    {
+      "name": "rejects a non-boolean billing_agreement",
+      "args": { "billing_agreement": "yes" },
+      "expect_error": "billing_agreement must be a boolean"
+    },
+    {
+      "name": "rejects a false billing_agreement",
+      "args": { "billing_agreement": false },
+      "expect_error": "billing_agreement must be true when provided"
+    },
+    {
+      "name": "requires confirm before acknowledging",
+      "args": { "billing_agreement": true },
+      "expect_error": "This acknowledges account agreements. Set confirm=true to proceed."
+    },
+    {
+      "name": "acknowledges an account agreement",
+      "args": { "billing_agreement": true, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/agreements",
+        "body": { "billing_agreement": true }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"billing_agreement": true},
+      "expect_error": "This acknowledges account agreements. Set confirm=true to proceed."
+    }
+  ]
+}

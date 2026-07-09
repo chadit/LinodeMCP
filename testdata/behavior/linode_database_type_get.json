@@ -1,0 +1,22 @@
+{
+  "tool": "linode_database_type_get",
+  "description": "Shared non-integer pagination rejections and the type GET path. Missing/invalid type_id error text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "type_id": "g6-nanode-1", "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects non-integer page_size",
+      "args": { "type_id": "g6-nanode-1", "page_size": "x" },
+      "expect_error": "page_size must be an integer"
+    },
+    {
+      "name": "gets a database type by id",
+      "args": { "type_id": "g6-nanode-1" },
+      "api_response": { "id": "g6-nanode-1", "label": "Nanode 1GB" },
+      "expect_request": { "method": "GET", "path": "/databases/types/g6-nanode-1" }
+    }
+  ]
+}

@@ -1,7 +1,6 @@
 package tools_test
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -35,92 +34,6 @@ func TestSetLiveConfigSourceLifecycle(_ *testing.T) { //nolint:paralleltest // S
 	tools.SetLiveConfigSource(nil)
 	tools.SetLiveConfigSource(func() *config.Config { return nil })
 	tools.SetLiveConfigSource(nil)
-}
-
-// Ensures all tool response serialization paths work correctly.
-func TestMarshalToolResponseValidStruct(t *testing.T) {
-	t.Parallel()
-
-	input := map[string]string{"key": "value"}
-
-	result, err := tools.MarshalToolResponse(input)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if len(result.Content) == 0 {
-		t.Fatal("result.Content is empty")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if !strings.Contains(textContent.Text, `"key"`) {
-		t.Errorf("textContent.Text does not contain %v", `"key"`)
-	}
-
-	if !strings.Contains(textContent.Text, `"value"`) {
-		t.Errorf("textContent.Text does not contain %v", `"value"`)
-	}
-
-	// Verify the output is valid JSON.
-	var parsed map[string]string
-	if err := json.Unmarshal([]byte(textContent.Text), &parsed); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if parsed["key"] != "value" {
-		t.Errorf("got %v, want %v", parsed["key"], "value")
-	}
-}
-
-func TestMarshalToolResponseNilInput(t *testing.T) {
-	t.Parallel()
-
-	result, err := tools.MarshalToolResponse(nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if len(result.Content) == 0 {
-		t.Fatal("result.Content is empty")
-	}
-
-	textContent, ok := result.Content[0].(mcp.TextContent)
-	if !ok {
-		t.Fatal("ok = false, want true")
-	}
-
-	if textContent.Text != databaseJSONNull {
-		t.Errorf("textContent.Text = %v, want %v", textContent.Text, databaseJSONNull)
-	}
-}
-
-func TestMarshalToolResponseUnmarshalableType(t *testing.T) {
-	t.Parallel()
-
-	result, err := tools.MarshalToolResponse(make(chan int))
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-
-	if result != nil {
-		t.Errorf("result = %v, want nil", result)
-	}
-
-	if err == nil {
-		t.Error("expected a marshal error, got nil")
-	}
 }
 
 // Validates the safety gate for destructive write operations.
@@ -351,84 +264,6 @@ func TestFilterByContains(t *testing.T) {
 			for idx, wantName := range tt.wantNames {
 				if filtered[idx].Name != wantName {
 					t.Errorf("filtered[idx].Name = %v, want %v", filtered[idx].Name, wantName)
-				}
-			}
-		})
-	}
-}
-
-// Ensures the standard list response envelope is built correctly.
-func TestFormatListResponse(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name           string
-		items          []testItem
-		filters        []string
-		wantContains   []string
-		wantNotContain []string
-	}{
-		{
-			name: "with items",
-			items: []testItem{
-				{Name: stageAlpha, Status: statusActive},
-				{Name: stageBeta, Status: "inactive"},
-			},
-			filters:        nil,
-			wantContains:   []string{`"count": 2`, stageAlpha, stageBeta},
-			wantNotContain: []string{"filter"},
-		},
-		{
-			name:         "empty items",
-			items:        nil,
-			filters:      nil,
-			wantContains: []string{`"count": 0`},
-		},
-		{
-			name: "with filters",
-			items: []testItem{
-				{Name: stageAlpha, Status: statusActive},
-			},
-			filters:      []string{"status=active", "region=us-east"},
-			wantContains: []string{"status=active", "region=us-east"},
-		},
-		{
-			name: "no filters",
-			items: []testItem{
-				{Name: stageAlpha},
-			},
-			filters:        nil,
-			wantNotContain: []string{"filter"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			result, err := tools.FormatListResponse(tt.items, tt.filters, "items")
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			textContent, ok := result.Content[0].(mcp.TextContent)
-			if !ok {
-				t.Fatal("ok = false, want true")
-			}
-
-			for _, want := range tt.wantContains {
-				if !strings.Contains(textContent.Text, want) {
-					t.Errorf("textContent.Text does not contain %v", want)
-				}
-			}
-
-			for _, notWant := range tt.wantNotContain {
-				if strings.Contains(textContent.Text, notWant) {
-					t.Errorf("textContent.Text should not contain %v", notWant)
 				}
 			}
 		})

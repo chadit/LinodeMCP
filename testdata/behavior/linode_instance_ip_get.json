@@ -1,0 +1,27 @@
+{
+  "tool": "linode_instance_ip_get",
+  "description": "Requires linode_id then address, rejects a malformed address locally (Go now mirrors Python's net.ParseIP check), then GETs the single IP.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects missing address",
+      "args": { "linode_id": 123 },
+      "expect_error": "address is required"
+    },
+    {
+      "name": "rejects a malformed address",
+      "args": { "linode_id": 123, "address": "not-an-ip" },
+      "expect_error": "address must be a valid IP address"
+    },
+    {
+      "name": "gets one IP with a plain GET",
+      "args": { "linode_id": 123, "address": "203.0.113.5" },
+      "api_response": { "address": "203.0.113.5" },
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/ips/203.0.113.5" }
+    }
+  ]
+}

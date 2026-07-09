@@ -48,29 +48,11 @@ func TestLinodeStackScriptUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyStackScriptID]; !ok {
-		t.Errorf("props missing key %v", keyStackScriptID)
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyScript]; !ok {
-		t.Errorf("props missing key %v", keyScript)
-	}
-
-	if _, ok := props[keyImages]; !ok {
-		t.Errorf("props missing key %v", keyImages)
-	}
-
-	if _, ok := props[keyDescription]; !ok {
-		t.Errorf("props missing key %v", keyDescription)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyStackScriptID, keyLabel, keyScript, keyImages, keyDescription, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 

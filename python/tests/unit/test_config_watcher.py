@@ -14,6 +14,8 @@ from linodemcp.config.watcher import ConfigWatcher
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from linodemcp.config import Config
+
 POLL_INTERVAL = 0.05
 
 
@@ -114,3 +116,137 @@ async def test_watcher_stop_is_idempotent(tmp_path: Path) -> None:
     await watcher.stop()
     # Second stop should not raise.
     await watcher.stop()
+
+
+def test_non_positive_interval_is_accepted(tmp_path: Path) -> None:
+    """A zero interval is accepted rather than rejected. The constructor
+    clamps a non-positive cadence to the default internally so polling never
+    becomes a busy loop; construction succeeds and the config is available."""
+    cfg_path = tmp_path / "config.yml"
+    _write_config(cfg_path, "X")
+
+    watcher = ConfigWatcher(cfg_path, interval=0)
+
+    assert watcher.get().server.name == "X"
+
+
+async def test_start_is_idempotent_while_running(tmp_path: Path) -> None:
+    """A second start() while already polling is a no-op: it hits the
+    already-running guard, does not raise, and the watcher keeps serving its
+    config and still stops cleanly."""
+    cfg_path = tmp_path / "config.yml"
+    _write_config(cfg_path, "X")
+
+    watcher = ConfigWatcher(cfg_path, interval=POLL_INTERVAL)
+    watcher.start()
+    watcher.start()
+
+    try:
+        assert watcher.get().server.name == "X"
+    finally:
+        await watcher.stop()
+
+
+async def test_reload_skips_when_stat_fails(tmp_path: Path) -> None:
+    """A stat failure during polling is logged and leaves the config intact."""
+    cfg_path = tmp_path / "config.yml"
+    _write_config(cfg_path, "Persisted")
+
+    watcher = ConfigWatcher(cfg_path, interval=POLL_INTERVAL)
+    watcher.start()
+
+    try:
+        cfg_path.unlink()  # stat() inside _check_and_reload now raises OSError
+
+        for _ in range(10):
+            await asyncio.sleep(POLL_INTERVAL)
+
+        assert watcher.get().server.name == "Persisted", (
+            "a stat failure must not blank out the cached config"
+        )
+    finally:
+        await watcher.stop()
+
+
+async def test_sync_on_change_callback_fires_after_reload(tmp_path: Path) -> None:
+    """A registered sync callback runs with the freshly reloaded config."""
+    cfg_path = tmp_path / "config.yml"
+    _write_config(cfg_path, "Original")
+
+    watcher = ConfigWatcher(cfg_path, interval=POLL_INTERVAL)
+    received: list[str] = []
+    watcher.set_on_change(lambda cfg: received.append(cfg.server.name))
+    watcher.start()
+
+    try:
+        _write_config(cfg_path, "Reloaded")
+        _bump_mtime(cfg_path)
+
+        for _ in range(40):
+            await asyncio.sleep(POLL_INTERVAL)
+            if received:
+                break
+
+        assert received == ["Reloaded"]
+    finally:
+        await watcher.stop()
+
+
+async def test_async_on_change_callback_is_awaited(tmp_path: Path) -> None:
+    """An async callback is awaited, not left as an un-awaited coroutine."""
+    cfg_path = tmp_path / "config.yml"
+    _write_config(cfg_path, "Original")
+
+    watcher = ConfigWatcher(cfg_path, interval=POLL_INTERVAL)
+    received: list[str] = []
+
+    async def _record(cfg: Config) -> None:
+        received.append(cfg.server.name)
+
+    watcher.set_on_change(_record)
+    watcher.start()
+
+    try:
+        _write_config(cfg_path, "AsyncReloaded")
+        _bump_mtime(cfg_path)
+
+        for _ in range(40):
+            await asyncio.sleep(POLL_INTERVAL)
+            if received:
+                break
+
+        assert received == ["AsyncReloaded"]
+    finally:
+        await watcher.stop()
+
+
+async def test_on_change_callback_error_does_not_stop_watcher(
+    tmp_path: Path,
+) -> None:
+    """A raising callback is caught; the reload still swaps in the new config."""
+    cfg_path = tmp_path / "config.yml"
+    _write_config(cfg_path, "Original")
+
+    watcher = ConfigWatcher(cfg_path, interval=POLL_INTERVAL)
+
+    def _boom(cfg: Config) -> None:
+        msg = "callback failed"
+        raise RuntimeError(msg)
+
+    watcher.set_on_change(_boom)
+    watcher.start()
+
+    try:
+        _write_config(cfg_path, "Reloaded")
+        _bump_mtime(cfg_path)
+
+        for _ in range(40):
+            await asyncio.sleep(POLL_INTERVAL)
+            if watcher.get().server.name == "Reloaded":
+                break
+
+        assert watcher.get().server.name == "Reloaded", (
+            "the reload must still land even when the callback raises"
+        )
+    finally:
+        await watcher.stop()

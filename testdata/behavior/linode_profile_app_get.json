@@ -1,0 +1,17 @@
+{
+  "tool": "linode_profile_app_get",
+  "description": "Shared non-positive app_id rejection and the OAuth-app GET path. Missing-app_id text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive app_id",
+      "args": { "app_id": 0 },
+      "expect_error": "app_id must be a positive integer"
+    },
+    {
+      "name": "gets an OAuth app authorization by id",
+      "args": { "app_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/profile/apps/123" }
+    }
+  ]
+}

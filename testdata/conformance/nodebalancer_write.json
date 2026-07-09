@@ -1,0 +1,50 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerWriteResponse",
+  "description": "NodeBalancer write envelope: a confirmation message plus the full NodeBalancer element.",
+  "input": {
+    "message": "NodeBalancer 'edge-lb' (ID: 7777) created successfully in us-east",
+    "nodebalancer": {
+      "id": 7777,
+      "label": "edge-lb",
+      "region": "us-east",
+      "hostname": "nb-192-0-2-40.newark.nodebalancer.linode.com",
+      "ipv4": "192.0.2.40",
+      "ipv6": "2001:db8::40",
+      "client_conn_throttle": 10,
+      "transfer": {
+        "in": 1.5,
+        "out": 2.5,
+        "total": 4.0
+      },
+      "tags": [
+        "edge",
+        "prod"
+      ],
+      "created": "2026-02-11T11:00:00",
+      "updated": "2026-02-11T11:05:00"
+    }
+  },
+  "canonical": {
+    "message": "NodeBalancer 'edge-lb' (ID: 7777) created successfully in us-east",
+    "nodebalancer": {
+      "id": 7777,
+      "label": "edge-lb",
+      "region": "us-east",
+      "hostname": "nb-192-0-2-40.newark.nodebalancer.linode.com",
+      "ipv4": "192.0.2.40",
+      "ipv6": "2001:db8::40",
+      "client_conn_throttle": 10,
+      "transfer": {
+        "in": 1.5,
+        "out": 2.5,
+        "total": 4.0
+      },
+      "tags": [
+        "edge",
+        "prod"
+      ],
+      "created": "2026-02-11T11:00:00",
+      "updated": "2026-02-11T11:05:00"
+    }
+  }
+}

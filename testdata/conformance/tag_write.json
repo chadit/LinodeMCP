@@ -1,0 +1,44 @@
+{
+  "message": "linode.mcp.v1.TagWriteResponse",
+  "description": "Tag write envelope: a confirmation message plus the full tag element with all entity-ID lists.",
+  "input": {
+    "message": "Tag 'prod' created successfully",
+    "tag": {
+      "label": "prod",
+      "domains": [
+        11,
+        22
+      ],
+      "linodes": [
+        123,
+        456
+      ],
+      "nodebalancers": [
+        789
+      ],
+      "volumes": [
+        321
+      ]
+    }
+  },
+  "canonical": {
+    "message": "Tag 'prod' created successfully",
+    "tag": {
+      "label": "prod",
+      "domains": [
+        11,
+        22
+      ],
+      "linodes": [
+        123,
+        456
+      ],
+      "nodebalancers": [
+        789
+      ],
+      "volumes": [
+        321
+      ]
+    }
+  }
+}

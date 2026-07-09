@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.InstanceDiskActionResponse",
+  "description": "Instance disk action id-echo (disk password reset): a confirmation message plus the affected Linode and disk ids. The endpoint returns no resource body, so the ids echo the request.",
+  "input": {
+    "message": "Password reset for disk 10 on instance 123",
+    "linode_id": 123,
+    "disk_id": 10
+  },
+  "canonical": {
+    "message": "Password reset for disk 10 on instance 123",
+    "linode_id": 123,
+    "disk_id": 10
+  }
+}

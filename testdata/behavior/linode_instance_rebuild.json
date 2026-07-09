@@ -1,0 +1,47 @@
+{
+  "tool": "linode_instance_rebuild",
+  "description": "Destroy tool. Pins linode_id/image/root_pass required rejections, the confirm-alone destroy gate, and the bypassed rebuild POST body.",
+  "cases": [
+    {
+      "name": "requires linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "requires image",
+      "args": { "linode_id": 5 },
+      "expect_error": "image is required"
+    },
+    {
+      "name": "requires root_pass",
+      "args": { "linode_id": 5, "image": "linode/ubuntu22.04" },
+      "expect_error": "root_pass is required"
+    },
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": {
+        "linode_id": 5,
+        "image": "linode/ubuntu22.04",
+        "root_pass": "SecurePass123",
+        "confirm": true
+      },
+      "expect_error": "linode_instance_rebuild is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "rebuilds the instance",
+      "args": {
+        "linode_id": 5,
+        "image": "linode/ubuntu22.04",
+        "root_pass": "SecurePass123",
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/rebuild",
+        "body": { "image": "linode/ubuntu22.04", "root_pass": "SecurePass123" }
+      }
+    }
+  ]
+}

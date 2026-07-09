@@ -33,28 +33,7 @@ def create_linode_region_list_tool() -> tuple[Tool, Capability]:
             "Lists all available Linode regions (datacenters) "
             "with optional filtering by country or capabilities"
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "country": {
-                    "type": "string",
-                    "description": "Filter regions by country code (e.g., 'us', 'de')",
-                },
-                "capability": {
-                    "type": "string",
-                    "description": (
-                        "Filter regions by capability "
-                        "(e.g., 'Linodes', 'Block Storage')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.RegionListInput"),
     ), Capability.Read
 
 
@@ -134,17 +113,7 @@ def create_linode_region_availability_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_region_availability_list",
         description="Lists compute instance type availability across Linode regions",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.RegionAvailabilityListInput"),
     ), Capability.Read
 
 
@@ -171,22 +140,7 @@ def create_linode_region_availability_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets compute instance type availability for a specific Linode region"
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region_id": {
-                    "type": "string",
-                    "description": "Region ID to check (for example, 'us-east')",
-                },
-            },
-            "required": ["region_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.RegionAvailabilityGetInput"),
     ), Capability.Read
 
 
@@ -204,11 +158,11 @@ async def handle_linode_region_availability_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         availability = await client.get_region_availability(region_id)
-        return {
-            "region_id": region_id,
-            "count": len(availability),
-            "availability": availability,
-        }
+        return serialize_list_response(
+            {"data": availability},
+            "region_availabilities",
+            region_pb2.RegionAvailabilityListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve availability for region {region_id}", _call

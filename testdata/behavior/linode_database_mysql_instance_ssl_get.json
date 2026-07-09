@@ -1,0 +1,22 @@
+{
+  "tool": "linode_database_mysql_instance_ssl_get",
+  "description": "Pins the SSL GET path plus the Option B instance_id rejections, which now agree across languages.",
+  "cases": [
+    {
+      "name": "gets the mysql ssl certificate",
+      "args": { "instance_id": 123 },
+      "api_response": { "ca_certificate": "cert" },
+      "expect_request": { "method": "GET", "path": "/databases/mysql/instances/123/ssl" }
+    },
+    {
+      "name": "rejects missing instance_id",
+      "args": {},
+      "expect_error": "instance_id is required"
+    },
+    {
+      "name": "rejects zero instance_id",
+      "args": { "instance_id": 0 },
+      "expect_error": "instance_id must be a positive integer"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "message": "linode.mcp.v1.ProfileDraftAddToolsResponse",
+  "description": "Draft add-tools echo: the names this call actually added.",
+  "input": {
+    "name": "ops-lite",
+    "added": [
+      "linode_volume_list",
+      "linode_volume_get"
+    ]
+  },
+  "canonical": {
+    "name": "ops-lite",
+    "added": [
+      "linode_volume_list",
+      "linode_volume_get"
+    ]
+  }
+}

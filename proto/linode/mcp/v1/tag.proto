@@ -49,3 +49,68 @@ message TaggedObjectListResponse {
   optional string filter = 2;
   repeated TaggedObject tagged_objects = 3;
 }
+
+// TagListInput is the input contract for linode_tag_list.
+message TagListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// TagCreateInput is the input contract for linode_tag_create. label and
+// confirm are required; the resource-ID arrays are optional.
+message TagCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The tag label.
+  string label = 2;
+  // Optional domain IDs to tag.
+  repeated int32 domains = 3;
+  // Optional Linode IDs to tag.
+  repeated int32 linodes = 4;
+  // Optional NodeBalancer IDs to tag.
+  repeated int32 nodebalancers = 5;
+  // Optional volume IDs to tag.
+  repeated int32 volumes = 6;
+  // Must be true to confirm tag creation. Ignored when dry_run=true.
+  bool confirm = 7;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 8;
+}
+
+// TagDeleteInput is the input contract for linode_tag_delete, a two-stage
+// destroy addressed by tag label (tags have no numeric ID).
+message TagDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Tag label to delete.
+  string tag_label = 2;
+  // Must be true to confirm tag deletion. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// TaggedObjectListInput is the input contract for linode_tag_object_list.
+// Pairs with TaggedObjectListResponse.
+message TaggedObjectListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Tag label to list objects for.
+  string tag_label = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
+}

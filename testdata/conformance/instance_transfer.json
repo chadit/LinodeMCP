@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.InstanceTransfer",
+  "description": "Current-month transfer pool: used is int64 bytes so it serializes as a JSON string; billable and quota stay JSON numbers.",
+  "input": {
+    "billable": 0,
+    "quota": 2000,
+    "used": 22956600198
+  },
+  "canonical": {
+    "quota": 2000,
+    "used": 22956600198,
+    "billable": 0
+  }
+}

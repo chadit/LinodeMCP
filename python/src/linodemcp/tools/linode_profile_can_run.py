@@ -22,7 +22,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
 from linodemcp.profiles import Capability
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -128,28 +131,7 @@ def create_linode_profile_can_run_tool() -> tuple[Tool, Capability]:
                 "environment arg, not resource IDs. Advice only; it does not "
                 "execute anything."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_CALLS: {
-                        "type": "array",
-                        "description": (
-                            "Tool calls to pre-check. Each entry is an object "
-                            'with a required "tool" name and optional "args" '
-                            '(only "environment" is inspected).'
-                        ),
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                _ENTRY_TOOL: {"type": "string"},
-                                _ENTRY_ARGS: {"type": "object"},
-                            },
-                            "required": [_ENTRY_TOOL],
-                        },
-                    },
-                },
-                "required": [_ARG_CALLS],
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileCanRunInput"),
         ),
         Capability.Meta,
     )
@@ -275,4 +257,7 @@ async def handle_linode_profile_can_run(
         },
     }
 
-    return [TextContent(type="text", text=json.dumps(response))]
+    result = serialize_api_response(
+        response, profile_builder_pb2.ProfileCanRunResponse()
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]

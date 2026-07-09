@@ -41,17 +41,17 @@ func TestLinodeDatabaseAllInstancesListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyPage) {
+		t.Errorf("rawSchema missing key %v", keyPage)
 	}
 
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
+	if !strings.Contains(rawSchema, keyPageSize) {
+		t.Errorf("rawSchema missing key %v", keyPageSize)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("rawSchema has unexpected key %v", keyConfirm)
 	}
 }
 

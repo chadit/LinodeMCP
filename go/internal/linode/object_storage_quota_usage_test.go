@@ -10,11 +10,12 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
-func TestClientGetObjectStorageQuotaUsageSuccess(t *testing.T) {
-	t.Parallel()
+func objectStorageQuotaUsageBody(quotaLimit, usage int) map[string]any {
+	return map[string]any{"quota_limit": quotaLimit, "usage": usage}
+}
 
-	used := 10
-	usage := linode.ObjectStorageQuotaUsage{QuotaLimit: 100, Usage: &used}
+func TestClientGetObjectStorageQuotaUsageProtoSuccess(t *testing.T) {
+	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -35,7 +36,7 @@ func TestClientGetObjectStorageQuotaUsageSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(usage); err != nil {
+		if err := json.NewEncoder(w).Encode(objectStorageQuotaUsageBody(100, 10)); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -43,7 +44,7 @@ func TestClientGetObjectStorageQuotaUsageSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.GetObjectStorageQuotaUsage(t.Context(), "obj-bucket-us-ord-1")
+	result, err := client.GetObjectStorageQuotaUsageProto(t.Context(), "obj-bucket-us-ord-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -52,23 +53,21 @@ func TestClientGetObjectStorageQuotaUsageSuccess(t *testing.T) {
 		t.Fatal("result is nil")
 	}
 
-	if result.QuotaLimit != 100 {
-		t.Errorf("result.QuotaLimit = %v, want %v", result.QuotaLimit, 100)
+	if result.GetQuotaLimit() != int64(100) {
+		t.Errorf("result.GetQuotaLimit() = %v, want %v", result.GetQuotaLimit(), int64(100))
 	}
 
 	if result.Usage == nil {
 		t.Fatal("result.Usage is nil")
 	}
 
-	if *result.Usage != 10 {
-		t.Errorf("*result.Usage = %v, want %v", *result.Usage, 10)
+	if result.GetUsage() != int64(10) {
+		t.Errorf("result.GetUsage() = %v, want %v", result.GetUsage(), int64(10))
 	}
 }
 
-func TestClientGetObjectStorageQuotaUsageEscapesQuotaID(t *testing.T) {
+func TestClientGetObjectStorageQuotaUsageProtoEscapesQuotaID(t *testing.T) {
 	t.Parallel()
-
-	used := 1
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.EscapedPath() != "/object-storage/quotas/obj%2Fbucket%3Funsafe/usage" {
@@ -81,7 +80,7 @@ func TestClientGetObjectStorageQuotaUsageEscapesQuotaID(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.ObjectStorageQuotaUsage{QuotaLimit: 2, Usage: &used}); err != nil {
+		if err := json.NewEncoder(w).Encode(objectStorageQuotaUsageBody(2, 1)); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -89,7 +88,7 @@ func TestClientGetObjectStorageQuotaUsageEscapesQuotaID(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.GetObjectStorageQuotaUsage(t.Context(), "obj/bucket?unsafe")
+	result, err := client.GetObjectStorageQuotaUsageProto(t.Context(), "obj/bucket?unsafe")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -99,7 +98,7 @@ func TestClientGetObjectStorageQuotaUsageEscapesQuotaID(t *testing.T) {
 	}
 }
 
-func TestClientGetObjectStorageQuotaUsageError(t *testing.T) {
+func TestClientGetObjectStorageQuotaUsageProtoError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -115,7 +114,7 @@ func TestClientGetObjectStorageQuotaUsageError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.GetObjectStorageQuotaUsage(t.Context(), "obj-bucket-us-ord-1")
+	result, err := client.GetObjectStorageQuotaUsageProto(t.Context(), "obj-bucket-us-ord-1")
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -125,12 +124,10 @@ func TestClientGetObjectStorageQuotaUsageError(t *testing.T) {
 	}
 }
 
-func TestClientGetObjectStorageQuotaUsageRetriesReadOnlyRoute(t *testing.T) {
+func TestClientGetObjectStorageQuotaUsageProtoRetriesReadOnlyRoute(t *testing.T) {
 	t.Parallel()
 
 	var calls int32
-
-	used := 10
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		call := atomic.AddInt32(&calls, 1)
@@ -148,7 +145,7 @@ func TestClientGetObjectStorageQuotaUsageRetriesReadOnlyRoute(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.ObjectStorageQuotaUsage{QuotaLimit: 100, Usage: &used}); err != nil {
+		if err := json.NewEncoder(w).Encode(objectStorageQuotaUsageBody(100, 10)); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -156,7 +153,7 @@ func TestClientGetObjectStorageQuotaUsageRetriesReadOnlyRoute(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 
-	result, err := client.GetObjectStorageQuotaUsage(t.Context(), "obj-bucket-us-ord-1")
+	result, err := client.GetObjectStorageQuotaUsageProto(t.Context(), "obj-bucket-us-ord-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

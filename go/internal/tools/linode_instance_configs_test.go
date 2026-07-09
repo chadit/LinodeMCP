@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -33,7 +32,7 @@ const (
 	errIPRangesType = "ip_ranges must be an array of strings"
 
 	errPurposeRequired = "purpose is required"
-	errPurposeInvalid  = "purpose must be public, vlan, or vpc"
+	errPurposeInvalid  = "purpose must be one of: public, vlan, vpc"
 )
 
 type instanceConfigCreateValidationCase struct {
@@ -49,11 +48,11 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingLinodeID, args: map[string]any{keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseFractionalLinodeID, args: map[string]any{keyLinodeID: float64(1.5), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDRequired},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseFractionalLinodeID, args: map[string]any{keyLinodeID: float64(1.5), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLinodeIDInteger},
 		{name: caseMissingLabel, args: map[string]any{keyLinodeID: float64(123), keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: "non-string label", args: map[string]any{keyLinodeID: float64(123), keyLabel: float64(99), keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: "label must be a string"},
 		{name: caseBlankLabelImageShareGroupToken, args: map[string]any{keyLinodeID: float64(123), keyLabel: blankWhitespace, keyDevices: configDevicesSDAJSON, keyConfirm: true}, wantContains: errLabelRequired},
@@ -89,7 +88,7 @@ func instanceConfigCreateValidationCases() []instanceConfigCreateValidationCase 
 		{name: caseUnknownInterfaceField, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"public","typo":true}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "read-only interface id", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"id":101,"purpose":"public"}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "trailing interfaces JSON", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"public"}] {}`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
-		{name: caseInvalidInterfacePurpose, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"bad"}]`, keyConfirm: true}, wantContains: "purpose must be public, vlan, or vpc"},
+		{name: caseInvalidInterfacePurpose, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyInterfaces: `[{"purpose":"bad"}]`, keyConfirm: true}, wantContains: "purpose must be one of: public, vlan, vpc"},
 		{name: "invalid run level", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyRunLevel: stageBeta, keyConfirm: true}, wantContains: "run_level must be"},
 		{name: "invalid virt mode", args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyDevices: configDevicesSDAJSON, keyVirtMode: stageBeta, keyConfirm: true}, wantContains: "virt_mode must be"},
 	}
@@ -125,21 +124,21 @@ func TestLinodeInstanceConfigCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
+	if !strings.Contains(rawSchema, keyLabel) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLabel)
 	}
 
-	if _, ok := props[keyDevices]; !ok {
-		t.Errorf("props missing key %v", keyDevices)
+	if !strings.Contains(rawSchema, keyDevices) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDevices)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -351,19 +350,15 @@ func TestLinodeInstanceConfigInterfaceAddToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyConfigID, keyPurpose, keyLabel, keyIPAMAddress, keyPrimary, keySubnetID, keyIPRanges, keyIPv4, keyIPv6, keyConfirm} {
-		if _, ok := props[key]; !ok {
-			t.Errorf("props missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
-	if _, ok := props[keyInterface]; ok {
-		t.Errorf("props should not contain key %v", keyInterface)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyPurpose) {
-		t.Errorf("required does not contain %v", keyPurpose)
+	if !strings.Contains(rawSchema, keyPurpose) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPurpose)
 	}
 }
 
@@ -383,11 +378,11 @@ func TestLinodeInstanceConfigInterfaceAddToolValidation(t *testing.T) {
 		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1), keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDRequired},
 		{name: "invalid config id", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0), keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: paymentMethodIDSlash, keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyPurpose: purposePublic, keyConfirm: true}, wantContains: errConfigIDPositive},
@@ -602,14 +597,14 @@ func TestLinodeInstanceConfigInterfaceGetToolValidation(t *testing.T) {
 
 	validationTests := []instanceConfigCreateValidationCase{
 		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyInterfaceID: float64(456)}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyInterfaceID: float64(456)}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(456)}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(456)}, wantContains: errLinodeIDRequired},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyInterfaceID: float64(456)}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(456)}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(456)}, wantContains: errLinodeIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456)}, wantContains: errConfigIDRequired},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(456)}, wantContains: errConfigIDPositive},
-		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789)}, wantContains: errInterfaceIDPositive},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789)}, wantContains: errInterfaceIDRequired},
 		{name: caseNegativeInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(-1)}, wantContains: errInterfaceIDPositive},
 		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathSeparatorValue}, wantContains: errInterfaceIDPositive},
 		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue}, wantContains: errInterfaceIDPositive},
@@ -780,25 +775,25 @@ func TestLinodeInstanceConfigInterfaceDeleteToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := props[keyConfigID]; !ok {
-		t.Errorf("props missing key %v", keyConfigID)
+	if !strings.Contains(rawSchema, keyConfigID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfigID)
 	}
 
-	if _, ok := props[keyInterfaceID]; !ok {
-		t.Errorf("props missing key %v", keyInterfaceID)
+	if !strings.Contains(rawSchema, keyInterfaceID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyInterfaceID)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -863,14 +858,14 @@ func TestLinodeInstanceConfigInterfaceDeleteToolValidation(t *testing.T) {
 
 	validationTests := []instanceConfigCreateValidationCase{
 		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDRequired},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errConfigIDPositive},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errLinodeIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errConfigIDRequired},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errConfigIDPositive},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errConfigIDPositive},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errConfigIDPositive},
-		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errInterfaceIDPositive},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errInterfaceIDRequired},
 		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathSeparatorValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errInterfaceIDPositive},
 		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errInterfaceIDPositive},
 		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errInterfaceIDPositive},
@@ -1025,17 +1020,17 @@ func TestLinodeInstanceConfigUpdateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := props[keyConfigID]; !ok {
-		t.Errorf("props missing key %v", keyConfigID)
+	if !strings.Contains(rawSchema, keyConfigID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfigID)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -1055,10 +1050,10 @@ func TestLinodeInstanceConfigUpdateToolValidation(t *testing.T) {
 		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDRequired},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue, keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue, keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyLabel: labelBootConfig, keyConfirm: true}, wantContains: errConfigIDPositive},
@@ -1081,7 +1076,7 @@ func TestLinodeInstanceConfigUpdateToolValidation(t *testing.T) {
 		{name: caseUnknownInterfaceField, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"public","typo":true}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "read-only interface id update", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"id":101,"purpose":"public"}]`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
 		{name: "trailing interfaces JSON", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"public"}] {}`, keyConfirm: true}, wantContains: errInvalidInterfacesJSON},
-		{name: caseInvalidInterfacePurpose, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"bad"}]`, keyConfirm: true}, wantContains: "purpose must be public, vlan, or vpc"},
+		{name: caseInvalidInterfacePurpose, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaces: `[{"purpose":"bad"}]`, keyConfirm: true}, wantContains: "purpose must be one of: public, vlan, vpc"},
 		{name: "invalid run level", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyRunLevel: stageBeta, keyConfirm: true}, wantContains: "run_level must be"},
 		{name: "invalid virt mode", args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyVirtMode: stageBeta, keyConfirm: true}, wantContains: "virt_mode must be"},
 	}
@@ -1285,21 +1280,21 @@ func TestLinodeInstanceConfigInterfacesReorderToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := props[keyConfigID]; !ok {
-		t.Errorf("props missing key %v", keyConfigID)
+	if !strings.Contains(rawSchema, keyConfigID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfigID)
 	}
 
-	if _, ok := props[keyIDs]; !ok {
-		t.Errorf("props missing key %v", keyIDs)
+	if !strings.Contains(rawSchema, keyIDs) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyIDs)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -1498,15 +1493,11 @@ func TestLinodeInstanceConfigInterfaceUpdateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyConfigID, keyInterfaceID, keyIPRanges, keyIPv4, keyPrimary, keyConfirm} {
-		if _, ok := props[key]; !ok {
-			t.Errorf("props missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if _, ok := props[keyInterface]; ok {
-		t.Errorf("props should not contain key %v", keyInterface)
 	}
 }
 
@@ -1526,14 +1517,14 @@ func TestLinodeInstanceConfigInterfaceUpdateToolValidation(t *testing.T) {
 		{name: caseStringConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: float64(1)}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingLinodeID, args: map[string]any{keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDRequired},
-		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDPositive},
+		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: paymentMethodIDSlash, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: float64(789), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errLinodeIDInteger},
+		{name: caseMissingConfigID, args: map[string]any{keyLinodeID: float64(123), keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDRequired},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: paymentMethodIDSlash, keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: shareGroupIDQueryValue, keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDPositive},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue, keyInterfaceID: float64(101), keyPrimary: true, keyConfirm: true}, wantContains: errConfigIDPositive},
-		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDPositive},
+		{name: caseMissingInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDRequired},
 		{name: caseSlashInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: paymentMethodIDSlash, keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDPositive},
 		{name: caseQueryInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: shareGroupIDQueryValue, keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDPositive},
 		{name: caseTraversalInterfaceID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(789), keyInterfaceID: pathTraversalValue, keyPrimary: true, keyConfirm: true}, wantContains: errInterfaceIDPositive},

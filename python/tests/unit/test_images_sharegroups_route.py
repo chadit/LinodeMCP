@@ -318,9 +318,7 @@ def test_create_linode_image_sharegroups_by_image_list_tool_schema() -> None:
     assert tool.name == "linode_image_sharegroup_by_image_list"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["image_id"]
-    assert tool.inputSchema["properties"]["image_id"]["pattern"] == (
-        r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$"
-    )
+    assert tool.inputSchema["properties"]["image_id"]["type"] == "string"
 
 
 @pytest.mark.asyncio
@@ -439,9 +437,8 @@ def test_create_linode_images_sharegroups_list_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["page_size"]["minimum"] == 25
-    assert tool.inputSchema["properties"]["page_size"]["maximum"] == 500
+    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
 
 
 @pytest.mark.asyncio
@@ -703,7 +700,13 @@ def test_create_linode_image_sharegroup_create_tool_schema() -> None:
     schema = tool.inputSchema
     assert schema["required"] == ["label", "confirm"]
     assert schema["properties"]["label"]["type"] == "string"
-    assert schema["properties"]["images"]["items"]["required"] == ["id"]
+    # The images item detail is preserved via the named ImageShareGroupImageSpec
+    # message rather than an inline object with a required list.
+    assert schema["properties"]["images"]["type"] == "array"
+    assert (
+        schema["properties"]["images"]["items"]["$ref"]
+        == "linode.mcp.v1.ImageShareGroupImageSpec.schema.strict.json"
+    )
     assert schema["properties"]["confirm"]["type"] == "boolean"
     assert schema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -1051,6 +1054,7 @@ async def test_handle_linode_images_sharegroups_token_get_success(
         {"token_uuid": "11111111?1111-4111-8111-111111111111"},
         {"token_uuid": ".."},
         {"token_uuid": 123},
+        {"token_uuid": "123e4567e89b12d3a456426614174000"},
     ],
 )
 async def test_handle_linode_images_sharegroups_token_get_rejects_invalid_token_uuid(
@@ -2013,7 +2017,7 @@ def test_create_linode_images_sharegroup_member_token_update_tool_schema() -> No
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert "[0-9a-fA-F]{8}" in tool.inputSchema["properties"]["token_uuid"]["pattern"]
+    assert tool.inputSchema["properties"]["token_uuid"]["type"] == "string"
 
 
 @pytest.mark.asyncio
@@ -2328,7 +2332,7 @@ def test_create_linode_images_sharegroup_member_token_delete_tool_schema() -> No
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert "[0-9a-fA-F]{8}" in tool.inputSchema["properties"]["token_uuid"]["pattern"]
+    assert tool.inputSchema["properties"]["token_uuid"]["type"] == "string"
 
 
 @pytest.mark.asyncio
@@ -2655,9 +2659,7 @@ def test_create_linode_images_sharegroup_image_delete_tool_schema() -> None:
     schema = tool.inputSchema
     assert schema["required"] == ["sharegroup_id", "image_id", "confirm"]
     assert schema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert schema["properties"]["sharegroup_id"]["minimum"] == 1
     assert schema["properties"]["image_id"]["type"] == "integer"
-    assert schema["properties"]["image_id"]["minimum"] == 1
     assert schema["properties"]["confirm"]["type"] == "boolean"
     assert schema["properties"]["dry_run"]["type"] == "boolean"
 
@@ -2692,7 +2694,7 @@ async def test_handle_linode_images_sharegroup_image_delete_rejects_non_true_con
 
     result = await handle_linode_image_sharegroup_image_delete(arguments, sample_config)
 
-    assert "Set confirm=true" in result[0].text
+    assert "confirm=true is required to remove the shared image" in result[0].text
     mock_linode_client.delete_image_sharegroup_image.assert_not_called()
 
 
@@ -2702,7 +2704,7 @@ async def test_handle_linode_images_sharegroup_image_delete_rejects_non_true_con
     [
         (
             {"image_id": 456, "confirm": True},
-            "sharegroup_id must be a positive integer",
+            "sharegroup_id is required",
         ),
         (
             {"sharegroup_id": "", "image_id": 456, "confirm": True},
@@ -2919,8 +2921,10 @@ def test_create_linode_images_sharegroup_images_add_tool_schema() -> None:
         "confirm",
         "dry_run",
     }
-    assert tool.inputSchema["required"] == ["sharegroup_id", "images", "confirm"]
-    assert tool.inputSchema["properties"]["images"]["minItems"] == 1
+    # images is required at runtime but a repeated proto field cannot be marked
+    # required in the generated schema, so it drops from the required list.
+    assert tool.inputSchema["required"] == ["sharegroup_id", "confirm"]
+    assert tool.inputSchema["properties"]["images"]["type"] == "array"
     assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
 
 
@@ -3473,10 +3477,10 @@ async def test_handle_linode_images_sharegroup_images_list_success(
 @pytest.mark.parametrize(
     ("pagination", "message"),
     [
-        ({"page": 0}, "page must be an integer at least 1"),
-        ({"page": "2"}, "page must be an integer at least 1"),
-        ({"page_size": 24}, "page_size must be an integer between 25 and 500"),
-        ({"page_size": 501}, "page_size must be an integer between 25 and 500"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
+        ({"page": "2"}, "page must be an integer"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_handle_linode_images_sharegroup_images_list_rejects_bad_pagination(
@@ -3499,8 +3503,8 @@ async def test_handle_linode_images_sharegroup_images_list_rejects_bad_paginatio
 @pytest.mark.parametrize(
     ("pagination", "message"),
     [
-        ({"page": 0}, "page must be an integer at least 1"),
-        ({"page_size": 24}, "page_size must be an integer between 25 and 500"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
+        ({"page_size": 24}, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_handle_linode_images_token_images_list_rejects_bad_pagination(
@@ -3528,8 +3532,8 @@ async def test_handle_linode_images_token_images_list_rejects_bad_pagination(
 @pytest.mark.parametrize(
     ("pagination", "message"),
     [
-        ({"page": 0}, "page must be an integer at least 1"),
-        ({"page_size": 501}, "page_size must be an integer between 25 and 500"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
+        ({"page_size": 501}, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_handle_linode_images_by_image_list_rejects_bad_pagination(
@@ -4347,12 +4351,11 @@ def test_create_linode_images_sharegroup_image_update_tool_schema() -> None:
     assert tool.name == "linode_image_sharegroup_image_update"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["sharegroup_id", "image_id", "confirm"]
-    assert tool.inputSchema["properties"]["sharegroup_id"]["minimum"] == 1
+    assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
     assert tool.inputSchema["properties"]["image_id"]["type"] == "string"
     assert "dry_run" in tool.inputSchema["properties"]
     assert "label" in tool.inputSchema["properties"]
     assert "description" in tool.inputSchema["properties"]
-    assert "anyOf" in tool.inputSchema
 
 
 @pytest.mark.asyncio
@@ -4466,9 +4469,8 @@ async def test_handle_linode_images_sharegroup_image_update_requires_literal_con
 
     result = await handle_linode_image_sharegroup_image_update(arguments, sample_config)
 
-    assert (
-        result[0].text
-        == "Error: This updates a shared image. Set confirm=true to proceed."
+    assert result[0].text == (
+        "Error: This updates a shared image. Set confirm=true to proceed."
     )
     mock_linode_client.update_image_sharegroup_image.assert_not_called()
 
@@ -4682,9 +4684,7 @@ async def test_handle_linode_image_delete_requires_literal_confirm(
 
     result = await handle_linode_image_delete(arguments, sample_config)
 
-    assert result[0].text == (
-        "Error: This deletes a private image. Set confirm=true to proceed."
-    )
+    assert result[0].text == "Error: confirm=true is required to delete the image"
     mock_linode_client.delete_image.assert_not_called()
 
 

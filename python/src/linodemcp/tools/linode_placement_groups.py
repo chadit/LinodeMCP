@@ -8,7 +8,11 @@ from mcp.types import Tool
 
 from linodemcp.genpb.linode.mcp.v1 import placement_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import (
+    error_response,
+    execute_tool,
+    pagination_int_argument,
+)
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -64,48 +68,10 @@ def placement_group_to_response_dict(raw: dict[str, Any]) -> dict[str, Any]:
     return body
 
 
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-_GROUP_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The placement group ID.",
-}
-_PAGE_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "Page of results to return.",
-}
-_PAGE_SIZE_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 25,
-    "maximum": 500,
-    "description": "Number of results per page.",
-}
-
-
 def _parse_positive_int(value: Any, name: str) -> int | list[TextContent]:
     """Parse a positive integer argument, rejecting bools and path strings."""
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         return error_response(f"{name} must be a positive integer")
-    return value
-
-
-def _parse_optional_int(
-    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
-) -> int | None:
-    """Parse an optional integer argument with inclusive bounds."""
-    value = arguments.get(name)
-    if value is None:
-        return None
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise TypeError(f"{name} must be an integer")
-    if value < minimum:
-        raise ValueError(f"{name} must be at least {minimum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{name} must be at most {maximum}")
     return value
 
 
@@ -114,14 +80,7 @@ def create_linode_placement_group_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_list",
         description="Lists placement groups",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "page": _PAGE_PROP,
-                "page_size": _PAGE_SIZE_PROP,
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.PlacementGroupListInput"),
     ), Capability.Read
 
 
@@ -130,8 +89,8 @@ async def handle_linode_placement_group_list(
 ) -> list[TextContent]:
     """Handle linode_placement_group_list tool request."""
     try:
-        page = _parse_optional_int(arguments, "page", 1)
-        page_size = _parse_optional_int(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 

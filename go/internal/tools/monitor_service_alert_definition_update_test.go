@@ -111,9 +111,16 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	var parsed struct {
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal(tool.RawInputSchema, &parsed); err != nil {
+		t.Fatalf("unmarshal RawInputSchema: %v", err)
+	}
+
 	for _, key := range []string{monitorServiceTypeParam, monitorAlertIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !slices.Contains(parsed.Required, key) {
+			t.Errorf("RawInputSchema required does not contain %v", key)
 		}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -17,16 +18,15 @@ import (
 
 // NewLinodeInstanceIPListTool creates a tool for listing all IP addresses for a Linode instance.
 func NewLinodeInstanceIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_ip_list",
 		"Lists all IP addresses (IPv4 and IPv6) for a Linode instance",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-		},
-		handleInstanceIPsListRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceIPListInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceIPsListRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -76,6 +76,10 @@ func handleInstanceIPGetRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError("address is required"), nil
 	}
 
+	if net.ParseIP(address) == nil {
+		return mcp.NewToolResultError("address must be a valid IP address"), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -91,23 +95,15 @@ func handleInstanceIPGetRequest(ctx context.Context, request *mcp.CallToolReques
 
 // NewLinodeInstanceIPAllocateTool creates a tool for allocating a new IP address for a Linode instance.
 func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_ip_allocate",
 		"Allocates a new IP address for a Linode instance. WARNING: Additional IPs may incur charges.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("type", mcp.Required(),
-				mcp.Description("The type of IP address to allocate (e.g. 'ipv4')")),
-			mcp.WithBoolean("public", mcp.Required(),
-				mcp.Description("Whether the IP address should be public (true) or private (false)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IP allocation. Additional IPs may incur charges. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceIPAllocateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceIPAllocateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceIPAllocateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -115,6 +111,10 @@ func NewLinodeInstanceIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	linodeID := request.GetInt("linode_id", 0)
 	ipType := request.GetString("type", "")
+
+	if msg := enumChoiceError(ipType, "type", linodev1.InstanceIPType_Value_value); msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
 
 	if IsDryRun(request) {
 		if linodeID == 0 {
@@ -141,7 +141,10 @@ func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError("type is required (e.g. 'ipv4')"), nil
 	}
 
-	public := request.GetBool("public", false)
+	public, validationMessage := requiredNetworkingBoolArg(request.GetArguments(), "public")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
 
 	req := linode.AllocateIPRequest{
 		Type:   ipType,
@@ -166,23 +169,15 @@ func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeInstanceIPUpdateRDNSTool creates a tool for updating the RDNS on a Linode instance IP address.
 func NewLinodeInstanceIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_ip_update",
 		"Updates the reverse DNS for a specific IP address on a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("address", mcp.Required(),
-				mcp.Description("The IP address to update (e.g. 203.0.113.1)")),
-			mcp.WithString("rdns", mcp.Required(),
-				mcp.Description("The reverse DNS hostname to assign to the IP address")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm the RDNS update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceIPUpdateRDNSRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceIPUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceIPUpdateRDNSRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -254,24 +249,16 @@ func handleInstanceIPUpdateRDNSRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeInstanceIPDeleteTool creates a tool for removing an IP address from a Linode instance.
 func NewLinodeInstanceIPDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_ip_delete",
 		"Removes an IP address from a Linode instance. WARNING: This permanently removes the IP and is irreversible."+
 			" Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("address", mcp.Required(),
-				mcp.Description("The IP address to remove (e.g. 203.0.113.1)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IP removal. This action is irreversible. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleInstanceIPDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceIPDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceIPDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -287,6 +274,10 @@ func handleInstanceIPDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 		return mcp.NewToolResultError("address is required"), nil
 	}
 
+	if net.ParseIP(address) == nil {
+		return mcp.NewToolResultError("address must be a valid IP address"), nil
+	}
+
 	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
 		ToolName:       "linode_instance_ip_delete",
 		Method:         httpMethodDelete,
@@ -298,11 +289,11 @@ func handleInstanceIPDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 		Execute: func(ctx context.Context, c *linode.Client) error {
 			return c.DeleteInstanceIP(ctx, linodeID, address)
 		},
-		Success: func() any {
-			return map[string]any{
-				responseKeyMessage: fmt.Sprintf("IP %s removed from instance %d", address, linodeID),
-				paramLinodeID:      linodeID,
-				"address":          address,
+		Success: func() proto.Message {
+			return &linodev1.InstanceIPDeleteResponse{
+				Message:  fmt.Sprintf("IP %s removed from instance %d", address, linodeID),
+				LinodeId: linodeIDToInt32(linodeID),
+				Address:  address,
 			}
 		},
 		// An IP address record carries no cosmetic timestamp, so the whole

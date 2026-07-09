@@ -1,0 +1,22 @@
+{
+  "tool": "linode_account_invoice_list",
+  "description": "Shared pagination rejections and the bare account-invoice list GET.",
+  "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects non-integer page_size",
+      "args": { "page_size": "x" },
+      "expect_error": "page_size must be an integer"
+    },
+    {
+      "name": "lists account invoices",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/account/invoices" }
+    }
+  ]
+}

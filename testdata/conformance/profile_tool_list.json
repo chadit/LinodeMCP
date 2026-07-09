@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.ProfileToolListResponse",
+  "description": "Profile tool-catalog envelope: count plus the filtered catalog entries, matching the {count, items} list convention.",
+  "input": {
+    "count": 2,
+    "tools": [
+      {
+        "name": "hello",
+        "capability": "CapMeta",
+        "categories": [
+          "meta"
+        ]
+      },
+      {
+        "name": "linode_instance_list",
+        "capability": "CapRead",
+        "categories": [
+          "compute"
+        ]
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "tools": [
+      {
+        "name": "hello",
+        "capability": "CapMeta",
+        "categories": [
+          "meta"
+        ]
+      },
+      {
+        "name": "linode_instance_list",
+        "capability": "CapRead",
+        "categories": [
+          "compute"
+        ]
+      }
+    ]
+  }
+}

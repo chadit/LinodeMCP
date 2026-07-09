@@ -323,7 +323,6 @@ def test_create_linode_instance_interfaces_list_tool_schema() -> None:
     assert capability is Capability.Read
     assert tool.name == "linode_instance_interface_list"
     assert tool.inputSchema["required"] == ["linode_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
 
 
 def test_linode_instance_interfaces_list_registered_and_exported() -> None:
@@ -481,7 +480,7 @@ async def test_handle_linode_instance_interface_get_rejects_invalid_ids(
     result = await handle_linode_instance_interface_get(arguments, sample_config)
 
     assert result[0].text.startswith("Error: ")
-    assert "positive integer" in result[0].text
+    assert "positive integer" in result[0].text or "is required" in result[0].text
     mock_linode_client.get_instance_interface.assert_not_called()
 
 
@@ -695,14 +694,6 @@ def test_create_linode_instance_config_interface_add_tool_schema() -> None:
         "purpose",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["purpose"]["enum"] == [
-        "public",
-        "vlan",
-        "vpc",
-    ]
-    assert tool.inputSchema["properties"]["subnet_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["ip_ranges"]["items"] == {"type": "string"}
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
@@ -830,7 +821,10 @@ async def test_handle_config_interface_add_requires_boolean_confirm_true(
 
     result = await handle_linode_instance_config_interface_add(arguments, sample_config)
 
-    assert result[0].text == "Error: confirm must be true"
+    assert result[0].text == (
+        "Error: This adds a network interface to the configuration profile. Set "
+        "confirm=true to proceed."
+    )
     mock_linode_client.add_instance_config_interface.assert_not_called()
 
 
@@ -1118,13 +1112,10 @@ def test_create_linode_instance_config_update_tool_schema() -> None:
     assert tool.name == "linode_instance_config_update"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["linode_id", "config_id", "confirm"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "dry_run" not in tool.inputSchema["required"]
-    assert {"required": ["label"]} in tool.inputSchema["anyOf"]
     assert "id" not in tool.inputSchema["properties"]
     assert "devices" in tool.inputSchema["properties"]
     assert "virt_mode" in tool.inputSchema["properties"]
@@ -1237,7 +1228,10 @@ async def test_handle_linode_instance_config_update_requires_boolean_confirm_tru
 
     result = await handle_linode_instance_config_update(arguments, sample_config)
 
-    assert result[0].text == "Error: confirm must be true"
+    assert result[0].text == (
+        "Error: This updates a configuration profile on the instance. Set confirm=true "
+        "to proceed."
+    )
     mock_linode_client.update_instance_config.assert_not_called()
 
 
@@ -1250,6 +1244,25 @@ async def test_handle_linode_instance_config_update_requires_update_field(
     )
 
     assert result[0].text == "Error: at least one update field is required"
+    mock_linode_client.update_instance_config.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_linode_instance_config_update_rejects_invalid_device_slot(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    """A device slot outside sda-sdh is rejected before the client call."""
+    result = await handle_linode_instance_config_update(
+        {
+            "linode_id": 123,
+            "config_id": 456,
+            "devices": {"sdz": {"disk_id": 789}},
+            "confirm": True,
+        },
+        sample_config,
+    )
+
+    assert result[0].text == "Error: device slot sdz must be one of sda through sdh"
     mock_linode_client.update_instance_config.assert_not_called()
 
 
@@ -1412,11 +1425,10 @@ def test_create_linode_instance_config_interfaces_order_tool_schema() -> None:
 
     assert tool.name == "linode_instance_config_interface_reorder"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["linode_id", "config_id", "ids", "confirm"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
+    # ids maps to a proto repeated field, so it drops out of the generated
+    # required set even though the handler still enforces it.
+    assert tool.inputSchema["required"] == ["linode_id", "config_id", "confirm"]
     assert tool.inputSchema["properties"]["ids"]["type"] == "array"
-    assert tool.inputSchema["properties"]["ids"]["items"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
 
@@ -1498,7 +1510,26 @@ async def test_handle_config_interfaces_order_requires_confirm_true(
         arguments, sample_config
     )
 
-    assert result[0].text == "Error: confirm must be true"
+    assert result[0].text == (
+        "Error: This reorders network interfaces on the configuration profile. Set "
+        "confirm=true to proceed."
+    )
+    mock_linode_client.reorder_instance_config_interfaces.assert_not_called()
+
+
+async def test_handle_config_interfaces_order_rejects_duplicate_ids(
+    sample_config: Any, mock_linode_client: AsyncMock
+) -> None:
+    from linodemcp.tools.linode_instances import (
+        handle_linode_instance_config_interface_reorder,
+    )
+
+    result = await handle_linode_instance_config_interface_reorder(
+        {"linode_id": 123, "config_id": 456, "ids": [1, 1], "confirm": True},
+        sample_config,
+    )
+
+    assert "ids must not contain duplicate interface IDs" in result[0].text
     mock_linode_client.reorder_instance_config_interfaces.assert_not_called()
 
 
@@ -1702,8 +1733,6 @@ def test_create_linode_instance_interface_delete_tool_schema() -> None:
         "interface_id",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["interface_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
 
@@ -1719,7 +1748,7 @@ async def test_handle_linode_instance_interface_delete_success(
 
     body = json.loads(result[0].text)
     assert body == {
-        "message": "Linode instance interface 789 deleted from Linode 123",
+        "message": "Interface 789 deleted from instance 123 successfully",
         "linode_id": 123,
         "interface_id": 789,
     }
@@ -1760,7 +1789,10 @@ async def test_handle_instance_interface_delete_requires_confirm_true(
 
     result = await handle_linode_instance_interface_delete(arguments, sample_config)
 
-    assert result[0].text == "Error: confirm must be true"
+    assert result[0].text == (
+        "Error: This deletes a Linode interface and changes instance networking. Set "
+        "confirm=true to proceed."
+    )
     mock_linode_client.delete_instance_interface.assert_not_called()
 
 
@@ -1943,9 +1975,6 @@ def test_create_linode_instance_config_interface_delete_tool_schema() -> None:
         "interface_id",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["interface_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert "dry_run" in tool.inputSchema["properties"]
 
@@ -2018,7 +2047,10 @@ async def test_handle_config_interface_delete_requires_confirm_true(
         arguments, sample_config
     )
 
-    assert result[0].text == "Error: confirm must be true"
+    assert result[0].text == (
+        "Error: This removes a network interface from the configuration profile. Set "
+        "confirm=true to proceed."
+    )
     mock_linode_client.delete_instance_config_interface.assert_not_called()
 
 

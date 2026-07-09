@@ -1,0 +1,21 @@
+{
+  "tool": "linode_profile_token_create",
+  "description": "Personal access token create: the POST body once confirmed. Confirm text and field-type rejections diverge (see report).",
+  "cases": [
+    {
+      "name": "creates a personal access token",
+      "args": { "label": "my-token", "scopes": "linodes:read_only", "confirm": true },
+      "api_response": { "id": 123, "label": "my-token", "token": "shh" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/tokens",
+        "body": { "label": "my-token", "scopes": "linodes:read_only" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "my-token", "scopes": "linodes:read_only"},
+      "expect_error": "This creates a personal access token. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -41,9 +41,9 @@ func fixtureCatalog() []profiles.ToolDescriptor {
 }
 
 // callListTools is a thin helper that invokes the list_tools handler
-// with the given argument map and returns the parsed JSON entries.
-// Cuts the boilerplate the parameterized filter tests would otherwise
-// repeat per case.
+// with the given argument map and returns the parsed catalog entries
+// from the {count, tools} envelope. Cuts the boilerplate the
+// parameterized filter tests would otherwise repeat per case.
 func callListTools(t *testing.T, args map[string]any) []map[string]any {
 	t.Helper()
 
@@ -65,13 +65,20 @@ func callListTools(t *testing.T, args map[string]any) []map[string]any {
 		t.Error("ok = false, want true")
 	}
 
-	var out []map[string]any
+	var out struct {
+		Count int              `json:"count"`
+		Tools []map[string]any `json:"tools"`
+	}
 
 	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	return out
+	if out.Count != len(out.Tools) {
+		t.Errorf("out.Count = %d, want %d", out.Count, len(out.Tools))
+	}
+
+	return out.Tools
 }
 
 // TestListToolsRegistration checks the static contract: the tool's
@@ -279,8 +286,9 @@ func TestListToolsCombinedFilters(t *testing.T) {
 }
 
 // TestListToolsEmptyCatalogReturnsEmptyArray locks the JSON shape on
-// the empty path: “[]“ not “null“. The model would handle null as
-// "tool failed"; an empty array is the correct "no tools matched".
+// the empty path: tools is “[]“ not “null“ inside the envelope. The
+// model would handle null as "tool failed"; an empty array is the
+// correct "no tools matched".
 func TestListToolsEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	t.Parallel()
 
@@ -297,8 +305,21 @@ func TestListToolsEmptyCatalogReturnsEmptyArray(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	if textContent.Text != databaseJSONArray {
-		t.Errorf("textContent.Text = %v, want %v", textContent.Text, databaseJSONArray)
+	var out struct {
+		Count int               `json:"count"`
+		Tools *[]map[string]any `json:"tools"`
+	}
+
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if out.Count != 0 {
+		t.Errorf("out.Count = %d, want 0", out.Count)
+	}
+
+	if out.Tools == nil || len(*out.Tools) != 0 {
+		t.Errorf("tools = %v, want present empty array", out.Tools)
 	}
 }
 
@@ -367,10 +388,14 @@ func TestListCategoriesReturnsDeduplicatedCounts(t *testing.T) {
 		t.Error("ok = false, want true")
 	}
 
-	var entries []map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &entries); err != nil {
+	var envelope struct {
+		Categories []map[string]any `json:"categories"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &envelope); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
+
+	entries := envelope.Categories
 
 	// JSON unmarshal yields float64 for numbers; convert to int so
 	// the comparison is exact rather than approximate.
@@ -412,10 +437,14 @@ func TestListCategoriesSortedByName(t *testing.T) {
 
 	textContent, _ := result.Content[0].(mcp.TextContent)
 
-	var entries []map[string]any
-	if err := json.Unmarshal([]byte(textContent.Text), &entries); err != nil {
+	var envelope struct {
+		Categories []map[string]any `json:"categories"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &envelope); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
+
+	entries := envelope.Categories
 
 	names := make([]string, len(entries))
 	for i, entry := range entries {
@@ -448,7 +477,21 @@ func TestListCategoriesEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	}
 
 	textContent, _ := result.Content[0].(mcp.TextContent)
-	if textContent.Text != databaseJSONArray {
-		t.Errorf("textContent.Text = %v, want %v", textContent.Text, databaseJSONArray)
+
+	var out struct {
+		Count      int               `json:"count"`
+		Categories *[]map[string]any `json:"categories"`
+	}
+
+	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if out.Count != 0 {
+		t.Errorf("out.Count = %d, want 0", out.Count)
+	}
+
+	if out.Categories == nil || len(*out.Categories) != 0 {
+		t.Errorf("categories = %v, want present empty array", out.Categories)
 	}
 }

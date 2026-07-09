@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.VolumeWriteResponse",
+  "description": "Volume write envelope: a confirmation message plus the full volume element.",
+  "input": {
+    "message": "Volume 'data-vol' (ID: 67890) created successfully in us-east",
+    "volume": {
+      "id": 67890,
+      "label": "data-vol",
+      "status": "active",
+      "size": 40,
+      "region": "us-east",
+      "linode_id": 54321,
+      "linode_label": "web-1",
+      "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data-vol",
+      "tags": [
+        "prod"
+      ],
+      "created": "2024-01-15T10:00:00",
+      "updated": "2024-01-15T12:00:00",
+      "hardware_type": "nvme"
+    }
+  },
+  "canonical": {
+    "message": "Volume 'data-vol' (ID: 67890) created successfully in us-east",
+    "volume": {
+      "id": 67890,
+      "label": "data-vol",
+      "status": "active",
+      "size": 40,
+      "region": "us-east",
+      "linode_id": 54321,
+      "linode_label": "web-1",
+      "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_data-vol",
+      "tags": [
+        "prod"
+      ],
+      "created": "2024-01-15T10:00:00",
+      "updated": "2024-01-15T12:00:00",
+      "hardware_type": "nvme"
+    }
+  }
+}

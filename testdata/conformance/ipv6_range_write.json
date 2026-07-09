@@ -1,0 +1,23 @@
+{
+  "message": "linode.mcp.v1.IPv6RangeWriteResponse",
+  "description": "linode_ipv6_range_create write envelope: a confirmation message plus the full IPv6Range element the API returned.",
+  "input": {
+    "message": "IPv6 range created",
+    "range": {
+      "range": "2001:db8::",
+      "region": "us-east",
+      "prefix": 64,
+      "route_target": "2600:3c00::f03c:91ff:fe24:3a2f"
+    }
+  },
+  "canonical": {
+    "message": "IPv6 range created",
+    "range": {
+      "range": "2001:db8::",
+      "region": "us-east",
+      "prefix": 64,
+      "route_target": "2600:3c00::f03c:91ff:fe24:3a2f",
+      "linodes": []
+    }
+  }
+}

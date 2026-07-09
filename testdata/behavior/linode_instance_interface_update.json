@@ -1,0 +1,26 @@
+{
+  "tool": "linode_instance_interface_update",
+  "description": "Pins the shared interface_id positive-int rejection and the instance-interface update PUT body. linode_id and no-fields rejection text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive interface_id",
+      "args": { "linode_id": 123, "interface_id": 0 },
+      "expect_error": "interface_id must be a positive integer"
+    },
+    {
+      "name": "updates a public interface",
+      "args": { "linode_id": 123, "interface_id": 9, "confirm": true, "public": {} },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/123/interfaces/9",
+        "body": { "public": {} }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "interface_id": 9, "public": {}},
+      "expect_error": "This updates a network interface on the Linode instance. Set confirm=true to proceed."
+    }
+  ]
+}

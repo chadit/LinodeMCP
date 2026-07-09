@@ -98,7 +98,7 @@ _CASES = [
             "updated": "2026-01-01T00:00:00",
         },
         "delete_image_sharegroup",
-        "deleted",
+        "removed successfully",
         id="image_sharegroup",
     ),
     pytest.param(
@@ -107,7 +107,7 @@ _CASES = [
         "get_image_sharegroup_by_token",
         {"uuid": "sg-uuid", "label": "share", "updated": "2026-01-01T00:00:00"},
         "delete_image_sharegroup_token",
-        "deleted",
+        "removed successfully",
         id="image_sharegroup_token",
     ),
     pytest.param(
@@ -134,7 +134,7 @@ _CASES = [
         "get_instance_ip",
         {"address": "203.0.113.7", "type": "ipv4", "public": True},
         "delete_instance_ip",
-        "deleted",
+        "removed from instance",
         id="instance_ip",
     ),
     pytest.param(
@@ -179,7 +179,7 @@ _CASES = [
         "get_object_storage_bucket",
         {"label": _BUCKET, "region": _REGION, "objects": 0},
         "delete_object_storage_bucket",
-        "deleted",
+        "removed successfully",
         id="object_storage_bucket",
     ),
     pytest.param(
@@ -220,7 +220,7 @@ _TWO_ID_CASES = [
         "get_firewall_device",
         {"id": 20, "status": "ready", "updated": "2026-01-01T00:00:00"},
         "delete_firewall_device",
-        "deleted",
+        "removed",
         id="firewall_device",
     ),
 ]

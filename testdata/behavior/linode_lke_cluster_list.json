@@ -1,0 +1,12 @@
+{
+  "tool": "linode_lke_cluster_list",
+  "description": "No required args. Both languages issue a single unfiltered GET; the label filter is applied client-side, so it never reaches the query string.",
+  "cases": [
+    {
+      "name": "lists clusters",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/lke/clusters" }
+    }
+  ]
+}

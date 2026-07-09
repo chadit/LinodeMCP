@@ -1,0 +1,40 @@
+{
+  "message": "linode.mcp.v1.VolumeGetResponse",
+  "description": "Volume get envelope: the volume wrapper carries a full attached volume, locking the optional linode_id/linode_label present path.",
+  "input": {
+    "volume": {
+      "id": 123,
+      "label": "my-volume",
+      "status": "active",
+      "size": 20,
+      "region": "us-east",
+      "linode_id": 456,
+      "linode_label": "my-linode",
+      "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
+      "tags": [
+        "prod"
+      ],
+      "created": "2024-01-01T00:00:00",
+      "updated": "2024-01-02T00:00:00",
+      "hardware_type": "nvme"
+    }
+  },
+  "canonical": {
+    "volume": {
+      "id": 123,
+      "label": "my-volume",
+      "status": "active",
+      "size": 20,
+      "region": "us-east",
+      "linode_id": 456,
+      "linode_label": "my-linode",
+      "filesystem_path": "/dev/disk/by-id/scsi-0Linode_Volume_my-volume",
+      "tags": [
+        "prod"
+      ],
+      "created": "2024-01-01T00:00:00",
+      "updated": "2024-01-02T00:00:00",
+      "hardware_type": "nvme"
+    }
+  }
+}

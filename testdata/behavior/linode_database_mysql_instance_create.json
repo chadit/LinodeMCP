@@ -1,0 +1,37 @@
+{
+  "tool": "linode_database_mysql_instance_create",
+  "description": "Confirm-gated create POST body and the unsupported-argument rejection now enforced in both languages (Go gained Python's allowlist). The unsupported case sets confirm:true so both reach the check.",
+  "cases": [
+    {
+      "name": "rejects an unsupported argument",
+      "args": { "label": "prod-db", "type": "g6-nanode-1", "engine": "mysql/8", "region": "us-east", "bogus_field": "x", "confirm": true },
+      "expect_error": "unsupported argument: bogus_field"
+    },
+    {
+      "name": "creates a mysql instance",
+      "args": {
+        "label": "prod-db",
+        "type": "g6-nanode-1",
+        "engine": "mysql/8",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": { "id": 123, "label": "prod-db" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/databases/mysql/instances",
+        "body": {
+          "label": "prod-db",
+          "type": "g6-nanode-1",
+          "engine": "mysql/8",
+          "region": "us-east"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": { "label": "prod-db", "type": "g6-nanode-1", "engine": "mysql/8", "region": "us-east" },
+      "expect_error": "This creates a billable Managed Database instance. Set confirm=true to proceed."
+    }
+  ]
+}

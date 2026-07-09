@@ -1,0 +1,37 @@
+{
+  "tool": "linode_image_sharegroup_update",
+  "description": "With confirm set both languages reach the sharegroup_id check. The update PUT sends only the provided fields.",
+  "cases": [
+    {
+      "name": "rejects missing sharegroup_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "sharegroup_id is required"
+    },
+    {
+      "name": "updates the label",
+      "args": {
+        "sharegroup_id": 5,
+        "label": "new-label",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/images/sharegroups/5",
+        "body": {
+          "label": "new-label"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "sharegroup_id": 5,
+        "label": "new-label"
+      },
+      "expect_error": "This updates an image share group. Set confirm=true to proceed."
+    }
+  ]
+}

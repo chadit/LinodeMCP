@@ -1,0 +1,17 @@
+{
+  "tool": "linode_domain_record_list",
+  "description": "Domain record list requires domain_id, then GETs the record collection. Type/name filters are client-side and do not change the path.",
+  "cases": [
+    {
+      "name": "requires domain_id",
+      "args": {},
+      "expect_error": "domain_id is required"
+    },
+    {
+      "name": "lists domain records",
+      "args": { "domain_id": 5 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/domains/5/records" }
+    }
+  ]
+}

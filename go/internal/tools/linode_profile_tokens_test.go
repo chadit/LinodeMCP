@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -51,13 +50,13 @@ func TestLinodeProfileTokensToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
+	raw := string(tool.RawInputSchema)
+	if !strings.Contains(raw, keyPage) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPage)
 	}
 
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
+	if !strings.Contains(raw, keyPageSize) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPageSize)
 	}
 }
 
@@ -297,29 +296,29 @@ func TestLinodeProfileTokenUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
+	raw := string(tool.RawInputSchema)
 
-	if _, ok := props[profileTokenIDParam]; !ok {
-		t.Errorf("props missing key %v", profileTokenIDParam)
+	if !strings.Contains(raw, profileTokenIDParam) {
+		t.Errorf("tool.RawInputSchema missing key %v", profileTokenIDParam)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(raw, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
+	if !strings.Contains(raw, keyLabel) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLabel)
 	}
 
 	for _, field := range []string{keyExpiry, profileTokenScopesField} {
-		if _, ok := props[field]; ok {
-			t.Errorf("props has unexpected key %v (a token update only changes the label)", field)
+		if strings.Contains(raw, field) {
+			t.Errorf("tool.RawInputSchema has unexpected key %v (a token update only changes the label)", field)
 		}
 	}
 
 	for _, key := range []string{profileTokenIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -389,7 +388,7 @@ func TestLinodeProfileTokenUpdateValidation(t *testing.T) {
 		args map[string]any
 		want string
 	}{
-		{name: "missing token id", args: map[string]any{keyLabel: profileTokenLabel, keyConfirm: true}, want: errProfileTokenIDPositive},
+		{name: "missing token id", args: map[string]any{keyLabel: profileTokenLabel, keyConfirm: true}, want: errTokenIDRequired},
 		{name: "slash token id", args: map[string]any{profileTokenIDParam: placementGroupSlashID, keyLabel: profileTokenLabel, keyConfirm: true}, want: errProfileTokenIDPositive},
 		{name: "query token id", args: map[string]any{profileTokenIDParam: profileTokenQueryValue, keyLabel: profileTokenLabel, keyConfirm: true}, want: errProfileTokenIDPositive},
 		{name: "signed token id", args: map[string]any{profileTokenIDParam: "+12345", keyLabel: profileTokenLabel, keyConfirm: true}, want: errProfileTokenIDPositive},

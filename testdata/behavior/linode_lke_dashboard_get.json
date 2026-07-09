@@ -1,0 +1,17 @@
+{
+  "tool": "linode_lke_dashboard_get",
+  "description": "Pins cluster_id-required and the single GET.",
+  "cases": [
+    {
+      "name": "rejects missing cluster_id",
+      "args": {},
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "gets the dashboard url",
+      "args": { "cluster_id": "12345" },
+      "api_response": { "url": "https://dashboard.example" },
+      "expect_request": { "method": "GET", "path": "/lke/clusters/12345/dashboard" }
+    }
+  ]
+}

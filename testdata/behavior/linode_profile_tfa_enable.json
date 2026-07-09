@@ -1,0 +1,17 @@
+{
+  "tool": "linode_profile_tfa_enable",
+  "description": "Generates a TFA secret with a single POST once confirmed. Confirm text diverges (see report).",
+  "cases": [
+    {
+      "name": "generates a two-factor secret",
+      "args": { "confirm": true },
+      "api_response": { "secret": "ABCD", "expiry": "2030-01-01T00:00:00" },
+      "expect_request": { "method": "POST", "path": "/profile/tfa-enable" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {},
+      "expect_error": "This generates a two-factor authentication secret. Set confirm=true to proceed."
+    }
+  ]
+}

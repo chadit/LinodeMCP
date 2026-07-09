@@ -1,0 +1,31 @@
+{
+  "tool": "linode_vpc_subnet_create",
+  "description": "VPC subnet create requires vpc_id (integer), label, and ipv4 (with confirm), then POSTs label/ipv4 to the subnet collection.",
+  "cases": [
+    {
+      "name": "requires vpc_id",
+      "args": { "confirm": true },
+      "expect_error": "vpc_id is required"
+    },
+    {
+      "name": "requires label",
+      "args": { "confirm": true, "vpc_id": 5 },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "creates the subnet",
+      "args": { "confirm": true, "vpc_id": 5, "label": "sub1", "ipv4": "10.0.0.0/24" },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/vpcs/5/subnets",
+        "body": { "label": "sub1", "ipv4": "10.0.0.0/24" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"vpc_id": 5, "label": "sub1", "ipv4": "10.0.0.0/24"},
+      "expect_error": "This creates a new subnet in the VPC. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "tool": "linode_placement_group_create",
+  "description": "Placement group create: the label-pattern, placement_group_type, and placement_group_policy rejections both languages agree on (confirm set so both reach them), plus the POST body once confirmed. Go now mirrors Python's label pattern.",
+  "cases": [
+    {
+      "name": "rejects an invalid label",
+      "args": { "confirm": true, "label": "-bad", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict" },
+      "expect_error": "label must start and end with an alphanumeric character and contain only alphanumeric characters, hyphens, underscores, or periods"
+    },
+    {
+      "name": "rejects invalid placement_group_type",
+      "args": { "confirm": true, "label": "my-group", "region": "us-east", "placement_group_type": "bogus" },
+      "expect_error": "placement_group_type must be anti_affinity:local"
+    },
+    {
+      "name": "rejects invalid placement_group_policy",
+      "args": { "confirm": true, "label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "bogus" },
+      "expect_error": "placement_group_policy must be one of: flexible, strict"
+    },
+    {
+      "name": "creates a placement group",
+      "args": { "confirm": true, "label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict" },
+      "api_response": { "id": 7, "label": "my-group", "region": "us-east" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/placement/groups",
+        "body": { "label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict" }
+      }
+    },
+    {
+      "name": "trims a whitespace-padded label",
+      "args": { "confirm": true, "label": "  my-group  ", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict" },
+      "api_response": { "id": 7, "label": "my-group", "region": "us-east" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/placement/groups",
+        "body": { "label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict"},
+      "expect_error": "This creates a placement group. Set confirm=true to proceed."
+    }
+  ]
+}

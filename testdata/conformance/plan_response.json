@@ -1,0 +1,64 @@
+{
+  "message": "linode.mcp.v1.PlanResponse",
+  "description": "Two-stage mode:\"plan\" envelope: a richer dry-run that adds a plan_id, RFC3339-Z timestamps, and a current_state_hash the later apply re-checks for drift. plan_id and the timestamps are dynamic at runtime, so this fixture pins fixed literal values.",
+  "input": {
+    "plan_id": "plan_01HZY0000000000000000000",
+    "created_at": "2026-07-02T12:00:00Z",
+    "expires_at": "2026-07-02T12:05:00Z",
+    "tool": "linode_instance_delete",
+    "environment": "prod",
+    "would_execute": {
+      "method": "DELETE",
+      "path": "/linode/instances/123"
+    },
+    "current_state": {
+      "id": 123,
+      "label": "web-01",
+      "status": "running"
+    },
+    "current_state_hash": "sha256:deadbeef",
+    "dependencies": [
+      {
+        "kind": "volume",
+        "id": 456,
+        "action": "detached"
+      }
+    ],
+    "side_effects": [
+      "backups will be deleted"
+    ],
+    "warnings": [
+      "this is irreversible"
+    ]
+  },
+  "canonical": {
+    "plan_id": "plan_01HZY0000000000000000000",
+    "created_at": "2026-07-02T12:00:00Z",
+    "expires_at": "2026-07-02T12:05:00Z",
+    "tool": "linode_instance_delete",
+    "environment": "prod",
+    "would_execute": {
+      "method": "DELETE",
+      "path": "/linode/instances/123"
+    },
+    "current_state": {
+      "id": 123,
+      "label": "web-01",
+      "status": "running"
+    },
+    "current_state_hash": "sha256:deadbeef",
+    "dependencies": [
+      {
+        "kind": "volume",
+        "id": 456,
+        "action": "detached"
+      }
+    ],
+    "side_effects": [
+      "backups will be deleted"
+    ],
+    "warnings": [
+      "this is irreversible"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.AuditHealthResponse",
+  "description": "Audit health body with the SQLite sink enabled. 64-bit counters emit as JSON strings per canonical protojson.",
+  "input": {
+    "jsonl_path": "/var/log/linodemcp/audit",
+    "active_log_exists": true,
+    "rotated_file_count": 3,
+    "oldest_rotated_date": "2026-06-01",
+    "disk_bytes": 40960,
+    "dropped_events": 0,
+    "sqlite": {
+      "path": "/var/log/linodemcp/audit.db",
+      "event_count": 1200,
+      "oldest_event_unix_ns": 1782734400000000000,
+      "db_bytes": 262144
+    }
+  },
+  "canonical": {
+    "jsonl_path": "/var/log/linodemcp/audit",
+    "active_log_exists": true,
+    "rotated_file_count": 3,
+    "oldest_rotated_date": "2026-06-01",
+    "disk_bytes": 40960,
+    "dropped_events": 0,
+    "sqlite": {
+      "path": "/var/log/linodemcp/audit.db",
+      "event_count": 1200,
+      "oldest_event_unix_ns": 1782734400000000000,
+      "db_bytes": 262144
+    }
+  }
+}

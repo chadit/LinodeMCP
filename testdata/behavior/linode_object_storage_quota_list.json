@@ -1,0 +1,12 @@
+{
+  "tool": "linode_object_storage_quota_list",
+  "description": "No local validation; pins the plain quotas list GET.",
+  "cases": [
+    {
+      "name": "lists quotas",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/object-storage/quotas" }
+    }
+  ]
+}

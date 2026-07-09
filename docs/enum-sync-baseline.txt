@@ -1,0 +1,1 @@
+# enum-sync drift baseline (reviewed at linode-api-openapi 4.229.1)

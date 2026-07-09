@@ -241,11 +241,6 @@ type UpdateManagedCredentialUsernamePasswordRequest struct {
 	Username *string `json:"username,omitempty"`
 }
 
-// ManagedSSHKey represents the Managed SSH public key assigned to an account.
-type ManagedSSHKey struct {
-	SSHKey string `json:"ssh_key"`
-}
-
 // CreateManagedCredentialRequest contains the fields for POST /managed/credentials.
 type CreateManagedCredentialRequest struct {
 	Label    string  `json:"label"`

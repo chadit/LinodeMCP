@@ -43,9 +43,10 @@ func TestLinodePlacementGroupAssignToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyPlacementGroupID, keyPlacementGroupLinodes, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
 	}
 

@@ -1,0 +1,22 @@
+{
+  "tool": "linode_account_invoice_item_list",
+  "description": "Shared non-positive invoice_id and pagination rejections plus the invoice-items GET path. Missing-invoice_id text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive invoice_id",
+      "args": { "invoice_id": 0 },
+      "expect_error": "invoice_id must be a positive integer"
+    },
+    {
+      "name": "rejects non-integer page",
+      "args": { "invoice_id": 123, "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "lists items on an account invoice",
+      "args": { "invoice_id": 123 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/account/invoices/123/items" }
+    }
+  ]
+}

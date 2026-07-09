@@ -299,6 +299,30 @@ func (c *Client) httpUpdateManagedService(ctx context.Context, serviceID int, re
 	return &service, nil
 }
 
+// httpUpdateManagedServiceProto updates one Managed service monitor and decodes
+// the response into the proto element so the write tool emits the same field set
+// as the service GET/LIST path.
+func (c *Client) httpUpdateManagedServiceProto(ctx context.Context, serviceID int, req *UpdateManagedServiceRequest) (*linodev1.ManagedService, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateManagedService", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	service := &linodev1.ManagedService{}
+	if err := c.handleProtoResponse(resp, service); err != nil {
+		return nil, err
+	}
+
+	return service, nil
+}
+
 // httpDeleteManagedService deletes one Managed service monitor.
 func (c *Client) httpDeleteManagedService(ctx context.Context, serviceID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -490,6 +514,28 @@ func (c *Client) httpCreateManagedService(ctx context.Context, request *CreateMa
 	return &service, nil
 }
 
+// httpCreateManagedServiceProto creates a Managed service monitor and decodes the
+// response into the proto element so the write tool emits the same field set as
+// the service GET/LIST path.
+func (c *Client) httpCreateManagedServiceProto(ctx context.Context, request *CreateManagedServiceRequest) (*linodev1.ManagedService, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedServices, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateManagedService", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	service := &linodev1.ManagedService{}
+	if err := c.handleProtoResponse(resp, service); err != nil {
+		return nil, err
+	}
+
+	return service, nil
+}
+
 // httpCreateManagedContact creates a managed contact.
 func (c *Client) httpCreateManagedContact(ctx context.Context, request *CreateManagedContactRequest) (*ManagedContact, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -544,6 +590,28 @@ func (c *Client) httpUpdateManagedContactProto(ctx context.Context, contactID in
 	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateManagedContact", Err: err}
+	}
+
+	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+
+	contact := &linodev1.ManagedContact{}
+	if err := c.handleProtoResponse(resp, contact); err != nil {
+		return nil, err
+	}
+
+	return contact, nil
+}
+
+// httpCreateManagedContactProto creates a managed contact and decodes the
+// response into the proto element so the write tool emits the same field set as
+// the contact GET/LIST path.
+func (c *Client) httpCreateManagedContactProto(ctx context.Context, request *CreateManagedContactRequest) (*linodev1.ManagedContact, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedContacts, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateManagedContact", Err: err}
 	}
 
 	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern

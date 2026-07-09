@@ -53,16 +53,16 @@ func TestLinodeInstanceFirewallListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
+	if !strings.Contains(string(tool.RawInputSchema), keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := tool.InputSchema.Properties["page"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "page")
+	if !strings.Contains(string(tool.RawInputSchema), "page") {
+		t.Errorf("tool.RawInputSchema missing key %v", "page")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyPageSize]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyPageSize)
+	if !strings.Contains(string(tool.RawInputSchema), keyPageSize) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPageSize)
 	}
 
 	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
@@ -259,9 +259,10 @@ func TestLinodeInstanceInterfaceFirewallsListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyInterfaceID} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -448,25 +449,25 @@ func TestLinodeInstanceFirewallsUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := props[keyFirewallIDs]; !ok {
-		t.Errorf("props missing key %v", keyFirewallIDs)
+	if !strings.Contains(rawSchema, keyFirewallIDs) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyFirewallIDs)
 	}
 
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
+	if !strings.Contains(rawSchema, keyPage) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPage)
 	}
 
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
+	if !strings.Contains(rawSchema, keyPageSize) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPageSize)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 

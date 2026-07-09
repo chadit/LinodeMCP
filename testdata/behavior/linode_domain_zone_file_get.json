@@ -1,0 +1,17 @@
+{
+  "tool": "linode_domain_zone_file_get",
+  "description": "Domain zone-file get requires a positive domain_id, then GETs the rendered zone file.",
+  "cases": [
+    {
+      "name": "requires a positive domain_id",
+      "args": {},
+      "expect_error": "domain_id must be a positive integer"
+    },
+    {
+      "name": "gets the zone file",
+      "args": { "domain_id": 5 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/domains/5/zone-file" }
+    }
+  ]
+}

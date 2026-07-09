@@ -1,0 +1,56 @@
+{
+  "tool": "linode_managed_contact_update",
+  "description": "Contact update: shared id rejection, empty email/name rejections (ported to Go, strictest-wins), confirm gate, and the PUT body once confirmed.",
+  "cases": [
+    {
+      "name": "rejects missing contact_id",
+      "args": {},
+      "expect_error": "contact_id is required"
+    },
+    {
+      "name": "rejects an empty email",
+      "args": { "contact_id": 7, "email": "" },
+      "expect_error": "email must be a non-empty string"
+    },
+    {
+      "name": "rejects an empty name",
+      "args": { "contact_id": 7, "name": "" },
+      "expect_error": "name must be a non-empty string"
+    },
+    {
+      "name": "requires confirm before updating",
+      "args": {
+        "contact_id": 7,
+        "name": "NewName"
+      },
+      "expect_error": "This updates a Managed contact. Set confirm=true to proceed."
+    },
+    {
+      "name": "updates a managed contact",
+      "args": {
+        "contact_id": 7,
+        "name": "NewName",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 7,
+        "name": "NewName"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/contacts/7",
+        "body": {
+          "name": "NewName"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "contact_id": 7,
+        "name": "NewName"
+      },
+      "expect_error": "This updates a Managed contact. Set confirm=true to proceed."
+    }
+  ]
+}

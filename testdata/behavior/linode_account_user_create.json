@@ -1,0 +1,36 @@
+{
+  "tool": "linode_account_user_create",
+  "description": "Account user create: required-field rejections, confirm gate, and the POST body once confirmed.",
+  "cases": [
+    {
+      "name": "requires username",
+      "args": {},
+      "expect_error": "username is required"
+    },
+    {
+      "name": "requires email",
+      "args": { "username": "alice" },
+      "expect_error": "email is required"
+    },
+    {
+      "name": "requires confirm before creating",
+      "args": { "username": "alice", "email": "alice@example.com" },
+      "expect_error": "This creates an account user. Set confirm=true to proceed."
+    },
+    {
+      "name": "creates an account user",
+      "args": { "username": "alice", "email": "alice@example.com", "restricted": false, "confirm": true },
+      "api_response": { "username": "alice", "email": "alice@example.com", "restricted": false },
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/users",
+        "body": { "username": "alice", "email": "alice@example.com", "restricted": false }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"username": "alice", "email": "alice@example.com", "restricted": false},
+      "expect_error": "This creates an account user. Set confirm=true to proceed."
+    }
+  ]
+}

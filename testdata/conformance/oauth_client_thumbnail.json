@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.OAuthClientThumbnail",
+  "description": "linode_account_oauth_client_thumbnail_get: the echoed client_id and the base64-encoded PNG.",
+  "input": {
+    "client_id": "11111",
+    "thumbnail_png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+  },
+  "canonical": {
+    "client_id": "11111",
+    "thumbnail_png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+  }
+}

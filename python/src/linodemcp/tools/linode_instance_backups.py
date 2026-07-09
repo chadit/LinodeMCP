@@ -7,12 +7,6 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import instance_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     execute_dry_run,
@@ -32,29 +26,6 @@ if TYPE_CHECKING:
 def _error_response(message: str) -> list[TextContent]:
     """Return a single-element TextContent error list."""
     return [TextContent(type="text", text=f"Error: {message}")]
-
-
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-
-_LINODE_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the Linode instance (required)",
-}
-
-_BACKUP_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the backup (required)",
-}
-
-_CONFIRM_PROP: dict[str, Any] = {
-    "type": "boolean",
-    "description": "Must be true to confirm this operation.",
-}
 
 
 def _parse_instance_id(
@@ -92,14 +63,7 @@ def create_linode_instance_backup_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backup_list",
         description=("Lists backups for a Linode instance"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceBackupListInput"),
     ), Capability.Read
 
 
@@ -156,20 +120,7 @@ def create_linode_instance_backup_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backup_create",
         description=("Creates a snapshot backup of a Linode instance"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "Label for the snapshot",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceBackupCreateInput"),
     ), Capability.Write
 
 
@@ -196,7 +147,10 @@ async def handle_linode_instance_backup_create(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This creates a manual snapshot and overwrites any existing one. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
@@ -222,30 +176,7 @@ def create_linode_instance_backup_restore_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backup_restore",
         description="Restores a backup to a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "backup_id": _BACKUP_ID_PROP,
-                "target_linode_id": {
-                    "type": "integer",
-                    "description": ("Target instance ID for restore"),
-                },
-                "overwrite": {
-                    "type": "boolean",
-                    "description": ("Overwrite existing data on target"),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "backup_id",
-                "target_linode_id",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceBackupRestoreInput"),
     ), Capability.Write
 
 
@@ -307,10 +238,19 @@ async def handle_linode_instance_backup_restore(
             _walk,
         )
 
-    if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
-
     overwrite = bool(arguments.get("overwrite", False))
+
+    if not arguments.get("confirm"):
+        confirm_message = (
+            "This restores a backup to the target instance. "
+            "Set confirm=true to proceed."
+        )
+        if overwrite:
+            confirm_message = (
+                "This restores a backup and DESTROYS all existing disks and "
+                "configs on the target instance. Set confirm=true to proceed."
+            )
+        return _error_response(confirm_message)
 
     async def _call(
         client: RetryableClient,
@@ -344,16 +284,7 @@ def create_linode_instance_backups_enable_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backups_enable",
         description=("Enables backups for a Linode instance (billing charges apply)"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceBackupsEnableInput"),
     ), Capability.Write
 
 
@@ -380,16 +311,22 @@ async def handle_linode_instance_backups_enable(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "Enabling backups adds a recurring charge to your account. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.enable_instance_backups(iid)
-        return {
-            "message": (f"Backup service enabled for instance {iid}"),
-            "linode_id": iid,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Backup service enabled for instance {iid}",
+                "linode_id": iid,
+            },
+            instance_pb2.InstanceActionWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "enable instance backups", _call)
 
@@ -404,24 +341,7 @@ def create_linode_instance_backups_cancel_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without canceling."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm. Existing backups will be deleted."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceBackupsCancelInput"),
     ), Capability.Destroy
 
 
@@ -437,13 +357,16 @@ async def _instance_backups_cancel_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.cancel_instance_backups(iid)
-        return {
-            "message": (
-                f"Backup service canceled for instance {iid}."
-                " All backups have been deleted."
-            ),
-            "linode_id": iid,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Backup service canceled for instance {iid}."
+                    " All backups have been deleted."
+                ),
+                "linode_id": iid,
+            },
+            instance_pb2.InstanceActionWriteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -485,18 +408,24 @@ async def handle_linode_instance_backups_cancel(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
+        return _error_response(
+            "This permanently deletes all backups for the instance. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.cancel_instance_backups(iid)
-        return {
-            "message": (
-                f"Backup service canceled for instance {iid}."
-                " All backups have been deleted."
-            ),
-            "linode_id": iid,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Backup service canceled for instance {iid}."
+                    " All backups have been deleted."
+                ),
+                "linode_id": iid,
+            },
+            instance_pb2.InstanceActionWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "cancel instance backups", _call)

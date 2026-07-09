@@ -63,8 +63,10 @@ func (c *Client) httpListInstanceBackupsProto(ctx context.Context, linodeID int)
 	return backups, nil
 }
 
-// GetInstanceStats retrieves daily statistics for a Linode instance.
-func (c *Client) httpGetInstanceStats(ctx context.Context, linodeID int) (*InstanceStats, error) {
+// httpGetInstanceStatsProto retrieves daily statistics for a Linode instance as
+// a proto message. The API nests the graphs under a top-level "data" object, so
+// InstanceStats models that wrapper (see instance_stats.proto).
+func (c *Client) httpGetInstanceStatsProto(ctx context.Context, linodeID int) (*linodev1.InstanceStats, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -77,16 +79,19 @@ func (c *Client) httpGetInstanceStats(ctx context.Context, linodeID int) (*Insta
 
 	defer drainClose(resp)
 
-	var stats InstanceStats
-	if err := c.handleResponse(resp, &stats); err != nil {
+	stats := &linodev1.InstanceStats{}
+	if err := c.handleProtoResponse(resp, stats); err != nil {
 		return nil, err
 	}
 
-	return &stats, nil
+	return stats, nil
 }
 
-// GetInstanceTransferByYearMonth retrieves monthly network transfer statistics for a Linode instance.
-func (c *Client) httpGetInstanceTransferByYearMonth(ctx context.Context, linodeID, year, month int) (*Transfer, error) {
+// httpGetInstanceTransferByYearMonthProto retrieves a specific month's network
+// transfer totals for a Linode instance as a proto message. This endpoint
+// returns bytes_in/bytes_out/bytes_total, a distinct shape from the current
+// month's billable/quota/used, so it decodes into InstanceTransferMonth.
+func (c *Client) httpGetInstanceTransferByYearMonthProto(ctx context.Context, linodeID, year, month int) (*linodev1.InstanceTransferMonth, error) {
 	if linodeID <= 0 {
 		return nil, ErrLinodeIDPositive
 	}
@@ -114,12 +119,12 @@ func (c *Client) httpGetInstanceTransferByYearMonth(ctx context.Context, linodeI
 
 	defer drainClose(resp)
 
-	var transfer Transfer
-	if err := c.handleResponse(resp, &transfer); err != nil {
+	transfer := &linodev1.InstanceTransferMonth{}
+	if err := c.handleProtoResponse(resp, transfer); err != nil {
 		return nil, err
 	}
 
-	return &transfer, nil
+	return transfer, nil
 }
 
 // GetInstanceBackup retrieves a specific backup for a Linode instance.
@@ -353,6 +358,38 @@ func (c *Client) httpAddInstanceInterface(ctx context.Context, linodeID int, req
 	return &instanceInterface, nil
 }
 
+// httpAddInstanceInterfaceProto appends an interface to a Linode instance and
+// decodes the response into the proto element.
+func (c *Client) httpAddInstanceInterfaceProto(ctx context.Context, linodeID int, req *AddInstanceInterfaceRequest) (*linodev1.InstanceInterface, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrAddInstanceInterfaceRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "AddInstanceInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instanceInterface := &linodev1.InstanceInterface{}
+	if err := c.handleProtoResponse(resp, instanceInterface); err != nil {
+		return nil, err
+	}
+
+	return instanceInterface, nil
+}
+
 // UpdateInstanceInterface updates an interface on an existing Linode instance.
 func (c *Client) httpUpdateInstanceInterface(ctx context.Context, linodeID, interfaceID int, req *UpdateInstanceInterfaceRequest) (*InstanceInterface, error) {
 	if linodeID <= 0 {
@@ -387,6 +424,43 @@ func (c *Client) httpUpdateInstanceInterface(ctx context.Context, linodeID, inte
 	}
 
 	return &instanceInterface, nil
+}
+
+// httpUpdateInstanceInterfaceProto updates an interface on a Linode instance and
+// decodes the response into the proto element.
+func (c *Client) httpUpdateInstanceInterfaceProto(ctx context.Context, linodeID, interfaceID int, req *UpdateInstanceInterfaceRequest) (*linodev1.InstanceInterface, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if interfaceID <= 0 {
+		return nil, ErrInterfaceIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateInstanceInterfaceRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedInterfaceID := url.PathEscape(strconv.Itoa(interfaceID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/%s", encodedLinodeID, encodedInterfaceID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceInterface", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instanceInterface := &linodev1.InstanceInterface{}
+	if err := c.handleProtoResponse(resp, instanceInterface); err != nil {
+		return nil, err
+	}
+
+	return instanceInterface, nil
 }
 
 // DeleteInstanceInterface deletes an interface from a Linode instance.
@@ -608,6 +682,38 @@ func (c *Client) httpUpdateInstanceInterfaceSettings(ctx context.Context, linode
 	}
 
 	return &settings, nil
+}
+
+// httpUpdateInstanceInterfaceSettingsProto updates a Linode's interface settings
+// and decodes the response into the proto element.
+func (c *Client) httpUpdateInstanceInterfaceSettingsProto(ctx context.Context, linodeID int, req *UpdateInstanceInterfaceSettingsRequest) (*linodev1.InstanceInterfaceSettings, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateInterfaceSettingsRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces/settings", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceInterfaceSettings", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	settings := &linodev1.InstanceInterfaceSettings{}
+	if err := c.handleProtoResponse(resp, settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
 }
 
 func validateInstanceConfigInterfaceIDs(linodeID, configID, interfaceID int) error {
@@ -855,6 +961,35 @@ func (c *Client) httpUpdateInstanceFirewalls(ctx context.Context, linodeID, page
 	return response.Data, nil
 }
 
+// httpUpdateInstanceFirewallsProto replaces firewall assignments for a Linode
+// instance and decodes the returned page into Firewall proto elements so the
+// write tool emits the same shape as the instance firewall list path.
+func (c *Client) httpUpdateInstanceFirewallsProto(ctx context.Context, linodeID, page, pageSize int, req *UpdateInstanceFirewallsRequest) ([]*linodev1.Firewall, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateInstanceFirewallsRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := withPaginationQuery(fmt.Sprintf(endpointInstanceDeep+"/%s/firewalls", encodedLinodeID), page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateInstanceFirewalls", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return decodeProtoElementsBareOrData(resp, c, "UpdateInstanceFirewalls",
+		func() *linodev1.Firewall { return &linodev1.Firewall{} })
+}
+
 // ListInstanceInterfaces retrieves all interfaces for a Linode instance.
 func (c *Client) httpListInstanceInterfaces(ctx context.Context, linodeID int) ([]InstanceInterface, error) {
 	if linodeID <= 0 {
@@ -925,6 +1060,35 @@ func (c *Client) httpUpgradeLinodeInterfaces(ctx context.Context, linodeID int, 
 	}
 
 	return &result, nil
+}
+
+// httpUpgradeLinodeInterfacesProto upgrades a Linode's legacy config interfaces
+// and decodes the upgrade body (config_id, dry_run, interfaces) into the proto
+// envelope. The message field is not in the API body; the handler fills it.
+func (c *Client) httpUpgradeLinodeInterfacesProto(ctx context.Context, linodeID int, req *UpgradeLinodeInterfacesRequest) (*linodev1.InstanceInterfaceUpgradeWriteResponse, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/upgrade-interfaces", encodedLinodeID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpgradeLinodeInterfaces", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	result := &linodev1.InstanceInterfaceUpgradeWriteResponse{}
+	if err := c.handleProtoResponse(resp, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // GetInstanceInterface retrieves a specific interface for a Linode instance.
@@ -1198,6 +1362,41 @@ func (c *Client) httpGetInstanceConfig(ctx context.Context, linodeID, configID i
 	}
 
 	return &config, nil
+}
+
+// httpGetInstanceConfigProto retrieves a specific configuration profile for a
+// Linode instance and decodes it into the InstanceConfig proto element for the
+// proto-backed read path. The GET returns the bare config object, so the body
+// decodes straight into the element with DiscardUnknown, matching the list decode.
+func (c *Client) httpGetInstanceConfigProto(ctx context.Context, linodeID, configID int) (*linodev1.InstanceConfig, error) {
+	if linodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if configID <= 0 {
+		return nil, ErrConfigIDPositive
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
+	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
+	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s", encodedLinodeID, encodedConfigID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetInstanceConfig", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	config := &linodev1.InstanceConfig{}
+	if err := c.handleProtoResponse(resp, config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 // DeleteInstanceConfig deletes a configuration profile from a Linode instance.

@@ -33,8 +33,10 @@ func TestLinodeAccountPromoCreditToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountPromoCreditTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -86,8 +88,10 @@ func TestLinodeAccountAgreementsAcknowledgeToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountAgreementsAcknowledgeTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -144,8 +148,10 @@ func TestLinodeAccountBetaEnrollToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountBetaEnrollTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -206,8 +212,10 @@ func TestLinodeAccountCancelToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountCancelTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -272,8 +280,10 @@ func TestLinodeAccountEventSeenToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountEventSeenTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -335,8 +345,10 @@ func TestLinodeAccountChildAccountTokenToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountChildAccountTokenTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

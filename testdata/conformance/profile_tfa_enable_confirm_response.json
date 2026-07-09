@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.ProfileTfaEnableConfirmResponse",
+  "description": "Profile TFA enable-confirm envelope: a confirmation message plus the one-time scratch backup code the API returns on confirmation, and its expiry when present. The scratch code is returned to the user by design (account recovery); it is not output-redacted.",
+  "input": {
+    "message": "Profile two-factor authentication enabled successfully",
+    "scratch": "abcd-efgh-ijkl-mnop",
+    "expiry": "2026-06-30T12:15:00"
+  },
+  "canonical": {
+    "message": "Profile two-factor authentication enabled successfully",
+    "scratch": "abcd-efgh-ijkl-mnop",
+    "expiry": "2026-06-30T12:15:00"
+  }
+}

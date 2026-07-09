@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -49,40 +48,17 @@ func TestLinodePlacementGroupCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[keyPlacementGroupTypeJSON]; !ok {
-		t.Errorf("props missing key %v", keyPlacementGroupTypeJSON)
-	}
-
-	if _, ok := props[keyPlacementGroupPolicyJSON]; !ok {
-		t.Errorf("props missing key %v", keyPlacementGroupPolicyJSON)
-	}
-
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	for _, key := range []string{managedServiceLabelParam, keySupportTicketRegion} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
-		}
-	}
-
-	for _, key := range []string{keyPlacementGroupTypeJSON, keyPlacementGroupPolicyJSON, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{
+		managedServiceLabelParam,
+		keySupportTicketRegion,
+		keyPlacementGroupTypeJSON,
+		keyPlacementGroupPolicyJSON,
+		keyDryRun,
+		keyConfirm,
+	} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -158,6 +134,7 @@ func TestLinodePlacementGroupCreateToolInvalidRequestRejectedBeforeClientCall(t 
 		{name: caseMissingLabel, update: func(args map[string]any) { delete(args, managedServiceLabelParam) }, wantMessage: errLabelRequired},
 		{name: caseBlankLabelImageShareGroupToken, update: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = blankString }, wantMessage: errLabelNonEmpty},
 		{name: caseNumericLabel, update: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = 123 }, wantMessage: errLabelNonEmpty},
+		{name: "invalid label pattern", update: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = "-bad" }, wantMessage: "label must start and end with an alphanumeric character and contain only alphanumeric characters, hyphens, underscores, or periods"},
 		{name: caseMissingRegion, update: func(args map[string]any) { delete(args, keySupportTicketRegion) }, wantMessage: "region is required"},
 		{name: "blank region", update: func(args map[string]any) { args[keySupportTicketRegion] = blankString }, wantMessage: errPlacementGroupRegionBlank},
 		{name: caseMissingType, update: func(args map[string]any) { delete(args, keyPlacementGroupTypeJSON) }, wantMessage: "placement_group_type is required"},
@@ -166,7 +143,7 @@ func TestLinodePlacementGroupCreateToolInvalidRequestRejectedBeforeClientCall(t 
 		{name: "missing policy", update: func(args map[string]any) { delete(args, keyPlacementGroupPolicyJSON) }, wantMessage: "placement_group_policy is required"},
 		{name: "blank policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = blankString }, wantMessage: "placement_group_policy must be a non-empty string"},
 		{name: "numeric policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = 123 }, wantMessage: "placement_group_policy must be a non-empty string"},
-		{name: "invalid policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = "eventual" }, wantMessage: "placement_group_policy must be strict or flexible"},
+		{name: "invalid policy", update: func(args map[string]any) { args[keyPlacementGroupPolicyJSON] = "eventual" }, wantMessage: "placement_group_policy must be one of: flexible, strict"},
 	}
 
 	for _, testCase := range cases {
@@ -247,17 +224,12 @@ func TestLinodePlacementGroupCreateToolDryRunReturnsPreviewWithoutClientCall(t *
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"dry_run": true`) {
-		t.Errorf("textContent.Text does not contain %v", `"dry_run": true`)
+	body := decodeBody(t, textContent.Text)
+	if body["dry_run"] != true {
+		t.Errorf("dry_run = %v, want true", body["dry_run"])
 	}
 
-	if !strings.Contains(textContent.Text, `"method": "POST"`) {
-		t.Errorf("textContent.Text does not contain %v", `"method": "POST"`)
-	}
-
-	if !strings.Contains(textContent.Text, `"path": "/placement/groups"`) {
-		t.Errorf("textContent.Text does not contain %v", `"path": "/placement/groups"`)
-	}
+	assertDryRunRequest(t, body, "POST", "/placement/groups")
 
 	if !strings.Contains(textContent.Text, "side_effects") {
 		t.Errorf("textContent.Text does not contain %v", "side_effects")

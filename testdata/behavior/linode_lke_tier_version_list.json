@@ -1,0 +1,17 @@
+{
+  "tool": "linode_lke_tier_version_list",
+  "description": "Pins the single GET for a valid tier. Tier validation text/behavior diverges (Go accepts only standard|enterprise with 'tier is required'/'tier must be ...'; Python uses a regex path-segment check with 'tier must be a non-empty path segment'), so rejection cases are reported, not pinned.",
+  "cases": [
+    {
+      "name": "lists tier versions",
+      "args": { "tier": "standard" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/lke/tiers/standard/versions" }
+    },
+    {
+      "name": "rejects an invalid tier (proto LKETier enum)",
+      "args": { "tier": "premium" },
+      "expect_error": "tier must be one of: standard, enterprise"
+    }
+  ]
+}

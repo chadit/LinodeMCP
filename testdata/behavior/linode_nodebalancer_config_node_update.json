@@ -1,0 +1,51 @@
+{
+  "tool": "linode_nodebalancer_config_node_update",
+  "description": "Pins the node-update PUT body and the shared at-least-one-field, label-length, and weight-max rejections (with confirm set).",
+  "cases": [
+    {
+      "name": "rejects empty update",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "confirm": true },
+      "expect_error": "at least one update field is required"
+    },
+    {
+      "name": "rejects a too-short label",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "label": "ab", "confirm": true },
+      "expect_error": "label must be 3 to 32 characters"
+    },
+    {
+      "name": "rejects a weight above 255",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "weight": 256, "confirm": true },
+      "expect_error": "weight must be at most 255"
+    },
+    {
+      "name": "puts the node update body",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "weight": 100, "confirm": true },
+      "api_response": { "id": 9, "config_id": 7, "nodebalancer_id": 5, "label": "web-1", "address": "192.168.1.5:80", "weight": 100 },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/nodebalancers/5/configs/7/nodes/9",
+        "body": { "weight": 100 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"nodebalancer_id": 5, "config_id": 7, "node_id": 9, "weight": 100},
+      "expect_error": "This updates a NodeBalancer node. Set confirm=true to proceed."
+    },
+    {
+      "name": "accepts mode none (was wrongly rejected before the proto-enum migration)",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "mode": "none", "confirm": true },
+      "api_response": { "id": 9, "config_id": 7, "nodebalancer_id": 5, "label": "web-1", "address": "192.168.1.5:80", "mode": "none" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/nodebalancers/5/configs/7/nodes/9",
+        "body": { "mode": "none" }
+      }
+    },
+    {
+      "name": "rejects an invalid mode",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "mode": "bogus", "confirm": true },
+      "expect_error": "mode must be one of: accept, backup, drain, none, reject"
+    }
+  ]
+}

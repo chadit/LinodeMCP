@@ -40,21 +40,11 @@ func TestLinodeVolumeCloneToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyVolumeID]; !ok {
-		t.Errorf("props missing key %v", keyVolumeID)
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyVolumeID, keyLabel, keyConfirm, keyDryRun} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 

@@ -1,0 +1,31 @@
+{
+  "tool": "linode_instance_update",
+  "description": "Pins instance_id-required, the no-fields rejection, and the PUT body. Confirm passed so Go clears its confirm gate; the confirm-message text itself diverges (see report).",
+  "cases": [
+    {
+      "name": "requires instance_id",
+      "args": { "confirm": true },
+      "expect_error": "instance_id is required"
+    },
+    {
+      "name": "requires at least one update field",
+      "args": { "instance_id": 5, "confirm": true },
+      "expect_error": "at least one update field is required: label, group, tags, alerts, maintenance_policy, or watchdog_enabled"
+    },
+    {
+      "name": "updates the label",
+      "args": { "instance_id": 5, "confirm": true, "label": "updated-label" },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/5",
+        "body": { "label": "updated-label" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"instance_id": 5, "label": "updated-label"},
+      "expect_error": "This updates a Linode instance. Set confirm=true to proceed."
+    }
+  ]
+}

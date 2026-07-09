@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
@@ -26,7 +28,7 @@ const (
 
 // NewLinodeTagsTool creates a tool for listing account tags.
 func NewLinodeTagsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_tag_list",
 		"Lists tags visible to the authenticated account.",
@@ -40,6 +42,12 @@ func NewLinodeTagsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(
 		tagListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_tag_list",
+		"Lists tags visible to the authenticated account.",
+		toolschemas.Schema("linode.mcp.v1.TagListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -49,19 +57,15 @@ func tagListResponse(items []*linodev1.Tag, count int32, filter *string) *linode
 
 // NewLinodeTagDeleteTool creates a tool for deleting an account tag.
 func NewLinodeTagDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_tag_delete",
 		"Deletes a tag from all objects on the account."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithString(tagLabelParam, mcp.Required(), mcp.Description("Tag label to delete.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm tag deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleLinodeTagDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.TagDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeTagDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -84,7 +88,7 @@ func handleLinodeTagDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 		Execute: func(ctx context.Context, c *linode.Client) error {
 			return c.DeleteTag(ctx, tagLabel)
 		},
-		Success: func() any {
+		Success: func() proto.Message {
 			return &linodev1.MessageResponse{
 				Message: fmt.Sprintf("Tag '%s' deleted successfully", tagLabel),
 			}
@@ -136,23 +140,15 @@ func tagsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
 
 // NewLinodeTagCreateTool creates a tool for creating a Linode tag.
 func NewLinodeTagCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_tag_create",
 		"Creates a Linode tag and optionally applies it to existing resources. Pass dry_run=true to preview without creating the tag.",
-		[]mcp.ToolOption{
-			mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-			mcp.WithString("label", mcp.Required(), mcp.Description("The tag label.")),
-			mcp.WithArray(tagDomainsParam, mcp.Description("Optional domain IDs to tag.")),
-			mcp.WithArray(tagLinodesParam, mcp.Description("Optional Linode IDs to tag.")),
-			mcp.WithArray(tagNodeBalancersParam, mcp.Description("Optional NodeBalancer IDs to tag.")),
-			mcp.WithArray(tagVolumesParam, mcp.Description("Optional volume IDs to tag.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm tag creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeTagCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.TagCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeTagCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }

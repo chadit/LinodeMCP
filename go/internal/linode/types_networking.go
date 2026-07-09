@@ -294,25 +294,55 @@ type Transfer struct {
 	Total float64 `json:"total"`
 }
 
-// NodeBalancerStats represents traffic and connection statistics for a NodeBalancer.
-type NodeBalancerStats struct {
-	Title       string                   `json:"title"`
-	Connections [][]float64              `json:"connections"`
-	Traffic     NodeBalancerTrafficStats `json:"traffic"`
-}
-
-// NodeBalancerTrafficStats contains inbound and outbound traffic graphs for a NodeBalancer.
-type NodeBalancerTrafficStats struct {
-	In  [][]float64 `json:"in"`
-	Out [][]float64 `json:"out"`
-}
-
 // CreateFirewallRequest represents the request body for creating a firewall.
 type CreateFirewallRequest struct {
 	Label   string         `json:"label"`
 	Rules   *FirewallRules `json:"rules,omitempty"`
 	Tags    []string       `json:"tags,omitempty"`
 	Devices []Device       `json:"devices,omitempty"`
+}
+
+// firewallCreateBody is the wire form of a firewall-create request. Unlike the
+// shared FirewallRules struct (which doubles as a response type and so tags every
+// field), its rules sub-object omits the inbound/outbound rule lists when they are
+// empty, so a create with only default policies sends no null rule arrays. This
+// matches the Python client, which sends only inbound_policy/outbound_policy.
+type firewallCreateBody struct {
+	Label   string               `json:"label"`
+	Rules   *firewallCreateRules `json:"rules,omitempty"`
+	Tags    []string             `json:"tags,omitempty"`
+	Devices []Device             `json:"devices,omitempty"`
+}
+
+type firewallCreateRules struct {
+	Inbound        []FirewallRule `json:"inbound,omitempty"`
+	InboundPolicy  string         `json:"inbound_policy,omitempty"`
+	Outbound       []FirewallRule `json:"outbound,omitempty"`
+	OutboundPolicy string         `json:"outbound_policy,omitempty"`
+}
+
+func firewallCreateBodyFromRequest(req CreateFirewallRequest) firewallCreateBody {
+	body := firewallCreateBody{Label: req.Label, Tags: req.Tags, Devices: req.Devices}
+	if req.Rules != nil {
+		body.Rules = &firewallCreateRules{
+			Inbound:        req.Rules.Inbound,
+			InboundPolicy:  req.Rules.InboundPolicy,
+			Outbound:       req.Rules.Outbound,
+			OutboundPolicy: req.Rules.OutboundPolicy,
+		}
+	}
+
+	return body
+}
+
+// firewallRulesReplaceBody is the wire form of a PUT /networking/firewalls/{id}/
+// rules request: the inbound and outbound rule lists only. inbound_policy and
+// outbound_policy are optional with no documented default, so they are omitted
+// rather than sent as empty enum strings (the shared FirewallRules struct would
+// emit them). This matches the Python client, which sends only inbound/outbound.
+type firewallRulesReplaceBody struct {
+	Inbound  []FirewallRule `json:"inbound"`
+	Outbound []FirewallRule `json:"outbound"`
 }
 
 // Device represents a device attached to a firewall.

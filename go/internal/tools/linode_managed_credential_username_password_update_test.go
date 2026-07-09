@@ -48,9 +48,10 @@ func TestLinodeManagedCredentialUsernamePasswordUpdateToolDefinition(t *testing.
 		t.Fatal("handler is nil")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyConfirm, managedCredentialIDParam, keyDiskPassword} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -121,7 +122,7 @@ func TestLinodeManagedCredentialUsernamePasswordUpdateToolRequiredArgumentsRejec
 		args        map[string]any
 		wantMessage string
 	}{
-		{name: caseMissingCredentialID, args: map[string]any{keyConfirm: true, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
+		{name: caseMissingCredentialID, args: map[string]any{keyConfirm: true, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errCredentialIDRequired},
 		{name: caseZeroCredentialID, args: map[string]any{keyConfirm: true, managedCredentialIDParam: 0, keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
 		{name: "slash credential id", args: map[string]any{keyConfirm: true, managedCredentialIDParam: "9991/2", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},
 		{name: "query credential id", args: map[string]any{keyConfirm: true, managedCredentialIDParam: "9991?x=1", keyDiskPassword: managedCredentialUsernamePasswordToolPassword}, wantMessage: errManagedCredentialIDPositive},

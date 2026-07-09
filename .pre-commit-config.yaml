@@ -91,6 +91,75 @@ repos:
         language: system
         pass_filenames: false
 
+      # Handler-level write-proto completeness. Statically classifies every
+      # mutating tool's success path (Go: go run ./cmd/write-proto-dump; Python:
+      # the _write_proto_classifier module) and ratchets the straggler + missing
+      # fixture sets down against docs/write-proto-baseline.txt and
+      # docs/write-proto-fixture-baseline.txt. language: system because it needs
+      # both the Go toolchain and the Python venv. Fires when either
+      # implementation's source or the protos change so a handler cannot stay or
+      # go legacy without the baseline moving.
+      - id: write-proto
+        name: write-proto (handler proto-routing completeness)
+        entry: bash -c 'python/.venv/bin/python scripts/verify_write_proto.py'
+        files: ^(go|python|proto)/
+        language: system
+        pass_filenames: false
+
+      # Read-surface sibling of write-proto: classifies every Read tool's
+      # handler on both sides and ratchets the straggler set against
+      # docs/read-proto-baseline.txt (that baseline is the authoritative
+      # remaining-work list for the read-surface proto conversion).
+      - id: read-proto
+        name: read-proto (read handler proto-routing completeness)
+        entry: bash -c 'python/.venv/bin/python scripts/verify_read_proto.py'
+        files: ^(go|python|proto)/
+        language: system
+        pass_filenames: false
+
+      # Input-schema sibling of write-proto/read-proto: classifies every tool's
+      # factory on both sides (Go: go run ./cmd/write-proto-dump -surface input;
+      # Python: the _write_proto_classifier module in input mode) as
+      # proto-generated or hand-built and ratchets the straggler set against
+      # docs/input-proto-baseline.txt (the authoritative remaining-work list for
+      # the input-surface proto conversion).
+      - id: input-proto
+        name: input-proto (tool input-schema proto completeness)
+        entry: bash -c 'python/.venv/bin/python scripts/verify_input_proto.py'
+        files: ^(go|python|proto)/
+        language: system
+        pass_filenames: false
+
+      # Meta-capability sibling of write-proto/read-proto: classifies every
+      # Meta tool's handler on both sides and ratchets the straggler set
+      # against docs/meta-proto-baseline.txt.
+      - id: meta-proto
+        name: meta-proto (meta handler proto-routing completeness)
+        entry: bash -c 'python/.venv/bin/python scripts/verify_meta_proto.py'
+        files: ^(go|python|proto)/
+        language: system
+        pass_filenames: false
+
+      # Handler-semantics gate: ratchets behavior-fixture coverage against
+      # docs/behavior-baseline.txt (the Go/Python test runners enforce the
+      # fixtures themselves; this keeps coverage from regressing).
+      - id: behavior
+        name: behavior (cross-language handler fixture coverage)
+        entry: bash -c 'python/.venv/bin/python scripts/verify_behavior.py'
+        files: ^(go|python|proto|testdata/behavior)/
+        language: system
+        pass_filenames: false
+
+      # Confirm-message text parity: diffs every extractable confirm-gate
+      # message across both languages so text drift on branches no fixture
+      # exercises still fails (ratchets docs/message-parity-baseline.txt).
+      - id: messages
+        name: messages (cross-language confirm-text parity)
+        entry: bash -c 'python/.venv/bin/python scripts/verify_messages.py'
+        files: ^(go|python)/
+        language: system
+        pass_filenames: false
+
       # mypy - language: system because it needs project venv dependencies
       - id: mypy
         name: mypy
@@ -100,14 +169,18 @@ repos:
         language: system
         pass_filenames: false
 
-      # pytest - language: system because it needs project venv dependencies
-      - id: pytest
-        name: pytest
-        entry: bash -c 'cd python && .venv/bin/pytest -q'
-        files: ^python/
-        types: [python]
+      # Full gate battery before push: proto regen, both languages' lint +
+      # full test suites, and all six cross-language gates (tool-parity,
+      # write/read/input/meta-proto, behavior). Subsumes the old pytest-only
+      # pre-push hook; the commit stage already runs each gate script
+      # individually for fast per-commit feedback. Requires:
+      #   pre-commit install --hook-type pre-push
+      - id: make-check
+        name: make check (both languages + all gates)
+        entry: make check
         language: system
         pass_filenames: false
+        always_run: true
         stages: [pre-push]
 
       # Final lint gate before push. Runs the root `make lint`, which is

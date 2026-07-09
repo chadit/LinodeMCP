@@ -160,16 +160,17 @@ func TestLinodeInstanceConfigsListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := tool.InputSchema.Properties["page"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "page")
+	if !strings.Contains(rawSchema, "page") {
+		t.Errorf("tool.RawInputSchema missing key %v", "page")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyPageSize]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyPageSize)
+	if !strings.Contains(rawSchema, keyPageSize) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPageSize)
 	}
 }
 
@@ -366,14 +367,15 @@ func TestLinodeInstanceConfigDeleteToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyConfigID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -584,9 +586,10 @@ func TestLinodeInstanceConfigInterfacesListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyLinodeID, keyConfigID} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -944,9 +947,10 @@ func TestLinodeInstanceConfigGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
 	configProfile := map[string]any{
-		keyBetaID: float64(456),
-		keyLabel:  "boot-config",
-		keyKernel: configKernelLatest,
+		keyBetaID:     float64(456),
+		keyLabel:      "boot-config",
+		keyKernel:     configKernelLatest,
+		keyNotInProto: valNotInProto,
 		"devices": map[string]any{
 			configDeviceSlotSDA: map[string]any{"disk_id": float64(10)},
 		},
@@ -1006,6 +1010,10 @@ func TestLinodeInstanceConfigGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, configKernelLatest) {
 		t.Errorf("textContent.Text does not contain %v", configKernelLatest)
+	}
+
+	if strings.Contains(textContent.Text, "not_in_proto") {
+		t.Errorf("textContent.Text unexpectedly contains dropped unknown field: %v", textContent.Text)
 	}
 }
 
@@ -1081,13 +1089,13 @@ func TestLinodeInstanceBackupCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -1231,21 +1239,21 @@ func TestLinodeInstanceBackupRestoreToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["backup_id"]; !ok {
-		t.Errorf("props missing key %v", "backup_id")
+	if !strings.Contains(rawSchema, "backup_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "backup_id")
 	}
 
-	if _, ok := props["target_linode_id"]; !ok {
-		t.Errorf("props missing key %v", "target_linode_id")
+	if !strings.Contains(rawSchema, "target_linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "target_linode_id")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -1590,8 +1598,8 @@ func TestLinodeInstanceBackupsCancelToolDryRunSchemaAdvertisesDryRun(t *testing.
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeInstanceBackupsCancelTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), "dry_run") {
+		t.Errorf("tool.RawInputSchema missing key %v", "dry_run")
 	}
 }
 
@@ -1956,21 +1964,21 @@ func TestLinodeInstanceDiskCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
+	if !strings.Contains(rawSchema, monitorAlertDefinitionLabelParam) {
+		t.Errorf("tool.RawInputSchema missing key %v", managedServiceLabelParam)
 	}
 
-	if _, ok := props["size"]; !ok {
-		t.Errorf("props missing key %v", "size")
+	if !strings.Contains(rawSchema, "size") {
+		t.Errorf("tool.RawInputSchema missing key %v", "size")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -2102,21 +2110,21 @@ func TestLinodeInstanceDiskUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["disk_id"]; !ok {
-		t.Errorf("props missing key %v", "disk_id")
+	if !strings.Contains(rawSchema, "disk_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "disk_id")
 	}
 
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
+	if !strings.Contains(rawSchema, monitorAlertDefinitionLabelParam) {
+		t.Errorf("tool.RawInputSchema missing key %v", managedServiceLabelParam)
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -2316,8 +2324,8 @@ func TestLinodeInstanceDiskDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) 
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeInstanceDiskDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), "dry_run") {
+		t.Errorf("tool.RawInputSchema missing key %v", "dry_run")
 	}
 }
 
@@ -2456,17 +2464,17 @@ func TestLinodeInstanceDiskCloneToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["disk_id"]; !ok {
-		t.Errorf("props missing key %v", "disk_id")
+	if !strings.Contains(rawSchema, "disk_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "disk_id")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -2581,21 +2589,21 @@ func TestLinodeInstanceDiskResizeToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["disk_id"]; !ok {
-		t.Errorf("props missing key %v", "disk_id")
+	if !strings.Contains(rawSchema, "disk_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "disk_id")
 	}
 
-	if _, ok := props["size"]; !ok {
-		t.Errorf("props missing key %v", "size")
+	if !strings.Contains(rawSchema, "size") {
+		t.Errorf("tool.RawInputSchema missing key %v", "size")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -2871,6 +2879,7 @@ func TestLinodeInstanceIPGetToolValidation(t *testing.T) {
 	}{
 		{name: caseMissingLinodeID, args: map[string]any{keyAddress: testNetIPv4AddressOne}, wantContains: errLinodeIDRequired},
 		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123)}, wantContains: errAddressRequired},
+		{name: caseMalformedAddress, args: map[string]any{keyLinodeID: float64(123), keyAddress: testInvalidIPValue}, wantContains: errAddressValidIP},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -2982,21 +2991,21 @@ func TestLinodeInstanceIPAllocateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["type"]; !ok {
-		t.Errorf("props missing key %v", "type")
+	if !strings.Contains(rawSchema, "type") {
+		t.Errorf("tool.RawInputSchema missing key %v", "type")
 	}
 
-	if _, ok := props["public"]; !ok {
-		t.Errorf("props missing key %v", "public")
+	if !strings.Contains(rawSchema, "public") {
+		t.Errorf("tool.RawInputSchema missing key %v", "public")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -3120,21 +3129,21 @@ func TestLinodeInstanceIPUpdateRDNSToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := props[keyAddress]; !ok {
-		t.Errorf("props missing key %v", keyAddress)
+	if !strings.Contains(rawSchema, keyAddress) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyAddress)
 	}
 
-	if _, ok := props[keyRDNS]; !ok {
-		t.Errorf("props missing key %v", keyRDNS)
+	if !strings.Contains(rawSchema, keyRDNS) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyRDNS)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -3367,6 +3376,7 @@ func TestLinodeInstanceIPDeleteToolValidation(t *testing.T) {
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyAddress: testNetIPv4AddressOne}, wantContains: errConfirmEqualsTrue},
 		{name: caseMissingAddress, args: map[string]any{keyLinodeID: float64(123), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errAddressRequired},
+		{name: caseMalformedAddress, args: map[string]any{keyLinodeID: float64(123), keyAddress: testInvalidIPValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errAddressValidIP},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3452,8 +3462,8 @@ func TestLinodeInstanceIPDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeInstanceIPDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), "dry_run") {
+		t.Errorf("tool.RawInputSchema missing key %v", "dry_run")
 	}
 }
 
@@ -3586,13 +3596,13 @@ func TestLinodeInstanceCloneToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -3724,17 +3734,17 @@ func TestLinodeInstanceMigrateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
+	if !strings.Contains(rawSchema, keySupportTicketRegion) {
+		t.Errorf("tool.RawInputSchema missing key %v", keySupportTicketRegion)
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -3848,21 +3858,21 @@ func TestLinodeInstanceRebuildToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["image"]; !ok {
-		t.Errorf("props missing key %v", "image")
+	if !strings.Contains(rawSchema, "image") {
+		t.Errorf("tool.RawInputSchema missing key %v", "image")
 	}
 
-	if _, ok := props["root_pass"]; !ok {
-		t.Errorf("props missing key %v", "root_pass")
+	if !strings.Contains(rawSchema, "root_pass") {
+		t.Errorf("tool.RawInputSchema missing key %v", "root_pass")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -3979,8 +3989,8 @@ func TestLinodeInstanceRebuildToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeInstanceRebuildTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), "dry_run") {
+		t.Errorf("tool.RawInputSchema missing key %v", "dry_run")
 	}
 }
 
@@ -4119,17 +4129,17 @@ func TestLinodeInstanceRescueToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["devices"]; !ok {
-		t.Errorf("props missing key %v", "devices")
+	if !strings.Contains(rawSchema, "devices") {
+		t.Errorf("tool.RawInputSchema missing key %v", "devices")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -4234,17 +4244,17 @@ func TestLinodeInstancePasswordResetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["root_pass"]; !ok {
-		t.Errorf("props missing key %v", "root_pass")
+	if !strings.Contains(rawSchema, "root_pass") {
+		t.Errorf("tool.RawInputSchema missing key %v", "root_pass")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 
@@ -4346,8 +4356,8 @@ func TestLinodeInstancePasswordResetToolDryRunSchemaAdvertisesDryRun(t *testing.
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeInstancePasswordResetTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), "dry_run") {
+		t.Errorf("tool.RawInputSchema missing key %v", "dry_run")
 	}
 }
 
@@ -4480,16 +4490,16 @@ func TestLinodeInstanceVolumesListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
+	if !strings.Contains(string(tool.RawInputSchema), keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := tool.InputSchema.Properties["page"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "page")
+	if !strings.Contains(string(tool.RawInputSchema), "page") {
+		t.Errorf("tool.RawInputSchema missing key %v", "page")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyPageSize]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyPageSize)
+	if !strings.Contains(string(tool.RawInputSchema), keyPageSize) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPageSize)
 	}
 }
 

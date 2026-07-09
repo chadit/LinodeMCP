@@ -1,0 +1,27 @@
+{
+  "tool": "linode_account_service_transfer_get",
+  "description": "Missing, non-string, and path-separator token rejections plus the transfer GET path. Both languages now share Go's non-empty-string and path-safety texts.",
+  "cases": [
+    {
+      "name": "requires token",
+      "args": {},
+      "expect_error": "token is required"
+    },
+    {
+      "name": "rejects a non-string token",
+      "args": { "token": 123 },
+      "expect_error": "token must be a non-empty string"
+    },
+    {
+      "name": "rejects a token with path separators",
+      "args": { "token": "abc/def" },
+      "expect_error": "token must not contain path separators, query separators, or traversal segments"
+    },
+    {
+      "name": "gets an account service transfer by token",
+      "args": { "token": "svc-token-123" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/service-transfers/svc-token-123" }
+    }
+  ]
+}

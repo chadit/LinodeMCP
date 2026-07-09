@@ -1,0 +1,36 @@
+{
+  "tool": "linode_instance_mutate",
+  "description": "Pins the allow_auto_disk_resize type rejection and the mutate POST. Both languages omit allow_auto_disk_resize unless the caller sets it (API default true), so a minimal call sends an empty body; an explicit value is sent verbatim. Confirm passed so Go clears its confirm gate. The linode_id-required text diverges (Go 'linode_id is required and must be positive' vs Python 'linode_id must be a positive integer') - see report.",
+  "cases": [
+    {
+      "name": "rejects non-boolean allow_auto_disk_resize",
+      "args": { "linode_id": 5, "allow_auto_disk_resize": "yes", "confirm": true },
+      "expect_error": "allow_auto_disk_resize must be a boolean"
+    },
+    {
+      "name": "mutates the instance with the API default",
+      "args": { "linode_id": 5, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/mutate",
+        "body": {}
+      }
+    },
+    {
+      "name": "mutates the instance with an explicit option",
+      "args": { "linode_id": 5, "allow_auto_disk_resize": true, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/mutate",
+        "body": { "allow_auto_disk_resize": true }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 5, "allow_auto_disk_resize": true},
+      "expect_error": "This upgrades the instance and may cause downtime. Set confirm=true to proceed."
+    }
+  ]
+}

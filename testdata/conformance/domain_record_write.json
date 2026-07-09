@@ -1,0 +1,40 @@
+{
+  "message": "linode.mcp.v1.DomainRecordWriteResponse",
+  "description": "Domain record write envelope: a confirmation message plus the full record element.",
+  "input": {
+    "message": "A record (ID: 45678) created successfully",
+    "record": {
+      "id": 45678,
+      "type": "A",
+      "name": "www",
+      "target": "203.0.113.5",
+      "priority": 10,
+      "weight": 5,
+      "port": 443,
+      "service": "_https",
+      "protocol": "_tcp",
+      "ttl_sec": 300,
+      "tag": "issue",
+      "created": "2024-01-15T10:00:00",
+      "updated": "2024-01-15T12:00:00"
+    }
+  },
+  "canonical": {
+    "message": "A record (ID: 45678) created successfully",
+    "record": {
+      "id": 45678,
+      "type": "A",
+      "name": "www",
+      "target": "203.0.113.5",
+      "priority": 10,
+      "weight": 5,
+      "port": 443,
+      "service": "_https",
+      "protocol": "_tcp",
+      "ttl_sec": 300,
+      "tag": "issue",
+      "created": "2024-01-15T10:00:00",
+      "updated": "2024-01-15T12:00:00"
+    }
+  }
+}

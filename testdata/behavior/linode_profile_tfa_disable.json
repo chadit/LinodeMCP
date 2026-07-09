@@ -1,0 +1,17 @@
+{
+  "tool": "linode_profile_tfa_disable",
+  "description": "Disables TFA with a single POST once confirmed. Confirm text diverges (see report).",
+  "cases": [
+    {
+      "name": "disables two-factor authentication",
+      "args": { "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/profile/tfa-disable" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {},
+      "expect_error": "This disables two-factor authentication for the profile. Set confirm=true to proceed."
+    }
+  ]
+}

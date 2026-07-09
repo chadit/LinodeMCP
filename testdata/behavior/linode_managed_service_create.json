@@ -1,0 +1,46 @@
+{
+  "tool": "linode_managed_service_create",
+  "description": "Service create: required-field rejections, confirm gate, and the POST body once confirmed.",
+  "cases": [
+    {
+      "name": "requires label",
+      "args": {},
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects read-only fields",
+      "args": { "id": 5, "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30 },
+      "expect_error": "Read-only fields are not accepted: id"
+    },
+    {
+      "name": "requires address",
+      "args": { "label": "web", "service_type": "url" },
+      "expect_error": "address is required"
+    },
+    {
+      "name": "requires confirm before creating",
+      "args": { "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30 },
+      "expect_error": "This creates a Managed service monitor. Set confirm=true to proceed."
+    },
+    {
+      "name": "creates a managed service",
+      "args": { "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30, "confirm": true },
+      "api_response": { "id": 5, "label": "web" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/managed/services",
+        "body": { "label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "web", "service_type": "url", "address": "https://ex.com", "timeout": 30},
+      "expect_error": "This creates a Managed service monitor. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects an invalid service_type",
+      "args": { "label": "web", "service_type": "ping", "address": "https://ex.com", "timeout": 30, "confirm": true },
+      "expect_error": "service_type must be one of: tcp, url"
+    }
+  ]
+}

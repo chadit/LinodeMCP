@@ -5,46 +5,22 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // NewLinodeVolumeCreateTool creates a tool for creating a volume.
 func NewLinodeVolumeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_volume_create",
-		mcp.WithDescription("Creates a new block storage volume. WARNING: Billing starts immediately. Use linode_region_list to find valid regions."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("A label for the volume (must be unique within your account)"),
-		),
-		mcp.WithString(
-			"region",
-			mcp.Description("Region where the volume will be created. Required unless attaching to a Linode."),
-		),
-		mcp.WithNumber(
-			"size",
-			mcp.Description("Size in GB (10-10240). Default is 20GB."),
-		),
-		mcp.WithNumber(
-			"linode_id",
-			mcp.Description("Linode ID to attach the volume to (optional). If provided, region is inferred."),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm volume creation. This operation incurs billing charges. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Creates a new block storage volume. WARNING: Billing starts immediately. Use linode_region_list to find valid regions.",
+		toolschemas.Schema("linode.mcp.v1.VolumeCreateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -75,17 +51,7 @@ func validateVolumeCreateArgs(label, region string, size, linodeID int) string {
 }
 
 func volumeCloneIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()["volume_id"]
-	if !exists {
-		return 0, "volume_id is required"
-	}
-
-	volumeID, ok := numberArgToInt(raw)
-	if !ok || volumeID <= 0 {
-		return 0, "volume_id must be a positive integer"
-	}
-
-	return volumeID, ""
+	return requiredIDArgument(request, "volume_id")
 }
 
 func validateVolumeCloneLabel(label string) string {
@@ -151,19 +117,15 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeVolumeCloneTool creates a tool for cloning a volume.
 func NewLinodeVolumeCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_volume_clone",
 		"Clones an existing block storage volume. WARNING: Billing starts immediately for the cloned volume. Pass dry_run=true to preview without cloning.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("volume_id", mcp.Required(), mcp.Description("The ID of the source volume to clone")),
-			mcp.WithString("label", mcp.Required(), mcp.Description("A label for the cloned volume")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm volume cloning. This operation incurs billing charges. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeVolumeCloneRequest,
+		toolschemas.Schema("linode.mcp.v1.VolumeCloneInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeVolumeCloneRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -212,22 +174,15 @@ func handleLinodeVolumeCloneRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeVolumeAttachTool creates a tool for attaching a volume to a Linode.
 func NewLinodeVolumeAttachTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_volume_attach",
 		"Attaches a block storage volume to a Linode instance. The volume and instance must be in the same region.",
-		[]mcp.ToolOption{
-			mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-			mcp.WithNumber("volume_id", mcp.Required(), mcp.Description("The ID of the volume to attach")),
-			mcp.WithNumber("linode_id", mcp.Required(), mcp.Description("The ID of the Linode instance to attach the volume to")),
-			mcp.WithNumber("config_id", mcp.Description("The Linode config ID to attach to (optional)")),
-			mcp.WithBoolean("persist_across_boots", mcp.Description("Whether the volume should remain attached across instance reboots (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm attaching the volume. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeVolumeAttachRequest,
+		toolschemas.Schema("linode.mcp.v1.VolumeAttachInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeVolumeAttachRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -295,18 +250,15 @@ func handleLinodeVolumeAttachRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeVolumeDetachTool creates a tool for detaching a volume from a Linode.
 func NewLinodeVolumeDetachTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_volume_detach",
 		"Detaches a block storage volume from a Linode instance. The volume data is preserved. Pass dry_run=true to preview without detaching.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("volume_id", mcp.Required(), mcp.Description("The ID of the volume to detach")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm detaching the volume. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeVolumeDetachRequest,
+		toolschemas.Schema("linode.mcp.v1.VolumeDetachInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeVolumeDetachRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -344,42 +296,18 @@ func handleLinodeVolumeDetachRequest(ctx context.Context, request *mcp.CallToolR
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to detach volume %d: %v", volumeID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		VolumeID int    `json:"volume_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.VolumeDetachResponse{
 		Message:  fmt.Sprintf("Volume %d detached successfully", volumeID),
-		VolumeID: volumeID,
-	}
-
-	return MarshalToolResponse(response)
+		VolumeId: linodeIDToInt32(volumeID),
+	})
 }
 
 // NewLinodeVolumeResizeTool creates a tool for resizing a volume.
 func NewLinodeVolumeResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_volume_resize",
-		mcp.WithDescription("Resizes a block storage volume. WARNING: Volumes can only be resized UP. This operation may incur additional billing."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"volume_id",
-			mcp.Required(),
-			mcp.Description("The ID of the volume to resize"),
-		),
-		mcp.WithNumber(
-			"size",
-			mcp.Required(),
-			mcp.Description("New size in GB (must be larger than current size)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm resize. Volumes cannot be downsized. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Resizes a block storage volume. WARNING: Volumes can only be resized UP. This operation may incur additional billing.",
+		toolschemas.Schema("linode.mcp.v1.VolumeResizeInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -442,32 +370,10 @@ func handleLinodeVolumeResizeRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeVolumeUpdateTool creates a tool for updating a volume's label or tags.
 func NewLinodeVolumeUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_volume_update",
-		mcp.WithDescription("Updates a block storage volume's label or tags."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"volume_id",
-			mcp.Required(),
-			mcp.Description("The ID of the volume to update"),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Description("New label for the volume (1-32 chars, alphanumeric, hyphens, underscores)"),
-		),
-		mcp.WithArray(
-			"tags",
-			mcp.Description("Replacement tags for the volume (optional)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm the update. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Updates a block storage volume's label or tags.",
+		toolschemas.Schema("linode.mcp.v1.VolumeUpdateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -547,11 +453,10 @@ func handleLinodeVolumeUpdateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeVolumeDeleteTool creates a tool for deleting a volume.
 func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := newDeleteByIDTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_volume_delete",
-		"Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first. Pass dry_run=true to preview without deleting.",
-		"volume_id",
-		"The ID of the volume to delete",
+		"Deletes a block storage volume. WARNING: This action is irreversible and all data will be permanently lost. The volume must be detached first. Pass dry_run=true to preview without deleting."+twoStageNote,
+		toolschemas.Schema("linode.mcp.v1.VolumeDeleteInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -561,6 +466,16 @@ func NewLinodeVolumeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	return tool, profiles.CapDestroy, handler
 }
 
+// volumeDeleteProto builds the proto-canonical id-echo body for a successful
+// volume delete, keeping the proto literal off the handler's struct literal so
+// the delete handlers stay below the dupl threshold.
+func volumeDeleteProto(id int) proto.Message {
+	return &linodev1.VolumeDeleteResponse{
+		Message:  fmt.Sprintf("Volume %d removed successfully", id),
+		VolumeId: linodeIDToInt32(id),
+	}
+}
+
 func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
 		ToolName:       "linode_volume_delete",
@@ -568,7 +483,7 @@ func handleLinodeVolumeDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		Method:         httpMethodDelete,
 		PathPattern:    "/volumes/%d",
 		ConfirmMessage: "This operation is destructive and irreversible. Set confirm=true to proceed.",
-		SuccessFormat:  "Volume %d removed successfully",
+		SuccessProto:   volumeDeleteProto,
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetVolume(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteVolume(ctx, id) },
 		DependencyWalk: volumeDeleteDependencyWalk,

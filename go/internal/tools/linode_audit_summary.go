@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 
@@ -10,15 +9,10 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
-
-// auditSummaryResponse is the wire shape of the linode_audit_summary
-// result: the per-bucket rows plus the total event count across them.
-type auditSummaryResponse struct {
-	TotalEvents int                `json:"total_events"`
-	Rows        []audit.SummaryRow `json:"rows"`
-}
 
 // NewLinodeAuditSummaryTool returns the linode_audit_summary query
 // tool. It counts audit events bucketed by the requested columns over
@@ -30,29 +24,12 @@ type auditSummaryResponse struct {
 func NewLinodeAuditSummaryTool(
 	cfg *config.Config,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_audit_summary",
-		mcp.WithDescription(
-			"Count audit events grouped by tool and status (or other columns) "+
-				"over a time window. Useful for questions like 'how many destroys "+
-				"in the last 24h'. Reads SQLite when enabled, else the JSONL log.",
-		),
-		mcp.WithString(
-			"since",
-			mcp.Description("Only count events at or after this RFC 3339 timestamp."),
-		),
-		mcp.WithArray(
-			"group_by",
-			mcp.Description(
-				"Columns to group by. Allowed: tool, status, capability, "+
-					"profile, environment. Defaults to [tool, status].",
-			),
-			mcp.Items(schemaStringItem()),
-		),
-		mcp.WithBoolean(
-			"include_meta",
-			mcp.Description("Include audit/profile meta-tool events. Default false."),
-		),
+		"Count audit events grouped by tool and status (or other columns) "+
+			"over a time window. Useful for questions like 'how many destroys "+
+			"in the last 24h'. Reads SQLite when enabled, else the JSONL log.",
+		toolschemas.Schema("linode.mcp.v1.AuditSummaryInput"),
 	)
 
 	sqlitePath := resolveAuditSQLitePath(cfg)
@@ -76,12 +53,10 @@ func NewLinodeAuditSummaryTool(
 
 		rows := audit.Summarize(events, query.GroupBy)
 
-		body, err := json.Marshal(auditSummaryResponse{TotalEvents: len(events), Rows: rows})
-		if err != nil {
-			return nil, fmt.Errorf("marshal audit summary response: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.AuditSummaryResponse{
+			TotalEvents: linodeIDToInt32(len(events)),
+			Rows:        auditSummaryRowsProto(rows),
+		})
 	}
 
 	return tool, profiles.CapMeta, handler

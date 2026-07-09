@@ -19,7 +19,8 @@
         "range": "2600:3c03::02:5000:0000:0000:0000",
         "region": "us-east",
         "prefix": 64,
-        "route_target": "2600:3c03::f03c:91ff:fe24:3a2f"
+        "route_target": "2600:3c03::f03c:91ff:fe24:3a2f",
+        "linodes": []
       }
     ]
   }

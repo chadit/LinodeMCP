@@ -1,0 +1,12 @@
+{
+  "tool": "linode_nodebalancer_stats_get",
+  "description": "Pins the stats GET path. Missing/invalid id error text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "gets nodebalancer stats by id",
+      "args": { "nodebalancer_id": 456 },
+      "api_response": { "title": "nb-456", "data": {} },
+      "expect_request": { "method": "GET", "path": "/nodebalancers/456/stats" }
+    }
+  ]
+}

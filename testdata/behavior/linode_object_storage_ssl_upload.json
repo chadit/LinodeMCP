@@ -1,0 +1,31 @@
+{
+  "tool": "linode_object_storage_ssl_upload",
+  "description": "Pins the shared certificate/private_key validation (behind confirm) and the SSL upload POST body. Every case carries confirm:true because the confirm-gate message text diverges.",
+  "cases": [
+    {
+      "name": "requires certificate",
+      "args": { "region": "us-east", "label": "my-bucket", "confirm": true },
+      "expect_error": "certificate is required"
+    },
+    {
+      "name": "requires private_key",
+      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "confirm": true },
+      "expect_error": "private_key is required"
+    },
+    {
+      "name": "uploads a certificate",
+      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
+      "api_response": { "ssl": true },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/ssl",
+        "body": { "certificate": "cert-pem", "private_key": "key-pem" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem"},
+      "expect_error": "This uploads an SSL certificate to the bucket. Set confirm=true to proceed."
+    }
+  ]
+}

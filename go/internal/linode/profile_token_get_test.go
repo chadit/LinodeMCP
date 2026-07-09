@@ -5,13 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
-func TestClientGetProfileTokenSuccess(t *testing.T) {
+const profileTokenTestLabel = "api-token"
+
+func TestClientGetProfileTokenProtoSuccess(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +38,9 @@ func TestClientGetProfileTokenSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: "api-token", profileTokenScopesKey: "*"}); err != nil {
+		// The API may echo a token secret; the metadata-only proto has no secret
+		// field, so the DiscardUnknown decode drops it.
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: float64(12345), keyLabel: profileTokenTestLabel, profileTokenScopesKey: "*", "token": "super-secret-token-value"}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -45,7 +48,7 @@ func TestClientGetProfileTokenSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.GetProfileToken(t.Context(), 12345)
+	result, err := client.GetProfileTokenProto(t.Context(), 12345)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -54,25 +57,20 @@ func TestClientGetProfileTokenSuccess(t *testing.T) {
 		t.Fatal("result is nil")
 	}
 
-	tokenID, ok := (*result)[keyID].(float64)
-	if !ok {
-		t.Fatalf("token ID should decode as a number")
+	if result.GetId() != int32(12345) {
+		t.Errorf("result.GetId() = %v, want %v", result.GetId(), int32(12345))
 	}
 
-	if tokenID != float64(12345) {
-		t.Errorf("tokenID = %v, want %v", tokenID, float64(12345))
+	if result.GetLabel() != profileTokenTestLabel {
+		t.Errorf("result.GetLabel() = %v, want %v", result.GetLabel(), profileTokenTestLabel)
 	}
 
-	if !reflect.DeepEqual((*result)[keyLabel], "api-token") {
-		t.Errorf("(*result)[keyLabel] = %v, want %v", (*result)[keyLabel], "api-token")
-	}
-
-	if !reflect.DeepEqual((*result)[profileTokenScopesKey], "*") {
-		t.Errorf("(*result)[profileTokenScopesKey] = %v, want %v", (*result)[profileTokenScopesKey], "*")
+	if result.GetScopes() != "*" {
+		t.Errorf("result.GetScopes() = %v, want %v", result.GetScopes(), "*")
 	}
 }
 
-func TestClientGetProfileTokenEscapesTokenID(t *testing.T) {
+func TestClientGetProfileTokenProtoEscapesTokenID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +80,7 @@ func TestClientGetProfileTokenEscapesTokenID(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: "api-token"}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: float64(12345), keyLabel: profileTokenTestLabel}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -90,13 +88,13 @@ func TestClientGetProfileTokenEscapesTokenID(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetProfileToken(t.Context(), 12345)
+	_, err := client.GetProfileTokenProto(t.Context(), 12345)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestClientGetProfileTokenAPIError(t *testing.T) {
+func TestClientGetProfileTokenProtoAPIError(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +117,7 @@ func TestClientGetProfileTokenAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetProfileToken(t.Context(), 12345)
+	_, err := client.GetProfileTokenProto(t.Context(), 12345)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}

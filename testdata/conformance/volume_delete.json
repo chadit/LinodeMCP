@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.VolumeDeleteResponse",
+  "description": "Volume delete id-echo: a confirmation message plus the deleted volume's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "Volume 12345 removed successfully",
+    "volume_id": 12345
+  },
+  "canonical": {
+    "message": "Volume 12345 removed successfully",
+    "volume_id": 12345
+  }
+}

@@ -5,36 +5,28 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // NewLinodeVPCCreateTool creates a tool for creating a new VPC.
 func NewLinodeVPCCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vpc_create",
 		"Creates a new VPC. WARNING: This creates a billable resource. "+
 			"Use linode_region_list to find valid region values.",
-		[]mcp.ToolOption{
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("Label for the VPC (1-64 characters)")),
-			mcp.WithString("region", mcp.Required(),
-				mcp.Description("Region for the VPC (e.g. us-east). Use linode_region_list to find valid values.")),
-			mcp.WithString("description",
-				mcp.Description("Description for the VPC (optional)")),
-			mcp.WithArray("subnets",
-				mcp.Description("Array of subnet objects to create: [{\"label\": \"my-subnet\", \"ipv4\": \"10.0.0.0/24\"}] (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm VPC creation. This creates a billable resource. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleVPCCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.VpcCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleVPCCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -114,23 +106,15 @@ func handleVPCCreateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 
 // NewLinodeVPCUpdateTool creates a tool for updating an existing VPC.
 func NewLinodeVPCUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vpc_update",
 		"Updates an existing VPC's label or description.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("vpc_id", mcp.Required(),
-				mcp.Description("The ID of the VPC to update")),
-			mcp.WithString("label",
-				mcp.Description("New label for the VPC (optional)")),
-			mcp.WithString("description",
-				mcp.Description("New description for the VPC (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm VPC update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleVPCUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.VpcUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleVPCUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -190,24 +174,28 @@ func handleVPCUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, c
 
 // NewLinodeVPCDeleteTool creates a tool for deleting a VPC.
 func NewLinodeVPCDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vpc_delete",
 		"Deletes a VPC. WARNING: This is irreversible. All subnets within the VPC will also be deleted."+
 			" Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("vpc_id", mcp.Required(),
-				mcp.Description("The ID of the VPC to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm deletion. This action is irreversible and deletes all subnets. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleVPCDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.VpcDeleteInput"),
 	)
 
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleVPCDeleteRequest(ctx, &request, cfg)
+	}
+
 	return tool, profiles.CapDestroy, handler
+}
+
+// vpcDeleteProto builds the proto-canonical id-echo body for a successful VPC
+// delete, keeping the proto literal off the handler's struct literal so the
+// delete handlers stay below the dupl threshold.
+func vpcDeleteProto(id int) proto.Message {
+	return &linodev1.VpcDeleteResponse{
+		Message: fmt.Sprintf("VPC %d removed successfully", id),
+		VpcId:   linodeIDToInt32(id),
+	}
 }
 
 func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -217,7 +205,7 @@ func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		Method:         httpMethodDelete,
 		PathPattern:    "/vpcs/%d",
 		ConfirmMessage: "This is irreversible. All subnets in the VPC will also be deleted. Set confirm=true to proceed.",
-		SuccessFormat:  "VPC %d removed successfully",
+		SuccessProto:   vpcDeleteProto,
 		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
 			return c.GetVPC(ctx, id)
 		},
@@ -231,23 +219,15 @@ func handleVPCDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, c
 
 // NewLinodeVPCSubnetCreateTool creates a tool for creating a subnet within a VPC.
 func NewLinodeVPCSubnetCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vpc_subnet_create",
 		"Creates a new subnet within a VPC.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("vpc_id", mcp.Required(),
-				mcp.Description("The ID of the VPC to add the subnet to")),
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("Label for the subnet")),
-			mcp.WithString("ipv4", mcp.Required(),
-				mcp.Description("IPv4 range for the subnet in CIDR notation (e.g. 10.0.0.0/24)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm subnet creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleVPCSubnetCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.VpcSubnetCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleVPCSubnetCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -320,23 +300,15 @@ func handleVPCSubnetCreateRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeVPCSubnetUpdateTool creates a tool for updating a subnet within a VPC.
 func NewLinodeVPCSubnetUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vpc_subnet_update",
 		"Updates the label of a subnet within a VPC.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("vpc_id", mcp.Required(),
-				mcp.Description("The ID of the VPC containing the subnet")),
-			mcp.WithNumber("subnet_id", mcp.Required(),
-				mcp.Description("The ID of the subnet to update")),
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("New label for the subnet")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm subnet update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleVPCSubnetUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.VpcSubnetUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleVPCSubnetUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -406,26 +378,29 @@ func handleVPCSubnetUpdateRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeVPCSubnetDeleteTool creates a tool for deleting a subnet from a VPC.
 func NewLinodeVPCSubnetDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vpc_subnet_delete",
 		"Deletes a subnet from a VPC. WARNING: This is irreversible."+
 			" Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("vpc_id", mcp.Required(),
-				mcp.Description("The ID of the VPC containing the subnet")),
-			mcp.WithNumber("subnet_id", mcp.Required(),
-				mcp.Description("The ID of the subnet to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm subnet deletion. This action is irreversible. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleVPCSubnetDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.VpcSubnetDeleteInput"),
 	)
 
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleVPCSubnetDeleteRequest(ctx, &request, cfg)
+	}
+
 	return tool, profiles.CapDestroy, handler
+}
+
+// vpcSubnetDeleteProto builds the proto-canonical id-echo body for a successful
+// subnet delete, keeping the proto literal off the handler's struct literal so
+// the delete handlers stay below the dupl threshold.
+func vpcSubnetDeleteProto(vpcID, subnetID int) proto.Message {
+	return &linodev1.VpcSubnetDeleteResponse{
+		Message:  fmt.Sprintf("Subnet %d deleted from VPC %d successfully", subnetID, vpcID),
+		VpcId:    linodeIDToInt32(vpcID),
+		SubnetId: linodeIDToInt32(subnetID),
+	}
 }
 
 func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -436,7 +411,7 @@ func handleVPCSubnetDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 		Method:         httpMethodDelete,
 		PathPattern:    "/vpcs/%d/subnets/%d",
 		ConfirmMessage: "This is irreversible. The subnet will be permanently deleted. Set confirm=true to proceed.",
-		SuccessFormat:  "Subnet %d deleted from VPC %d successfully",
+		SuccessProto:   vpcSubnetDeleteProto,
 		FetchState: func(ctx context.Context, c *linode.Client, vpcID, subnetID int) (any, error) {
 			return c.GetVPCSubnet(ctx, vpcID, subnetID)
 		},

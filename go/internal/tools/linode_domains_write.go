@@ -5,31 +5,27 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // NewLinodeDomainImportTool creates a tool for importing a domain zone.
 func NewLinodeDomainImportTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_domain_import",
 		"Imports a DNS domain zone from a remote nameserver that allows zone transfers. Pass dry_run=true to preview without importing.",
-		[]mcp.ToolOption{
-			mcp.WithString("domain", mcp.Required(),
-				mcp.Description("The domain name to import (for example, 'example.com')")),
-			mcp.WithString("remote_nameserver", mcp.Required(),
-				mcp.Description("The remote nameserver that allows zone transfers (AXFR)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm domain import. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeDomainImportRequest,
+		toolschemas.Schema("linode.mcp.v1.DomainImportInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeDomainImportRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -87,19 +83,15 @@ func handleLinodeDomainImportRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeDomainCloneTool creates a tool for cloning a domain.
 func NewLinodeDomainCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_domain_clone",
 		"Clones a DNS domain and all associated records to a new domain name.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("domain_id", mcp.Required(), mcp.Description("The ID of the domain to clone")),
-			mcp.WithString("domain", mcp.Required(), mcp.Description("The new domain name for the clone")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm domain cloning. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeDomainCloneRequest,
+		toolschemas.Schema("linode.mcp.v1.DomainCloneInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeDomainCloneRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -156,41 +148,10 @@ func handleLinodeDomainCloneRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeDomainCreateTool creates a tool for creating a domain.
 func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_domain_create",
-		mcp.WithDescription("Creates a new DNS domain. Use type 'master' for domains you control, 'slave' for secondary DNS."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"domain",
-			mcp.Required(),
-			mcp.Description("The domain name (e.g., 'example.com')"),
-		),
-		mcp.WithString(
-			"type",
-			mcp.Required(),
-			mcp.Description("Domain type: 'master' (primary) or 'slave' (secondary)"),
-		),
-		mcp.WithString(
-			"soa_email",
-			mcp.Description("Start of Authority email address (required for master domains)"),
-		),
-		mcp.WithString(
-			"description",
-			mcp.Description("A description for the domain (optional)"),
-		),
-		mcp.WithNumber(
-			"ttl_sec",
-			mcp.Description("Default TTL in seconds for records (optional)"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm domain creation. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Creates a new DNS domain. Use type 'master' for domains you control, 'slave' for secondary DNS.",
+		toolschemas.Schema("linode.mcp.v1.DomainCreateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -262,23 +223,15 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeDomainUpdateTool creates a tool for updating a domain.
 func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_domain_update",
 		"Updates an existing DNS domain. Can modify SOA email, description, TTL, and status. Pass dry_run=true to preview without updating.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("domain_id", mcp.Required(), mcp.Description("The ID of the domain to update")),
-			mcp.WithString("domain", mcp.Description("New domain name, for example example.com (optional)")),
-			mcp.WithString("soa_email", mcp.Description("New SOA email address (optional)")),
-			mcp.WithString("description", mcp.Description("New description (optional)")),
-			mcp.WithString("status", mcp.Description("New status: 'active', 'disabled', or 'edit_mode' (optional)")),
-			mcp.WithNumber("ttl_sec", mcp.Description("New default TTL in seconds (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm domain update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeDomainUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.DomainUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeDomainUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -369,12 +322,10 @@ func handleLinodeDomainUpdateDryRun(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeDomainDeleteTool creates a tool for deleting a domain.
 func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := newDeleteByIDToolConfirm(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_domain_delete",
-		"Deletes a DNS domain and all its records. WARNING: This action is irreversible. Pass dry_run=true to preview without deleting.",
-		"domain_id",
-		"The ID of the domain to delete",
-		"Must be set to true to confirm deletion. This deletes all DNS records. Ignored when dry_run=true.",
+		"Deletes a DNS domain and all its records. WARNING: This action is irreversible. Pass dry_run=true to preview without deleting."+twoStageNote,
+		toolschemas.Schema("linode.mcp.v1.DomainDeleteInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -384,6 +335,16 @@ func NewLinodeDomainDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 	return tool, profiles.CapDestroy, handler
 }
 
+// domainDeleteProto builds the proto-canonical id-echo body for a successful
+// domain delete, keeping the proto literal off the handler's struct literal so
+// the delete handlers stay below the dupl threshold.
+func domainDeleteProto(id int) proto.Message {
+	return &linodev1.DomainDeleteResponse{
+		Message:  fmt.Sprintf("Domain %d and all its records removed successfully", id),
+		DomainId: linodeIDToInt32(id),
+	}
+}
+
 func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
 		ToolName:       "linode_domain_delete",
@@ -391,7 +352,7 @@ func handleLinodeDomainDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		Method:         httpMethodDelete,
 		PathPattern:    "/domains/%d",
 		ConfirmMessage: "This operation is destructive and deletes all DNS records. Set confirm=true to proceed.",
-		SuccessFormat:  "Domain %d and all its records removed successfully",
+		SuccessProto:   domainDeleteProto,
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetDomain(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteDomain(ctx, id) },
 		DependencyWalk: domainDeleteDependencyWalk,

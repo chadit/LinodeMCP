@@ -21,8 +21,11 @@ from typing import Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.audit import collect_health, resolve_default_audit_dir
+from linodemcp.genpb.linode.mcp.v1 import audit_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_audit_summary import audit_sqlite_path
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 
 def create_linode_audit_health_tool() -> tuple[Tool, Capability]:
@@ -36,7 +39,7 @@ def create_linode_audit_health_tool() -> tuple[Tool, Capability]:
                 "SQLite sink is enabled) row count, oldest event, and "
                 "database size."
             ),
-            inputSchema={"type": "object", "properties": {}},
+            inputSchema=schema("linode.mcp.v1.AuditHealthInput"),
         ),
         Capability.Meta,
     )
@@ -45,6 +48,7 @@ def create_linode_audit_health_tool() -> tuple[Tool, Capability]:
 async def handle_linode_audit_health(
     _arguments: dict[str, Any],
 ) -> list[TextContent]:
-    """Collect audit subsystem status and return it as JSON."""
+    """Collect audit subsystem status and return it as proto-canonical JSON."""
     report = collect_health(audit_sqlite_path(), resolve_default_audit_dir())
-    return [TextContent(type="text", text=json.dumps(asdict(report)))]
+    result = serialize_api_response(asdict(report), audit_pb2.AuditHealthResponse())
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_database_mysql_config_get",
+  "description": "No local validation on this tool; pins the bare config GET the handler issues.",
+  "cases": [
+    {
+      "name": "gets mysql advanced parameters",
+      "args": {},
+      "api_response": { "mysql": {} },
+      "expect_request": { "method": "GET", "path": "/databases/mysql/config" }
+    }
+  ]
+}

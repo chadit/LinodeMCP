@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.IPv6RangeDeleteResponse",
+  "description": "IPv6 range delete: a message plus the deleted range CIDR. The endpoint returns an empty body.",
+  "input": {
+    "message": "IPv6 range deleted",
+    "range": "2600:3c00::/64"
+  },
+  "canonical": {
+    "message": "IPv6 range deleted",
+    "range": "2600:3c00::/64"
+  }
+}

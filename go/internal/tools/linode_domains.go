@@ -15,10 +15,11 @@ import (
 
 // NewLinodeDomainListTool creates a tool for listing domains.
 func NewLinodeDomainListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_domain_list",
 		"Lists all domains managed by your Linode account. Can filter by domain name or type (master/slave).",
+		"linode.mcp.v1.DomainListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.Domain, error) {
 			return client.ListDomainsProto(ctx)
 		},
@@ -150,10 +151,11 @@ func handleLinodeDomainRecordGetRequest(ctx context.Context, request *mcp.CallTo
 
 // NewLinodeDomainRecordListTool creates a tool for listing domain records.
 func NewLinodeDomainRecordListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	tool, handler := newProtoListToolSubresourceRawSchema(
 		cfg,
 		"linode_domain_record_list",
 		"Lists all DNS records for a specific domain. Can filter by record type or name.",
+		"linode.mcp.v1.DomainRecordListInput",
 		protoListPathID{
 			option: mcp.WithNumber("domain_id", mcp.Required(),
 				mcp.Description("The ID of the domain to list records for")),

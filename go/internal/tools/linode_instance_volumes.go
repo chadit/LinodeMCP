@@ -9,11 +9,15 @@ import (
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeInstanceVolumeListTool creates a tool for listing volumes attached to a Linode instance.
 func NewLinodeInstanceVolumeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	// The raw-schema tool advertises the generated InstanceVolumeListInput; the
+	// list helper still builds the fetch/paginate/serialize handler, which is
+	// schema-source independent.
+	_, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_instance_volume_list",
 		"Lists volumes attached to a Linode instance with optional pagination.",
@@ -30,6 +34,12 @@ func NewLinodeInstanceVolumeListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		},
 		nil,
 		instanceVolumeListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_volume_list",
+		"Lists volumes attached to a Linode instance with optional pagination.",
+		toolschemas.Schema("linode.mcp.v1.InstanceVolumeListInput"),
 	)
 
 	return tool, profiles.CapRead, handler

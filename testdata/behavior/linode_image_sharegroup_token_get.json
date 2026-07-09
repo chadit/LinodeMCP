@@ -1,0 +1,22 @@
+{
+  "tool": "linode_image_sharegroup_token_get",
+  "description": "Pins the token_uuid rejections and the token GET. Python now uses Go's strict canonical-UUID check, so a non-dashed 32-hex form is rejected in both languages.",
+  "cases": [
+    {
+      "name": "rejects missing token_uuid",
+      "args": {},
+      "expect_error": "token_uuid must be a non-empty string"
+    },
+    {
+      "name": "rejects a non-canonical uuid",
+      "args": { "token_uuid": "123e4567e89b12d3a456426614174000" },
+      "expect_error": "token_uuid must be a UUID"
+    },
+    {
+      "name": "gets one token",
+      "args": { "token_uuid": "123e4567-e89b-12d3-a456-426614174000" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/images/sharegroups/tokens/123e4567-e89b-12d3-a456-426614174000" }
+    }
+  ]
+}

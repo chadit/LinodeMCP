@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.LKEACLDeleteResponse",
+  "description": "LKE control-plane ACL delete id-echo: a confirmation message plus the cluster ID whose ACL was removed. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "Control plane ACL for cluster 5150 removed successfully",
+    "cluster_id": 5150
+  },
+  "canonical": {
+    "message": "Control plane ACL for cluster 5150 removed successfully",
+    "cluster_id": 5150
+  }
+}

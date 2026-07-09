@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.PlacementGroupDeleteResponse",
+  "description": "Placement group delete confirmation: the endpoint returns an empty body, so the response carries only a message.",
+  "input": {
+    "message": "Placement group 321 deleted successfully"
+  },
+  "canonical": {
+    "message": "Placement group 321 deleted successfully"
+  }
+}

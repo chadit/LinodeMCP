@@ -23,10 +23,11 @@ const (
 
 // NewLinodeKernelListTool creates a tool for listing Linode kernels.
 func NewLinodeKernelListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_kernel_list",
 		"Lists available Linode kernels with optional pagination.",
+		"linode.mcp.v1.KernelListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Kernel, error) {

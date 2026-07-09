@@ -1,0 +1,64 @@
+{
+  "message": "linode.mcp.v1.StackScriptWriteResponse",
+  "description": "linode_stackscript_create / linode_stackscript_update write envelope: a confirmation message plus the full StackScript element the API returned.",
+  "input": {
+    "message": "StackScript 'a-stackscript' (ID: 10079) created successfully",
+    "stackscript": {
+      "username": "myuser",
+      "user_gravatar_id": "a445b305abda30ebc766bc7fda037c37",
+      "label": "a-stackscript",
+      "description": "This StackScript installs and configures MySQL",
+      "images": [
+        "linode/debian11",
+        "linode/debian12"
+      ],
+      "created": "2018-01-01T00:01:01",
+      "updated": "2018-01-01T00:01:01",
+      "script": "#!/bin/bash\napt-get update",
+      "user_defined_fields": [
+        {
+          "label": "Set the password for the root user",
+          "name": "ssvar_db_password",
+          "example": "hunter2",
+          "oneof": "avalue,bvalue,cvalue",
+          "default": "defaultvalue"
+        }
+      ],
+      "id": 10079,
+      "deployments_total": 12,
+      "deployments_active": 1,
+      "is_public": true,
+      "mine": true
+    }
+  },
+  "canonical": {
+    "message": "StackScript 'a-stackscript' (ID: 10079) created successfully",
+    "stackscript": {
+      "username": "myuser",
+      "user_gravatar_id": "a445b305abda30ebc766bc7fda037c37",
+      "label": "a-stackscript",
+      "description": "This StackScript installs and configures MySQL",
+      "images": [
+        "linode/debian11",
+        "linode/debian12"
+      ],
+      "created": "2018-01-01T00:01:01",
+      "updated": "2018-01-01T00:01:01",
+      "script": "#!/bin/bash\napt-get update",
+      "user_defined_fields": [
+        {
+          "label": "Set the password for the root user",
+          "name": "ssvar_db_password",
+          "example": "hunter2",
+          "oneof": "avalue,bvalue,cvalue",
+          "default": "defaultvalue"
+        }
+      ],
+      "id": 10079,
+      "deployments_total": 12,
+      "deployments_active": 1,
+      "is_public": true,
+      "mine": true
+    }
+  }
+}

@@ -61,9 +61,25 @@ func TestLinodeMonitorServiceAlertDefinitionCreateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	for _, key := range []string{monitorServiceTypeParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	var parsed struct {
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal(tool.RawInputSchema, &parsed); err != nil {
+		t.Fatalf("unmarshal RawInputSchema: %v", err)
+	}
+
+	for _, key := range []string{monitorServiceTypeParam, monitorAlertDefinitionLabelParam, monitorAlertDefinitionSeverityParam, keyConfirm} {
+		if !slices.Contains(parsed.Required, key) {
+			t.Errorf("RawInputSchema required does not contain %v", key)
+		}
+	}
+
+	// rule_criteria/trigger_conditions convert to map fields and channel_ids to a
+	// repeated field; none are ever emitted into the generated required set (the
+	// handler still enforces them at runtime).
+	for _, key := range []string{monitorAlertDefinitionRuleCriteriaParam, monitorAlertDefinitionTriggerParam, monitorAlertDefinitionChannelIDsParam} {
+		if slices.Contains(parsed.Required, key) {
+			t.Errorf("RawInputSchema required unexpectedly contains %v", key)
 		}
 	}
 

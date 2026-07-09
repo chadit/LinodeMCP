@@ -29,10 +29,78 @@ message SSHKeyWriteResponse {
   SSHKey ssh_key = 2;
 }
 
+// SSHKeyDeleteResponse is the id-echo envelope linode_sshkey_delete returns: a
+// confirmation message plus the removed SSH key's ID. The delete endpoint
+// returns an empty body, so the id echo confirms the target.
+message SSHKeyDeleteResponse {
+  string message = 1;
+  int32 ssh_key_id = 2;
+}
+
 // SSHKeyGetInput is the input contract for linode_sshkey_get.
 message SSHKeyGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
   // The ID of the SSH key to retrieve (required).
   int32 ssh_key_id = 2;
+}
+
+// SSHKeyListInput is the input contract for linode_sshkey_list. label_contains
+// is a client-side filter (fetch-all-then-filter, not an API param).
+message SSHKeyListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Filter SSH keys by label containing this string (case-insensitive).
+  optional string label_contains = 2;
+}
+
+// SSHKeyCreateInput is the input contract for linode_sshkey_create.
+message SSHKeyCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // A label for the SSH key (must be unique).
+  string label = 2;
+  // The public SSH key in authorized_keys format (e.g., 'ssh-rsa AAAA...').
+  string ssh_key = 3;
+  // Must be set to true to confirm SSH key creation. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// SSHKeyUpdateInput is the input contract for linode_sshkey_update. label is
+// required in the hand-built schema (the label is the only updatable field).
+message SSHKeyUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the SSH key to update.
+  int32 ssh_key_id = 2;
+  // The new label for the SSH key.
+  string label = 3;
+  // Must be set to true to confirm SSH key update. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// SSHKeyDeleteInput is the input contract for linode_sshkey_delete (two-stage
+// destroy: optional mode/plan_id).
+message SSHKeyDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the SSH key to delete.
+  int32 ssh_key_id = 2;
+  // Must be set to true to confirm SSH key deletion. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
 }

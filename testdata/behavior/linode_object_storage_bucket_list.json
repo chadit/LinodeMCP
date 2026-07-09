@@ -1,0 +1,12 @@
+{
+  "tool": "linode_object_storage_bucket_list",
+  "description": "No local validation; pins the plain list GET (single request, no pagination query).",
+  "cases": [
+    {
+      "name": "lists all buckets",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/object-storage/buckets" }
+    }
+  ]
+}

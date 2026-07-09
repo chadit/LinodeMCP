@@ -16,10 +16,11 @@ import (
 
 // NewLinodeVPCListTool creates a tool for listing all VPCs with optional label and region filtering.
 func NewLinodeVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_vpc_list",
 		"Lists all VPCs. Can filter by label or region.",
+		"linode.mcp.v1.VpcListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.Vpc, error) {
 			return client.ListVPCsProto(ctx)
 		},
@@ -75,7 +76,7 @@ func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg 
 
 // NewLinodeVPCIPsListTool creates a tool for listing all VPC IP addresses across all VPCs.
 func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	_, handler := newProtoListTool(
 		cfg,
 		"linode_vpc_ip_all_list",
 		"Lists all IP addresses across all VPCs",
@@ -86,12 +87,18 @@ func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 		vpcIPListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_vpc_ip_all_list",
+		"Lists all IP addresses across all VPCs",
+		toolschemas.Schema("linode.mcp.v1.VPCIPAllListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeVPCIPListTool creates a tool for listing IP addresses for a specific VPC.
 func NewLinodeVPCIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	_, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_vpc_ip_list",
 		"Lists all IP addresses for a specific VPC",
@@ -106,6 +113,12 @@ func NewLinodeVPCIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		vpcIPListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_vpc_ip_list",
+		"Lists all IP addresses for a specific VPC",
+		toolschemas.Schema("linode.mcp.v1.VPCIPListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -115,7 +128,7 @@ func vpcIPListResponse(items []*linodev1.VPCIP, count int32, filter *string) *li
 
 // NewLinodeVPCSubnetListTool creates a tool for listing subnets in a specific VPC.
 func NewLinodeVPCSubnetListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	_, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_vpc_subnet_list",
 		"Lists all subnets for a specific VPC",
@@ -128,6 +141,12 @@ func NewLinodeVPCSubnetListTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		},
 		nil,
 		vpcSubnetListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_vpc_subnet_list",
+		"Lists all subnets for a specific VPC",
+		toolschemas.Schema("linode.mcp.v1.VpcSubnetListInput"),
 	)
 
 	return tool, profiles.CapRead, handler

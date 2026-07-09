@@ -1,0 +1,22 @@
+{
+  "tool": "linode_profile_app_delete",
+  "description": "Shared non-positive app_id rejection and the single DELETE once confirmed. Missing-app_id text and confirm text diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive app_id",
+      "args": { "app_id": 0 },
+      "expect_error": "app_id must be a positive integer"
+    },
+    {
+      "name": "revokes OAuth app access",
+      "args": { "app_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/profile/apps/123" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"app_id": 123},
+      "expect_error": "This revokes OAuth app access. Set confirm=true to proceed."
+    }
+  ]
+}

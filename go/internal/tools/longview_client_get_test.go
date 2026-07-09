@@ -181,8 +181,8 @@ func TestLinodeLongviewClientGetToolInvalidLongviewClientIdRejectsBeforeClient(t
 		want string
 	}{
 		{name: caseMissing, args: map[string]any{}, want: "client_id is required"},
-		{name: caseString, args: map[string]any{keyLongviewClientID: idAbc123}, want: "client_id must be an integer"},
-		{name: caseZero, args: map[string]any{keyLongviewClientID: float64(0)}, want: "client_id must be an integer"},
+		{name: caseString, args: map[string]any{keyLongviewClientID: idAbc123}, want: "client_id must be a positive integer"},
+		{name: caseZero, args: map[string]any{keyLongviewClientID: float64(0)}, want: "client_id must be a positive integer"},
 	}
 
 	for _, testCase := range cases {

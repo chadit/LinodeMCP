@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.InstanceTransferMonth",
+  "description": "Monthly transfer totals: all three byte counts are int64 and serialize as JSON strings.",
+  "input": {
+    "bytes_in": 30471077120,
+    "bytes_out": 22956600198,
+    "bytes_total": 53427677318
+  },
+  "canonical": {
+    "bytes_in": 30471077120,
+    "bytes_out": 22956600198,
+    "bytes_total": 53427677318
+  }
+}

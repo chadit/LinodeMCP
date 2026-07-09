@@ -4,6 +4,19 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+// FirewallDeviceType is the kind of resource a firewall device assignment
+// attaches to. Values are the exact lowercase Linode API strings, authored from
+// the live OpenAPI spec (POST /networking/firewalls/{firewallId}/devices). See
+// the enum-wrapper convention in nodebalancer_config.proto.
+message FirewallDeviceType {
+  enum Value {
+    unspecified = 0;
+    linode = 1;
+    nodebalancer = 2;
+    linode_interface = 3;
+  }
+}
+
 // FirewallDeviceEntity is the resource a firewall device is attached to.
 // parent_entity is a nullable self-reference (omitted when unset).
 message FirewallDeviceEntity {
@@ -37,5 +50,79 @@ message FirewallDeviceGetInput {
   // The ID of the firewall (required).
   int32 firewall_id = 2;
   // The ID of the firewall device to retrieve (required).
+  int32 device_id = 3;
+}
+
+// FirewallDeviceListInput is the input contract for
+// linode_firewall_device_list.
+message FirewallDeviceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the firewall whose assigned devices should be listed.
+  int32 firewall_id = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
+}
+
+// FirewallDeviceCreateInput is the input contract for
+// linode_firewall_device_create.
+message FirewallDeviceCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the firewall to assign the device to.
+  int32 firewall_id = 2;
+  // The positive ID of the Linode, Linode interface, or NodeBalancer to
+  // assign.
+  int32 id = 3;
+  // Device type. Must be linode, nodebalancer, or linode_interface.
+  FirewallDeviceType.Value type = 4;
+  // Must be true to confirm firewall device assignment. Ignored when
+  // dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// FirewallDeviceDeleteInput is the input contract for
+// linode_firewall_device_delete.
+message FirewallDeviceDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the firewall whose device assignment should be removed.
+  int32 firewall_id = 2;
+  // The ID of the firewall device assignment to remove.
+  int32 device_id = 3;
+  // Must be true to confirm firewall device removal. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 6;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 7;
+}
+
+// FirewallDeviceWriteResponse is the {message, device} envelope the
+// linode_firewall_device_create tool returns: a confirmation string plus the
+// full FirewallDevice element the API returned when the device was assigned.
+message FirewallDeviceWriteResponse {
+  string message = 1;
+  FirewallDevice device = 2;
+}
+
+// FirewallDeviceDeleteResponse is the id-echo envelope
+// linode_firewall_device_delete returns: a confirmation message plus the parent
+// firewall and removed device IDs. The delete endpoint returns an empty body,
+// so the echo confirms the target.
+message FirewallDeviceDeleteResponse {
+  string message = 1;
+  int32 firewall_id = 2;
   int32 device_id = 3;
 }

@@ -1,0 +1,26 @@
+{
+  "tool": "linode_instance_config_interface_reorder",
+  "description": "Pins the config-interface reorder POST body and the duplicate-ids rejection now enforced in both languages (Python gained Go's check). The dup case sets confirm:true so both reach it.",
+  "cases": [
+    {
+      "name": "reorders config interfaces",
+      "args": { "linode_id": 123, "config_id": 7, "confirm": true, "ids": [3, 1, 2] },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/configs/7/interfaces/order",
+        "body": { "ids": [3, 1, 2] }
+      }
+    },
+    {
+      "name": "rejects duplicate interface ids",
+      "args": { "linode_id": 123, "config_id": 7, "confirm": true, "ids": [1, 1] },
+      "expect_error": "ids must not contain duplicate interface IDs"
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "config_id": 7, "ids": [3, 1, 2]},
+      "expect_error": "This reorders network interfaces on the configuration profile. Set confirm=true to proceed."
+    }
+  ]
+}

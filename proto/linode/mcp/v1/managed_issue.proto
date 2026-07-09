@@ -35,3 +35,13 @@ message ManagedIssueGetInput {
   // The ID of the managed issue to retrieve (required).
   int32 issue_id = 2;
 }
+
+// ManagedIssueListInput is the input contract for linode_managed_issue_list.
+message ManagedIssueListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}

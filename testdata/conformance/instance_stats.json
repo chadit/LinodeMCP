@@ -1,0 +1,158 @@
+{
+  "message": "linode.mcp.v1.InstanceStats",
+  "description": "Instance stats with the top-level data wrapper the Linode API returns; each series is a list of [timestamp, value] pairs held as ListValue so the leaf numbers stay JSON numbers.",
+  "input": {
+    "title": "linode.com - my-linode (linode123456) - day (5 min avg)",
+    "data": {
+      "cpu": [
+        [
+          1521483600000,
+          0.42
+        ]
+      ],
+      "io": {
+        "io": [
+          [
+            1521484800000,
+            0.19
+          ]
+        ],
+        "swap": [
+          [
+            1521484800000,
+            0
+          ]
+        ]
+      },
+      "netv4": {
+        "in": [
+          [
+            1521484800000,
+            2004.36
+          ]
+        ],
+        "out": [
+          [
+            1521484800000,
+            3928.91
+          ]
+        ],
+        "private_in": [
+          [
+            1521484800000,
+            0
+          ]
+        ],
+        "private_out": [
+          [
+            1521484800000,
+            5.6
+          ]
+        ]
+      },
+      "netv6": {
+        "in": [
+          [
+            1521484800000,
+            0
+          ]
+        ],
+        "out": [
+          [
+            1521484800000,
+            0
+          ]
+        ],
+        "private_in": [
+          [
+            1521484800000,
+            195.18
+          ]
+        ],
+        "private_out": [
+          [
+            1521484800000,
+            5.6
+          ]
+        ]
+      }
+    }
+  },
+  "canonical": {
+    "title": "linode.com - my-linode (linode123456) - day (5 min avg)",
+    "data": {
+      "cpu": [
+        [
+          1521483600000.0,
+          0.42
+        ]
+      ],
+      "io": {
+        "io": [
+          [
+            1521484800000.0,
+            0.19
+          ]
+        ],
+        "swap": [
+          [
+            1521484800000.0,
+            0.0
+          ]
+        ]
+      },
+      "netv4": {
+        "in": [
+          [
+            1521484800000.0,
+            2004.36
+          ]
+        ],
+        "out": [
+          [
+            1521484800000.0,
+            3928.91
+          ]
+        ],
+        "private_in": [
+          [
+            1521484800000.0,
+            0.0
+          ]
+        ],
+        "private_out": [
+          [
+            1521484800000.0,
+            5.6
+          ]
+        ]
+      },
+      "netv6": {
+        "in": [
+          [
+            1521484800000.0,
+            0.0
+          ]
+        ],
+        "out": [
+          [
+            1521484800000.0,
+            0.0
+          ]
+        ],
+        "private_in": [
+          [
+            1521484800000.0,
+            195.18
+          ]
+        ],
+        "private_out": [
+          [
+            1521484800000.0,
+            5.6
+          ]
+        ]
+      }
+    }
+  }
+}

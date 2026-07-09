@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.SSHKeyDeleteResponse",
+  "description": "SSH key delete id-echo: a confirmation message plus the removed key's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "SSH key 753 removed successfully",
+    "ssh_key_id": 753
+  },
+  "canonical": {
+    "message": "SSH key 753 removed successfully",
+    "ssh_key_id": 753
+  }
+}

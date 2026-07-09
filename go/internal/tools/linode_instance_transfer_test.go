@@ -10,7 +10,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
@@ -33,8 +32,8 @@ func TestLinodeInstanceTransferGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
+	if !strings.Contains(string(tool.RawInputSchema), keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
 	if handler == nil {
@@ -101,7 +100,7 @@ func TestLinodeInstanceTransferGetToolInvalid(t *testing.T) {
 func TestLinodeInstanceTransferGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	transfer := linode.InstanceTransfer{Billable: 0, Quota: 2000, Used: 22956600198}
+	transfer := map[string]any{"billable": 0, "quota": 2000, "used": 22956600198, keyNotInProto: valNotInProto}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
@@ -155,6 +154,10 @@ func TestLinodeInstanceTransferGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "22956600198") {
 		t.Errorf("textContent.Text does not contain %v", "22956600198")
+	}
+
+	if strings.Contains(textContent.Text, keyNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 

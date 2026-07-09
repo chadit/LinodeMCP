@@ -1,0 +1,5 @@
+# *WriteResponse protos still missing a conformance fixture in the Go corpus
+# (go/internal/tools/proto_conformance_corpus_test.go). Ratchet: add a
+# testdata fixture and register the message, then remove its line.
+# Regenerate: python scripts/verify_write_proto.py --update-baseline
+

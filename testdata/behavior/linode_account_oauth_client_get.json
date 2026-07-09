@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_oauth_client_get",
+  "description": "OAuth client get: missing client_id agrees; success pins the GET path.",
+  "cases": [
+    {
+      "name": "requires client_id",
+      "args": {},
+      "expect_error": "client_id is required"
+    },
+    {
+      "name": "gets an OAuth client by id",
+      "args": { "client_id": "abc123" },
+      "api_response": { "id": "abc123", "label": "my-app" },
+      "expect_request": { "method": "GET", "path": "/account/oauth-clients/abc123" }
+    }
+  ]
+}

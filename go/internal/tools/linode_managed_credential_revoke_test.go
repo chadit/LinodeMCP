@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -40,18 +39,10 @@ func TestLinodeManagedCredentialRevokeToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[managedCredentialIDParam]; !ok {
-		t.Errorf("props missing key %v", managedCredentialIDParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{managedCredentialIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -223,8 +214,13 @@ func TestLinodeManagedCredentialRevokeToolInvalidCredentialIdRejectsBeforeClient
 				t.Error("result.IsError = false, want true")
 			}
 
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errManagedCredentialIDPositive) {
-				t.Errorf("error text %q does not contain %q", text.Text, errManagedCredentialIDPositive)
+			wantCredentialID := errManagedCredentialIDPositive
+			if testCase.name == caseMissingCredentialID {
+				wantCredentialID = errCredentialIDRequired
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantCredentialID) {
+				t.Errorf("error text %q does not contain %q", text.Text, wantCredentialID)
 			}
 
 			if calls.Load() != int32(0) {

@@ -5,33 +5,27 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // NewLinodeFirewallCreateTool creates a tool for creating a firewall.
 func NewLinodeFirewallCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_create",
 		"Creates a new Cloud Firewall. The firewall is created with no rules by default.",
-		[]mcp.ToolOption{
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("A label for the firewall (must be unique)")),
-			mcp.WithString("inbound_policy",
-				mcp.Description("Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')")),
-			mcp.WithString("outbound_policy",
-				mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional, default: 'ACCEPT')")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm firewall creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeFirewallCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -43,12 +37,12 @@ func validateFirewallCreateArgs(label, inboundPolicy, outboundPolicy string) str
 		return errLabelRequired
 	}
 
-	if err := validateFirewallPolicy(inboundPolicy); err != nil {
-		return fmt.Sprintf("inbound_policy: %v", err)
+	if msg := enumChoiceError(inboundPolicy, "inbound_policy", linodev1.FirewallPolicy_Value_value); msg != "" {
+		return msg
 	}
 
-	if err := validateFirewallPolicy(outboundPolicy); err != nil {
-		return fmt.Sprintf("outbound_policy: %v", err)
+	if msg := enumChoiceError(outboundPolicy, "outbound_policy", linodev1.FirewallPolicy_Value_value); msg != "" {
+		return msg
 	}
 
 	return ""
@@ -106,22 +100,15 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeFirewallUpdateTool creates a tool for updating a firewall.
 func NewLinodeFirewallUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_update",
 		"Updates an existing Cloud Firewall. Can modify label, status, and default policies.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("firewall_id", mcp.Required(), mcp.Description("The ID of the firewall to update")),
-			mcp.WithString("label", mcp.Description("New label for the firewall (optional)")),
-			mcp.WithString("status", mcp.Description("New status: 'enabled' or 'disabled' (optional)")),
-			mcp.WithString("inbound_policy", mcp.Description("Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional)")),
-			mcp.WithString("outbound_policy", mcp.Description("Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm firewall update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeFirewallUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -133,16 +120,12 @@ func validateFirewallUpdateArgs(firewallID int, inboundPolicy, outboundPolicy st
 		return "firewall_id is required"
 	}
 
-	if inboundPolicy != "" {
-		if err := validateFirewallPolicy(inboundPolicy); err != nil {
-			return fmt.Sprintf("inbound_policy: %v", err)
-		}
+	if msg := enumChoiceError(inboundPolicy, "inbound_policy", linodev1.FirewallPolicy_Value_value); msg != "" {
+		return msg
 	}
 
-	if outboundPolicy != "" {
-		if err := validateFirewallPolicy(outboundPolicy); err != nil {
-			return fmt.Sprintf("outbound_policy: %v", err)
-		}
+	if msg := enumChoiceError(outboundPolicy, "outbound_policy", linodev1.FirewallPolicy_Value_value); msg != "" {
+		return msg
 	}
 
 	return ""
@@ -208,23 +191,28 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeFirewallDeleteTool creates a tool for deleting a firewall.
 func NewLinodeFirewallDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_delete",
 		"Deletes a Cloud Firewall. WARNING: This will remove all firewall rules and unassign all attached devices."+
 			" Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("firewall_id", mcp.Required(), mcp.Description("The ID of the firewall to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleLinodeFirewallDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallDeleteInput"),
 	)
 
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallDeleteRequest(ctx, &request, cfg)
+	}
+
 	return tool, profiles.CapDestroy, handler
+}
+
+// firewallDeleteProto builds the proto-canonical id-echo body for a successful
+// firewall delete, keeping the proto literal off the handler's struct literal
+// so the delete handlers stay below the dupl threshold.
+func firewallDeleteProto(id int) proto.Message {
+	return &linodev1.FirewallDeleteResponse{
+		Message:    fmt.Sprintf("Firewall %d removed successfully", id),
+		FirewallId: linodeIDToInt32(id),
+	}
 }
 
 func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -234,7 +222,7 @@ func handleLinodeFirewallDeleteRequest(ctx context.Context, request *mcp.CallToo
 		Method:         httpMethodDelete,
 		PathPattern:    "/networking/firewalls/%d",
 		ConfirmMessage: destroyConfirmMessage,
-		SuccessFormat:  "Firewall %d removed successfully",
+		SuccessProto:   firewallDeleteProto,
 		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
 			return c.GetFirewall(ctx, id)
 		},

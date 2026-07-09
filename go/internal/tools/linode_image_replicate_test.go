@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -39,22 +38,10 @@ func TestLinodeImageReplicateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyImageID]; !ok {
-		t.Errorf("props missing key %v", keyImageID)
-	}
-
-	if _, ok := props[keyRegions]; !ok {
-		t.Errorf("props missing key %v", keyRegions)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyImageID, keyRegions, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 

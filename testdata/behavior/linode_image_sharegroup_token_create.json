@@ -1,0 +1,22 @@
+{
+  "tool": "linode_image_sharegroup_token_create",
+  "description": "Pins the token-create POST body. uuid-missing/format and confirm-message rejections diverge (see report).",
+  "cases": [
+    {
+      "name": "creates a share group token",
+      "args": { "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/images/sharegroups/tokens", "body": { "valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000" } }
+    },
+    {
+      "name": "rejects a non-uuid valid_for_sharegroup_uuid",
+      "args": { "valid_for_sharegroup_uuid": "not-a-uuid", "confirm": true },
+      "expect_error": "valid_for_sharegroup_uuid must be a valid UUID"
+    },
+    {
+      "name": "requires confirm",
+      "args": {"valid_for_sharegroup_uuid": "123e4567-e89b-12d3-a456-426614174000"},
+      "expect_error": "This creates single-use image share group token material. Set confirm=true to proceed."
+    }
+  ]
+}

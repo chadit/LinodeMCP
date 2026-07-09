@@ -38,3 +38,16 @@ message NodeBalancerVPCConfigGetInput {
   // The ID of the VPC configuration to retrieve (required).
   int32 vpc_config_id = 3;
 }
+
+// NodeBalancerVPCConfigListInput is the input contract for
+// linode_nodebalancer_vpc_config_list.
+message NodeBalancerVPCConfigListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer whose VPC configurations should be listed.
+  int32 nodebalancer_id = 2;
+  // Page number to retrieve.
+  optional int32 page = 3;
+  // Number of results per page, from 25 through 500.
+  optional int32 page_size = 4;
+}

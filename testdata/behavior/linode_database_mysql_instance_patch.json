@@ -1,0 +1,22 @@
+{
+  "tool": "linode_database_mysql_instance_patch",
+  "description": "Instance-id validation (with confirm, both languages agree) and the confirm-gated patch POST.",
+  "cases": [
+    {
+      "name": "rejects non-positive instance_id",
+      "args": { "instance_id": 0, "confirm": true },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "patches a mysql instance",
+      "args": { "instance_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/databases/mysql/instances/123/patch" }
+    },
+    {
+      "name": "requires confirm",
+      "args": { "instance_id": 123 },
+      "expect_error": "This patches a Managed Database instance. Set confirm=true to proceed."
+    }
+  ]
+}

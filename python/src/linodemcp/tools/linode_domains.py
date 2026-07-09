@@ -4,9 +4,9 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.genpb.linode.mcp.v1 import domain_pb2
+from linodemcp.genpb.linode.mcp.v1 import domain_pb2, domain_zone_file_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -52,23 +52,7 @@ def create_linode_domain_list_tool() -> tuple[Tool, Capability]:
             "Lists all domains managed by your Linode account. "
             "Can filter by domain name or type (master/slave)."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_contains": {
-                    "type": "string",
-                    "description": (
-                        "Filter domains by name containing this string "
-                        "(case-insensitive)"
-                    ),
-                },
-                "type": {
-                    "type": "string",
-                    "description": "Filter by domain type (master, slave)",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.DomainListInput"),
     ), Capability.Read
 
 
@@ -155,7 +139,7 @@ async def handle_linode_domain_zone_file_get(
         return error_response("domain_id must be a positive integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        zone_file = await client.get_domain_zone_file(domain_id)
-        return {"zone_file": zone_file.zone_file or []}
+        raw = await client.get_raw(f"/domains/{domain_id}/zone-file")
+        return serialize_api_response(raw, domain_zone_file_pb2.DomainZoneFile())
 
     return await execute_tool(cfg, arguments, "retrieve domain zone file", _call)

@@ -1,0 +1,17 @@
+{
+  "tool": "linode_vpc_ip_list",
+  "description": "VPC IP list requires vpc_id (a string id), then GETs the VPC's IP collection.",
+  "cases": [
+    {
+      "name": "requires vpc_id",
+      "args": {},
+      "expect_error": "vpc_id is required"
+    },
+    {
+      "name": "lists the VPC IPs",
+      "args": { "vpc_id": "5" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/vpcs/5/ips" }
+    }
+  ]
+}

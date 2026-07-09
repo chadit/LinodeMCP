@@ -1,0 +1,7 @@
+# Handler-level read-proto stragglers: read tools not yet proto-routed on
+# both sides. One line per straggler: <tool>\t<go_status>\t<py_status>.
+# This file is the authoritative remaining-work list for the read-surface
+# proto conversion. Ratchet: convert a handler to proto on both sides,
+# then remove its line; never add a line by hand. Regenerate:
+#   python scripts/verify_read_proto.py --update-baseline
+

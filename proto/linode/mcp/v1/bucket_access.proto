@@ -29,3 +29,47 @@ message ObjectStorageBucketAccessGetInput {
   // The bucket label (required).
   string label = 3;
 }
+
+// ObjectStorageBucketAccessAllowInput is the input contract for
+// linode_object_storage_bucket_access_allow. region, label, and confirm are
+// required.
+message ObjectStorageBucketAccessAllowInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region of the bucket.
+  string region = 2;
+  // Label of the bucket.
+  string label = 3;
+  // Access control: private, public-read, authenticated-read, or
+  // public-read-write.
+  optional string acl = 4;
+  // Whether to enable CORS on the bucket.
+  optional bool cors_enabled = 5;
+  // Must be set to true to confirm access changes. Ignored when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+}
+
+// ObjectStorageBucketAccessUpdateInput is the input contract for
+// linode_object_storage_bucket_access_update. region, label, and confirm are
+// required.
+message ObjectStorageBucketAccessUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region of the bucket.
+  string region = 2;
+  // Label of the bucket.
+  string label = 3;
+  // New access control: private, public-read, authenticated-read, or
+  // public-read-write.
+  optional string acl = 4;
+  // Whether to enable CORS on the bucket.
+  optional bool cors_enabled = 5;
+  // Must be set to true to confirm access update. Ignored when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+}

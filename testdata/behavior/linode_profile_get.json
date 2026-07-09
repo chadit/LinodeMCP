@@ -1,0 +1,12 @@
+{
+  "tool": "linode_profile_get",
+  "description": "Pins the bare profile GET path both languages issue.",
+  "cases": [
+    {
+      "name": "gets the authenticated profile",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/profile" }
+    }
+  ]
+}

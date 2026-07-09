@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -15,6 +16,18 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
+
+// firewallDeviceDeleteProto builds the proto-canonical id-echo body for a
+// successful firewall-device removal, keeping the proto literal off the
+// handler's struct literal so the delete handlers stay below the dupl
+// threshold.
+func firewallDeviceDeleteProto(firewallID, deviceID int) proto.Message {
+	return &linodev1.FirewallDeviceDeleteResponse{
+		Message:    "Firewall device removed successfully",
+		FirewallId: linodeIDToInt32(firewallID),
+		DeviceId:   linodeIDToInt32(deviceID),
+	}
+}
 
 const (
 	firewallDefaultLinodeKey  = "linode"
@@ -31,10 +44,11 @@ const (
 
 // NewLinodeFirewallListTool creates a tool for listing firewalls.
 func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_firewall_list",
 		"Lists all Cloud Firewalls on your account. Can filter by status or label.",
+		"linode.mcp.v1.FirewallListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.Firewall, error) {
 			return client.ListFirewallsProto(ctx)
 		},
@@ -70,9 +84,9 @@ func NewLinodeFirewallGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 }
 
 func handleLinodeFirewallGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	firewallID := request.GetInt(paramFirewallID, 0)
-	if firewallID <= 0 {
-		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	firewallID, validationMessage := requiredIDArgument(request, paramFirewallID)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -90,10 +104,11 @@ func handleLinodeFirewallGetRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeVLANsListTool creates a tool for listing VLANs.
 func NewLinodeVLANsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_vlan_list",
 		"Lists VLANs on the account with optional pagination.",
+		"linode.mcp.v1.VLANListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.VLAN, error) {
@@ -113,23 +128,15 @@ func vlanListResponse(items []*linodev1.VLAN, count int32, filter *string) *lino
 
 // NewLinodeVLANDeleteTool creates a tool for deleting one VLAN.
 func NewLinodeVLANDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_vlan_delete",
 		"Deletes one VLAN by region and label. Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithString("region_id", mcp.Required(),
-				mcp.Description("The region ID for the VLAN, for example us-east.")),
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("The VLAN label.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm deleting the VLAN. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleLinodeVLANDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.VLANDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeVLANDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -160,11 +167,11 @@ func handleLinodeVLANDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 		Execute: func(ctx context.Context, c *linode.Client) error {
 			return c.DeleteVLAN(ctx, regionID, label)
 		},
-		Success: func() any {
-			return map[string]any{
-				responseKeyMessage: "VLAN " + label + " deleted successfully from region " + regionID,
-				"region_id":        regionID,
-				"label":            label,
+		Success: func() proto.Message {
+			return &linodev1.VLANDeleteResponse{
+				Message:  "VLAN " + label + " deleted successfully from region " + regionID,
+				RegionId: regionID,
+				Label:    label,
 			}
 		},
 		// A VLAN carries no cosmetic timestamp, so the whole state is hashed;
@@ -237,12 +244,7 @@ func NewLinodeFirewallRulesListTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 }
 
 func handleLinodeFirewallRulesListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	firewallID, validationMessage := requiredPositiveIntArgument(
-		request,
-		paramFirewallID,
-		linode.ErrFirewallIDPositive.Error(),
-		linode.ErrFirewallIDPositive.Error(),
-	)
+	firewallID, validationMessage := requiredIDArgument(request, paramFirewallID)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -262,23 +264,15 @@ func handleLinodeFirewallRulesListRequest(ctx context.Context, request *mcp.Call
 
 // NewLinodeFirewallRulesUpdateTool creates a tool for replacing rules for a Cloud Firewall.
 func NewLinodeFirewallRulesUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_rules_update",
 		"Replaces inbound and outbound rules for a Cloud Firewall.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
-				mcp.Description("The ID of the firewall whose rules should be replaced.")),
-			mcp.WithArray(paramFirewallRuleInbound, mcp.Required(),
-				mcp.Description("Array of inbound firewall rule objects.")),
-			mcp.WithArray(paramFirewallRuleOutbound, mcp.Required(),
-				mcp.Description("Array of outbound firewall rule objects.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm replacing firewall rules. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeFirewallRulesUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallRulesUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallRulesUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -292,12 +286,7 @@ func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.Ca
 		return result, nil
 	}
 
-	firewallID, validationMessage := requiredPositiveIntArgument(
-		request,
-		paramFirewallID,
-		linode.ErrFirewallIDPositive.Error(),
-		linode.ErrFirewallIDPositive.Error(),
-	)
+	firewallID, validationMessage := requiredIDArgument(request, paramFirewallID)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -339,12 +328,7 @@ func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.Ca
 }
 
 func handleLinodeFirewallRulesUpdateDryRun(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	firewallID, validationMessage := requiredPositiveIntArgument(
-		request,
-		paramFirewallID,
-		linode.ErrFirewallIDPositive.Error(),
-		linode.ErrFirewallIDPositive.Error(),
-	)
+	firewallID, validationMessage := requiredIDArgument(request, paramFirewallID)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -389,10 +373,11 @@ func firewallRuleSetFromTool(request *mcp.CallToolRequest, name string) ([]linod
 
 // NewLinodeFirewallRuleVersionsListTool creates a tool for retrieving rule-version history for a Cloud Firewall.
 func NewLinodeFirewallRuleVersionsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	tool, handler := newProtoListToolSubresourceRawSchema(
 		cfg,
 		"linode_firewall_rule_version_list",
 		"Retrieves the rule-version history payload for a Cloud Firewall.",
+		"linode.mcp.v1.FirewallRuleVersionListInput",
 		protoListPathID{
 			option: mcp.WithNumber(paramFirewallID, mcp.Required(),
 				mcp.Description("The ID of the firewall whose rule versions should be listed.")),
@@ -414,39 +399,26 @@ func firewallRuleVersionListResponse(items []*linodev1.FirewallRuleVersion, coun
 
 // NewLinodeFirewallRuleVersionGetTool creates a tool for retrieving one Cloud Firewall rule version.
 func NewLinodeFirewallRuleVersionGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_rule_version_get",
 		"Retrieves one rule version for a Cloud Firewall.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
-				mcp.Description("The ID of the firewall whose rule version should be retrieved.")),
-			mcp.WithNumber(paramFirewallRuleVersion, mcp.Required(),
-				mcp.Description("The firewall rule version number to retrieve.")),
-		},
-		handleLinodeFirewallRuleVersionGetRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallRuleVersionGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallRuleVersionGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 func handleLinodeFirewallRuleVersionGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	firewallID, validationMessage := requiredPositiveIntArgument(
-		request,
-		paramFirewallID,
-		linode.ErrFirewallIDPositive.Error(),
-		linode.ErrFirewallIDPositive.Error(),
-	)
+	firewallID, validationMessage := requiredIDArgument(request, paramFirewallID)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	version, validationMessage := requiredPositiveIntArgument(
-		request,
-		paramFirewallRuleVersion,
-		linode.ErrFirewallRuleVersionPositive.Error(),
-		linode.ErrFirewallRuleVersionPositive.Error(),
-	)
+	version, validationMessage := requiredIDArgument(request, paramFirewallRuleVersion)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -466,10 +438,11 @@ func handleLinodeFirewallRuleVersionGetRequest(ctx context.Context, request *mcp
 
 // NewLinodeFirewallDevicesListTool creates a tool for listing devices assigned to a Cloud Firewall.
 func NewLinodeFirewallDevicesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	tool, handler := newProtoListToolSubresourcePaginatedRawSchema(
 		cfg,
 		"linode_firewall_device_list",
 		"Lists devices assigned to a Cloud Firewall.",
+		"linode.mcp.v1.FirewallDeviceListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		protoListPathID{
@@ -492,12 +465,7 @@ func NewLinodeFirewallDevicesListTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 // same way the non-proto handler did (a non-positive id returns
 // ErrFirewallIDPositive).
 func firewallDeviceListFirewallIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	firewallID := request.GetInt(paramFirewallID, 0)
-	if firewallID <= 0 {
-		return 0, linode.ErrFirewallIDPositive.Error()
-	}
-
-	return firewallID, ""
+	return requiredIDArgument(request, paramFirewallID)
 }
 
 // firewallDeviceListPaginationFromTool reads page/page_size the same way the
@@ -527,9 +495,9 @@ func NewLinodeFirewallDeviceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 }
 
 func handleLinodeFirewallDeviceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	firewallID := request.GetInt(paramFirewallID, 0)
-	if firewallID <= 0 {
-		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	firewallID, validationMessage := requiredIDArgument(request, paramFirewallID)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	deviceID := request.GetInt(paramFirewallDeviceID, 0)
@@ -552,23 +520,15 @@ func handleLinodeFirewallDeviceGetRequest(ctx context.Context, request *mcp.Call
 
 // NewLinodeFirewallDeviceCreateTool creates a tool for assigning a device to a Cloud Firewall.
 func NewLinodeFirewallDeviceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_device_create",
 		"Assigns a Linode, Linode interface, or NodeBalancer device to a Cloud Firewall.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
-				mcp.Description("The ID of the firewall to assign the device to.")),
-			mcp.WithNumber(paramDeviceID, mcp.Required(),
-				mcp.Description("The positive ID of the Linode, Linode interface, or NodeBalancer to assign.")),
-			mcp.WithString(paramDeviceType, mcp.Required(),
-				mcp.Description("Device type. Must be linode, nodebalancer, or linode_interface.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm firewall device assignment. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeFirewallDeviceCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallDeviceCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallDeviceCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -577,8 +537,8 @@ func handleLinodeFirewallDeviceCreateRequest(ctx context.Context, request *mcp.C
 	firewallID := request.GetInt(paramFirewallID, 0)
 
 	if IsDryRun(request) {
-		if firewallID <= 0 {
-			return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+		if _, validationMessage := requiredIDArgument(request, paramFirewallID); validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
 		}
 
 		if _, validationMessage := firewallDeviceCreateRequestFromTool(request); validationMessage != "" {
@@ -597,8 +557,8 @@ func handleLinodeFirewallDeviceCreateRequest(ctx context.Context, request *mcp.C
 		return result, nil
 	}
 
-	if firewallID <= 0 {
-		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	if _, validationMessage := requiredIDArgument(request, paramFirewallID); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	req, validationMessage := firewallDeviceCreateRequestFromTool(request)
@@ -616,10 +576,7 @@ func handleLinodeFirewallDeviceCreateRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(failureMessage), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message string                 `json:"message"`
-		Device  *linode.FirewallDevice `json:"device"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.FirewallDeviceWriteResponse{
 		Message: "Firewall device assigned successfully",
 		Device:  device,
 	})
@@ -644,12 +601,7 @@ func firewallDeviceCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 }
 
 func validateFirewallDeviceType(deviceType string) string {
-	switch deviceType {
-	case firewallDefaultLinodeKey, "nodebalancer", "linode_interface":
-		return ""
-	default:
-		return linode.ErrInvalidFirewallDeviceType.Error()
-	}
+	return enumChoiceError(deviceType, paramDeviceType, linodev1.FirewallDeviceType_Value_value)
 }
 
 func createFirewallDevice(
@@ -657,8 +609,8 @@ func createFirewallDevice(
 	client *linode.Client,
 	firewallID int,
 	req *linode.CreateFirewallDeviceRequest,
-) (*linode.FirewallDevice, string) {
-	device, err := client.CreateFirewallDevice(ctx, firewallID, req)
+) (*linodev1.FirewallDevice, string) {
+	device, err := client.CreateFirewallDeviceProto(ctx, firewallID, req)
 	if err != nil {
 		return nil, "Failed to create linode_firewall_device_create: " + err.Error()
 	}
@@ -668,36 +620,26 @@ func createFirewallDevice(
 
 // NewLinodeFirewallDeviceDeleteTool creates a tool for removing a device assignment from a Cloud Firewall.
 func NewLinodeFirewallDeviceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_device_delete",
 		"Removes one device assignment from a Cloud Firewall."+
 			" Pass dry_run=true to preview without removing."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber(paramFirewallID, mcp.Required(),
-				mcp.Description("The ID of the firewall whose device assignment should be removed.")),
-			mcp.WithNumber(paramFirewallDeviceID, mcp.Required(),
-				mcp.Description("The ID of the firewall device assignment to remove.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm firewall device removal. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleLinodeFirewallDeviceDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallDeviceDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallDeviceDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 func handleLinodeFirewallDeviceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	// Pre-validation: existing tests assert specific sentinel error
-	// messages for non-positive IDs. The shared two-int helper only
-	// rejects `id == 0`; this guard catches negatives before either
-	// branch (dry-run or real) runs. Same pattern as the negative-ID
-	// guard on object_storage_key_delete (Phase 1b.2).
-	if firewallID := request.GetInt(paramFirewallID, 0); firewallID <= 0 {
-		return mcp.NewToolResultError(linode.ErrFirewallIDPositive.Error()), nil
+	// Pre-validation before the shared two-int destroy helper runs, so each
+	// id path emits its own Option-B message rather than the helper's generic
+	// one. Same pattern as the negative-ID guard on object_storage_key_delete.
+	if _, validationMessage := requiredIDArgument(request, paramFirewallID); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if deviceID := request.GetInt(paramFirewallDeviceID, 0); deviceID <= 0 {
@@ -711,7 +653,7 @@ func handleLinodeFirewallDeviceDeleteRequest(ctx context.Context, request *mcp.C
 		Method:         httpMethodDelete,
 		PathPattern:    "/networking/firewalls/%d/devices/%d",
 		ConfirmMessage: "This removes a device assignment from a Cloud Firewall. Set confirm=true to proceed.",
-		SuccessFormat:  "Firewall device removed successfully",
+		SuccessProto:   firewallDeviceDeleteProto,
 		FetchState: func(ctx context.Context, c *linode.Client, firewallID, deviceID int) (any, error) {
 			return c.GetFirewallDevice(ctx, firewallID, deviceID)
 		},
@@ -724,16 +666,15 @@ func handleLinodeFirewallDeviceDeleteRequest(ctx context.Context, request *mcp.C
 
 // NewLinodeFirewallSettingsListTool creates a tool for listing default firewall assignments.
 func NewLinodeFirewallSettingsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_settings_get",
 		"Lists default Cloud Firewall assignments for Linodes, NodeBalancers, public interfaces, and VPC interfaces.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
-		},
-		handleLinodeFirewallSettingsListRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallSettingsGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallSettingsListRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -744,20 +685,21 @@ func handleLinodeFirewallSettingsListRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	settings, err := client.ListFirewallSettings(ctx, request.GetInt("page", 0), request.GetInt("page_size", 0))
+	settings, err := client.ListFirewallSettingsProto(ctx, request.GetInt("page", 0), request.GetInt("page_size", 0))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_settings_get: %v", err)), nil
 	}
 
-	return MarshalToolResponse(settings)
+	return MarshalProtoToolResponse(settings)
 }
 
 // NewLinodeFirewallTemplatesListTool creates a tool for listing reusable firewall templates.
 func NewLinodeFirewallTemplatesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_firewall_template_list",
 		"Lists reusable Cloud Firewall templates for VPC and public interfaces.",
+		"linode.mcp.v1.FirewallTemplateListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.FirewallTemplate, error) {
@@ -784,18 +726,15 @@ func firewallTemplateListResponse(items []*linodev1.FirewallTemplate, count int3
 
 // NewLinodeFirewallTemplateGetTool creates a tool for retrieving a reusable firewall template by slug.
 func NewLinodeFirewallTemplateGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_template_get",
 		"Gets a reusable Cloud Firewall template for VPC or public interfaces.",
-		[]mcp.ToolOption{
-			mcp.WithString(paramSlug, mcp.Required(),
-				mcp.Description("Firewall template slug to retrieve. Must be public or vpc.")),
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
-		},
-		handleLinodeFirewallTemplateGetRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallTemplateGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallTemplateGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -820,31 +759,24 @@ func handleLinodeFirewallTemplateGetRequest(ctx context.Context, request *mcp.Ca
 }
 
 func validateFirewallTemplateSlug(slug string) string {
-	switch slug {
-	case interfaceFieldPublic, "vpc":
-		return ""
-	case "":
+	if slug == "" {
 		return "slug is required"
-	default:
-		return "slug must be one of public or vpc"
 	}
+
+	return enumChoiceError(slug, paramSlug, linodev1.FirewallTemplateSlug_Value_value)
 }
 
 // NewLinodeFirewallSettingsUpdateTool creates a tool for updating default firewall assignments.
 func NewLinodeFirewallSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_firewall_settings_update",
 		"Updates default Cloud Firewall assignments for Linodes, NodeBalancers, public interfaces, and VPC interfaces.",
-		[]mcp.ToolOption{
-			mcp.WithObject(paramDefaultFirewallIDs, mcp.Required(),
-				mcp.Description("Object of positive firewall IDs keyed by linode, nodebalancer, public_interface, or vpc_interface.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm default firewall settings update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeFirewallSettingsUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.FirewallSettingsUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeFirewallSettingsUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -879,10 +811,7 @@ func handleLinodeFirewallSettingsUpdateRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(failureMessage), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message  string                   `json:"message"`
-		Settings *linode.FirewallSettings `json:"settings"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.FirewallSettingsWriteResponse{
 		Message:  "Default firewall settings updated successfully",
 		Settings: settings,
 	})
@@ -892,8 +821,8 @@ func updateFirewallSettings(
 	ctx context.Context,
 	client *linode.Client,
 	req *linode.UpdateFirewallSettingsRequest,
-) (*linode.FirewallSettings, string) {
-	settings, err := client.UpdateFirewallSettings(ctx, req)
+) (*linodev1.FirewallSettings, string) {
+	settings, err := client.UpdateFirewallSettingsProto(ctx, req)
 	if err != nil {
 		return nil, "Failed to update linode_firewall_settings_update: " + err.Error()
 	}

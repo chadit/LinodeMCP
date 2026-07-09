@@ -2,21 +2,22 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/appinfo"
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewVersionTool creates a version info tool.
 func NewVersionTool(_ *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"version",
-		mcp.WithDescription("Returns LinodeMCP server version and build information"),
+		"Returns LinodeMCP server version and build information",
+		toolschemas.Schema("linode.mcp.v1.VersionInput"),
 	)
 
 	handler := func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -26,15 +27,24 @@ func NewVersionTool(_ *config.Config) (mcp.Tool, profiles.Capability, func(ctx c
 		default:
 		}
 
-		versionInfo := appinfo.Get()
-
-		jsonResponse, err := json.MarshalIndent(versionInfo, "", "  ")
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal version info: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(jsonResponse)), nil
+		return MarshalProtoToolResponse(VersionResponseProto())
 	}
 
 	return tool, profiles.CapMeta, handler
+}
+
+// VersionResponseProto builds the canonical VersionResponse proto from the
+// build-time metadata. The `version` MCP tool and the CLI `version` subcommand
+// both serialize this message so the two surfaces (and the Python server) emit
+// the same field set.
+func VersionResponseProto() *linodev1.VersionResponse {
+	info := appinfo.Get()
+
+	return &linodev1.VersionResponse{
+		Version:    info.Version,
+		ApiVersion: info.APIVersion,
+		BuildDate:  info.BuildDate,
+		Commit:     info.Commit,
+		Platform:   info.Platform,
+	}
 }

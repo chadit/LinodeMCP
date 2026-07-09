@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.InstanceResizeWriteResponse",
+  "description": "Instance resize id-echo: a confirmation message plus the affected instance and the plan type it is resizing to. The resize endpoint returns no resource body, so these echo the request.",
+  "input": {
+    "message": "Instance 123 resize to g6-standard-1 initiated successfully",
+    "instance_id": 123,
+    "new_type": "g6-standard-1"
+  },
+  "canonical": {
+    "message": "Instance 123 resize to g6-standard-1 initiated successfully",
+    "instance_id": 123,
+    "new_type": "g6-standard-1"
+  }
+}

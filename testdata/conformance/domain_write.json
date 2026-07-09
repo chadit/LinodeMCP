@@ -1,0 +1,58 @@
+{
+  "message": "linode.mcp.v1.DomainWriteResponse",
+  "description": "Domain write envelope: a confirmation message plus the full domain element.",
+  "input": {
+    "message": "Domain 'example.com' (ID: 23456) created successfully",
+    "domain": {
+      "id": 23456,
+      "domain": "example.com",
+      "type": "master",
+      "status": "active",
+      "soa_email": "admin@example.com",
+      "description": "primary zone",
+      "retry_sec": 300,
+      "master_ips": [
+        "203.0.113.1"
+      ],
+      "axfr_ips": [
+        "203.0.113.2"
+      ],
+      "expire_sec": 604800,
+      "refresh_sec": 14400,
+      "ttl_sec": 3600,
+      "tags": [
+        "prod"
+      ],
+      "created": "2024-01-15T10:00:00",
+      "updated": "2024-01-15T12:00:00",
+      "group": "web"
+    }
+  },
+  "canonical": {
+    "message": "Domain 'example.com' (ID: 23456) created successfully",
+    "domain": {
+      "id": 23456,
+      "domain": "example.com",
+      "type": "master",
+      "status": "active",
+      "soa_email": "admin@example.com",
+      "description": "primary zone",
+      "retry_sec": 300,
+      "master_ips": [
+        "203.0.113.1"
+      ],
+      "axfr_ips": [
+        "203.0.113.2"
+      ],
+      "expire_sec": 604800,
+      "refresh_sec": 14400,
+      "ttl_sec": 3600,
+      "tags": [
+        "prod"
+      ],
+      "created": "2024-01-15T10:00:00",
+      "updated": "2024-01-15T12:00:00",
+      "group": "web"
+    }
+  }
+}

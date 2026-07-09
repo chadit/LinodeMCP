@@ -1,0 +1,17 @@
+{
+  "tool": "linode_nodebalancer_config_list",
+  "description": "Pins the list GET and the shared non-integer page rejection. Missing/invalid id text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "nodebalancer_id": 456, "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "lists configs for a nodebalancer",
+      "args": { "nodebalancer_id": 456 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/nodebalancers/456/configs" }
+    }
+  ]
+}

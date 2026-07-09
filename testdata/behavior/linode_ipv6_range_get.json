@@ -1,0 +1,23 @@
+{
+  "tool": "linode_ipv6_range_get",
+  "description": "IPv6 range get GETs the range with the slash path-escaped (Go url.PathEscape, Python quote(safe=\":\")), and rejects a malformed CIDR locally (Python now mirrors Go's netip.ParsePrefix check).",
+  "cases": [
+    {
+      "name": "gets the IPv6 range",
+      "args": { "range": "2600:3c03::/64" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/networking/ipv6/ranges/2600:3c03::%2F64" }
+    },
+    {
+      "name": "trims a whitespace-padded range",
+      "args": { "range": "  2600:3c03::/64  " },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/networking/ipv6/ranges/2600:3c03::%2F64" }
+    },
+    {
+      "name": "rejects a malformed range",
+      "args": { "range": "not-a-range" },
+      "expect_error": "range must be a valid IPv6 prefix"
+    }
+  ]
+}

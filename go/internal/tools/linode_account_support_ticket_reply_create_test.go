@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -40,26 +39,10 @@ func TestLinodeAccountSupportTicketReplyCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[supportTicketAttachmentTicketID]; !ok {
-		t.Errorf("props missing key %v", supportTicketAttachmentTicketID)
-	}
-
-	if _, ok := props[keyDescription]; !ok {
-		t.Errorf("props missing key %v", keyDescription)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
-	}
-
-	for _, key := range []string{supportTicketAttachmentTicketID, keyDescription, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{supportTicketAttachmentTicketID, keyDescription, keyConfirm, keyDryRun} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }

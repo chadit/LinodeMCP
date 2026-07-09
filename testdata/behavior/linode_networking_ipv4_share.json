@@ -1,0 +1,21 @@
+{
+  "tool": "linode_networking_ipv4_share",
+  "description": "Networking IPv4 share POSTs linode_id/ips to the ipv4 share endpoint once confirmed. The no-confirm text and arg validation diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "shares IPv4s with a primary linode",
+      "args": { "confirm": true, "linode_id": 123, "ips": [ "192.0.2.1" ] },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/ipv4/share",
+        "body": { "linode_id": 123, "ips": [ "192.0.2.1" ] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "ips": ["192.0.2.1"]},
+      "expect_error": "This changes shared IP assignments. Set confirm=true to proceed."
+    }
+  ]
+}

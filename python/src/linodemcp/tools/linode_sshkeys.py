@@ -33,8 +33,18 @@ async def handle_linode_sshkey_get(
     """Handle linode_sshkey_get tool request."""
     ssh_key_id = arguments.get("ssh_key_id", 0)
 
-    if not ssh_key_id:
-        return [TextContent(type="text", text="Error: ssh_key_id is required")]
+    # bool is a subclass of int; one message for missing/wrong-type/non-positive
+    # matches the Go parser exactly and stops negative ids reaching the API.
+    if (
+        isinstance(ssh_key_id, bool)
+        or not isinstance(ssh_key_id, int)
+        or ssh_key_id <= 0
+    ):
+        return [
+            TextContent(
+                type="text", text="Error: ssh_key_id must be a positive integer"
+            )
+        ]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         raw = await client.get_raw(f"/profile/sshkeys/{int(ssh_key_id)}")
@@ -51,24 +61,7 @@ def create_linode_sshkey_list_tool() -> tuple[Tool, Capability]:
             "Lists all SSH keys associated with your Linode profile. "
             "Can filter by label."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "label_contains": {
-                    "type": "string",
-                    "description": (
-                        "Filter SSH keys by label containing this string "
-                        "(case-insensitive)"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.SSHKeyListInput"),
     ), Capability.Read
 
 

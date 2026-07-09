@@ -1,0 +1,17 @@
+{
+  "tool": "linode_beta_get",
+  "description": "Beta program get. Missing beta_id agrees across languages; the invalid-character and non-string rejections diverge (see report), so only the missing rejection and the success GET are pinned.",
+  "cases": [
+    {
+      "name": "requires beta_id",
+      "args": {},
+      "expect_error": "beta_id is required"
+    },
+    {
+      "name": "gets one beta program by id",
+      "args": { "beta_id": "example-beta" },
+      "api_response": { "id": "example-beta" },
+      "expect_request": { "method": "GET", "path": "/betas/example-beta" }
+    }
+  ]
+}

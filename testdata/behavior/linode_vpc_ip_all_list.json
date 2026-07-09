@@ -1,0 +1,12 @@
+{
+  "tool": "linode_vpc_ip_all_list",
+  "description": "VPC all-IP list GETs the account-wide /vpcs/ips collection.",
+  "cases": [
+    {
+      "name": "lists all VPC IPs",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/vpcs/ips" }
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "tool": "linode_object_storage_bucket_create",
+  "description": "Pins the shared label/region validation (behind confirm) and the create POST body. The confirm-gate message text itself diverges, so every case carries confirm:true.",
+  "cases": [
+    {
+      "name": "rejects label shorter than 3 characters",
+      "args": { "label": "ab", "region": "us-east", "confirm": true },
+      "expect_error": "bucket label must be at least 3 characters"
+    },
+    {
+      "name": "requires region",
+      "args": { "label": "my-bucket", "confirm": true },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "creates a bucket",
+      "args": { "label": "test-bucket", "region": "us-east", "acl": "private", "confirm": true },
+      "api_response": { "label": "test-bucket", "region": "us-east" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets",
+        "body": { "label": "test-bucket", "region": "us-east", "acl": "private" }
+      }
+    },
+    {
+      "name": "rejects an invalid acl",
+      "args": { "label": "test-bucket", "region": "us-east", "acl": "bogus", "confirm": true },
+      "expect_error": "acl must be one of: private, public-read, authenticated-read, public-read-write"
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "test-bucket", "region": "us-east", "acl": "private"},
+      "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
+    }
+  ]
+}

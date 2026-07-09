@@ -1,0 +1,22 @@
+{
+  "tool": "linode_lke_node_get",
+  "description": "Pins the cluster_id/node_id-required rejections (checked in order) and the single GET. Non-integer cluster_id text diverges (Go appends ': <raw>'), see report.",
+  "cases": [
+    {
+      "name": "rejects missing cluster_id",
+      "args": {},
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "rejects missing node_id",
+      "args": { "cluster_id": "12345" },
+      "expect_error": "node_id is required"
+    },
+    {
+      "name": "gets a node",
+      "args": { "cluster_id": "12345", "node_id": "node-1" },
+      "api_response": { "id": "node-1", "instance_id": 555, "status": "ready" },
+      "expect_request": { "method": "GET", "path": "/lke/clusters/12345/nodes/node-1" }
+    }
+  ]
+}

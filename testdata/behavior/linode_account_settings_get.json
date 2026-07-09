@@ -1,0 +1,12 @@
+{
+  "tool": "linode_account_settings_get",
+  "description": "Pins the account settings GET path both languages issue.",
+  "cases": [
+    {
+      "name": "gets account-wide settings",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/settings" }
+    }
+  ]
+}

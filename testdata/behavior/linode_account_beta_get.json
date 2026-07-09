@@ -1,0 +1,22 @@
+{
+  "tool": "linode_account_beta_get",
+  "description": "Missing-beta_id, charset-invalid beta_id rejections, and the enrolled-beta GET path. Both languages now share Go's charset validator and texts.",
+  "cases": [
+    {
+      "name": "requires beta_id",
+      "args": {},
+      "expect_error": "beta_id is required"
+    },
+    {
+      "name": "rejects a charset-invalid beta_id",
+      "args": { "beta_id": "bad/id" },
+      "expect_error": "beta_id must contain only letters, numbers, underscores, and hyphens"
+    },
+    {
+      "name": "gets an enrolled account beta program by id",
+      "args": { "beta_id": "my-beta" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/betas/my-beta" }
+    }
+  ]
+}

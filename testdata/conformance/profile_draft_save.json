@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.ProfileDraftSaveResponse",
+  "description": "Draft save diff: is_new profile with tool deltas and old/new field changes (old null for a new profile).",
+  "input": {
+    "name": "ops-lite",
+    "is_new": true,
+    "added_tools": [
+      "linode_instance_list",
+      "linode_instance_reboot"
+    ],
+    "removed_tools": [],
+    "changed_fields": {
+      "description": {
+        "old": null,
+        "new": "Read plus instance power actions"
+      },
+      "allow_yolo": {
+        "old": null,
+        "new": false
+      }
+    }
+  },
+  "canonical": {
+    "name": "ops-lite",
+    "is_new": true,
+    "added_tools": [
+      "linode_instance_list",
+      "linode_instance_reboot"
+    ],
+    "removed_tools": [],
+    "changed_fields": {
+      "allow_yolo": {
+        "old": null,
+        "new": false
+      },
+      "description": {
+        "old": null,
+        "new": "Read plus instance power actions"
+      }
+    }
+  }
+}

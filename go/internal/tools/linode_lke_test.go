@@ -929,14 +929,23 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		t.Parallel()
 
 		// The Linode API wraps the ACL under a top-level "acl" key; the
-		// handler must emit the bare ACL object.
+		// handler must emit the bare ACL object. The extra field the proto
+		// does not model must be dropped by the DiscardUnknown decode,
+		// proving the output routes through the proto serializer.
 		wrapped := map[string]any{
-			keyACL: linode.LKEControlPlaneACL{
-				Enabled: true,
-				Addresses: linode.LKEControlPlaneACLAddresses{
-					IPv4: []string{cidrV4},
-					IPv6: []string{cidrV6},
+			keyACL: struct {
+				linode.LKEControlPlaneACL
+
+				NotInProto string `json:"not_in_proto"`
+			}{
+				LKEControlPlaneACL: linode.LKEControlPlaneACL{
+					Enabled: true,
+					Addresses: linode.LKEControlPlaneACLAddresses{
+						IPv4: []string{cidrV4},
+						IPv6: []string{cidrV6},
+					},
 				},
+				NotInProto: valNotInProto,
 			},
 		}
 
@@ -986,6 +995,10 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 
 		if !strings.Contains(textContent.Text, cidrV6) {
 			t.Errorf("textContent.Text does not contain %v", cidrV6)
+		}
+
+		if strings.Contains(textContent.Text, "not_in_proto") {
+			t.Error("unknown field not_in_proto leaked into proto-canonical output")
 		}
 	})
 }
@@ -1311,7 +1324,7 @@ func TestLinodeLKETypesListTool(t *testing.T) {
 // registers correctly and returns tier version data.
 const (
 	keyLKETier              = "tier"
-	errLKETierInvalidChoice = "tier must be 'standard' or 'enterprise'"
+	errLKETierInvalidChoice = "tier must be one of: standard, enterprise"
 )
 
 func TestLinodeLKETierVersionsListToolDefinition(t *testing.T) {
@@ -1328,8 +1341,8 @@ func TestLinodeLKETierVersionsListToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyLKETier) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyLKETier)
+	if !strings.Contains(string(tool.RawInputSchema), keyLKETier) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLKETier)
 	}
 
 	if handler == nil {
@@ -1459,25 +1472,11 @@ func TestLinodeLKEClusterCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props["k8s_version"]; !ok {
-		t.Errorf("props missing key %v", "k8s_version")
-	}
-
-	if _, ok := props["node_pools"]; !ok {
-		t.Errorf("props missing key %v", "node_pools")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{monitorAlertDefinitionLabelParam, keySupportTicketRegion, keyK8sVersion, keyNodePools, keyConfirm} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -1629,17 +1628,11 @@ func TestLinodeLKEClusterUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["cluster_id"]; !ok {
-		t.Errorf("props missing key %v", "cluster_id")
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyClusterID, monitorAlertDefinitionLabelParam, keyConfirm} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -1940,7 +1933,7 @@ func TestLinodeLKEClusterRecycleToolSuccessfulRecycle(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKEClusterRecycleTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -2043,7 +2036,7 @@ func TestLinodeLKEClusterRegenerateToolSuccessfulRegenerate(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKEClusterRegenerateTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyConfirm: true, keyConfirmedDryRun: true})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -2091,21 +2084,11 @@ func TestLinodeLKEPoolCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["cluster_id"]; !ok {
-		t.Errorf("props missing key %v", "cluster_id")
-	}
-
-	if _, ok := props["type"]; !ok {
-		t.Errorf("props missing key %v", "type")
-	}
-
-	if _, ok := props["count"]; !ok {
-		t.Errorf("props missing key %v", "count")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyClusterID, keyType, keyCount, keyConfirm} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -2517,7 +2500,7 @@ func TestLinodeLKEPoolRecycleToolSuccessfulRecycle(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKEPoolRecycleTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyPoolID: float64(10), keyConfirm: true, keyConfirmedDryRun: true})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -2740,7 +2723,7 @@ func TestLinodeLKENodeRecycleToolSuccessfulRecycle(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKENodeRecycleTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: float64(123), keyNodeID: idAbc123, keyConfirm: true, keyConfirmedDryRun: true})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -3015,17 +2998,11 @@ func TestLinodeLKEACLUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["cluster_id"]; !ok {
-		t.Errorf("props missing key %v", "cluster_id")
-	}
-
-	if _, ok := props["acl"]; !ok {
-		t.Errorf("props missing key %v", "acl")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyClusterID, keyACL, keyConfirm} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3101,7 +3078,7 @@ func TestLinodeLKEACLUpdateToolSuccessfulUpdate(t *testing.T) {
 	acl := linode.LKEControlPlaneACL{
 		Enabled: true,
 		Addresses: linode.LKEControlPlaneACLAddresses{
-			IPv4: []string{cidrV4, "192.168.1.0/24"},
+			IPv4: []string{cidrV4, cidrV4Secondary},
 			IPv6: []string{cidrV6},
 		},
 	}
@@ -3126,7 +3103,8 @@ func TestLinodeLKEACLUpdateToolSuccessfulUpdate(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(acl); err != nil {
+		// The Linode API wraps the updated ACL under a top-level "acl" key.
+		if err := json.NewEncoder(w).Encode(map[string]any{"acl": acl}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -3144,7 +3122,7 @@ func TestLinodeLKEACLUpdateToolSuccessfulUpdate(t *testing.T) {
 		"acl": map[string]any{
 			statusEnabled: true,
 			"addresses": map[string]any{
-				keyIPv4: []any{cidrV4, "192.168.1.0/24"},
+				keyIPv4: []any{cidrV4, cidrV4Secondary},
 				tcIpv6:  []any{cidrV6},
 			},
 		},
@@ -3171,6 +3149,34 @@ func TestLinodeLKEACLUpdateToolSuccessfulUpdate(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "modified successfully") {
 		t.Errorf("textContent.Text does not contain %v", "modified successfully")
+	}
+
+	// The output must carry the full acl object, not the stripped/empty ACL the
+	// old decode-bug produced: {message, acl:{enabled, addresses:{ipv4,ipv6}}}.
+	var envelope struct {
+		Message string `json:"message"`
+		ACL     struct {
+			Enabled   bool `json:"enabled"`
+			Addresses struct {
+				IPv4 []string `json:"ipv4"`
+				IPv6 []string `json:"ipv6"`
+			} `json:"addresses"`
+		} `json:"acl"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &envelope); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	if !envelope.ACL.Enabled {
+		t.Error("envelope.ACL.Enabled = false, want true")
+	}
+
+	if !reflect.DeepEqual(envelope.ACL.Addresses.IPv4, []string{cidrV4, cidrV4Secondary}) {
+		t.Errorf("envelope.ACL.Addresses.IPv4 = %v, want %v", envelope.ACL.Addresses.IPv4, []string{cidrV4, cidrV4Secondary})
+	}
+
+	if !reflect.DeepEqual(envelope.ACL.Addresses.IPv6, []string{cidrV6}) {
+		t.Errorf("envelope.ACL.Addresses.IPv6 = %v, want %v", envelope.ACL.Addresses.IPv6, []string{cidrV6})
 	}
 }
 
@@ -3282,8 +3288,8 @@ func TestLinodeLKEClusterDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeLKEClusterDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -3410,8 +3416,8 @@ func TestLinodeLKEPoolDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeLKEPoolDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -3524,8 +3530,8 @@ func TestLinodeLKENodeDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeLKENodeDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -3644,8 +3650,8 @@ func TestLinodeLKEKubeconfigDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEKubeconfigDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -3745,8 +3751,8 @@ func TestLinodeLKEServiceTokenDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeLKEServiceTokenDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

@@ -1,0 +1,31 @@
+{
+  "tool": "linode_account_service_transfer_create",
+  "description": "Shared missing-linode_ids rejection, confirm gate, and the create POST body. Empty-list/non-positive text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires linode_ids",
+      "args": {},
+      "expect_error": "linode_ids is required"
+    },
+    {
+      "name": "requires confirm before creating",
+      "args": { "linode_ids": [123] },
+      "expect_error": "This creates an account service transfer. Set confirm=true to proceed."
+    },
+    {
+      "name": "creates an account service transfer",
+      "args": { "linode_ids": [123], "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/service-transfers",
+        "body": { "entities": { "linodes": [123] } }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_ids": [123]},
+      "expect_error": "This creates an account service transfer. Set confirm=true to proceed."
+    }
+  ]
+}

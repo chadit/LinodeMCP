@@ -101,8 +101,10 @@ func (c *Client) httpGetInstance(ctx context.Context, instanceID int) (*Instance
 	return &instance, nil
 }
 
-// GetInstanceStatsByYearMonth retrieves monthly statistics for a Linode instance.
-func (c *Client) httpGetInstanceStatsByYearMonth(ctx context.Context, linodeID, year, month int) (*InstanceStats, error) {
+// httpGetInstanceStatsByYearMonthProto retrieves monthly statistics for a Linode
+// instance as a proto message. Like the daily stats endpoint, the graphs nest
+// under a top-level "data" object modeled by InstanceStats.
+func (c *Client) httpGetInstanceStatsByYearMonthProto(ctx context.Context, linodeID, year, month int) (*linodev1.InstanceStats, error) {
 	if linodeID <= 0 {
 		return nil, ErrLinodeIDPositive
 	}
@@ -127,16 +129,17 @@ func (c *Client) httpGetInstanceStatsByYearMonth(ctx context.Context, linodeID, 
 
 	defer drainClose(resp)
 
-	var stats InstanceStats
-	if err := c.handleResponse(resp, &stats); err != nil {
+	stats := &linodev1.InstanceStats{}
+	if err := c.handleProtoResponse(resp, stats); err != nil {
 		return nil, err
 	}
 
-	return &stats, nil
+	return stats, nil
 }
 
-// GetInstanceTransfer retrieves monthly network transfer statistics for a Linode instance.
-func (c *Client) httpGetInstanceTransfer(ctx context.Context, linodeID int) (*InstanceTransfer, error) {
+// httpGetInstanceTransferProto retrieves the current month's network transfer
+// pool for a Linode instance as a proto message.
+func (c *Client) httpGetInstanceTransferProto(ctx context.Context, linodeID int) (*linodev1.InstanceTransfer, error) {
 	if linodeID <= 0 {
 		return nil, ErrLinodeIDPositive
 	}
@@ -154,12 +157,12 @@ func (c *Client) httpGetInstanceTransfer(ctx context.Context, linodeID int) (*In
 
 	defer drainClose(resp)
 
-	var transfer InstanceTransfer
-	if err := c.handleResponse(resp, &transfer); err != nil {
+	transfer := &linodev1.InstanceTransfer{}
+	if err := c.handleProtoResponse(resp, transfer); err != nil {
 		return nil, err
 	}
 
-	return &transfer, nil
+	return transfer, nil
 }
 
 // ListRegions retrieves all available Linode regions.
@@ -261,26 +264,16 @@ func (c *Client) httpListRegionsAvailabilityProto(ctx context.Context) ([]*linod
 		func() *linodev1.RegionAvailability { return &linodev1.RegionAvailability{} })
 }
 
-// httpGetRegionAvailability retrieves compute type availability for one region.
-func (c *Client) httpGetRegionAvailability(ctx context.Context, regionID string) ([]RegionAvailability, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
+// httpGetRegionAvailabilityProto retrieves compute type availability for one
+// region as proto RegionAvailability messages for the proto-backed read path.
+// The endpoint returns the same {data:[...]} page envelope as the cross-region
+// list, so listProtoElements decodes each element the same way, keeping the
+// per-region get and the list byte-identical element-for-element.
+func (c *Client) httpGetRegionAvailabilityProto(ctx context.Context, regionID string) ([]*linodev1.RegionAvailability, error) {
 	endpoint := fmt.Sprintf(endpointRegionAvailability, url.PathEscape(regionID))
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetRegionAvailability", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[RegionAvailability]
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return listProtoElements(ctx, c, "GetRegionAvailability", endpoint,
+		func() *linodev1.RegionAvailability { return &linodev1.RegionAvailability{} })
 }
 
 // ListKernels retrieves all available Linode kernels.
@@ -1615,6 +1608,60 @@ func (c *Client) httpCreateStackScript(ctx context.Context, req *CreateStackScri
 	}
 
 	return &script, nil
+}
+
+// httpCreateStackScriptProto creates a StackScript and decodes the response into
+// the StackScript proto element so the write tool emits the same shape as the
+// StackScript read path.
+func (c *Client) httpCreateStackScriptProto(ctx context.Context, req *CreateStackScriptRequest) (*linodev1.StackScript, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointStackScripts, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateStackScript", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	script := &linodev1.StackScript{}
+	if err := c.handleProtoResponse(resp, script); err != nil {
+		return nil, err
+	}
+
+	return script, nil
+}
+
+// httpUpdateStackScriptProto updates a StackScript and decodes the response into
+// the StackScript proto element.
+func (c *Client) httpUpdateStackScriptProto(ctx context.Context, stackScriptID int, req *UpdateStackScriptRequest) (*linodev1.StackScript, error) {
+	if stackScriptID <= 0 {
+		return nil, ErrStackScriptIDPositive
+	}
+
+	if updateStackScriptRequestEmpty(req) {
+		return nil, ErrStackScriptUpdateRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedStackScriptID := strings.ReplaceAll(url.PathEscape(strconv.Itoa(stackScriptID)), ".", "%2E")
+	endpoint := endpointStackScripts + "/" + encodedStackScriptID
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateStackScript", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	script := &linodev1.StackScript{}
+	if err := c.handleProtoResponse(resp, script); err != nil {
+		return nil, err
+	}
+
+	return script, nil
 }
 
 // DeleteStackScript deletes a StackScript.

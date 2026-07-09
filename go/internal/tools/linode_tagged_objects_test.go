@@ -44,21 +44,15 @@ func TestLinodeTaggedObjectsToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[tagLabelParamTest]; !ok {
-		t.Errorf("props missing key %v", tagLabelParamTest)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{tagLabelParamTest, keyPage, keyPageSize} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 
-	if _, ok := props[keyPage]; !ok {
-		t.Errorf("props missing key %v", keyPage)
-	}
-
-	if _, ok := props[keyPageSize]; !ok {
-		t.Errorf("props missing key %v", keyPageSize)
-	}
-
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(raw, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 }
 

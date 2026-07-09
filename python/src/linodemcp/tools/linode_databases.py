@@ -16,22 +16,18 @@ from linodemcp.genpb.linode.mcp.v1 import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    ENV_PARAM_SCHEMA,
-    MODE_PROP,
     PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
 )
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
+    serialize_struct_response,
 )
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -238,10 +234,8 @@ def _validate_instance_id(value: object) -> tuple[int | None, str | None]:
     """Validate a MySQL Managed Database instance ID path parameter."""
     if value is None:
         return None, "instance_id is required"
-    if not isinstance(value, int) or isinstance(value, bool):
-        return None, "instance_id must be an integer"
-    if value < 1:
-        return None, "instance_id must be at least 1"
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None, "instance_id must be a positive integer"
     return value, None
 
 
@@ -381,28 +375,12 @@ def _validate_database_type_id(value: Any) -> tuple[str | None, str | None]:
     return type_id, None
 
 
-def _optional_int_argument(
-    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
-) -> int | None:
-    """Parse an optional integer argument with range checks."""
-    value = arguments.get(name)
-    if value is None:
-        return None
-    if not isinstance(value, int) or isinstance(value, bool):
-        msg = f"{name} must be an integer"
-        raise TypeError(msg)
-    if value < minimum:
-        msg = f"{name} must be at least {minimum}"
-        raise ValueError(msg)
-    if maximum is not None and value > maximum:
-        msg = f"{name} must be at most {maximum}"
-        raise ValueError(msg)
-    return value
-
-
 def _required_positive_int_argument(arguments: dict[str, Any], name: str) -> int:
-    """Parse a required positive integer path parameter."""
-    value = arguments.get(name)
+    """Parse a required positive integer path parameter (Option B)."""
+    if name not in arguments:
+        msg = f"{name} is required"
+        raise ValueError(msg)
+    value = arguments[name]
     if not isinstance(value, int) or isinstance(value, bool) or value < 1:
         msg = f"{name} must be a positive integer"
         raise ValueError(msg)
@@ -421,6 +399,31 @@ def _database_action_response(message: str, instance_id: int) -> dict[str, Any]:
         {"message": message, "instance_id": instance_id},
         database_instance_pb2.DatabaseInstanceActionWriteResponse(),
     )
+
+
+def _database_instance_delete_response(
+    message: str, instance_id: int
+) -> dict[str, Any]:
+    """Build the {message, instance_id} id-echo the delete tools return.
+
+    The MySQL and PostgreSQL delete endpoints return an empty body, so the
+    canonical response echoes the confirmation message and the deleted instance
+    ID. Both engines share the proto, matching Go's MarshalProtoToolResponse.
+    """
+    return serialize_api_response(
+        {"message": message, "instance_id": instance_id},
+        database_instance_pb2.DatabaseInstanceDeleteResponse(),
+    )
+
+
+def _database_credentials_response(raw: dict[str, Any]) -> dict[str, Any]:
+    """Route the {username, password} credentials body through the proto.
+
+    The password rides through in the clear on purpose: the credentials-get
+    tools exist to expose the connection secret, so it is emitted rather than
+    redacted, matching Go's MarshalProtoToolResponse output.
+    """
+    return serialize_api_response(raw, database_instance_pb2.DatabaseCredentials())
 
 
 def create_linode_database_engine_get_tool() -> tuple[Tool, Capability]:
@@ -450,56 +453,7 @@ def create_linode_database_mysql_instance_create_tool() -> tuple[Tool, Capabilit
             "create a billable resource. Pass dry_run=true to preview without "
             "creating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "label": {"type": "string", "description": "Database label"},
-                "type": {"type": "string", "description": "Linode database plan type"},
-                "engine": {
-                    "type": "string",
-                    "description": "MySQL engine ID, for example mysql/8.0",
-                },
-                "region": {"type": "string", "description": "Target region"},
-                "allow_list": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "IPv4/IPv6 addresses or ranges allowed to connect",
-                },
-                "cluster_size": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Number of nodes in the database cluster",
-                },
-                "engine_config": {
-                    "type": "object",
-                    "description": "Engine-specific configuration",
-                },
-                "fork": {
-                    "type": "object",
-                    "description": "Restore/fork source configuration",
-                },
-                "private_network": {
-                    "type": "object",
-                    "description": (
-                        "Object placing the database in a VPC (vpc_id, "
-                        "subnet_id, public_access). Omit for no private networking."
-                    ),
-                },
-                "ssl_connection": {
-                    "type": "boolean",
-                    "description": "Whether to enable SSL connection requirements",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm database creation or restore."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "type", "engine", "region", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceCreateInput"),
     ), Capability.Write
 
 
@@ -512,56 +466,7 @@ def create_linode_database_postgresql_instance_create_tool() -> tuple[Tool, Capa
             "create a billable resource. Pass dry_run=true to preview without "
             "creating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "label": {"type": "string", "description": "Database label"},
-                "type": {"type": "string", "description": "Linode database plan type"},
-                "engine": {
-                    "type": "string",
-                    "description": "PostgreSQL engine ID, for example postgresql/17",
-                },
-                "region": {"type": "string", "description": "Target region"},
-                "allow_list": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "IPv4/IPv6 addresses or ranges allowed to connect",
-                },
-                "cluster_size": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Number of nodes in the database cluster",
-                },
-                "engine_config": {
-                    "type": "object",
-                    "description": "Engine-specific configuration",
-                },
-                "fork": {
-                    "type": "object",
-                    "description": "Restore/fork source configuration",
-                },
-                "private_network": {
-                    "type": "object",
-                    "description": (
-                        "Object placing the database in a VPC (vpc_id, "
-                        "subnet_id, public_access). Omit for no private networking."
-                    ),
-                },
-                "ssl_connection": {
-                    "type": "boolean",
-                    "description": "Whether to enable SSL connection requirements",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm database creation or restore."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "type", "engine", "region", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceCreateInput"),
     ), Capability.Write
 
 
@@ -574,25 +479,7 @@ def create_linode_database_mysql_instance_delete_tool() -> tuple[Tool, Capabilit
             "without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database deletion.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -601,23 +488,7 @@ def create_linode_database_mysql_instance_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_database_mysql_instance_list",
         description="Lists MySQL Managed Database instances.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceListInput"),
     ), Capability.Read
 
 
@@ -626,23 +497,7 @@ def create_linode_database_postgresql_instance_list_tool() -> tuple[Tool, Capabi
     return Tool(
         name="linode_database_postgresql_instance_list",
         description="Lists PostgreSQL Managed Database instances.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceListInput"),
     ), Capability.Read
 
 
@@ -655,25 +510,7 @@ def create_linode_database_postgresql_instance_delete_tool() -> tuple[Tool, Capa
             "preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database deletion.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -685,23 +522,7 @@ def create_linode_database_mysql_instance_patch_tool() -> tuple[Tool, Capability
             "Applies pending patches to a MySQL Managed Database. Pass "
             "dry_run=true to preview without patching."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database patching.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstancePatchInput"),
     ), Capability.Write
 
 
@@ -713,23 +534,7 @@ def create_linode_database_postgresql_instance_patch_tool() -> tuple[Tool, Capab
             "Applies pending patches to a PostgreSQL Managed Database. Pass "
             "dry_run=true to preview without patching."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database patching.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstancePatchInput"),
     ), Capability.Write
 
 
@@ -741,23 +546,7 @@ def create_linode_database_mysql_instance_suspend_tool() -> tuple[Tool, Capabili
             "Suspends a MySQL Managed Database. Pass dry_run=true to preview "
             "without suspending."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database suspension.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceSuspendInput"),
     ), Capability.Write
 
 
@@ -769,46 +558,7 @@ def create_linode_database_mysql_instance_update_tool() -> tuple[Tool, Capabilit
             "Updates a MySQL Managed Database. Requires confirm=true; pass "
             "dry_run=true to preview without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-                "allow_list": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "IPv4/IPv6 addresses or ranges allowed to connect",
-                },
-                "engine_config": {
-                    "type": "object",
-                    "description": "Engine-specific configuration",
-                },
-                "label": {"type": "string", "description": "Database label"},
-                "private_network": {
-                    "type": "object",
-                    "description": (
-                        "Object placing the database in a VPC (vpc_id, "
-                        "subnet_id, public_access). Pass null to detach."
-                    ),
-                },
-                "type": {"type": "string", "description": "Linode database plan type"},
-                "updates": {
-                    "type": "object",
-                    "description": "Maintenance update settings",
-                },
-                "version": {"type": "string", "description": "MySQL version"},
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceUpdateInput"),
     ), Capability.Write
 
 
@@ -822,23 +572,7 @@ def create_linode_database_postgresql_instance_suspend_tool() -> tuple[
             "Suspends a PostgreSQL Managed Database. Pass dry_run=true to "
             "preview without suspending."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database suspension.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceSuspendInput"),
     ), Capability.Write
 
 
@@ -850,46 +584,7 @@ def create_linode_database_postgresql_instance_update_tool() -> tuple[Tool, Capa
             "Updates a PostgreSQL Managed Database. Requires confirm=true; pass "
             "dry_run=true to preview without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-                "allow_list": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "IPv4/IPv6 addresses or ranges allowed to connect",
-                },
-                "engine_config": {
-                    "type": "object",
-                    "description": "Engine-specific configuration",
-                },
-                "label": {"type": "string", "description": "Database label"},
-                "private_network": {
-                    "type": "object",
-                    "description": (
-                        "Object placing the database in a VPC (vpc_id, "
-                        "subnet_id, public_access). Pass null to detach."
-                    ),
-                },
-                "type": {"type": "string", "description": "Linode database plan type"},
-                "updates": {
-                    "type": "object",
-                    "description": "Maintenance update settings",
-                },
-                "version": {"type": "string", "description": "PostgreSQL version"},
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceUpdateInput"),
     ), Capability.Write
 
 
@@ -898,23 +593,7 @@ def create_linode_database_instance_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_instance_list",
         description="Lists Managed Database instances.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseInstanceListInput"),
     ), Capability.Read
 
 
@@ -923,23 +602,7 @@ def create_linode_database_engine_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_engine_list",
         description="Lists available Linode Managed Databases engines.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseEngineListInput"),
     ), Capability.Read
 
 
@@ -948,23 +611,7 @@ def create_linode_database_type_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_type_list",
         description="Lists available Linode Managed Databases types.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseTypeListInput"),
     ), Capability.Read
 
 
@@ -996,8 +643,8 @@ async def handle_linode_database_type_get(
         return error_response(error or "type_id is required")
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1022,25 +669,7 @@ def create_linode_database_mysql_instance_credentials_reset_tool() -> tuple[
             "Resets credentials for a MySQL Managed Database. Pass dry_run=true "
             "to preview without resetting credentials."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm database credential reset."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceCredentialsResetInput"),
     ), Capability.Write
 
 
@@ -1054,25 +683,9 @@ def create_linode_database_postgresql_instance_credentials_reset_tool() -> tuple
             "Resets credentials for a PostgreSQL Managed Database. Pass "
             "dry_run=true to preview without resetting credentials."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm database credential reset."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema(
+            "linode.mcp.v1.DatabasePostgreSQLInstanceCredentialsResetInput"
+        ),
     ), Capability.Write
 
 
@@ -1081,18 +694,7 @@ def create_linode_database_mysql_instance_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_mysql_instance_get",
         description="Gets a MySQL Managed Database instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-            },
-            "required": ["instance_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceGetInput"),
     ), Capability.Read
 
 
@@ -1139,23 +741,7 @@ def create_linode_database_mysql_instance_credentials_get_tool() -> tuple[
             "and requires a database write-capable profile. Pass dry_run=true "
             "to preview without retrieving credentials."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to retrieve database credentials.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceCredentialsGetInput"),
     ), Capability.Write
 
 
@@ -1171,23 +757,9 @@ def create_linode_database_postgresql_instance_credentials_get_tool() -> tuple[
             "and requires a database write-capable profile. Pass dry_run=true "
             "to preview without retrieving credentials."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to retrieve database credentials.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema(
+            "linode.mcp.v1.DatabasePostgreSQLInstanceCredentialsGetInput"
+        ),
     ), Capability.Write
 
 
@@ -1199,23 +771,7 @@ def create_linode_database_mysql_instance_resume_tool() -> tuple[Tool, Capabilit
             "Resumes a MySQL Managed Database. Requires confirm=true; pass "
             "dry_run=true to preview without resuming."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "MySQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database resume.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceResumeInput"),
     ), Capability.Write
 
 
@@ -1227,23 +783,7 @@ def create_linode_database_postgresql_instance_resume_tool() -> tuple[Tool, Capa
             "Resumes a PostgreSQL Managed Database. Requires confirm=true; pass "
             "dry_run=true to preview without resuming."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm database resume.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["instance_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceResumeInput"),
     ), Capability.Write
 
 
@@ -1252,12 +792,7 @@ def create_linode_database_mysql_config_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_mysql_config_get",
         description="Lists MySQL Managed Database advanced parameters.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.DatabaseMySQLConfigGetInput"),
     ), Capability.Read
 
 
@@ -1266,18 +801,7 @@ def create_linode_database_postgresql_instance_get_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_database_postgresql_instance_get",
         description="Gets a PostgreSQL Managed Database instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "instance_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "PostgreSQL Managed Database instance ID",
-                },
-            },
-            "required": ["instance_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceGetInput"),
     ), Capability.Read
 
 
@@ -1297,12 +821,7 @@ def create_linode_database_postgresql_config_get_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_database_postgresql_config_get",
         description="Lists PostgreSQL Managed Database advanced parameters.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLConfigGetInput"),
     ), Capability.Read
 
 
@@ -1330,7 +849,10 @@ async def handle_linode_database_mysql_instance_create(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This creates a billable Managed Database instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.create_mysql_database_instance(payload)
@@ -1373,7 +895,10 @@ async def handle_linode_database_postgresql_instance_create(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This creates a billable PostgreSQL Managed Database instance. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.create_postgresql_database_instance(payload)
@@ -1406,7 +931,10 @@ async def _mysql_instance_delete_two_stage(
         return await client.get_database_mysql_instance(instance_id)
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
-        return await client.delete_mysql_database_instance(instance_id)
+        await client.delete_mysql_database_instance(instance_id)
+        return _database_instance_delete_response(
+            f"Managed Database instance {instance_id} deleted", instance_id
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -1452,10 +980,15 @@ async def handle_linode_database_mysql_instance_delete(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This deletes a Managed Database instance. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.delete_mysql_database_instance(instance_id)
+        await client.delete_mysql_database_instance(instance_id)
+        return _database_instance_delete_response(
+            f"Managed Database instance {instance_id} deleted", instance_id
+        )
 
     return await execute_tool(cfg, arguments, "delete MySQL Managed Database", _call)
 
@@ -1465,8 +998,8 @@ async def handle_linode_database_mysql_instance_list(
 ) -> list[TextContent]:
     """Handle linode_database_mysql_instance_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1510,7 +1043,9 @@ async def handle_linode_database_mysql_instance_suspend(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This suspends a Managed Database instance. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.suspend_mysql_database_instance(instance_id)
@@ -1547,7 +1082,9 @@ async def handle_linode_database_mysql_instance_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This updates a Managed Database instance. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.update_mysql_database_instance(instance_id, payload)
@@ -1593,7 +1130,10 @@ async def handle_linode_database_postgresql_instance_suspend(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This suspends a PostgreSQL Managed Database instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.suspend_postgresql_database_instance(instance_id)
@@ -1635,7 +1175,10 @@ async def handle_linode_database_postgresql_instance_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This updates a PostgreSQL Managed Database instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.update_postgresql_database_instance(
@@ -1664,8 +1207,8 @@ async def handle_linode_database_postgresql_instance_list(
 ) -> list[TextContent]:
     """Handle linode_database_postgresql_instance_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1695,7 +1238,11 @@ async def _postgresql_instance_delete_two_stage(
         return await client.get_database_postgresql_instance(instance_id)
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
-        return await client.delete_postgresql_database_instance(instance_id)
+        await client.delete_postgresql_database_instance(instance_id)
+        return _database_instance_delete_response(
+            f"PostgreSQL Managed Database instance {instance_id} deleted",
+            instance_id,
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -1741,10 +1288,17 @@ async def handle_linode_database_postgresql_instance_delete(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This deletes a PostgreSQL Managed Database instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.delete_postgresql_database_instance(instance_id)
+        await client.delete_postgresql_database_instance(instance_id)
+        return _database_instance_delete_response(
+            f"PostgreSQL Managed Database instance {instance_id} deleted",
+            instance_id,
+        )
 
     return await execute_tool(
         cfg, arguments, "delete PostgreSQL Managed Database", _call
@@ -1777,7 +1331,9 @@ async def handle_linode_database_mysql_instance_patch(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This patches a Managed Database instance. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.patch_mysql_database_instance(instance_id)
@@ -1814,7 +1370,10 @@ async def handle_linode_database_postgresql_instance_patch(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This patches a PostgreSQL Managed Database instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.patch_postgresql_database_instance(instance_id)
@@ -1833,8 +1392,8 @@ async def handle_linode_database_instance_list(
 ) -> list[TextContent]:
     """Handle linode_database_instance_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1880,7 +1439,9 @@ async def handle_linode_database_mysql_instance_credentials_reset(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This resets Managed Database credentials. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         # The reset rotates the password, but the rotated credential never lands
@@ -1928,7 +1489,10 @@ async def handle_linode_database_postgresql_instance_credentials_reset(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This resets PostgreSQL Managed Database credentials. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         # The reset rotates the password, but the rotated credential never lands
@@ -1947,15 +1511,15 @@ async def handle_linode_database_mysql_instance_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_mysql_instance_get tool request."""
-    try:
-        instance_id = _optional_int_argument(arguments, "instance_id", 1)
-    except (TypeError, ValueError) as exc:
-        return error_response(str(exc))
-    if instance_id is None:
-        return error_response("instance_id is required")
+    instance_id, error = _validate_instance_id(arguments.get("instance_id"))
+    if error is not None or instance_id is None:
+        return error_response(error or "instance_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_mysql_instance(instance_id)
+        return serialize_api_response(
+            await client.get_database_mysql_instance(instance_id),
+            database_instance_pb2.DatabaseInstance(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve MySQL Managed Database instance {instance_id}", _call
@@ -1966,12 +1530,9 @@ async def handle_linode_database_mysql_instance_credentials_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_mysql_instance_credentials_get tool request."""
-    try:
-        instance_id = _optional_int_argument(arguments, "instance_id", 1)
-    except (TypeError, ValueError) as exc:
-        return error_response(str(exc))
-    if instance_id is None:
-        return error_response("instance_id is required")
+    instance_id, error = _validate_instance_id(arguments.get("instance_id"))
+    if error is not None or instance_id is None:
+        return error_response(error or "instance_id is required")
 
     encoded_instance_id = quote(str(instance_id), safe="")
     credentials_path = f"/databases/mysql/instances/{encoded_instance_id}/credentials"
@@ -1990,10 +1551,13 @@ async def handle_linode_database_mysql_instance_credentials_get(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This retrieves Managed Database credentials. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_mysql_instance_credentials(instance_id)
+        raw = await client.get_database_mysql_instance_credentials(instance_id)
+        return _database_credentials_response(raw)
 
     return await execute_tool(
         cfg,
@@ -2007,12 +1571,9 @@ async def handle_linode_database_postgresql_instance_credentials_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_database_postgresql_instance_credentials_get tool request."""
-    try:
-        instance_id = _optional_int_argument(arguments, "instance_id", 1)
-    except (TypeError, ValueError) as exc:
-        return error_response(str(exc))
-    if instance_id is None:
-        return error_response("instance_id is required")
+    instance_id, error = _validate_instance_id(arguments.get("instance_id"))
+    if error is not None or instance_id is None:
+        return error_response(error or "instance_id is required")
 
     encoded_instance_id = quote(str(instance_id), safe="")
     credentials_path = (
@@ -2033,10 +1594,13 @@ async def handle_linode_database_postgresql_instance_credentials_get(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This retrieves Managed Database credentials. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_postgresql_instance_credentials(instance_id)
+        raw = await client.get_database_postgresql_instance_credentials(instance_id)
+        return _database_credentials_response(raw)
 
     return await execute_tool(
         cfg,
@@ -2068,7 +1632,9 @@ async def handle_linode_database_mysql_instance_resume(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This resumes a Managed Database instance. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.resume_mysql_database_instance(instance_id)
@@ -2105,7 +1671,10 @@ async def handle_linode_database_postgresql_instance_resume(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This resumes a PostgreSQL Managed Database instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.resume_postgresql_database_instance(instance_id)
@@ -2125,7 +1694,7 @@ async def handle_linode_database_mysql_config_get(
     """Handle linode_database_mysql_config_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_mysql_config()
+        return serialize_struct_response(await client.get_database_mysql_config())
 
     return await execute_tool(
         cfg, arguments, "retrieve MySQL Managed Database advanced parameters", _call
@@ -2141,7 +1710,10 @@ async def handle_linode_database_postgresql_instance_get(
         return error_response(error or "instance_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_postgresql_instance(instance_id)
+        return serialize_api_response(
+            await client.get_database_postgresql_instance(instance_id),
+            database_instance_pb2.DatabaseInstance(),
+        )
 
     return await execute_tool(
         cfg,
@@ -2179,7 +1751,7 @@ async def handle_linode_database_postgresql_config_get(
     """Handle linode_database_postgresql_config_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_database_postgresql_config()
+        return serialize_struct_response(await client.get_database_postgresql_config())
 
     return await execute_tool(
         cfg,
@@ -2194,8 +1766,8 @@ async def handle_linode_database_engine_list(
 ) -> list[TextContent]:
     """Handle linode_database_engine_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -2215,8 +1787,8 @@ async def handle_linode_database_type_list(
 ) -> list[TextContent]:
     """Handle linode_database_type_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 

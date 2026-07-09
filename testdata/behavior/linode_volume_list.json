@@ -1,0 +1,12 @@
+{
+  "tool": "linode_volume_list",
+  "description": "Volume list: the bare list GET. Filters (region, label_contains) are applied client-side in both languages, so no query string.",
+  "cases": [
+    {
+      "name": "lists volumes",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/volumes" }
+    }
+  ]
+}

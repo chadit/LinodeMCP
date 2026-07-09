@@ -174,8 +174,13 @@ func TestLinodeFirewallGetToolRejectsInvalidFirewallIDBeforeClientCall(t *testin
 			t.Fatalf("%s: isText = false, want true", name)
 		}
 
-		if !strings.Contains(textContent.Text, errPositiveInteger) {
-			t.Errorf("%s: textContent.Text does not contain %v", name, errPositiveInteger)
+		wantFirewallID := errPositiveInteger
+		if name == "missing firewall_id" {
+			wantFirewallID = errFirewallIDRequired
+		}
+
+		if !strings.Contains(textContent.Text, wantFirewallID) {
+			t.Errorf("%s: textContent.Text does not contain %v", name, wantFirewallID)
 		}
 	}
 }

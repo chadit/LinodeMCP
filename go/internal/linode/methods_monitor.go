@@ -161,8 +161,10 @@ func (c *Client) httpGetMonitorServiceMetrics(ctx context.Context, serviceType s
 	return metrics, nil
 }
 
-// httpCreateMonitorServiceToken creates a token for one monitoring service type.
-func (c *Client) httpCreateMonitorServiceToken(ctx context.Context, serviceType string, request *CreateMonitorServiceTokenRequest) (*MonitorServiceToken, error) {
+// httpCreateMonitorServiceToken creates a token for one monitoring service
+// type and decodes the response into the MonitorServiceTokenCreateResponse
+// proto message so the write tool emits the proto-canonical body.
+func (c *Client) httpCreateMonitorServiceToken(ctx context.Context, serviceType string, request *CreateMonitorServiceTokenRequest) (*linodev1.MonitorServiceTokenCreateResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -175,12 +177,12 @@ func (c *Client) httpCreateMonitorServiceToken(ctx context.Context, serviceType 
 
 	defer drainClose(resp)
 
-	var token MonitorServiceToken
-	if err := c.handleResponse(resp, &token); err != nil {
+	token := &linodev1.MonitorServiceTokenCreateResponse{}
+	if err := c.handleProtoResponse(resp, token); err != nil {
 		return nil, err
 	}
 
-	return &token, nil
+	return token, nil
 }
 
 // httpCreateMonitorServiceAlertDefinition creates an alert definition for one monitoring service type.
@@ -274,6 +276,32 @@ func (c *Client) httpGetMonitorServiceAlertDefinition(ctx context.Context, servi
 	return definition, nil
 }
 
+// httpGetMonitorServiceAlertDefinitionProto retrieves one alert definition for
+// one monitoring service type and decodes it into the MonitorAlertDefinition
+// proto element for the proto-backed read path. criteria, rule_criteria, and
+// trigger_conditions are arbitrary JSON the element models as
+// google.protobuf.Struct, so the body decodes straight into the element.
+func (c *Client) httpGetMonitorServiceAlertDefinitionProto(ctx context.Context, serviceType string, alertID int) (*linodev1.MonitorAlertDefinition, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetMonitorServiceAlertDefinition", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	definition := &linodev1.MonitorAlertDefinition{}
+	if err := c.handleProtoResponse(resp, definition); err != nil {
+		return nil, err
+	}
+
+	return definition, nil
+}
+
 // httpDeleteMonitorServiceAlertDefinition deletes one alert definition for one monitoring service type.
 func (c *Client) httpDeleteMonitorServiceAlertDefinition(ctx context.Context, serviceType string, alertID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -323,8 +351,11 @@ func (c *Client) httpListMonitorDashboardsProto(ctx context.Context, page, pageS
 		func() *linodev1.MonitorDashboard { return &linodev1.MonitorDashboard{} })
 }
 
-// httpGetMonitorDashboard retrieves one monitoring dashboard.
-func (c *Client) httpGetMonitorDashboard(ctx context.Context, dashboardID int) (MonitorDashboard, error) {
+// httpGetMonitorDashboardProto retrieves one monitoring dashboard and decodes it
+// into the MonitorDashboard proto element for the proto-backed read path. Each
+// widget is arbitrary JSON the API returns verbatim, so the element models
+// widgets as google.protobuf.Struct; the body decodes straight into the element.
+func (c *Client) httpGetMonitorDashboardProto(ctx context.Context, dashboardID int) (*linodev1.MonitorDashboard, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -332,14 +363,14 @@ func (c *Client) httpGetMonitorDashboard(ctx context.Context, dashboardID int) (
 
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return MonitorDashboard(nil), &NetworkError{Operation: "GetMonitorDashboard", Err: err}
+		return nil, &NetworkError{Operation: "GetMonitorDashboard", Err: err}
 	}
 
 	defer drainClose(resp)
 
-	var dashboard MonitorDashboard
-	if err := c.handleResponse(resp, &dashboard); err != nil {
-		return MonitorDashboard(nil), err
+	dashboard := &linodev1.MonitorDashboard{}
+	if err := c.handleProtoResponse(resp, dashboard); err != nil {
+		return nil, err
 	}
 
 	return dashboard, nil

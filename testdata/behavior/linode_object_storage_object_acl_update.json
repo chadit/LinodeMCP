@@ -1,0 +1,36 @@
+{
+  "tool": "linode_object_storage_object_acl_update",
+  "description": "Pins the shared region/name validation (behind confirm) and the object-acl PUT body. Every case carries confirm:true because the confirm-gate message text diverges.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": { "confirm": true },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires name",
+      "args": { "region": "us-east", "label": "my-bucket", "confirm": true },
+      "expect_error": "name (object key) is required"
+    },
+    {
+      "name": "updates object acl",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
+      "api_response": { "acl": "public-read" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-acl",
+        "body": { "acl": "public-read", "name": "my-object.txt" }
+      }
+    },
+    {
+      "name": "rejects an invalid acl",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "bogus", "confirm": true },
+      "expect_error": "acl must be one of: private, public-read, authenticated-read, public-read-write"
+    },
+    {
+      "name": "requires confirm",
+      "args": {"region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read"},
+      "expect_error": "This modifies the object's access permissions. Set confirm=true to proceed."
+    }
+  ]
+}

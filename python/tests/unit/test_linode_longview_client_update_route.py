@@ -286,6 +286,8 @@ async def test_handle_linode_longview_client_update_rejects_non_true_confirm(
         {"client_id": 123, "confirm": True},
         {"client_id": 123, "label": "", "confirm": True},
         {"client_id": 123, "label": {"bad": object()}, "confirm": True},
+        {"client_id": 123, "label": "ab", "confirm": True},
+        {"client_id": 123, "label": "bad!label", "confirm": True},
     ],
 )
 async def test_handle_linode_longview_client_update_rejects_invalid_arguments(

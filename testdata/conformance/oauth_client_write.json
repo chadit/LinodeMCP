@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.OAuthClientWriteResponse",
+  "description": "OAuth client update envelope: a confirmation message and the full OAuthClient metadata element (no secret).",
+  "input": {
+    "message": "OAuth client updated successfully",
+    "client": {
+      "id": "client-123",
+      "label": "Example OAuth Client",
+      "public": true,
+      "redirect_uri": "https://example.com/callback",
+      "status": "active",
+      "thumbnail_url": "https://example.com/thumb.png"
+    }
+  },
+  "canonical": {
+    "message": "OAuth client updated successfully",
+    "client": {
+      "id": "client-123",
+      "label": "Example OAuth Client",
+      "public": true,
+      "redirect_uri": "https://example.com/callback",
+      "status": "active",
+      "thumbnail_url": "https://example.com/thumb.png"
+    }
+  }
+}

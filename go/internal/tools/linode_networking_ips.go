@@ -26,15 +26,15 @@ const (
 
 // NewLinodeNetworkingIPListTool creates a tool for listing account IP addresses.
 func NewLinodeNetworkingIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_networking_ip_list",
 		"Lists IP addresses on the account. Set skip_ipv6_rdns to true to skip IPv6 reverse DNS lookups.",
-		[]mcp.ToolOption{
-			mcp.WithBoolean(paramSkipIPv6RDNS, mcp.Description("Skip IPv6 reverse DNS lookups (optional).")),
-		},
-		handleLinodeNetworkingIPListRequest,
+		toolschemas.Schema("linode.mcp.v1.NetworkingIPListInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNetworkingIPListRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -100,21 +100,15 @@ func handleLinodeNetworkingIPGetRequest(ctx context.Context, request *mcp.CallTo
 
 // NewLinodeNetworkingIPUpdateRDNSTool creates a tool for updating account-level IP reverse DNS.
 func NewLinodeNetworkingIPUpdateRDNSTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_networking_ip_update",
 		"Updates reverse DNS for one account-level IP address.",
-		[]mcp.ToolOption{
-			mcp.WithString(paramAddress, mcp.Required(),
-				mcp.Description("The IPv4 or IPv6 address to update.")),
-			mcp.WithString(paramRDNS, mcp.Required(),
-				mcp.Description("The reverse DNS value to set.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm changing reverse DNS. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNetworkingIPUpdateRDNSRequest,
+		toolschemas.Schema("linode.mcp.v1.IPAddressUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNetworkingIPUpdateRDNSRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -179,23 +173,15 @@ func updateNetworkingIPRDNS(ctx context.Context, client *linode.Client, address,
 
 // NewLinodeNetworkingIPAllocateTool creates a tool for allocating an account-level IP address.
 func NewLinodeNetworkingIPAllocateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_networking_ip_allocate",
 		"Allocates an account-level IP address. WARNING: Additional IPs may incur charges.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode that receives the new IP address.")),
-			mcp.WithString("type", mcp.Required(),
-				mcp.Description("The type of IP address to allocate, for example ipv4.")),
-			mcp.WithBoolean("public", mcp.Required(),
-				mcp.Description("Whether the IP address should be public.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IP allocation. Additional IPs may incur charges. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNetworkingIPAllocateRequest,
+		toolschemas.Schema("linode.mcp.v1.IPAddressAllocateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNetworkingIPAllocateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -236,21 +222,15 @@ func handleLinodeNetworkingIPAllocateRequest(ctx context.Context, request *mcp.C
 
 // NewLinodeNetworkingIPAssignTool creates a tool for assigning IP addresses to Linodes.
 func NewLinodeNetworkingIPAssignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_networking_ip_assign",
 		"Assigns IP addresses to Linodes in a region. WARNING: This changes IP ownership assignments.",
-		[]mcp.ToolOption{
-			mcp.WithString("region", mcp.Required(),
-				mcp.Description("The region for the IP assignments.")),
-			mcp.WithArray("assignments", mcp.Required(),
-				mcp.Description("Array of assignment objects, each with address and linode_id.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IP reassignment. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNetworkingIPAssignRequest,
+		toolschemas.Schema("linode.mcp.v1.NetworkingIPAssignInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNetworkingIPAssignRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -332,21 +312,15 @@ func handleLinodeNetworkingIPAssignRequest(ctx context.Context, request *mcp.Cal
 
 // NewLinodeNetworkingIPv4AssignTool creates a tool for assigning IPv4 addresses to Linodes.
 func NewLinodeNetworkingIPv4AssignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_networking_ipv4_assign",
 		"Assigns IPv4 addresses to Linodes in a region. WARNING: This changes IP ownership assignments.",
-		[]mcp.ToolOption{
-			mcp.WithString("region", mcp.Required(),
-				mcp.Description("The region for the IPv4 assignments.")),
-			mcp.WithArray("assignments", mcp.Required(),
-				mcp.Description("Array of assignment objects, each with address and linode_id.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IPv4 reassignment. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNetworkingIPv4AssignRequest,
+		toolschemas.Schema("linode.mcp.v1.NetworkingIPv4AssignInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNetworkingIPv4AssignRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -369,21 +343,15 @@ func handleLinodeNetworkingIPv4AssignRequest(ctx context.Context, request *mcp.C
 
 // NewLinodeNetworkingIPv4ShareTool creates a tool for sharing IP addresses with a primary Linode.
 func NewLinodeNetworkingIPv4ShareTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_networking_ipv4_share",
 		"Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the primary Linode that receives the shared IP addresses.")),
-			mcp.WithArray(paramIPs, mcp.Required(),
-				mcp.Description("IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm changing shared IP assignments. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNetworkingIPv4ShareRequest,
+		toolschemas.Schema("linode.mcp.v1.NetworkingIPv4ShareInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNetworkingIPv4ShareRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -408,21 +376,15 @@ func handleLinodeNetworkingIPv4ShareRequest(ctx context.Context, request *mcp.Ca
 // primary Linode via the generic /networking/ips/share endpoint (the IPv4-only
 // variant above uses /networking/ipv4/share).
 func NewLinodeNetworkingIPShareTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_networking_ip_share",
 		"Shares IP addresses with a primary Linode. Set ips to a JSON string array; an empty array removes all shared IP addresses.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the primary Linode that receives the shared IP addresses.")),
-			mcp.WithArray(paramIPs, mcp.Required(),
-				mcp.Description("IP addresses or IPv6 ranges to share. Use [] to remove all shared IP addresses.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm changing shared IP assignments. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNetworkingIPShareRequest,
+		toolschemas.Schema("linode.mcp.v1.NetworkingIPShareInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNetworkingIPShareRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -451,6 +413,17 @@ func linodeIDToInt32(id int) int32 {
 	}
 
 	return int32(id)
+}
+
+// intSliceToInt32 narrows a slice of Linode IDs to the proto repeated int32
+// field, bounding each element the same way linodeIDToInt32 does.
+func intSliceToInt32(ids []int) []int32 {
+	out := make([]int32, len(ids))
+	for i, id := range ids {
+		out[i] = linodeIDToInt32(id)
+	}
+
+	return out
 }
 
 // networkingIPAssignResponse builds the id-echo proto for the IP assign tools
@@ -548,6 +521,10 @@ func networkingIPAllocateRequestFromTool(args map[string]any) (linode.AllocateNe
 	ipType, validationMessage := requiredStringArg(args, "type")
 	if validationMessage != "" {
 		return linode.AllocateNetworkingIPRequest{}, validationMessage
+	}
+
+	if msg := enumChoiceError(ipType, "type", linodev1.InstanceIPType_Value_value); msg != "" {
+		return linode.AllocateNetworkingIPRequest{}, msg
 	}
 
 	public, validationMessage := requiredNetworkingBoolArg(args, "public")

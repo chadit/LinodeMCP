@@ -1,0 +1,26 @@
+{
+  "tool": "linode_longview_plan_update",
+  "description": "Pins the plan-update PUT and the longview-<n> pattern rejection now enforced in both languages (Go gained Python's pattern). The pattern case sets confirm:true so both reach the check.",
+  "cases": [
+    {
+      "name": "rejects a non-plan subscription",
+      "args": { "longview_subscription": "bogus", "confirm": true },
+      "expect_error": "longview_subscription must be a Longview plan ID like longview-10"
+    },
+    {
+      "name": "updates the longview plan",
+      "args": { "longview_subscription": "longview-10", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/longview/plan",
+        "body": { "longview_subscription": "longview-10" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"longview_subscription": "longview-10"},
+      "expect_error": "This updates the Longview subscription plan. Set confirm=true to proceed."
+    }
+  ]
+}

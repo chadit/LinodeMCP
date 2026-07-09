@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.InstanceDeleteResponse",
+  "description": "Instance delete id-echo: a confirmation message plus the deleted instance's ID. The field is instance_id (not linode_id) to match the existing tool output key. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "Instance 98765 removed successfully",
+    "instance_id": 98765
+  },
+  "canonical": {
+    "message": "Instance 98765 removed successfully",
+    "instance_id": 98765
+  }
+}

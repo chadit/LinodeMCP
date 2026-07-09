@@ -19,9 +19,11 @@ from mcp.types import TextContent
 
 from linodemcp import twostage
 from linodemcp.config import EnvironmentNotFoundError
+from linodemcp.genpb.linode.mcp.v1 import dryrun_pb2
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools import helpers
+from linodemcp.tools.proto_response import serialize_preview_envelope
 from linodemcp.twostage.store import PlanEntry, PlanExpiredError, PlanNotFoundError
 
 if TYPE_CHECKING:
@@ -283,10 +285,10 @@ async def _run_plan(
         )
     )
 
-    body: dict[str, Any] = {
+    raw: dict[str, Any] = {
         "plan_id": plan_id,
-        "created_at": now.isoformat(),
-        "expires_at": expires.isoformat(),
+        "created_at": _rfc3339(now),
+        "expires_at": _rfc3339(expires),
         "tool": tool_name,
         "environment": environment,
         "would_execute": {"method": method, "path": path},
@@ -294,9 +296,24 @@ async def _run_plan(
         "current_state_hash": state_hash,
         **details,
     }
-    return [
-        TextContent(type="text", text=json.dumps(body, indent=2, default=_json_default))
-    ]
+    # Round-trip through JSON first so a dataclass current_state collapses to the
+    # plain dict ParseDict accepts, mirroring the Go builder. The PlanResponse
+    # proto then makes the envelope proto-canonical on both languages.
+    plain = cast("dict[str, Any]", json.loads(json.dumps(raw, default=_json_default)))
+    result = serialize_preview_envelope(plain, dryrun_pb2.PlanResponse())
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+
+def _rfc3339(moment: datetime) -> str:
+    """Format a UTC datetime as RFC3339 with a Z suffix and whole seconds.
+
+    Matches Go's time.RFC3339 output (no fractional seconds, Z zone) so the plan
+    timestamps read identically on both languages, replacing Python's
+    isoformat() which emitted a +00:00 offset with microseconds.
+    """
+    return (
+        moment.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    )
 
 
 async def _run_apply(

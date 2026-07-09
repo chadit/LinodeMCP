@@ -6,19 +6,14 @@ import httpx
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import (
+    firewall_pb2,
     nodebalancer_config_node_pb2,
     nodebalancer_config_pb2,
+    nodebalancer_pb2,
 )
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    ENV_PARAM_SCHEMA,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -26,22 +21,23 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
+    required_int_id,
 )
-from linodemcp.tools.linode_nodebalancers import nodebalancer_to_response_dict
-from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.proto_enum import optional_enum_error
+from linodemcp.tools.proto_response import (
+    raw_int,
+    raw_str,
+    serialize_api_response,
+    serialize_list_response,
+)
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
-
-
-def _positive_int_argument(arguments: dict[str, Any], name: str) -> int | None:
-    value = arguments.get(name)
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        return None
-    return value
 
 
 def _optional_int_argument(
@@ -74,7 +70,6 @@ def _firewall_ids_argument(arguments: dict[str, Any]) -> list[int] | None:
 
 NODE_LABEL_MIN_LENGTH = 3
 NODE_LABEL_MAX_LENGTH = 32
-NODE_MODE_VALUES = {"accept", "reject", "drain", "backup"}
 
 
 def _optional_non_empty_string(arguments: dict[str, Any], name: str) -> str | None:
@@ -102,8 +97,11 @@ def _node_create_fields(arguments: dict[str, Any]) -> tuple[dict[str, Any], str 
         return {}, "label is required"
     if not (NODE_LABEL_MIN_LENGTH <= len(label) <= NODE_LABEL_MAX_LENGTH):
         return {}, "label must be 3 to 32 characters"
-    if mode is not None and mode not in NODE_MODE_VALUES:
-        return {}, "mode must be one of accept, reject, drain, backup"
+    mode_error = optional_enum_error(
+        arguments, "mode", nodebalancer_config_node_pb2.NodeBalancerNodeMode.Value
+    )
+    if mode_error is not None:
+        return {}, mode_error
 
     return {
         key: value
@@ -132,8 +130,11 @@ def _node_update_fields(arguments: dict[str, Any]) -> tuple[dict[str, Any], str 
         NODE_LABEL_MIN_LENGTH <= len(label) <= NODE_LABEL_MAX_LENGTH
     ):
         return {}, "label must be 3 to 32 characters"
-    if mode is not None and mode not in NODE_MODE_VALUES:
-        return {}, "mode must be one of accept, reject, drain, backup"
+    mode_error = optional_enum_error(
+        arguments, "mode", nodebalancer_config_node_pb2.NodeBalancerNodeMode.Value
+    )
+    if mode_error is not None:
+        return {}, mode_error
 
     fields = {
         key: value
@@ -155,12 +156,12 @@ def _nb_config_ids(
     arguments: dict[str, Any],
 ) -> tuple[int, int] | list[TextContent]:
     """Parse nodebalancer_id and config_id; return the pair or an error."""
-    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    nodebalancer_id, error = required_int_id(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
-        return error_response("nodebalancer_id must be a positive integer")
-    config_id = _positive_int_argument(arguments, "config_id")
+        return error_response(error)
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
     return nodebalancer_id, config_id
 
 
@@ -171,9 +172,9 @@ def _nb_config_node_ids(
     ids = _nb_config_ids(arguments)
     if isinstance(ids, list):
         return ids
-    node_id = _positive_int_argument(arguments, "node_id")
+    node_id, error = required_int_id(arguments, "node_id")
     if node_id is None:
-        return error_response("node_id must be a positive integer")
+        return error_response(error)
     return ids[0], ids[1], node_id
 
 
@@ -185,8 +186,8 @@ def _firewalls_update_fields(
     if firewall_ids is None:
         return error_response("firewall_ids must be a list of positive integers")
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
     return firewall_ids, page, page_size
@@ -200,43 +201,7 @@ def create_linode_nodebalancer_firewall_update_tool() -> tuple[Tool, Capability]
             "Replaces the firewall assignments for a NodeBalancer. "
             "Pass an empty firewall_ids list to remove all assignments."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "firewall_ids": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "description": (
-                        "Complete list of Firewall IDs to assign. Use [] to remove all."
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of assigned Firewall results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of assigned Firewall results per page",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to replace NodeBalancer firewall assignments."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["nodebalancer_id", "firewall_ids", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerFirewallUpdateInput"),
     ), Capability.Write
 
 
@@ -245,9 +210,9 @@ async def handle_linode_nodebalancer_firewall_update(
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_firewall_update tool request."""
     if is_dry_run(arguments):
-        nb_id = _positive_int_argument(arguments, "nodebalancer_id")
+        nb_id, error = required_int_id(arguments, "nodebalancer_id")
         if nb_id is None:
-            return error_response("nodebalancer_id must be a positive integer")
+            return error_response(error)
         nb = nb_id
 
         async def _fetch(client: RetryableClient) -> Any:
@@ -263,11 +228,14 @@ async def handle_linode_nodebalancer_firewall_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This replaces firewall assignments for a NodeBalancer. Set confirm=true "
+            "to proceed."
+        )
 
-    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    nodebalancer_id, error = required_int_id(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
-        return error_response("nodebalancer_id must be a positive integer")
+        return error_response(error)
 
     parsed = _firewalls_update_fields(arguments)
     if isinstance(parsed, list):
@@ -275,8 +243,11 @@ async def handle_linode_nodebalancer_firewall_update(
     firewall_ids, page, page_size = parsed
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_nodebalancer_firewalls(
+        raw = await client.update_nodebalancer_firewalls(
             nodebalancer_id, firewall_ids, page=page, page_size=page_size
+        )
+        return serialize_list_response(
+            raw, "firewalls", firewall_pb2.FirewallListResponse()
         )
 
     return await execute_tool(
@@ -292,28 +263,7 @@ def create_linode_nodebalancer_config_rebuild_tool() -> tuple[Tool, Capability]:
             "Rebuilds a NodeBalancer config. "
             "Requires confirm because active connections may be affected."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer config (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to rebuild the NodeBalancer config.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["nodebalancer_id", "config_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigRebuildInput"),
     ), Capability.Write
 
 
@@ -340,15 +290,17 @@ async def handle_linode_nodebalancer_config_rebuild(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This rebuilds a NodeBalancer config. Set confirm=true to proceed."
+        )
 
-    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    nodebalancer_id, error = required_int_id(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
-        return error_response("nodebalancer_id must be a positive integer")
+        return error_response(error)
 
-    config_id = _positive_int_argument(arguments, "config_id")
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
@@ -375,32 +327,7 @@ def create_linode_nodebalancer_config_delete_tool() -> tuple[Tool, Capability]:
             "WARNING: This removes the config and its backend nodes."
             " Pass dry_run=true to preview without deleting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "The ID of the NodeBalancer config to delete (required)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["nodebalancer_id", "config_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigDeleteInput"),
     ), Capability.Destroy
 
 
@@ -410,13 +337,13 @@ async def handle_linode_nodebalancer_config_delete(
     """Handle linode_nodebalancer_config_delete tool request."""
     # Both branches need valid positive IDs, and the spec says dry-run
     # errors on missing required args the same way the real call would.
-    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    nodebalancer_id, error = required_int_id(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
-        return error_response("nodebalancer_id must be a positive integer")
+        return error_response(error)
 
-    config_id = _positive_int_argument(arguments, "config_id")
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
 
     if is_dry_run(arguments):
 
@@ -433,18 +360,23 @@ async def handle_linode_nodebalancer_config_delete(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This operation is destructive. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer_config(nodebalancer_id, config_id)
-        return {
-            "message": (
-                f"Config {config_id} removed from "
-                f"NodeBalancer {nodebalancer_id} successfully"
-            ),
-            "nodebalancer_id": nodebalancer_id,
-            "config_id": config_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Config {config_id} removed from "
+                    f"NodeBalancer {nodebalancer_id} successfully"
+                ),
+                "nodebalancer_id": nodebalancer_id,
+                "config_id": config_id,
+            },
+            nodebalancer_config_pb2.NodeBalancerConfigDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer config", _call)
 
@@ -457,33 +389,7 @@ def create_linode_nodebalancer_create_tool() -> tuple[Tool, Capability]:
             "Creates a new NodeBalancer (load balancer). "
             "WARNING: Billing starts immediately."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "region": {
-                    "type": "string",
-                    "description": "Region for the NodeBalancer (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label for the NodeBalancer (optional)",
-                },
-                "client_conn_throttle": {
-                    "type": "integer",
-                    "description": "Connections per second throttle (0-20, default: 0)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. This incurs billing. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["region", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerCreateInput"),
     ), Capability.Write
 
 
@@ -513,29 +419,30 @@ async def handle_linode_nodebalancer_create(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text="Error: This creates a billable resource. Set confirm=true.",
-            )
-        ]
+        return error_response(
+            "This operation creates a billable resource. Set confirm=true to proceed."
+        )
 
     if not region:
         return error_response("region is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        nb = await client.create_nodebalancer(
+        raw = await client.create_nodebalancer_raw(
             region=region,
             label=arguments.get("label"),
             client_conn_throttle=arguments.get("client_conn_throttle", 0),
         )
-        return {
-            "message": (
-                f"NodeBalancer '{nb.label}' (ID: {nb.id}) "
-                f"created successfully in {nb.region}"
-            ),
-            "nodebalancer": nodebalancer_to_response_dict(nb),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"NodeBalancer '{raw_str(raw, 'label')}' "
+                    f"(ID: {raw_int(raw, 'id')}) "
+                    f"created successfully in {raw_str(raw, 'region')}"
+                ),
+                "nodebalancer": raw,
+            },
+            nodebalancer_pb2.NodeBalancerWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create NodeBalancer", _call)
 
@@ -545,33 +452,7 @@ def create_linode_nodebalancer_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_nodebalancer_update",
         description="Updates an existing NodeBalancer.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "description": "The ID of the NodeBalancer to update (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "New label (optional)",
-                },
-                "client_conn_throttle": {
-                    "type": "integer",
-                    "description": "New throttle limit (0-20, optional)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["nodebalancer_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerUpdateInput"),
     ), Capability.Write
 
 
@@ -625,16 +506,24 @@ async def handle_linode_nodebalancer_update(
             _walk,
         )
 
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a NodeBalancer. Set confirm=true to proceed."
+        )
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        nb = await client.update_nodebalancer(
+        raw = await client.update_nodebalancer_raw(
             nodebalancer_id=int(nodebalancer_id),
             label=arguments.get("label"),
             client_conn_throttle=arguments.get("client_conn_throttle"),
         )
-        return {
-            "message": f"NodeBalancer {nodebalancer_id} modified successfully",
-            "nodebalancer": nodebalancer_to_response_dict(nb),
-        }
+        return serialize_api_response(
+            {
+                "message": f"NodeBalancer {nodebalancer_id} modified successfully",
+                "nodebalancer": raw,
+            },
+            nodebalancer_pb2.NodeBalancerWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update NodeBalancer", _call)
 
@@ -649,26 +538,7 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "description": "The ID of the NodeBalancer to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["nodebalancer_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerDeleteInput"),
     ), Capability.Destroy
 
 
@@ -721,10 +591,13 @@ async def _nodebalancer_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer(nodebalancer_id_int)
-        return {
-            "message": f"NodeBalancer {nodebalancer_id_int} removed successfully",
-            "nodebalancer_id": nodebalancer_id_int,
-        }
+        return serialize_api_response(
+            {
+                "message": f"NodeBalancer {nodebalancer_id_int} removed successfully",
+                "nodebalancer_id": nodebalancer_id_int,
+            },
+            nodebalancer_pb2.NodeBalancerDeleteResponse(),
+        )
 
     async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
         return await _nodebalancer_delete_dependency_walk(client, nodebalancer_id_int)
@@ -785,19 +658,19 @@ async def handle_linode_nodebalancer_delete(
     confirm = arguments.get("confirm", False)
 
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This operation is destructive. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer(nodebalancer_id_int)
-        return {
-            "message": f"NodeBalancer {nodebalancer_id_int} removed successfully",
-            "nodebalancer_id": nodebalancer_id_int,
-        }
+        return serialize_api_response(
+            {
+                "message": f"NodeBalancer {nodebalancer_id_int} removed successfully",
+                "nodebalancer_id": nodebalancer_id_int,
+            },
+            nodebalancer_pb2.NodeBalancerDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer", _call)
 
@@ -810,62 +683,7 @@ def create_linode_nodebalancer_config_node_create_tool() -> tuple[Tool, Capabili
             "Creates a backend node in a NodeBalancer config. "
             "Requires confirm because live backend routing may change."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer config (required)",
-                },
-                "address": {
-                    "type": "string",
-                    "description": "Backend address and port, such as 10.0.0.45:80.",
-                },
-                "label": {
-                    "type": "string",
-                    "minLength": 3,
-                    "maxLength": 32,
-                    "description": "Display label for the node.",
-                },
-                "mode": {
-                    "type": "string",
-                    "enum": ["accept", "reject", "drain", "backup"],
-                    "description": "Backend traffic mode for this node.",
-                },
-                "subnet_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "VPC subnet ID for VPC backend nodes.",
-                },
-                "weight": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 255,
-                    "description": "Backend selection weight from 1 to 255.",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to create the NodeBalancer config node."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "nodebalancer_id",
-                "config_id",
-                "address",
-                "label",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeCreateInput"),
     ), Capability.Write
 
 
@@ -887,7 +705,9 @@ async def handle_linode_nodebalancer_config_node_create(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This creates a NodeBalancer node. Set confirm=true to proceed."
+        )
 
     ids = _nb_config_ids(arguments)
     if isinstance(ids, list):
@@ -924,61 +744,7 @@ def create_linode_nodebalancer_config_node_update_tool() -> tuple[Tool, Capabili
             "Updates a node in a NodeBalancer config. "
             "Requires confirm because live backend routing may change."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer config (required)",
-                },
-                "node_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the node to update (required)",
-                },
-                "address": {
-                    "type": "string",
-                    "description": "Backend address and port, such as 10.0.0.45:80.",
-                },
-                "label": {
-                    "type": "string",
-                    "minLength": 3,
-                    "maxLength": 32,
-                    "description": "Display label for the node.",
-                },
-                "mode": {
-                    "type": "string",
-                    "enum": ["accept", "reject", "drain", "backup"],
-                    "description": "Backend traffic mode for this node.",
-                },
-                "subnet_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "VPC subnet ID for VPC backend nodes.",
-                },
-                "weight": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 255,
-                    "description": "Backend selection weight from 1 to 255.",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to update the NodeBalancer config node."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["nodebalancer_id", "config_id", "node_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeUpdateInput"),
     ), Capability.Write
 
 
@@ -1005,7 +771,9 @@ async def handle_linode_nodebalancer_config_node_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This updates a NodeBalancer node. Set confirm=true to proceed."
+        )
 
     ids = _nb_config_node_ids(arguments)
     if isinstance(ids, list):
@@ -1043,35 +811,7 @@ def create_linode_nodebalancer_config_node_delete_tool() -> tuple[Tool, Capabili
             "WARNING: This removes the backend node from the load balancer."
             " Pass dry_run=true to preview without deleting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer config (required)",
-                },
-                "node_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the node to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["nodebalancer_id", "config_id", "node_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1120,26 +860,26 @@ async def handle_linode_nodebalancer_config_node_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This deletes a NodeBalancer node. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_nodebalancer_config_node(
             nodebalancer_id_int, config_id_int, node_id_int
         )
-        return {
-            "message": (
-                f"NodeBalancer node {node_id_int} removed successfully "
-                f"from NodeBalancer {nodebalancer_id_int} config {config_id_int}"
-            ),
-            "nodebalancer_id": nodebalancer_id_int,
-            "config_id": config_id_int,
-            "node_id": node_id_int,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"NodeBalancer node {node_id_int} removed successfully "
+                    f"from NodeBalancer {nodebalancer_id_int} config {config_id_int}"
+                ),
+                "nodebalancer_id": nodebalancer_id_int,
+                "config_id": config_id_int,
+                "node_id": node_id_int,
+            },
+            nodebalancer_config_node_pb2.NodeBalancerConfigNodeDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete NodeBalancer config node", _call)
 
@@ -1152,110 +892,7 @@ def create_linode_nodebalancer_config_update_tool() -> tuple[Tool, Capability]:
             "Updates an existing NodeBalancer config. "
             "Requires confirm because live routing may be affected."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "The ID of the NodeBalancer config to update (required)"
-                    ),
-                },
-                "port": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 65535,
-                    "description": "Port the NodeBalancer listens on for this config.",
-                },
-                "protocol": {
-                    "type": "string",
-                    "enum": ["tcp", "udp", "http", "https"],
-                    "description": "Protocol for this config.",
-                },
-                "algorithm": {
-                    "type": "string",
-                    "enum": ["roundrobin", "leastconn", "source", "ring_hash"],
-                    "description": "Backend selection algorithm.",
-                },
-                "check": {
-                    "type": "string",
-                    "enum": ["none", "connection", "http", "http_body"],
-                    "description": "Health check type for backends.",
-                },
-                "check_passive": {
-                    "type": "boolean",
-                    "description": "Mark backend down on 5xx responses.",
-                },
-                "check_attempts": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 30,
-                    "description": "Check attempts before marking backend down.",
-                },
-                "check_body": {
-                    "type": "string",
-                    "description": "Required text in check response body.",
-                },
-                "check_interval": {
-                    "type": "integer",
-                    "minimum": 2,
-                    "maximum": 3600,
-                    "description": "Seconds between health checks.",
-                },
-                "check_path": {
-                    "type": "string",
-                    "description": "URL path for HTTP health checks.",
-                },
-                "check_timeout": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 30,
-                    "description": "Seconds to wait for a check attempt.",
-                },
-                "stickiness": {
-                    "type": "string",
-                    "enum": ["none", "table", "session", "source_ip", "http_cookie"],
-                    "description": "Session stickiness mode.",
-                },
-                "proxy_protocol": {
-                    "type": "string",
-                    "enum": ["none", "v1", "v2"],
-                    "description": "Proxy protocol version (TCP only).",
-                },
-                "cipher_suite": {
-                    "type": "string",
-                    "enum": ["recommended", "legacy"],
-                    "description": "SSL cipher suite (HTTPS only).",
-                },
-                "ssl_cert": {
-                    "type": "string",
-                    "description": "PEM-formatted SSL certificate (HTTPS only).",
-                },
-                "ssl_key": {
-                    "type": "string",
-                    "description": "PEM-formatted SSL private key (HTTPS only).",
-                },
-                "udp_check_port": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 65535,
-                    "description": "Health check port for UDP configs.",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to update the NodeBalancer config.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["nodebalancer_id", "config_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigUpdateInput"),
     ), Capability.Write
 
 
@@ -1282,38 +919,24 @@ async def handle_linode_nodebalancer_config_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This updates a NodeBalancer config. Set confirm=true to proceed."
+        )
 
-    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
-    if nodebalancer_id is None:
-        return error_response("nodebalancer_id must be a positive integer")
+    ids = _nb_config_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    nodebalancer_id, config_id = ids
 
-    config_id = _positive_int_argument(arguments, "config_id")
-    if config_id is None:
-        return error_response("config_id must be a positive integer")
+    body_error = _config_body_error(arguments, require_port=False, require_field=True)
+    if body_error is not None:
+        return error_response(body_error)
 
-    fields: dict[str, Any] = {}
-    for key in (
-        "port",
-        "protocol",
-        "algorithm",
-        "check",
-        "check_passive",
-        "check_attempts",
-        "check_body",
-        "check_interval",
-        "check_path",
-        "check_timeout",
-        "stickiness",
-        "proxy_protocol",
-        "cipher_suite",
-        "ssl_cert",
-        "ssl_key",
-        "udp_check_port",
-    ):
-        value = arguments.get(key)
-        if value is not None:
-            fields[key] = value
+    fields: dict[str, Any] = {
+        key: arguments[key]
+        for key in NODE_CONFIG_UPDATE_FIELDS
+        if arguments.get(key) is not None
+    }
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_nodebalancer_config(
@@ -1333,6 +956,77 @@ async def handle_linode_nodebalancer_config_update(
     return await execute_tool(cfg, arguments, "update NodeBalancer config", _call)
 
 
+# The config choice enums, sourced from the generated proto enums so the value
+# sets match the live API and the Go side exactly (no hand-maintained lists).
+# Order matches Go's validation order in nodeBalancerConfig*RequestFromTool for
+# identical error messages when more than one field is invalid.
+_CONFIG_CHOICE_ENUMS = (
+    ("protocol", nodebalancer_config_pb2.NodeBalancerProtocol.Value),
+    ("algorithm", nodebalancer_config_pb2.NodeBalancerAlgorithm.Value),
+    ("stickiness", nodebalancer_config_pb2.NodeBalancerStickiness.Value),
+    ("check", nodebalancer_config_pb2.NodeBalancerCheck.Value),
+    ("cipher_suite", nodebalancer_config_pb2.NodeBalancerCipherSuite.Value),
+    ("proxy_protocol", nodebalancer_config_pb2.NodeBalancerProxyProtocol.Value),
+)
+NODE_CONFIG_UPDATE_FIELDS = (
+    "port",
+    "protocol",
+    "algorithm",
+    "check",
+    "check_passive",
+    "check_attempts",
+    "check_body",
+    "check_interval",
+    "check_path",
+    "check_timeout",
+    "stickiness",
+    "proxy_protocol",
+    "cipher_suite",
+    "ssl_cert",
+    "ssl_key",
+    "udp_check_port",
+)
+
+
+def _config_body_error(
+    arguments: dict[str, Any], *, require_port: bool, require_field: bool = False
+) -> str | None:
+    """Port of Go's shared NodeBalancer config body validation (create + update).
+
+    Mirrors the checks Go performs in nodeBalancerConfig{Create,Update}RequestFromTool:
+    port-required (create only), port range 1-65535, the protocol/algorithm/
+    stickiness/check/cipher_suite/proxy_protocol choice enums, the
+    ssl-cert/key-when-https requirement, and update's at-least-one-field rule
+    (require_field). The choice-enum value sets come from the generated proto
+    enums (the same source the JSON Schema and the Go handler use), so they match
+    the live API exactly. This replaces an earlier state where only `check` was
+    validated because Go's hand-maintained protocol/algorithm/stickiness
+    allowlists were stale (rejecting udp, ring_hash, source_ip, session); the
+    proto enums carry the full, correct sets on both sides now. The
+    at-least-one check runs last to match Go's order. Returns Go's exact text.
+    """
+    if require_port and "port" not in arguments:
+        return "port is required"
+    if "port" in arguments:
+        try:
+            pagination_int_argument(arguments, "port", 1, 65535)
+        except (TypeError, ValueError) as exc:
+            return str(exc)
+    for key, enum in _CONFIG_CHOICE_ENUMS:
+        enum_error = optional_enum_error(arguments, key, enum)
+        if enum_error is not None:
+            return enum_error
+    if arguments.get("protocol") == "https" and (
+        not arguments.get("ssl_cert") or not arguments.get("ssl_key")
+    ):
+        return "ssl_cert and ssl_key are required when protocol is https"
+    if require_field and not any(
+        arguments.get(key) is not None for key in NODE_CONFIG_UPDATE_FIELDS
+    ):
+        return "at least one update field is required"
+    return None
+
+
 def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_nodebalancer_config_create tool."""
     return Tool(
@@ -1341,108 +1035,7 @@ def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:
             "Creates a NodeBalancer configuration. "
             "WARNING: This creates a new config on an existing NodeBalancer."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "nodebalancer_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the NodeBalancer (required)",
-                },
-                "port": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 65535,
-                    "description": "Port the config listens on (default: 80)",
-                },
-                "protocol": {
-                    "type": "string",
-                    "enum": ["http", "udp"],
-                    "description": "Protocol (default: http)",
-                },
-                "algorithm": {
-                    "type": "string",
-                    "enum": ["roundrobin", "leastconn", "ring_hash"],
-                    "description": "Load balancing algorithm (default: roundrobin)",
-                },
-                "stickiness": {
-                    "type": "string",
-                    "enum": ["none", "table", "http_cookie", "drop_thin"],
-                    "description": "Session stickiness (default: none)",
-                },
-                "check": {
-                    "type": "string",
-                    "enum": ["none", "connection", "http", "http_body"],
-                    "description": "Health check type (default: none)",
-                },
-                "check_interval": {
-                    "type": "integer",
-                    "minimum": 2,
-                    "maximum": 3600,
-                    "description": "Health check interval in seconds (default: 5)",
-                },
-                "check_timeout": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 30,
-                    "description": "Health check timeout in seconds (default: 3)",
-                },
-                "check_attempts": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 30,
-                    "description": "Health check attempts (default: 3)",
-                },
-                "check_path": {
-                    "type": "string",
-                    "description": "URL path for HTTP health checks",
-                },
-                "check_body": {
-                    "type": "string",
-                    "description": "Required response body for http_body checks",
-                },
-                "check_passive": {
-                    "type": "boolean",
-                    "description": "Enable passive health checks (ignored for UDP)",
-                },
-                "proxy_protocol": {
-                    "type": "string",
-                    "enum": ["none", "v1", "v2"],
-                    "description": "Proxy protocol version (default: none)",
-                },
-                "udp_check_port": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 65535,
-                    "description": "TCP/HTTP health check port for UDP backends",
-                },
-                "cipher_suite": {
-                    "type": "string",
-                    "enum": ["recommended", "legacy"],
-                    "description": "SSL cipher suite (HTTPS only).",
-                },
-                "ssl_cert": {
-                    "type": "string",
-                    "description": "PEM-formatted SSL certificate (HTTPS only).",
-                },
-                "ssl_key": {
-                    "type": "string",
-                    "description": "PEM-formatted SSL private key (HTTPS only).",
-                },
-                "nodes": {
-                    "type": "array",
-                    "items": {"type": "object"},
-                    "description": "Backend nodes to attach to this config",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to create the NodeBalancer config.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["nodebalancer_id", "port", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigCreateInput"),
     ), Capability.Write
 
 
@@ -1451,9 +1044,9 @@ async def handle_linode_nodebalancer_config_create(
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_config_create tool request."""
     if is_dry_run(arguments):
-        nb_id = _positive_int_argument(arguments, "nodebalancer_id")
+        nb_id, error = required_int_id(arguments, "nodebalancer_id")
         if nb_id is None:
-            return error_response("nodebalancer_id must be a positive integer")
+            return error_response(error)
         return build_dry_run_response(
             "linode_nodebalancer_config_create",
             arguments.get("environment", ""),
@@ -1463,11 +1056,17 @@ async def handle_linode_nodebalancer_config_create(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This creates a NodeBalancer config. Set confirm=true to proceed."
+        )
 
-    nodebalancer_id = _positive_int_argument(arguments, "nodebalancer_id")
+    nodebalancer_id, error = required_int_id(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
-        return error_response("nodebalancer_id must be a positive integer")
+        return error_response(error)
+
+    body_error = _config_body_error(arguments, require_port=True)
+    if body_error is not None:
+        return error_response(body_error)
 
     fields: dict[str, Any] = {}
     for key in (

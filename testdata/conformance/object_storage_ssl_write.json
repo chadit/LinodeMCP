@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageSSLWriteResponse",
+  "description": "Object Storage SSL upload envelope: a confirmation message plus the bucket TLS status element echoed by the upload endpoint.",
+  "input": {
+    "message": "SSL certificate uploaded to bucket 'my-bucket' in region 'us-east-1'",
+    "ssl": {
+      "ssl": true
+    }
+  },
+  "canonical": {
+    "message": "SSL certificate uploaded to bucket 'my-bucket' in region 'us-east-1'",
+    "ssl": {
+      "ssl": true
+    }
+  }
+}

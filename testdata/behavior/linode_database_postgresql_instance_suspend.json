@@ -1,0 +1,17 @@
+{
+  "tool": "linode_database_postgresql_instance_suspend",
+  "description": "Confirm-gated suspend POST. Missing/invalid instance_id error text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "suspends a postgresql instance",
+      "args": { "instance_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/databases/postgresql/instances/123/suspend" }
+    },
+    {
+      "name": "requires confirm",
+      "args": { "instance_id": 123 },
+      "expect_error": "This suspends a PostgreSQL Managed Database instance. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_longview_type_list",
+  "description": "No local validation; pins the unpaginated list GET.",
+  "cases": [
+    {
+      "name": "lists longview types",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/longview/types" }
+    }
+  ]
+}

@@ -137,8 +137,8 @@ func TestLinodeProfileCanRunToolSchemaAndCapability(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapMeta)
 	}
 
-	if _, ok := tool.InputSchema.Properties["calls"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "calls")
+	if !strings.Contains(string(tool.RawInputSchema), "calls") {
+		t.Errorf("tool.RawInputSchema missing key %v", "calls")
 	}
 }
 

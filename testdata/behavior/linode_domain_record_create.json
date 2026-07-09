@@ -1,0 +1,36 @@
+{
+  "tool": "linode_domain_record_create",
+  "description": "Domain record create requires domain_id and type (with confirm), then POSTs the record. A public A record captures type/name/target.",
+  "cases": [
+    {
+      "name": "requires domain_id",
+      "args": { "confirm": true },
+      "expect_error": "domain_id is required"
+    },
+    {
+      "name": "requires type",
+      "args": { "confirm": true, "domain_id": 5 },
+      "expect_error": "type is required"
+    },
+    {
+      "name": "rejects a reserved A-record target",
+      "args": { "confirm": true, "domain_id": 5, "type": "A", "name": "www", "target": "192.0.2.1" },
+      "expect_error": "a record target cannot be a private IP address"
+    },
+    {
+      "name": "creates an A record",
+      "args": { "confirm": true, "domain_id": 5, "type": "A", "name": "www", "target": "8.8.8.8" },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/domains/5/records",
+        "body": { "type": "A", "name": "www", "target": "8.8.8.8" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"domain_id": 5, "type": "A", "name": "www", "target": "8.8.8.8"},
+      "expect_error": "This creates a DNS record. Set confirm=true to proceed."
+    }
+  ]
+}

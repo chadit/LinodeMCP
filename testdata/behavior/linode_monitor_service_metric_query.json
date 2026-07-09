@@ -1,0 +1,16 @@
+{
+  "tool": "linode_monitor_service_metric_query",
+  "description": "Pins the metric-query POST with its empty body. The service_type rejection text diverges (see report), so only the success capture is fixtured.",
+  "cases": [
+    {
+      "name": "reads the monitor service metrics",
+      "args": { "service_type": "dbaas" },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/metrics",
+        "body": {}
+      }
+    }
+  ]
+}

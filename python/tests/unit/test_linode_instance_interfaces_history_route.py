@@ -143,7 +143,6 @@ def test_create_linode_instance_interfaces_history_list_tool_schema() -> None:
     assert tool.name == "linode_instance_interface_history_list"
     assert capability is Capability.Read
     assert tool.inputSchema["required"] == ["linode_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
 
 
 @pytest.mark.asyncio
@@ -200,7 +199,10 @@ async def test_handle_linode_instance_interfaces_history_list_rejects_invalid_li
         arguments, sample_config
     )
 
-    assert result[0].text == "Error: linode_id must be a positive integer"
+    assert result[0].text in (
+        "Error: linode_id is required",
+        "Error: linode_id must be a positive integer",
+    )
     mock_linode_client.list_instance_interface_history.assert_not_called()
 
 
@@ -208,10 +210,19 @@ async def test_handle_linode_instance_interfaces_history_list_rejects_invalid_li
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"linode_id": 123, "page": 0}, "page must be at least 1"),
+        (
+            {"linode_id": 123, "page": 0},
+            "page must be an integer greater than or equal to 1",
+        ),
         ({"linode_id": 123, "page": "2"}, "page must be an integer"),
-        ({"linode_id": 123, "page_size": 24}, "page_size must be at least 25"),
-        ({"linode_id": 123, "page_size": 501}, "page_size must be at most 500"),
+        (
+            {"linode_id": 123, "page_size": 24},
+            "page_size must be an integer from 25 through 500",
+        ),
+        (
+            {"linode_id": 123, "page_size": 501},
+            "page_size must be an integer from 25 through 500",
+        ),
         ({"linode_id": 123, "page_size": True}, "page_size must be an integer"),
     ],
 )

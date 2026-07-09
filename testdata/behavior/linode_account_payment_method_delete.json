@@ -1,0 +1,22 @@
+{
+  "tool": "linode_account_payment_method_delete",
+  "description": "Account payment method delete: confirm gate and the single DELETE once confirmed. Id-validation text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires confirm before deleting",
+      "args": { "payment_method_id": 123 },
+      "expect_error": "This deletes a payment method. Set confirm=true to proceed."
+    },
+    {
+      "name": "deletes a payment method",
+      "args": { "payment_method_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/account/payment-methods/123" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"payment_method_id": 123},
+      "expect_error": "This deletes a payment method. Set confirm=true to proceed."
+    }
+  ]
+}

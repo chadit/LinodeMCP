@@ -1,0 +1,17 @@
+{
+  "tool": "linode_firewall_device_get",
+  "description": "Firewall device get fetches one device via GET. Both languages reject a non-positive firewall_id with the same text; the missing-id and device_id messages diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects a non-positive firewall_id",
+      "args": { "firewall_id": -1, "device_id": 10 },
+      "expect_error": "firewall_id must be a positive integer"
+    },
+    {
+      "name": "gets a firewall device",
+      "args": { "firewall_id": 5, "device_id": 10 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/networking/firewalls/5/devices/10" }
+    }
+  ]
+}

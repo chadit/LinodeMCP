@@ -5,32 +5,27 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // NewLinodeNodeBalancerCreateTool creates a tool for creating a NodeBalancer.
 func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_create",
 		"Creates a new NodeBalancer (load balancer). WARNING: Billing starts immediately. Use linode_region_list to find valid regions.",
-		[]mcp.ToolOption{
-			mcp.WithString("region", mcp.Required(),
-				mcp.Description("Region where the NodeBalancer will be created (e.g., 'us-east')")),
-			mcp.WithString("label", mcp.Description("A label for the NodeBalancer (optional)")),
-			mcp.WithNumber("client_conn_throttle",
-				mcp.Description("Connections per second throttle limit (0-20). Default is 0 (no throttle).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm creation. This operation incurs billing charges. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -85,22 +80,15 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 
 // NewLinodeNodeBalancerUpdateTool creates a tool for updating a NodeBalancer.
 func NewLinodeNodeBalancerUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_update",
 		"Updates an existing NodeBalancer. Can modify label and connection throttle.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("nodebalancer_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer to update")),
-			mcp.WithString("label", mcp.Description("New label for the NodeBalancer (optional)")),
-			mcp.WithNumber("client_conn_throttle",
-				mcp.Description("New connections per second throttle limit (0-20) (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm NodeBalancer update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeNodeBalancerUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -164,24 +152,28 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 
 // NewLinodeNodeBalancerDeleteTool creates a tool for deleting a NodeBalancer.
 func NewLinodeNodeBalancerDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_nodebalancer_delete",
 		"Deletes a NodeBalancer. WARNING: This will remove the load balancer and all its configurations."+
 			" Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("nodebalancer_id", mcp.Required(),
-				mcp.Description("The ID of the NodeBalancer to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be set to true to confirm deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleLinodeNodeBalancerDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.NodeBalancerDeleteInput"),
 	)
 
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeNodeBalancerDeleteRequest(ctx, &request, cfg)
+	}
+
 	return tool, profiles.CapDestroy, handler
+}
+
+// nodebalancerDeleteProto builds the proto-canonical id-echo body for a
+// successful NodeBalancer delete, keeping the proto literal off the handler's
+// struct literal so the delete handlers stay below the dupl threshold.
+func nodebalancerDeleteProto(id int) proto.Message {
+	return &linodev1.NodeBalancerDeleteResponse{
+		Message:        fmt.Sprintf("NodeBalancer %d removed successfully", id),
+		NodebalancerId: linodeIDToInt32(id),
+	}
 }
 
 func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -191,7 +183,7 @@ func handleLinodeNodeBalancerDeleteRequest(ctx context.Context, request *mcp.Cal
 		Method:         httpMethodDelete,
 		PathPattern:    "/nodebalancers/%d",
 		ConfirmMessage: destroyConfirmMessage,
-		SuccessFormat:  "NodeBalancer %d removed successfully",
+		SuccessProto:   nodebalancerDeleteProto,
 		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
 			return c.GetNodeBalancer(ctx, id)
 		},

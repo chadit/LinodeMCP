@@ -1,0 +1,27 @@
+{
+  "tool": "linode_object_storage_object_acl_get",
+  "description": "Pins the region/label/name-required rejections both languages share and the object-acl GET with the name query param.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": {},
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires label",
+      "args": { "region": "us-east" },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires name",
+      "args": { "region": "us-east", "label": "my-bucket" },
+      "expect_error": "name (object key) is required"
+    },
+    {
+      "name": "gets object acl",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt" },
+      "api_response": { "acl": "public-read" },
+      "expect_request": { "method": "GET", "path": "/object-storage/buckets/us-east/my-bucket/object-acl?name=my-object.txt" }
+    }
+  ]
+}

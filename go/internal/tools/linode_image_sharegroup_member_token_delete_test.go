@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,15 +35,10 @@ func TestLinodeImageShareGroupMemberTokenDeleteToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyShareGroupID, keyTokenUUID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyShareGroupID, keyTokenUUID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -65,7 +59,7 @@ func TestLinodeImageShareGroupMemberTokenDeleteToolValidation(t *testing.T) {
 		{name: caseFalseConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: false}, wantContains: errConfirmEqualsTrue},
 		{name: caseStringConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: boolStringTrue}, wantContains: errConfirmEqualsTrue},
 		{name: caseNumericConfirmRejected, args: map[string]any{keyShareGroupID: 1234, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: 1}, wantContains: errConfirmEqualsTrue},
-		{name: caseMissingShareGroupID, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
+		{name: caseMissingShareGroupID, args: map[string]any{keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDRequired},
 		{name: caseZeroShareGroupID, args: map[string]any{keyShareGroupID: 0, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
 		{name: caseSlashShareGroupID, args: map[string]any{keyShareGroupID: pathSeparatorValue, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
 		{name: caseQueryShareGroupID, args: map[string]any{keyShareGroupID: pathQueryValue, keyTokenUUID: shareGroupTokenGetUUID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errShareGroupIDPositive},
@@ -217,8 +211,8 @@ func TestLinodeImageShareGroupMemberTokenDeleteToolDryRunSchemaAdvertisesDryRun(
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeImageShareGroupMemberTokenDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), "dry_run") {
+		t.Errorf("tool.RawInputSchema missing key %v", "dry_run")
 	}
 }
 

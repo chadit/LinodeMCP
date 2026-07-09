@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -11,6 +12,7 @@ import (
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -23,23 +25,26 @@ const (
 	placementGroupTypeParam         = "placement_group_type"
 	placementGroupPolicyParam       = "placement_group_policy"
 	placementGroupTypeAntiAffinity  = "anti_affinity:local"
-	placementGroupPolicyStrict      = "strict"
-	placementGroupPolicyFlexible    = "flexible"
 	errPlacementGroupTypeRequired   = "placement_group_type is required"
 	errPlacementGroupTypeNonEmpty   = "placement_group_type must be a non-empty string"
 	errPlacementGroupPolicyRequired = "placement_group_policy is required"
 	errPlacementGroupPolicyNonEmpty = "placement_group_policy must be a non-empty string"
 	errPlacementGroupTypeInvalid    = "placement_group_type must be anti_affinity:local"
-	errPlacementGroupPolicyInvalid  = "placement_group_policy must be strict or flexible"
-	placementGroupLinodesParam      = "linodes"
+	errPlacementGroupLabelPattern   = "label must start and end with an alphanumeric character and contain only alphanumeric characters, hyphens, underscores, or periods"
 )
+
+// placementGroupLabelPattern mirrors Python's _LABEL_PATTERN so both languages
+// reject a label that does not start/end alphanumeric or uses characters other
+// than letters, digits, hyphens, underscores, or periods (strictest-wins).
+var placementGroupLabelPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$`)
 
 // NewLinodePlacementGroupListTool creates a tool for listing placement groups.
 func NewLinodePlacementGroupListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_placement_group_list",
 		"Lists placement groups for the authenticated account with optional pagination.",
+		"linode.mcp.v1.PlacementGroupListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.PlacementGroup, error) {
@@ -59,14 +64,10 @@ func placementGroupListResponse(items []*linodev1.PlacementGroup, count int32, f
 
 // NewLinodePlacementGroupUpdateTool creates a tool for updating a placement group label.
 func NewLinodePlacementGroupUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_placement_group_update",
-		mcp.WithDescription("Updates one placement group label by ID."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber(placementGroupIDParam, mcp.Required(), mcp.Description("Placement group ID to update.")),
-		mcp.WithString(placementGroupLabelParam, mcp.Required(), mcp.Description("New placement group label.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm placement group update.")),
+		"Updates one placement group label by ID.",
+		toolschemas.Schema("linode.mcp.v1.PlacementGroupUpdateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -113,22 +114,17 @@ func handlePlacementGroupUpdateRequest(ctx context.Context, request *mcp.CallToo
 }
 
 func placementGroupIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	groupID, validationMessage := optionalPaginationInt(request.GetArguments(), placementGroupIDParam, 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	if groupID == 0 {
-		return 0, placementGroupIDParam + " is required"
-	}
-
-	return groupID, ""
+	return requiredIDArgument(request, placementGroupIDParam)
 }
 
 func placementGroupUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdatePlacementGroupRequest, string) {
 	label, validationMessage := nonEmptyToolString(request.GetArguments()[placementGroupLabelParam], placementGroupLabelParam)
 	if validationMessage != "" {
 		return nil, validationMessage
+	}
+
+	if !placementGroupLabelPattern.MatchString(label) {
+		return nil, errPlacementGroupLabelPattern
 	}
 
 	return &linode.UpdatePlacementGroupRequest{Label: label}, ""
@@ -152,20 +148,15 @@ func placementGroupsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 
 // NewLinodePlacementGroupCreateTool creates a tool for creating placement groups.
 func NewLinodePlacementGroupCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_placement_group_create",
 		"Creates a Linode placement group.",
-		[]mcp.ToolOption{
-			mcp.WithString(placementGroupLabelParam, mcp.Required(), mcp.Description("Placement group label.")),
-			mcp.WithString(placementGroupRegionParam, mcp.Required(), mcp.Description("Region where the placement group is created.")),
-			mcp.WithString(placementGroupTypeParam, mcp.Required(), mcp.Description("Placement group type. Currently anti_affinity:local.")),
-			mcp.WithString(placementGroupPolicyParam, mcp.Required(), mcp.Description("Placement group policy: strict or flexible.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description("Preview placement group creation without creating it.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm placement group creation. Ignored when dry_run=true.")),
-		},
-		handleLinodePlacementGroupCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.PlacementGroupCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodePlacementGroupCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -174,6 +165,10 @@ func handleLinodePlacementGroupCreateRequest(ctx context.Context, request *mcp.C
 	label, validationMessage := requiredTrimmedString(request, placementGroupLabelParam, errLabelRequired, "label must be a non-empty string")
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if !placementGroupLabelPattern.MatchString(label) {
+		return mcp.NewToolResultError(errPlacementGroupLabelPattern), nil
 	}
 
 	region, validationMessage := requiredTrimmedString(request, placementGroupRegionParam, "region is required", "region must be a non-empty string")
@@ -195,8 +190,8 @@ func handleLinodePlacementGroupCreateRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	if placementGroupPolicy != placementGroupPolicyStrict && placementGroupPolicy != placementGroupPolicyFlexible {
-		return mcp.NewToolResultError(errPlacementGroupPolicyInvalid), nil
+	if message := enumChoiceError(placementGroupPolicy, placementGroupPolicyParam, linodev1.PlacementGroupPolicy_Value_value); message != "" {
+		return mcp.NewToolResultError(message), nil
 	}
 
 	if IsDryRun(request) {
@@ -261,18 +256,15 @@ func requiredTrimmedString(request *mcp.CallToolRequest, name, missingMessage, i
 
 // NewLinodePlacementGroupUnassignTool creates a tool for unassigning Linodes from a placement group.
 func NewLinodePlacementGroupUnassignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_placement_group_unassign",
 		"Unassigns Linodes from a placement group.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("group_id", mcp.Required(), mcp.Description("The ID of the placement group.")),
-			mcp.WithArray(placementGroupLinodesParam, mcp.Required(), mcp.Description("Linode IDs to unassign from the placement group.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description("Preview placement group unassignment without changing it.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm placement group unassignment. Ignored when dry_run=true.")),
-		},
-		handleLinodePlacementGroupUnassignRequest,
+		toolschemas.Schema("linode.mcp.v1.PlacementGroupUnassignInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodePlacementGroupUnassignRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }

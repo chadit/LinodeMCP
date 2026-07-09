@@ -22,10 +22,11 @@ const (
 
 // NewLinodeTypeListTool creates a tool for listing Linode instance types.
 func NewLinodeTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_type_list",
 		"Lists all available Linode instance types (plans) with pricing information. Can filter by class (standard, dedicated, gpu, highmem, premium).",
+		"linode.mcp.v1.InstanceTypeListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.InstanceType, error) {
 			return client.ListTypesProto(ctx)
 		},

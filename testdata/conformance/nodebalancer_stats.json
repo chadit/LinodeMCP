@@ -1,0 +1,54 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerStats",
+  "description": "NodeBalancer stats with the top-level data wrapper the Linode API returns; connection and traffic series are ListValue pairs.",
+  "input": {
+    "title": "nodebalancer.example.com (nodebalancer123) - day (5 min avg)",
+    "data": {
+      "connections": [
+        [
+          1521483600000,
+          12.5
+        ]
+      ],
+      "traffic": {
+        "in": [
+          [
+            1521484800000,
+            2004.36
+          ]
+        ],
+        "out": [
+          [
+            1521484800000,
+            3928.91
+          ]
+        ]
+      }
+    }
+  },
+  "canonical": {
+    "title": "nodebalancer.example.com (nodebalancer123) - day (5 min avg)",
+    "data": {
+      "connections": [
+        [
+          1521483600000.0,
+          12.5
+        ]
+      ],
+      "traffic": {
+        "in": [
+          [
+            1521484800000.0,
+            2004.36
+          ]
+        ],
+        "out": [
+          [
+            1521484800000.0,
+            3928.91
+          ]
+        ]
+      }
+    }
+  }
+}

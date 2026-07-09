@@ -1,0 +1,24 @@
+{
+  "tool": "linode_sshkey_get",
+  "description": "Pins the SSH key GET path both languages issue. Missing/invalid ssh_key_id rejection diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects negative ssh_key_id",
+      "args": {
+        "ssh_key_id": -1
+      },
+      "expect_error": "ssh_key_id must be a positive integer"
+    },
+    {
+      "name": "gets an SSH key by id",
+      "args": {
+        "ssh_key_id": 123
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "GET",
+        "path": "/profile/sshkeys/123"
+      }
+    }
+  ]
+}

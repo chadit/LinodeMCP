@@ -1,0 +1,22 @@
+{
+  "tool": "linode_profile_device_revoke",
+  "description": "Shared non-positive device_id rejection and the single DELETE once confirmed. Missing-device_id text and confirm text diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive device_id",
+      "args": { "device_id": 0 },
+      "expect_error": "device_id must be a positive integer"
+    },
+    {
+      "name": "revokes a trusted device",
+      "args": { "device_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/profile/devices/123" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"device_id": 123},
+      "expect_error": "This revokes a trusted device. Set confirm=true to proceed."
+    }
+  ]
+}

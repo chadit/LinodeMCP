@@ -1,0 +1,36 @@
+{
+  "tool": "linode_managed_service_update",
+  "description": "Service update: shared id rejection, the timeout range rejection (Python's text now matches Go's 'between 1 and 255'), confirm gate, and the PUT body once confirmed.",
+  "cases": [
+    {
+      "name": "rejects non-positive service_id",
+      "args": { "service_id": 0 },
+      "expect_error": "service_id must be a positive integer"
+    },
+    {
+      "name": "rejects an out-of-range timeout",
+      "args": { "service_id": 8, "label": "web2", "timeout": 0, "confirm": true },
+      "expect_error": "timeout must be an integer between 1 and 255"
+    },
+    {
+      "name": "requires confirm before updating",
+      "args": { "service_id": 8, "label": "web2" },
+      "expect_error": "This updates a Managed service monitor. Set confirm=true to proceed."
+    },
+    {
+      "name": "updates a managed service",
+      "args": { "service_id": 8, "label": "web2", "confirm": true },
+      "api_response": { "id": 8, "label": "web2" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/services/8",
+        "body": { "label": "web2" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"service_id": 8, "label": "web2"},
+      "expect_error": "This updates a Managed service monitor. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "tool": "linode_managed_service_enable",
+  "description": "Service enable: shared positive-id rejection, confirm gate, and the enable POST.",
+  "cases": [
+    {
+      "name": "rejects non-positive service_id",
+      "args": { "service_id": 0 },
+      "expect_error": "service_id must be a positive integer"
+    },
+    {
+      "name": "requires confirm before enabling",
+      "args": { "service_id": 4 },
+      "expect_error": "This enables a Managed service monitor. Set confirm=true to proceed."
+    },
+    {
+      "name": "enables a managed service",
+      "args": { "service_id": 4, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/managed/services/4/enable" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"service_id": 4},
+      "expect_error": "This enables a Managed service monitor. Set confirm=true to proceed."
+    }
+  ]
+}

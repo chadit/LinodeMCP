@@ -19,8 +19,8 @@ func TestLinodeVolumeCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeVolumeCreateTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -126,8 +126,8 @@ func TestLinodeVolumeAttachToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVolumeAttachTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -214,8 +214,8 @@ func TestLinodeVolumeDetachToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeVolumeDetachTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -328,8 +328,8 @@ func TestLinodeVolumeResizeToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeVolumeResizeTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -427,8 +427,8 @@ func TestLinodeVolumeUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeVolumeUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

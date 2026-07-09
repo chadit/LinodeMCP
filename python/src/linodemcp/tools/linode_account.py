@@ -21,19 +21,14 @@ from linodemcp.genpb.linode.mcp.v1 import (
     common_pb2,
     managed_issue_pb2,
     managed_pb2,
+    oauth_client_thumbnail_pb2,
     support_ticket_pb2,
     tag_pb2,
 )
 from linodemcp.linode import RetryableClient
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    ENV_PARAM_SCHEMA,
-    MODE_PROP,
     PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -41,10 +36,15 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
+    required_int_id,
 )
+from linodemcp.tools.proto_enum import enum_choice_error, enum_value_names
 from linodemcp.tools.proto_response import (
+    raw_str,
     serialize_api_response,
     serialize_list_response,
+    serialize_struct_response,
 )
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -70,7 +70,6 @@ _ACCOUNT_GRANT_FIELDS = (
     "volume",
     "vpc",
 )
-_VALID_GRANT_PERMISSIONS = {"read_only", "read_write"}
 _GLOBAL_PERMISSION_FIELDS = {"account_access"}
 _GLOBAL_BOOLEAN_FIELDS = {
     "add_databases",
@@ -133,12 +132,13 @@ def _validate_resource_grant_entry(
         return None, f"{field}[{index}].permissions is required"
 
     permissions = typed_entry.get("permissions")
+    allowed = enum_value_names(account_user_pb2.GrantPermission.Value)
     if permissions is not None and (
-        not isinstance(permissions, str) or permissions not in _VALID_GRANT_PERMISSIONS
+        not isinstance(permissions, str) or permissions not in allowed
     ):
         return (
             None,
-            f"{field}[{index}].permissions must be 'read_only', 'read_write', or null",
+            f"{field}[{index}].permissions must be one of: " + ", ".join(allowed),
         )
     return {"id": resource_id, "permissions": permissions}, None
 
@@ -180,13 +180,13 @@ def _validate_global_grants(
     grants: dict[str, str | bool | None] = {}
     for field, grant_value in typed_value.items():
         if field in _GLOBAL_PERMISSION_FIELDS:
+            allowed = enum_value_names(account_user_pb2.GrantPermission.Value)
             if grant_value is not None and (
-                not isinstance(grant_value, str)
-                or grant_value not in _VALID_GRANT_PERMISSIONS
+                not isinstance(grant_value, str) or grant_value not in allowed
             ):
                 return (
                     None,
-                    f"global.{field} must be 'read_only', 'read_write', or null",
+                    f"global.{field} must be one of: " + ", ".join(allowed),
                 )
         elif field in _GLOBAL_BOOLEAN_FIELDS:
             if type(grant_value) is not bool:
@@ -228,22 +228,23 @@ def _collect_account_user_grants(
 
 
 def _validate_service_transfer_token(value: object) -> tuple[str | None, str | None]:
-    """Validate a service transfer token supplied by an MCP caller."""
+    """Validate a service transfer token supplied by an MCP caller.
+
+    Mirrors Go's accountTransferTokenFromTool: missing -> "token is required";
+    non-string/blank -> "token must be a non-empty string"; surrounding
+    whitespace or path/query/traversal characters -> the path-safety message.
+    """
     if value is None:
         return None, "token is required"
-    if not isinstance(value, str):
-        return None, "token must be a string"
-
-    token = value.strip()
-    if not token:
-        return None, "token is required"
-    if token != value or "/" in token or "?" in token or ".." in token:
+    if not isinstance(value, str) or not value.strip():
+        return None, "token must be a non-empty string"
+    if value != value.strip() or "/" in value or "?" in value or ".." in value:
         return (
             None,
             "token must not contain path separators, "
             "query separators, or traversal segments",
         )
-    return token, None
+    return value, None
 
 
 _OAUTH_CLIENT_UPDATE_FIELDS = (
@@ -254,47 +255,6 @@ _OAUTH_CLIENT_UPDATE_FIELDS = (
 _ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT = r"^[A-Za-z0-9][A-Za-z0-9_-]*$"
 _ACCOUNT_OAUTH_CLIENT_ID_PATTERN = re.compile(_ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT)
 _USD_AMOUNT_PATTERN = re.compile(r"^(?!0+(?:\.0{1,2})?$)\d+(?:\.\d{1,2})?$")
-
-
-def _promo_to_response_dict(promo: Any) -> dict[str, Any]:
-    """Shape a Promo dataclass to proto-canonical Promo form."""
-    return {
-        "description": promo.description,
-        "summary": promo.summary,
-        "credit_monthly_cap": promo.credit_monthly_cap,
-        "credit_remaining": promo.credit_remaining,
-        "expire_dt": promo.expire_dt,
-        "image_url": promo.image_url,
-        "service_type": promo.service_type,
-        "this_month_credit_remaining": promo.this_month_credit_remaining,
-    }
-
-
-def account_to_response_dict(account: Any) -> dict[str, Any]:
-    """Shape an Account dataclass to proto-canonical Account form."""
-    return {
-        "first_name": account.first_name,
-        "last_name": account.last_name,
-        "email": account.email,
-        "company": account.company,
-        "address_1": account.address_1,
-        "address_2": account.address_2,
-        "city": account.city,
-        "state": account.state,
-        "zip": account.zip,
-        "country": account.country,
-        "phone": account.phone,
-        "balance": account.balance,
-        "balance_uninvoiced": account.balance_uninvoiced,
-        "capabilities": account.capabilities or [],
-        "active_since": account.active_since,
-        "euuid": account.euuid,
-        "billing_source": account.billing_source,
-        "active_promotions": [
-            _promo_to_response_dict(p)
-            for p in cast("list[dict[str, Any]]", account.active_promotions or [])
-        ],
-    }
 
 
 def create_linode_account_get_tool() -> tuple[Tool, Capability]:
@@ -332,35 +292,7 @@ def create_linode_account_user_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_user_create",
         description="Creates a user on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "username": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Username for the new account user",
-                },
-                "email": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Email address for the new account user",
-                },
-                "restricted": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to create a restricted user; set false to create "
-                        "an unrestricted user."
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["username", "email", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountUserCreateInput"),
     ), Capability.Admin
 
 
@@ -411,61 +343,10 @@ async def handle_linode_account_user_create(
 
 def create_linode_account_user_grants_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_account_user_grants_update tool."""
-    resource_grant_schema = {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "id": {
-                    "type": "integer",
-                    "description": "Resource ID this grant applies to",
-                },
-                "permissions": {
-                    "type": ["string", "null"],
-                    "enum": ["read_only", "read_write", None],
-                    "description": "Grant level; use null to remove access",
-                },
-            },
-            "required": ["id", "permissions"],
-        },
-    }
-    grant_props: dict[str, dict[str, Any]] = {
-        field: resource_grant_schema.copy() for field in _RESOURCE_GRANT_FIELDS
-    }
-    grant_props["global"] = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "account_access": {
-                "type": ["string", "null"],
-                "enum": ["read_only", "read_write", None],
-            },
-            **{field: {"type": "boolean"} for field in _GLOBAL_BOOLEAN_FIELDS},
-            "child_account_access": {"type": ["boolean", "null"]},
-        },
-    }
     return Tool(
         name="linode_account_user_grants_update",
         description="Updates grants for an account user.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "username": {
-                    "type": "string",
-                    "pattern": _ACCOUNT_USERNAME_PATTERN_TEXT,
-                    "description": "Username whose grants will be updated",
-                },
-                **grant_props,
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["username", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountUserGrantsUpdateInput"),
     ), Capability.Admin
 
 
@@ -515,10 +396,7 @@ def create_linode_account_agreement_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_agreement_list",
         description="Lists agreements on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
-        },
+        inputSchema=schema("linode.mcp.v1.AccountAgreementsListInput"),
     ), Capability.Read
 
 
@@ -540,23 +418,7 @@ def create_linode_account_login_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_login_list",
         description="Lists user logins on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountLoginListInput"),
     ), Capability.Read
 
 
@@ -565,8 +427,8 @@ async def handle_linode_account_login_list(
 ) -> list[TextContent]:
     """Handle linode_account_login_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -586,23 +448,7 @@ def create_linode_account_user_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_user_list",
         description="Lists users on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountUserListInput"),
     ), Capability.Read
 
 
@@ -611,8 +457,8 @@ async def handle_linode_account_user_list(
 ) -> list[TextContent]:
     """Handle linode_account_user_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -657,20 +503,7 @@ def create_linode_account_settings_managed_enable_tool() -> tuple[Tool, Capabili
             "Enables Linode Managed for the account. Pass dry_run=true to "
             "preview without enabling it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm enabling or previewing Linode Managed."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountSettingsManagedEnableInput"),
     ), Capability.Admin
 
 
@@ -690,7 +523,7 @@ async def handle_linode_account_settings_managed_enable(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This enables Linode Managed. Set confirm=true to proceed."
+            "This enables Linode Managed for the account. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -730,23 +563,7 @@ def create_linode_account_maintenance_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_maintenance_list",
         description="Lists maintenances on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountMaintenanceListInput"),
     ), Capability.Read
 
 
@@ -755,8 +572,8 @@ async def handle_linode_account_maintenance_list(
 ) -> list[TextContent]:
     """Handle linode_account_maintenance_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -776,23 +593,7 @@ def create_linode_maintenance_policy_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_maintenance_policy_list",
         description="Lists available maintenance policies.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.MaintenancePolicyListInput"),
     ), Capability.Read
 
 
@@ -801,8 +602,8 @@ async def handle_linode_maintenance_policy_list(
 ) -> list[TextContent]:
     """Handle linode_maintenance_policy_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -822,23 +623,7 @@ def create_linode_account_oauth_client_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_oauth_client_list",
         description="Lists OAuth clients on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountOAuthClientListInput"),
     ), Capability.Read
 
 
@@ -847,8 +632,8 @@ async def handle_linode_account_oauth_client_list(
 ) -> list[TextContent]:
     """Handle linode_account_oauth_client_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -873,32 +658,7 @@ def create_linode_account_oauth_client_update_tool() -> tuple[Tool, Capability]:
             "Updates one Linode account OAuth client. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "client_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "OAuth client ID",
-                },
-                "label": {"type": "string", "description": "OAuth client label"},
-                "public": {
-                    "type": "boolean",
-                    "description": "Whether the client is public",
-                },
-                "redirect_uri": {"type": "string", "description": "OAuth redirect URI"},
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["client_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountOAuthClientUpdateInput"),
     ), Capability.Admin
 
 
@@ -912,33 +672,7 @@ def create_linode_account_oauth_client_thumbnail_update_tool() -> tuple[
             "Updates an account OAuth client's thumbnail. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "client_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "pattern": _ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT,
-                    "description": "OAuth client ID",
-                },
-                "thumbnail_png_base64": {
-                    "type": "string",
-                    "description": (
-                        "Base64-encoded PNG image for the OAuth client thumbnail."
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["client_id", "confirm", "thumbnail_png_base64"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountOAuthClientThumbnailUpdateInput"),
     ), Capability.Admin
 
 
@@ -996,10 +730,13 @@ async def handle_linode_account_oauth_client_update(
         oauth_client = await client.update_account_oauth_client(
             client_id, **update_fields
         )
-        return {
-            "message": "OAuth client updated successfully",
-            "client": oauth_client,
-        }
+        return serialize_api_response(
+            {
+                "message": "OAuth client updated successfully",
+                "client": oauth_client,
+            },
+            account_pb2.OAuthClientWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "update Linode account OAuth client", _call
@@ -1079,23 +816,7 @@ def create_linode_account_event_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_event_list",
         description="Lists events on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountEventListInput"),
     ), Capability.Read
 
 
@@ -1104,8 +825,8 @@ async def handle_linode_account_event_list(
 ) -> list[TextContent]:
     """Handle linode_account_event_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1125,23 +846,7 @@ def create_linode_account_invoice_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_invoice_list",
         description="Lists invoices on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountInvoiceListInput"),
     ), Capability.Read
 
 
@@ -1150,8 +855,8 @@ async def handle_linode_account_invoice_list(
 ) -> list[TextContent]:
     """Handle linode_account_invoice_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1171,23 +876,7 @@ def create_linode_account_payment_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_payment_list",
         description="Lists payments on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPaymentListInput"),
     ), Capability.Read
 
 
@@ -1196,8 +885,8 @@ async def handle_linode_account_payment_list(
 ) -> list[TextContent]:
     """Handle linode_account_payment_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1217,23 +906,7 @@ def create_linode_account_payment_method_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_payment_method_list",
         description="Lists payment methods on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodListInput"),
     ), Capability.Read
 
 
@@ -1242,8 +915,8 @@ async def handle_linode_account_payment_method_list(
 ) -> list[TextContent]:
     """Handle linode_account_payment_method_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1268,33 +941,7 @@ def create_linode_account_payment_create_tool() -> tuple[Tool, Capability]:
             "Makes a payment on the Linode account. "
             "Pass dry_run=true to preview without creating a payment."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "payment_method_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Payment method ID to charge",
-                },
-                "usd": {
-                    "type": "string",
-                    "minLength": 1,
-                    "pattern": r"^(?!0+(?:\.0{1,2})?$)\d+(?:\.\d{1,2})?$",
-                    "description": "Payment amount in USD",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm live payment creation. "
-                        "When dry_run=true, the request is previewed without "
-                        "creating the payment."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["usd", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPaymentCreateInput"),
     ), Capability.Admin
 
 
@@ -1345,7 +992,7 @@ async def handle_linode_account_payment_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates an account payment. Set confirm=true to proceed."
+            "This makes an account payment. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1372,28 +1019,7 @@ def create_linode_account_service_transfer_create_tool() -> tuple[Tool, Capabili
             "Requests a service transfer for Linode IDs on the account. "
             "Pass dry_run=true to preview without creating a service transfer."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_ids": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "minItems": 1,
-                    "description": "Linode IDs to include in the service transfer",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm live service transfer creation. "
-                        "When dry_run=true, the request is previewed without "
-                        "creating the service transfer."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_ids", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountServiceTransferCreateInput"),
     ), Capability.Admin
 
 
@@ -1447,7 +1073,14 @@ async def handle_linode_account_service_transfer_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_account_service_transfer(linode_ids)
+        transfer = await client.create_account_service_transfer(linode_ids)
+        return serialize_api_response(
+            {
+                "message": "Account service transfer created successfully",
+                "transfer": transfer,
+            },
+            account_service_transfer_pb2.AccountServiceTransferWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "create Linode account service transfer", _call
@@ -1462,26 +1095,7 @@ def create_linode_account_payment_method_delete_tool() -> tuple[Tool, Capability
             "Deletes a payment method on the Linode account. "
             "Pass dry_run=true to preview without deleting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "payment_method_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Payment method ID to delete",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this destructive operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["payment_method_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodDeleteInput"),
     ), Capability.Admin
 
 
@@ -1536,23 +1150,7 @@ def create_linode_account_notification_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_notification_list",
         description="Lists notifications on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountNotificationListInput"),
     ), Capability.Read
 
 
@@ -1561,8 +1159,8 @@ async def handle_linode_account_notification_list(
 ) -> list[TextContent]:
     """Handle linode_account_notification_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1584,29 +1182,7 @@ def create_linode_account_invoice_item_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_invoice_item_list",
         description="Lists items on a Linode account invoice.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "invoice_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Invoice ID whose items to list",
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["invoice_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountInvoiceItemListInput"),
     ), Capability.Read
 
 
@@ -1623,8 +1199,8 @@ async def handle_linode_account_invoice_item_list(
         return error_response("invoice_id must be a positive integer")
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1677,26 +1253,7 @@ def create_linode_account_event_seen_tool() -> tuple[Tool, Capability]:
             "Marks a Linode account event as seen. "
             "Pass dry_run=true to preview without marking the event seen."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "event_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Account event ID to mark as seen",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["event_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountEventSeenInput"),
     ), Capability.Write
 
 
@@ -1732,7 +1289,7 @@ async def handle_linode_account_event_seen(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This marks an account event seen. Set confirm=true to proceed."
+            "This marks an account event as seen. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1761,37 +1318,7 @@ def create_linode_account_agreement_acknowledge_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_account_agreement_acknowledge",
         description="Acknowledges agreements on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "billing_agreement": {
-                    "type": "boolean",
-                    "description": "Acknowledge the billing agreement",
-                },
-                "eu_model": {
-                    "type": "boolean",
-                    "description": "Acknowledge the EU model agreement",
-                },
-                "master_service_agreement": {
-                    "type": "boolean",
-                    "description": "Acknowledge the master service agreement",
-                },
-                "privacy_policy": {
-                    "type": "boolean",
-                    "description": "Acknowledge the privacy policy",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountAgreementsAcknowledgeInput"),
     ), Capability.Admin
 
 
@@ -1806,6 +1333,8 @@ async def handle_linode_account_agreement_acknowledge(
             continue
         if not isinstance(value, bool):
             return error_response(f"{field} must be a boolean")
+        if not value:
+            return error_response(f"{field} must be true when provided")
         agreements[field] = value
 
     if not agreements:
@@ -1829,7 +1358,11 @@ async def handle_linode_account_agreement_acknowledge(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.acknowledge_account_agreements(agreements)
+        await client.acknowledge_account_agreements(agreements)
+        return serialize_api_response(
+            {"message": "Account agreements acknowledged successfully"},
+            common_pb2.MessageResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "acknowledge Linode account agreements", _call
@@ -1844,27 +1377,7 @@ def create_linode_account_beta_enroll_tool() -> tuple[Tool, Capability]:
             "Enrolls the Linode account in a Beta program. "
             "Pass dry_run=true to preview without enrolling."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Beta program ID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to acknowledge this mutating operation. "
-                        "Required even when dry_run=true; dry_run still "
-                        "avoids the client call."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountBetaEnrollInput"),
     ), Capability.Admin
 
 
@@ -1872,15 +1385,13 @@ async def handle_linode_account_beta_enroll(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_beta_enroll tool request."""
-    raw_beta_id = arguments.get("id")
-    if raw_beta_id is None:
-        return error_response("id is required")
-    if not isinstance(raw_beta_id, str):
-        return error_response("id must be a string")
-
-    beta_id = raw_beta_id.strip()
-    if not beta_id:
-        return error_response("id is required")
+    beta_id, beta_id_error = _required_pathsafe_string(arguments, "id")
+    if beta_id_error is not None or beta_id is None:
+        return error_response(beta_id_error or "id is required")
+    if beta_id != beta_id.strip() or not _is_account_beta_id(beta_id):
+        return error_response(
+            "id must contain only letters, numbers, underscores, and hyphens"
+        )
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -1899,7 +1410,14 @@ async def handle_linode_account_beta_enroll(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.enroll_account_beta(beta_id)
+        await client.enroll_account_beta(beta_id)
+        return serialize_api_response(
+            {
+                "message": "Account beta enrollment requested successfully",
+                "id": beta_id,
+            },
+            account_pb2.AccountBetaEnrollResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"enroll Linode account in beta {beta_id}", _call
@@ -1915,32 +1433,7 @@ def create_linode_account_oauth_client_create_tool() -> tuple[Tool, Capability]:
             "shown once in the response. Pass dry_run=true to preview "
             "without creating the client."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Label for the OAuth client",
-                },
-                "redirect_uri": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Redirect URI for the OAuth client",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm live OAuth client creation. "
-                        "When dry_run=true, the request is previewed without "
-                        "creating the client."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "redirect_uri", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountOAuthClientCreateInput"),
     ), Capability.Admin
 
 
@@ -1952,24 +1445,7 @@ def create_linode_account_oauth_client_delete_tool() -> tuple[Tool, Capability]:
             "Deletes an account OAuth client by client ID. "
             "Pass dry_run=true to preview without deleting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "client_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "pattern": _ACCOUNT_OAUTH_CLIENT_ID_PATTERN_TEXT,
-                    "description": "OAuth client ID to delete",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm OAuth client deletion.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["client_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountOAuthClientDeleteInput"),
     ), Capability.Admin
 
 
@@ -1985,6 +1461,32 @@ def _required_nonempty_string_argument(
     if not value:
         return None, f"{name} is required"
     return value, None
+
+
+def _required_pathsafe_string(
+    arguments: dict[str, Any], name: str
+) -> tuple[str | None, str | None]:
+    """Mirror Go's string-id parsers: absent -> "<name> is required"; present but
+    not a non-blank string -> "<name> must be a non-empty string". Returns the
+    ORIGINAL (un-stripped) value so the caller can run charset/whitespace checks
+    on the caller-supplied text, matching Go which validates the raw value."""
+    if name not in arguments:
+        return None, f"{name} is required"
+    value = arguments.get(name)
+    if not isinstance(value, str) or not value.strip():
+        return None, f"{name} must be a non-empty string"
+    return value, None
+
+
+def _is_account_beta_id(value: str) -> bool:
+    """True when every char is an ASCII letter, digit, underscore, or hyphen.
+
+    Mirrors Go's isAccountBetaID so beta ids reject identically across languages.
+    """
+    return all(
+        ("a" <= c <= "z") or ("A" <= c <= "Z") or ("0" <= c <= "9") or c in "_-"
+        for c in value
+    )
 
 
 def _validate_account_oauth_client_id(value: str) -> str | None:
@@ -2067,8 +1569,8 @@ async def handle_linode_account_oauth_client_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates an OAuth client and returns a one-time secret. "
-            "Set confirm=true to proceed."
+            "This creates an OAuth client. The secret is only shown once. Set "
+            "confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2098,35 +1600,7 @@ def create_linode_account_payment_method_create_tool() -> tuple[Tool, Capability
             "Adds a payment method to the Linode account. "
             "Pass dry_run=true to preview without creating it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "type": {
-                    "type": "string",
-                    "enum": ["credit_card"],
-                    "description": "Payment method type",
-                },
-                "data": {
-                    "type": "object",
-                    "description": "Payment method provider data",
-                },
-                "is_default": {
-                    "type": "boolean",
-                    "description": "Whether to make this the default payment method",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm live payment method creation. "
-                        "When dry_run=true, the request is previewed without "
-                        "creating the payment method."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["type", "data", "is_default", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodCreateInput"),
     ), Capability.Admin
 
 
@@ -2182,7 +1656,7 @@ async def handle_linode_account_payment_method_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates an account payment method. Set confirm=true to proceed."
+            "This creates a payment method. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2212,27 +1686,7 @@ def create_linode_account_promo_credit_add_tool() -> tuple[Tool, Capability]:
             "Adds a promo credit to the Linode account. "
             "Pass dry_run=true to preview without applying the promo code."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "promo_code": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Promo code to apply to the account",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm applying this promo code. "
-                        "Required even when dry_run=true; dry_run still "
-                        "avoids the client call."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["promo_code", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPromoCreditAddInput"),
     ), Capability.Admin
 
 
@@ -2240,11 +1694,13 @@ async def handle_linode_account_promo_credit_add(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_promo_credit_add tool request."""
-    promo_code, promo_code_error = _required_nonempty_string_argument(
-        arguments, "promo_code"
-    )
+    promo_code, promo_code_error = _required_pathsafe_string(arguments, "promo_code")
     if promo_code_error is not None or promo_code is None:
         return error_response(promo_code_error or "promo_code is required")
+    if promo_code != promo_code.strip():
+        return error_response(
+            "promo_code must not include leading or trailing whitespace"
+        )
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -2285,25 +1741,7 @@ def create_linode_account_cancel_tool() -> tuple[Tool, Capability]:
             "Cancels the Linode account. "
             "Pass dry_run=true to preview without canceling."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "comments": {
-                    "type": "string",
-                    "description": "Optional cancellation comments",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this destructive operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountCancelInput"),
     ), Capability.Admin
 
 
@@ -2334,11 +1772,18 @@ async def handle_linode_account_cancel(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This cancels the Linode account. Set confirm=true to proceed."
+            "This cancels the active account. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.cancel_account(comments=comments)
+        cancel_info = await client.cancel_account(comments=comments)
+        return serialize_api_response(
+            {
+                "message": "Account canceled successfully",
+                "cancel_info": cancel_info,
+            },
+            account_pb2.AccountCancelWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "cancel Linode account", _call)
 
@@ -2448,49 +1893,7 @@ def create_linode_account_settings_update_tool() -> tuple[Tool, Capability]:
             "Updates Linode account-wide settings. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "backups_enabled": {
-                    "type": "boolean",
-                    "description": "Whether backups are enabled by default",
-                },
-                "interfaces_for_new_linodes": {
-                    "type": "string",
-                    "description": "Default interface setting for new Linodes",
-                },
-                "longview_subscription": {
-                    "type": "string",
-                    "description": "Longview subscription tier",
-                },
-                "maintenance_policy": {
-                    "type": "string",
-                    "description": "Account maintenance policy",
-                },
-                "managed": {
-                    "type": "boolean",
-                    "description": "Whether Linode Managed is enabled",
-                },
-                "network_helper": {
-                    "type": "boolean",
-                    "description": "Whether Network Helper is enabled",
-                },
-                "object_storage": {
-                    "type": "string",
-                    "description": "Object Storage account setting",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountSettingsUpdateInput"),
     ), Capability.Admin
 
 
@@ -2546,15 +1949,18 @@ async def handle_linode_account_settings_update(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This updates account settings. Set confirm=true to proceed."
+            "This updates account-wide settings. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_account_settings(**update_fields)
-        return {
-            "message": "Account settings updated successfully",
-            "settings": result,
-        }
+        return serialize_api_response(
+            {
+                "message": "Account settings updated successfully",
+                "settings": result,
+            },
+            account_pb2.AccountSettingsWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode account settings", _call)
 
@@ -2567,33 +1973,7 @@ def create_linode_account_update_tool() -> tuple[Tool, Capability]:
             "Updates Linode account contact and billing-address information. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "first_name": {"type": "string", "description": "First name"},
-                "last_name": {"type": "string", "description": "Last name"},
-                "email": {"type": "string", "description": "Contact email"},
-                "company": {"type": "string", "description": "Company name"},
-                "address_1": {"type": "string", "description": "Address line 1"},
-                "address_2": {"type": "string", "description": "Address line 2"},
-                "city": {"type": "string", "description": "City"},
-                "state": {"type": "string", "description": "State or province"},
-                "zip": {"type": "string", "description": "Postal code"},
-                "country": {"type": "string", "description": "Country code"},
-                "phone": {"type": "string", "description": "Phone number"},
-                "tax_id": {"type": "string", "description": "Tax ID"},
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountUpdateInput"),
     ), Capability.Admin
 
 
@@ -2617,7 +1997,8 @@ async def handle_linode_account_update(
 
     if not arguments.get("confirm"):
         return error_response(
-            "This updates account information. Set confirm=true to proceed."
+            "This updates account billing/contact information. Set confirm=true to "
+            "proceed."
         )
 
     update_fields = {
@@ -2642,11 +2023,14 @@ async def handle_linode_account_update(
         return error_response("At least one account field is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        account = await client.update_account(**update_fields)
-        return {
-            "message": "Account updated successfully",
-            "account": account_to_response_dict(account),
-        }
+        account = await client.put_raw("/account", update_fields)
+        return serialize_api_response(
+            {
+                "message": "Account updated successfully",
+                "account": account,
+            },
+            account_pb2.AccountWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode account", _call)
 
@@ -2659,43 +2043,7 @@ def create_linode_account_user_update_tool() -> tuple[Tool, Capability]:
             "Updates an account user by username. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "username": {
-                    "type": "string",
-                    "description": "Account username to update.",
-                },
-                "email": {
-                    "type": "string",
-                    "description": "New email address for the account user.",
-                },
-                "restricted": {
-                    "type": "boolean",
-                    "description": "Whether the account user is restricted.",
-                },
-                "ssh_keys": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "SSH public keys for the account user.",
-                },
-                "new_username": {
-                    "type": "string",
-                    "description": "New username for the account user.",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. "
-                        "When dry_run=true, the request is previewed without "
-                        "updating the user."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["username", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountUserUpdateInput"),
     ), Capability.Admin
 
 
@@ -2747,15 +2095,14 @@ async def handle_linode_account_user_update(
     return await execute_tool(cfg, arguments, "update Linode account user", _call)
 
 
-_MIN_REGION_ID_PARTS = 2
-
-
 def _is_region_id(value: str) -> bool:
-    """Return True when value looks like a Linode region ID slug."""
-    parts = value.split("-")
-    return len(parts) >= _MIN_REGION_ID_PARTS and all(
-        part and all("0" <= c <= "9" or "a" <= c <= "z" for c in part) for part in parts
-    )
+    """Return True when every char is a-z, 0-9, or hyphen.
+
+    Mirrors Go's isAccountAvailabilityRegionSlug so region ids reject identically
+    across languages (Go accepts a no-hyphen slug like "useast", so the previous
+    ">= 2 hyphen parts" rule was stricter than the API contract).
+    """
+    return all(("a" <= c <= "z") or ("0" <= c <= "9") or c == "-" for c in value)
 
 
 def _optional_int_argument(
@@ -2786,17 +2133,13 @@ async def handle_linode_account_beta_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_beta_get tool request."""
-    raw_beta_id = arguments.get("beta_id")
-    if raw_beta_id is None:
-        return error_response("beta_id is required")
-    if not isinstance(raw_beta_id, str):
-        return error_response("beta_id must be a string")
-
-    beta_id = raw_beta_id.strip()
-    if not beta_id:
-        return error_response("beta_id is required")
-    if "/" in beta_id or "?" in beta_id or ".." in beta_id:
-        return error_response("beta_id must not contain '/', '?', or '..'")
+    beta_id, beta_id_error = _required_pathsafe_string(arguments, "beta_id")
+    if beta_id_error is not None or beta_id is None:
+        return error_response(beta_id_error or "beta_id is required")
+    if beta_id != beta_id.strip() or not _is_account_beta_id(beta_id):
+        return error_response(
+            "beta_id must contain only letters, numbers, underscores, and hyphens"
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
@@ -2814,17 +2157,7 @@ def create_linode_account_child_account_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_child_account_get",
         description="Gets a child account by EUUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "euuid": {
-                    "type": "string",
-                    "description": "Child account EUUID to retrieve",
-                },
-            },
-            "required": ["euuid"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountChildAccountGetInput"),
     ), Capability.Read
 
 
@@ -2832,20 +2165,19 @@ async def handle_linode_account_child_account_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_child_account_get tool request."""
-    raw_euuid = arguments.get("euuid")
-    if raw_euuid is None:
-        return error_response("euuid is required")
-    if not isinstance(raw_euuid, str):
-        return error_response("euuid must be a string")
-
-    euuid = raw_euuid.strip()
-    if not euuid:
-        return error_response("euuid is required")
-    if "/" in euuid or "?" in euuid or ".." in euuid:
-        return error_response("euuid must not contain '/', '?', or '..'")
+    euuid, euuid_error = _required_pathsafe_string(arguments, "euuid")
+    if euuid_error is not None or euuid is None:
+        return error_response(euuid_error or "euuid is required")
+    if euuid != euuid.strip() or "/" in euuid or "?" in euuid or ".." in euuid:
+        return error_response(
+            "euuid must not contain path separators, "
+            "query separators, or traversal segments"
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_child_account(euuid)
+        return serialize_api_response(
+            await client.get_account_child_account(euuid), account_pb2.ChildAccount()
+        )
 
     return await execute_tool(
         cfg, arguments, f"retrieve Linode child account {euuid}", _call
@@ -2860,26 +2192,7 @@ def create_linode_account_service_transfer_accept_tool() -> tuple[Tool, Capabili
             "Accepts an account service transfer request by token. "
             "Pass dry_run=true to preview without accepting the transfer."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "token": {
-                    "type": "string",
-                    "description": "Service transfer token to accept",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. "
-                        "Required even when dry_run=true; dry_run still avoids "
-                        "the client call."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["token", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountServiceTransferAcceptInput"),
     ), Capability.Admin
 
 
@@ -2959,25 +2272,7 @@ def create_linode_account_service_transfer_delete_tool() -> tuple[Tool, Capabili
             "Cancels an account service transfer request by token. "
             "Pass dry_run=true to preview without canceling."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "token": {
-                    "type": "string",
-                    "description": "Service transfer token to cancel",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this destructive operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["token", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountServiceTransferDeleteInput"),
     ), Capability.Admin
 
 
@@ -3002,7 +2297,7 @@ async def handle_linode_account_service_transfer_delete(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This cancels a service transfer. Set confirm=true to proceed."
+            "This cancels an account service transfer. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -3055,26 +2350,7 @@ def create_linode_account_oauth_client_secret_reset_tool() -> tuple[Tool, Capabi
             "Resets an OAuth client secret. The new secret is only shown once "
             "in the response. Pass dry_run=true to preview without resetting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "client_id": {
-                    "type": "string",
-                    "description": "OAuth client ID whose secret will be reset",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm live OAuth client secret reset. "
-                        "When dry_run=true, the request is previewed without "
-                        "resetting the secret."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["client_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountOAuthClientSecretResetInput"),
     ), Capability.Admin
 
 
@@ -3118,7 +2394,7 @@ async def handle_linode_account_oauth_client_secret_reset(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This resets the OAuth client secret and returns a one-time secret. "
+            "This resets an OAuth client secret. The new secret is only shown once. "
             "Set confirm=true to proceed."
         )
 
@@ -3147,17 +2423,7 @@ def create_linode_account_oauth_client_thumbnail_get_tool() -> tuple[Tool, Capab
     return Tool(
         name="linode_account_oauth_client_thumbnail_get",
         description="Gets an OAuth client's thumbnail by client ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "client_id": {
-                    "type": "string",
-                    "description": "OAuth client ID whose thumbnail to retrieve",
-                },
-            },
-            "required": ["client_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountOAuthClientThumbnailGetInput"),
     ), Capability.Read
 
 
@@ -3169,8 +2435,12 @@ async def handle_linode_account_oauth_client_thumbnail_get(
     if error is not None or client_id is None:
         return error_response(error or "client_id is required")
 
-    async def _call(client: RetryableClient) -> dict[str, str]:
-        return await client.get_account_oauth_client_thumbnail(client_id)
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        raw = await client.get_account_oauth_client_thumbnail(client_id)
+        return serialize_api_response(
+            {"client_id": client_id, **raw},
+            oauth_client_thumbnail_pb2.OAuthClientThumbnail(),
+        )
 
     return await execute_tool(
         cfg,
@@ -3249,18 +2519,7 @@ def create_linode_account_payment_method_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_payment_method_get",
         description="Gets a payment method on the Linode account by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "payment_method_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Payment method ID to retrieve",
-                },
-            },
-            "required": ["payment_method_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodGetInput"),
     ), Capability.Read
 
 
@@ -3268,18 +2527,15 @@ async def handle_linode_account_payment_method_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_payment_method_get tool request."""
-    raw_payment_method_id = arguments.get("payment_method_id")
+    raw_payment_method_id, error = required_int_id(arguments, "payment_method_id")
     if raw_payment_method_id is None:
-        return error_response("payment_method_id is required")
-    if not isinstance(raw_payment_method_id, int) or isinstance(
-        raw_payment_method_id, bool
-    ):
-        return error_response("payment_method_id must be an integer")
-    if raw_payment_method_id < 1:
-        return error_response("payment_method_id must be at least 1")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_payment_method(raw_payment_method_id)
+        return serialize_api_response(
+            await client.get_account_payment_method(raw_payment_method_id),
+            account_pb2.AccountPaymentMethod(),
+        )
 
     return await execute_tool(
         cfg,
@@ -3297,26 +2553,7 @@ def create_linode_account_payment_method_make_default_tool() -> tuple[Tool, Capa
             "Sets a payment method as the default for the Linode account. "
             "Pass dry_run=true to preview without changing the default."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "payment_method_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Payment method ID to set as default",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. Ignored "
-                        "when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["payment_method_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodMakeDefaultInput"),
     ), Capability.Admin
 
 
@@ -3324,15 +2561,9 @@ async def handle_linode_account_payment_method_make_default(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_payment_method_make_default tool request."""
-    raw_payment_method_id = arguments.get("payment_method_id")
+    raw_payment_method_id, error = required_int_id(arguments, "payment_method_id")
     if raw_payment_method_id is None:
-        return error_response("payment_method_id is required")
-    if not isinstance(raw_payment_method_id, int) or isinstance(
-        raw_payment_method_id, bool
-    ):
-        return error_response("payment_method_id must be an integer")
-    if raw_payment_method_id < 1:
-        return error_response("payment_method_id must be at least 1")
+        return error_response(error)
 
     encoded_payment_method_id = quote(str(raw_payment_method_id), safe="")
     if is_dry_run(arguments):
@@ -3408,24 +2639,7 @@ def create_linode_account_user_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a user from the Linode account by username. "
             "Pass dry_run=true to preview without deleting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "username": {
-                    "type": "string",
-                    "minLength": 1,
-                    "pattern": _ACCOUNT_USERNAME_PATTERN_TEXT,
-                    "description": "Username to delete from the account",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm account user deletion.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["username", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountUserDeleteInput"),
     ), Capability.Admin
 
 
@@ -3532,18 +2746,7 @@ def create_linode_account_user_grants_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_user_grants_get",
         description="Lists grants for an account user by username.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "username": {
-                    "type": "string",
-                    "pattern": _ACCOUNT_USERNAME_PATTERN_TEXT,
-                    "description": "Username whose grants to list",
-                },
-            },
-            "required": ["username"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountUserGrantsGetInput"),
     ), Capability.Read
 
 
@@ -3566,7 +2769,10 @@ async def handle_linode_account_user_grants_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_account_user_grants(username)
+        return serialize_api_response(
+            await client.get_account_user_grants(username),
+            account_user_pb2.AccountUserGrants(),
+        )
 
     return await execute_tool(
         cfg, arguments, f"list Linode account user grants for {username}", _call
@@ -3578,23 +2784,7 @@ def create_linode_account_availability_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_availability_list",
         description="Lists available Linode services for the account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountAvailabilityListInput"),
     ), Capability.Read
 
 
@@ -3603,8 +2793,8 @@ async def handle_linode_account_availability_list(
 ) -> list[TextContent]:
     """Handle linode_account_availability_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -3634,19 +2824,13 @@ async def handle_linode_account_availability_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_availability_get tool request."""
-    raw_region_id = arguments.get("region_id")
-    if raw_region_id is None:
-        return error_response("region_id is required")
-    if not isinstance(raw_region_id, str):
-        return error_response("region_id must be a string")
-
-    region_id = raw_region_id.strip()
-    if not region_id:
-        return error_response("region_id is required")
+    region_id, region_id_error = _required_pathsafe_string(arguments, "region_id")
+    if region_id_error is not None or region_id is None:
+        return error_response(region_id_error or "region_id is required")
     if not _is_region_id(region_id):
         return error_response(
-            "region_id must be a lowercase region slug with letters, "
-            "numbers, and hyphens"
+            "region_id must be a lowercase region slug containing only "
+            "letters, numbers, and hyphens"
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -3665,23 +2849,7 @@ def create_linode_account_beta_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_beta_list",
         description="Lists enrolled Beta programs for the account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountBetaListInput"),
     ), Capability.Read
 
 
@@ -3690,8 +2858,8 @@ async def handle_linode_account_beta_list(
 ) -> list[TextContent]:
     """Handle linode_account_beta_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -3711,23 +2879,7 @@ def create_linode_beta_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_beta_list",
         description="Lists available Beta programs.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.BetaListInput"),
     ), Capability.Read
 
 
@@ -3736,8 +2888,8 @@ async def handle_linode_beta_list(
 ) -> list[TextContent]:
     """Handle linode_beta_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -3757,23 +2909,7 @@ def create_linode_account_child_account_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_child_account_list",
         description="Lists child accounts for the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountChildAccountListInput"),
     ), Capability.Read
 
 
@@ -3782,8 +2918,8 @@ async def handle_linode_account_child_account_list(
 ) -> list[TextContent]:
     """Handle linode_account_child_account_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -3805,23 +2941,7 @@ def create_linode_account_service_transfer_list_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_account_service_transfer_list",
         description="Lists service transfers for the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.AccountServiceTransferListInput"),
     ), Capability.Read
 
 
@@ -3830,8 +2950,8 @@ async def handle_linode_account_service_transfer_list(
 ) -> list[TextContent]:
     """Handle linode_account_service_transfer_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -3858,27 +2978,7 @@ def create_linode_account_child_account_token_create_tool() -> tuple[Tool, Capab
             "Creates a proxy user token for a child account. "
             "Pass dry_run=true to preview without creating a token."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "euuid": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Child account EUUID",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this credential-creating operation. "
-                        "Required even when dry_run=true; dry_run still avoids "
-                        "the client call."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["euuid", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.AccountChildAccountTokenCreateInput"),
     ), Capability.Admin
 
 
@@ -3919,11 +3019,19 @@ async def handle_linode_account_child_account_token_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates a child account proxy token. Set confirm=true to proceed."
+            "This creates a proxy user token for a child account. Set confirm=true to "
+            "proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_account_child_account_token(euuid)
+        token = await client.create_account_child_account_token(euuid)
+        return serialize_api_response(
+            {
+                "message": "Child account proxy token created successfully",
+                "token": token,
+            },
+            account_pb2.AccountChildAccountTokenWriteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "create Linode account child account proxy token", _call
@@ -3935,23 +3043,7 @@ def create_linode_tag_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_tag_list",
         description="Lists tags on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.TagListInput"),
     ), Capability.Read
 
 
@@ -3960,8 +3052,8 @@ async def handle_linode_tag_list(
 ) -> list[TextContent]:
     """Handle linode_tag_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -3977,29 +3069,15 @@ def create_linode_tag_object_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_tag_object_list",
         description="Lists objects assigned to a Linode account tag.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "tag_label": {
-                    "type": "string",
-                    "description": "Label of the tag to inspect",
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["tag_label"],
-        },
+        inputSchema=schema("linode.mcp.v1.TaggedObjectListInput"),
     ), Capability.Read
+
+
+def _tag_label_path_error(tag_label: str) -> list[TextContent] | None:
+    """Reject path-unsafe tag labels locally (mirrors Go tagLabelArgFromTool)."""
+    if "?" in tag_label or "#" in tag_label or ".." in tag_label:
+        return error_response("tag_label must not contain '?', '#', or '..'")
+    return None
 
 
 async def handle_linode_tag_object_list(
@@ -4009,10 +3087,13 @@ async def handle_linode_tag_object_list(
     tag_label = arguments.get("tag_label")
     if not isinstance(tag_label, str) or not tag_label.strip():
         return error_response("tag_label is required")
+    path_error = _tag_label_path_error(tag_label)
+    if path_error is not None:
+        return path_error
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -4032,39 +3113,7 @@ def create_linode_tag_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_tag_create",
         description="Creates a Linode account tag and optionally assigns resources.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "label": {"type": "string", "description": "Tag label to create"},
-                "domains": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "description": "Domain IDs to assign to the tag",
-                },
-                "linodes": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "description": "Linode IDs to assign to the tag",
-                },
-                "nodebalancers": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "description": "NodeBalancer IDs to assign to the tag",
-                },
-                "volumes": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "description": "Volume IDs to assign to the tag",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.TagCreateInput"),
     ), Capability.Write
 
 
@@ -4088,21 +3137,6 @@ def _optional_int_list_argument(
     return values
 
 
-def tag_to_response_dict(raw: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw tag API dict to proto-canonical linode.mcp.v1.Tag form.
-
-    The entity-ID lists are always emitted as lists, matching the proto Tag
-    serialization (vs the API / Go-struct omitempty behavior).
-    """
-    return {
-        "label": raw.get("label", ""),
-        "domains": raw.get("domains") or [],
-        "linodes": raw.get("linodes") or [],
-        "nodebalancers": raw.get("nodebalancers") or [],
-        "volumes": raw.get("volumes") or [],
-    }
-
-
 async def handle_linode_tag_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -4120,7 +3154,7 @@ async def handle_linode_tag_create(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("This creates a tag. Set confirm=true to proceed.")
+        return error_response("This creates a Linode tag. Set confirm=true to proceed.")
 
     label = arguments.get("label")
     if not isinstance(label, str) or not label.strip():
@@ -4136,10 +3170,13 @@ async def handle_linode_tag_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         tag = await client.create_tag(label.strip(), **resource_ids)
-        return {
-            "message": f"Tag '{label.strip()}' created successfully",
-            "tag": tag_to_response_dict(tag),
-        }
+        return serialize_api_response(
+            {
+                "message": f"Tag '{raw_str(tag, 'label')}' created successfully",
+                "tag": tag,
+            },
+            tag_pb2.TagWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create Linode tag", _call)
 
@@ -4149,24 +3186,7 @@ def create_linode_tag_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_tag_delete",
         description="Deletes a Linode account tag by label." + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "tag_label": {
-                    "type": "string",
-                    "description": "Label of the tag to delete",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["tag_label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.TagDeleteInput"),
     ), Capability.Destroy
 
 
@@ -4208,6 +3228,9 @@ async def handle_linode_tag_delete(
     if not isinstance(tag_label_raw, str) or not tag_label_raw.strip():
         return error_response("tag_label is required")
     tag_label = tag_label_raw
+    path_error = _tag_label_path_error(tag_label)
+    if path_error is not None:
+        return path_error
 
     two_stage = await _account_tag_delete_two_stage(arguments, cfg, tag_label)
     if two_stage is not None:
@@ -4223,7 +3246,7 @@ async def handle_linode_tag_delete(
         )
 
     if not arguments.get("confirm"):
-        return error_response("This deletes a tag. Set confirm=true to proceed.")
+        return error_response("confirm must be true to delete a tag")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_tag(tag_label)
@@ -4240,52 +3263,7 @@ def create_linode_support_ticket_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_create",
         description="Opens a Linode support ticket.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "summary": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 64,
-                    "description": "Support ticket summary or title",
-                },
-                "description": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 65000,
-                    "description": "Full details of the issue or question",
-                },
-                "bucket": {
-                    "type": "string",
-                    "description": "Object Storage bucket name",
-                },
-                "database_id": {"type": "integer", "minimum": 1},
-                "domain_id": {"type": "integer", "minimum": 1},
-                "firewall_id": {"type": "integer", "minimum": 1},
-                "linode_id": {"type": "integer", "minimum": 1},
-                "lkecluster_id": {"type": "integer", "minimum": 1},
-                "longviewclient_id": {"type": "integer", "minimum": 1},
-                "managed_issue": {"type": "boolean"},
-                "nodebalancer_id": {"type": "integer", "minimum": 1},
-                "region": {"type": "string", "description": "Region ID"},
-                "severity": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 3,
-                    "description": "Ticket severity: 1 major, 2 moderate, 3 low",
-                },
-                "vlan": {"type": "string", "description": "VLAN label"},
-                "volume_id": {"type": "integer", "minimum": 1},
-                "vpc_id": {"type": "integer", "minimum": 1},
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["summary", "description", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.SupportTicketCreateInput"),
     ), Capability.Write
 
 
@@ -4322,6 +3300,30 @@ def _support_ticket_id(arguments: dict[str, Any]) -> int | list[TextContent]:
     return ticket_id
 
 
+# The file types the ticket-attachment endpoint documents as accepted.
+# Rejecting other extensions BEFORE the file read also keeps arbitrary local
+# files (keys, configs) from being uploaded to a ticket. The message matches
+# the Go handler exactly so the behavior fixture pins it cross-language.
+_ATTACHMENT_EXTENSIONS = frozenset(
+    {
+        ".gif",
+        ".jpg",
+        ".jpeg",
+        ".pjpg",
+        ".pjpeg",
+        ".tif",
+        ".tiff",
+        ".png",
+        ".pdf",
+        ".txt",
+    }
+)
+_ATTACHMENT_EXTENSION_MESSAGE = (
+    "file must have an accepted extension: "
+    ".gif, .jpg, .jpeg, .pjpg, .pjpeg, .tif, .tiff, .png, .pdf, or .txt"
+)
+
+
 def _attachment_file(arguments: dict[str, Any]) -> str | list[TextContent]:
     """Parse the attachment file path, or return an error response."""
     file = arguments.get("file")
@@ -4330,6 +3332,8 @@ def _attachment_file(arguments: dict[str, Any]) -> str | list[TextContent]:
     file_path = file.strip()
     if not Path(file_path).is_absolute():
         return error_response("file must be a local, absolute path")
+    if Path(file_path).suffix.lower() not in _ATTACHMENT_EXTENSIONS:
+        return error_response(_ATTACHMENT_EXTENSION_MESSAGE)
     return file_path
 
 
@@ -4360,7 +3364,7 @@ async def handle_linode_support_ticket_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This opens a support ticket. Set confirm=true to proceed."
+            "This creates a support ticket. Set confirm=true to proceed."
         )
 
     try:
@@ -4449,23 +3453,7 @@ def create_linode_managed_contact_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_contact_list",
         description="Lists Managed contacts on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedContactListInput"),
     ), Capability.Read
 
 
@@ -4474,8 +3462,8 @@ async def handle_linode_managed_contact_list(
 ) -> list[TextContent]:
     """Handle linode_managed_contact_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -4493,23 +3481,7 @@ def create_linode_managed_issue_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_issue_list",
         description="Lists open Managed issues on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedIssueListInput"),
     ), Capability.Read
 
 
@@ -4518,8 +3490,8 @@ async def handle_linode_managed_issue_list(
 ) -> list[TextContent]:
     """Handle linode_managed_issue_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -4537,23 +3509,7 @@ def create_linode_managed_credential_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_credential_list",
         description="Lists Managed credentials on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedCredentialListInput"),
     ), Capability.Read
 
 
@@ -4562,8 +3518,8 @@ async def handle_linode_managed_credential_list(
 ) -> list[TextContent]:
     """Handle linode_managed_credential_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -4601,25 +3557,9 @@ def create_linode_managed_credential_username_password_update_tool() -> tuple[
             "Requires confirm=true; pass dry_run=true with confirm=true "
             "to preview without changing it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "credential_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed credential ID to update",
-                },
-                "password": {"type": "string"},
-                "username": {"type": "string"},
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm credential update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["credential_id", "password", "confirm"],
-        },
+        inputSchema=schema(
+            "linode.mcp.v1.ManagedCredentialUsernamePasswordUpdateInput"
+        ),
     ), Capability.Admin
 
 
@@ -4651,7 +3591,8 @@ async def handle_linode_managed_credential_username_password_update(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This updates a Managed credential. Set confirm=true to proceed."
+            "This updates a stored Managed credential's username and password. Set "
+            "confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4679,26 +3620,7 @@ def create_linode_managed_credential_revoke_tool() -> tuple[Tool, Capability]:
             "Revokes a Managed credential. Pass confirm=true to revoke it; "
             "pass dry_run=true to preview without revoking it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "credential_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed credential ID to revoke",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm revoking or previewing "
-                        "the Managed credential."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["credential_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedCredentialRevokeInput"),
     ), Capability.Admin
 
 
@@ -4726,7 +3648,7 @@ async def handle_linode_managed_credential_revoke(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This revokes a Managed credential. Set confirm=true to proceed."
+            "This revokes a stored Managed credential. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4820,49 +3742,7 @@ def create_linode_managed_linode_settings_update_tool() -> tuple[Tool, Capabilit
             "Updates SSH-related Managed settings for a specific Linode. "
             "Pass dry_run=true to preview without updating settings."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Linode ID whose Managed settings to update",
-                },
-                "ssh": {
-                    "type": "object",
-                    "description": "SSH Managed settings to update for this Linode",
-                    "additionalProperties": False,
-                    "minProperties": 1,
-                    "properties": {
-                        "access": {"type": "boolean"},
-                        "ip": {"type": "string", "minLength": 1},
-                        "port": {
-                            "anyOf": [
-                                {"type": "integer", "minimum": 1, "maximum": 65535},
-                                {"type": "null"},
-                            ],
-                        },
-                        "user": {
-                            "anyOf": [
-                                {"type": "string", "maxLength": 32},
-                                {"type": "null"},
-                            ],
-                        },
-                    },
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating Managed settings "
-                        "operation. Required even when dry_run=true; dry_run "
-                        "still avoids the client call."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "ssh", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedLinodeSettingsUpdateInput"),
     ), Capability.Admin
 
 
@@ -4871,10 +3751,7 @@ def create_linode_managed_sshkey_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_sshkey_get",
         description="Gets the Managed SSH public key for the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedSSHKeyGetInput"),
     ), Capability.Read
 
 
@@ -4903,7 +3780,7 @@ async def handle_linode_managed_linode_settings_update(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This updates Managed settings for a Linode. Set confirm=true to proceed."
+            "This updates Managed Linode settings. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -4933,14 +3810,15 @@ async def handle_linode_managed_sshkey_get(
     """Handle linode_managed_sshkey_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_managed_ssh_key()
+        return serialize_api_response(
+            await client.get_managed_ssh_key(), managed_pb2.ManagedSSHKey()
+        )
 
     return await execute_tool(cfg, arguments, "get Linode Managed SSH key", _call)
 
 
 _MANAGED_CONTACT_BODY_FIELDS = ("email", "group", "name")
 _MANAGED_SERVICE_READ_ONLY_FIELDS = {"created", "id", "status", "updated"}
-_MANAGED_SERVICE_TYPES = {"tcp", "url"}
 _MANAGED_CREDENTIAL_REQUIRED_FIELDS = ("label", "password")
 
 
@@ -4967,24 +3845,7 @@ def create_linode_managed_credential_create_tool() -> tuple[Tool, Capability]:
             "Creates a Managed credential. Pass confirm=true to create it; "
             "pass dry_run=true to preview without creating it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "label": {"type": "string"},
-                "password": {"type": "string"},
-                "username": {"type": "string"},
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm creating or previewing "
-                        "the Managed credential."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "password", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedCredentialCreateInput"),
     ), Capability.Admin
 
 
@@ -5011,14 +3872,23 @@ async def handle_linode_managed_credential_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates a Managed credential. Set confirm=true to proceed."
+            "This creates a stored Managed credential. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_managed_credential(
+        credential = await client.create_managed_credential(
             label=body["label"],
             password=body["password"],
             username=body.get("username"),
+        )
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Managed credential {credential.get('id', 0)} created successfully"
+                ),
+                "credential": credential,
+            },
+            managed_pb2.ManagedCredentialWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "create Managed credential", _call)
@@ -5026,13 +3896,9 @@ async def handle_linode_managed_credential_create(
 
 def _managed_credential_id(arguments: dict[str, Any]) -> int | list[TextContent]:
     """Parse a positive managed credential ID, or return an error response."""
-    credential_id = arguments.get("credential_id")
-    if (
-        not isinstance(credential_id, int)
-        or isinstance(credential_id, bool)
-        or credential_id < 1
-    ):
-        return error_response("credential_id must be a positive integer")
+    credential_id, error = required_int_id(arguments, "credential_id")
+    if credential_id is None:
+        return error_response(error)
     return credential_id
 
 
@@ -5061,27 +3927,7 @@ def create_linode_managed_credential_update_tool() -> tuple[Tool, Capability]:
             "Updates a Managed credential label. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without changing it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "credential_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed credential ID to update",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Managed credential label",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["credential_id", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedCredentialUpdateInput"),
     ), Capability.Admin
 
 
@@ -5136,6 +3982,13 @@ def _managed_contact_body(arguments: dict[str, Any]) -> dict[str, Any]:
     The string fields (email, group, name) carry through as-is; the phone
     argument is a nested object with optional primary and secondary numbers.
     """
+    # The API assigns id and updated; Go rejects them on create, so mirror that
+    # here for identical cross-language rejection.
+    if "id" in arguments or "updated" in arguments:
+        raise ValueError(
+            "id and updated are read-only and cannot be set "
+            "when creating a managed contact"
+        )
     body: dict[str, Any] = {
         field: value
         for field in _MANAGED_CONTACT_BODY_FIELDS
@@ -5159,8 +4012,11 @@ def _managed_service_body(arguments: dict[str, Any]) -> dict[str, Any]:
 
     label = _required_string_argument(arguments, "label")
     service_type = _required_string_argument(arguments, "service_type")
-    if service_type not in _MANAGED_SERVICE_TYPES:
-        raise ValueError("service_type must be 'url' or 'tcp'")
+    error = enum_choice_error(
+        service_type, "service_type", managed_pb2.ManagedServiceType.Value
+    )
+    if error is not None:
+        raise ValueError(error)
     address = _required_string_argument(arguments, "address")
     timeout = _optional_int_argument(arguments, "timeout", 1, 255)
     if timeout is None:
@@ -5193,48 +4049,13 @@ def _managed_service_body(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def create_linode_managed_service_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_service_create tool."""
-    service_properties: dict[str, Any] = {
-        "label": {"type": "string", "minLength": 3, "maxLength": 64},
-        "service_type": {"type": "string", "enum": ["url", "tcp"]},
-        "address": {"type": "string", "minLength": 3, "maxLength": 100},
-        "timeout": {"type": "integer", "minimum": 1, "maximum": 255},
-        "body": {"type": "string"},
-        "consultation_group": {"type": "string", "maxLength": 50},
-        "credentials": {
-            "type": "array",
-            "items": {"type": "integer", "minimum": 1},
-        },
-        "notes": {"type": "string"},
-        "region": {"type": "string"},
-    }
     return Tool(
         name="linode_managed_service_create",
         description=(
             "Creates a Managed service monitor. Pass confirm=true to create it; "
             "pass dry_run=true to preview without creating it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                **service_properties,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm creating or previewing "
-                        "the Managed service monitor."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "label",
-                "service_type",
-                "address",
-                "timeout",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedServiceCreateInput"),
     ), Capability.Admin
 
 
@@ -5264,7 +4085,7 @@ async def handle_linode_managed_service_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_managed_service(
+        service = await client.create_managed_service(
             label=request_body["label"],
             service_type=request_body["service_type"],
             address=request_body["address"],
@@ -5274,6 +4095,16 @@ async def handle_linode_managed_service_create(
             credentials=request_body.get("credentials"),
             notes=request_body.get("notes"),
             region=request_body.get("region"),
+        )
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Managed service monitor {service.get('id', 0)} "
+                    "created successfully"
+                ),
+                "service": service,
+            },
+            managed_pb2.ManagedServiceWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "create Managed service monitor", _call)
@@ -5287,23 +4118,7 @@ def create_linode_managed_service_enable_tool() -> tuple[Tool, Capability]:
             "Enables a Managed service monitor. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without enabling it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "service_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed service monitor ID to enable",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm enabling the monitor.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["service_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedServiceEnableInput"),
     ), Capability.Admin
 
 
@@ -5352,23 +4167,7 @@ def create_linode_managed_service_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a Managed service monitor. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without deleting it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "service_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed service monitor ID to delete",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm deletion.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["service_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedServiceDeleteInput"),
     ), Capability.Admin
 
 
@@ -5453,23 +4252,7 @@ def create_linode_managed_service_disable_tool() -> tuple[Tool, Capability]:
             "Disables a Managed service monitor by service ID. "
             "Pass dry_run=true to preview without disabling."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "service_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed service ID to disable",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm disabling the Managed service.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["service_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedServiceDisableInput"),
     ), Capability.Admin
 
 
@@ -5515,40 +4298,13 @@ async def handle_linode_managed_service_disable(
 
 def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_managed_contact_create tool."""
-    body_properties: dict[str, Any] = {
-        field: {"type": "string"} for field in _MANAGED_CONTACT_BODY_FIELDS
-    }
-    body_properties["phone"] = {
-        "type": "object",
-        "description": "Phone contact details",
-        "properties": {
-            "primary": {"type": ["string", "null"]},
-            "secondary": {"type": ["string", "null"]},
-        },
-        "additionalProperties": False,
-    }
     return Tool(
         name="linode_managed_contact_create",
         description=(
             "Creates a Managed contact. Pass confirm=true to create it; "
             "pass dry_run=true to preview without creating it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                **body_properties,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm creating or previewing "
-                        "the Managed contact."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedContactCreateInput"),
     ), Capability.Admin
 
 
@@ -5574,15 +4330,24 @@ async def handle_linode_managed_contact_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates a Managed contact. Set confirm=true to proceed."
+            "This creates a managed contact. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.create_managed_contact(
+        contact = await client.create_managed_contact(
             email=body.get("email"),
             group=body.get("group"),
             name=body.get("name"),
             phone=body.get("phone"),
+        )
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Managed contact {contact.get('id', 0)} created successfully"
+                ),
+                "contact": contact,
+            },
+            managed_pb2.ManagedContactWriteResponse(),
         )
 
     return await execute_tool(cfg, arguments, "create Managed contact", _call)
@@ -5596,23 +4361,7 @@ def create_linode_managed_contact_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a Managed contact by contact ID. "
             "Pass dry_run=true to preview without deleting."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "contact_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed contact ID to delete",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm Managed contact deletion.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["contact_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedContactDeleteInput"),
     ), Capability.Admin
 
 
@@ -5664,56 +4413,15 @@ def create_linode_managed_contact_update_tool() -> tuple[Tool, Capability]:
             "Updates a Managed contact. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without changing it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "contact_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed contact ID to update",
-                },
-                "email": {
-                    "type": "string",
-                    "description": "Email address for issue alerts",
-                },
-                "group": {
-                    "type": "string",
-                    "description": "Display grouping for this contact",
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Managed contact name",
-                },
-                "phone": {
-                    "type": "object",
-                    "description": "Phone contact details",
-                    "properties": {
-                        "primary": {"type": ["string", "null"]},
-                        "secondary": {"type": ["string", "null"]},
-                    },
-                    "additionalProperties": False,
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["contact_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedContactUpdateInput"),
     ), Capability.Admin
 
 
 def _managed_contact_id(arguments: dict[str, Any]) -> int | list[TextContent]:
     """Parse a positive managed contact ID, or return an error response."""
-    contact_id = arguments.get("contact_id")
-    if (
-        not isinstance(contact_id, int)
-        or isinstance(contact_id, bool)
-        or contact_id < 1
-    ):
-        return error_response("contact_id must be a positive integer")
+    contact_id, error = required_int_id(arguments, "contact_id")
+    if contact_id is None:
+        return error_response(error)
     return contact_id
 
 
@@ -5860,59 +4568,7 @@ def create_linode_managed_service_update_tool() -> tuple[Tool, Capability]:
             "Updates a Managed service monitor. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without changing it."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "service_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Managed service monitor ID to update",
-                },
-                "address": {"type": "string", "description": "Service monitor URL"},
-                "body": {
-                    "type": "string",
-                    "description": "Expected response body text, or null to clear",
-                },
-                "consultation_group": {
-                    "type": "string",
-                    "description": "Managed contact group for issue consultation",
-                },
-                "credentials": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "description": "Managed credential IDs used when resolving issues",
-                },
-                "label": {"type": "string", "description": "Display label"},
-                "notes": {
-                    "type": "string",
-                    "description": "Notes for support staff, or null to clear",
-                },
-                "region": {
-                    "type": "string",
-                    "description": "Region for private IP monitors, or null to clear",
-                },
-                "service_type": {
-                    "type": "string",
-                    "enum": ["url", "tcp"],
-                    "description": "How this service is monitored",
-                },
-                "timeout": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": _MANAGED_SERVICE_TIMEOUT_MAX,
-                    "description": (
-                        "Seconds to wait before considering the service down"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm update.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["service_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedServiceUpdateInput"),
     ), Capability.Admin
 
 
@@ -5989,8 +4645,11 @@ def _managed_service_type_field(
     if "service_type" not in arguments:
         return None
     service_type = arguments.get("service_type")
-    if service_type not in {"url", "tcp"}:
-        return error_response("service_type must be one of: tcp, url")
+    if service_type not in enum_value_names(managed_pb2.ManagedServiceType.Value):
+        return error_response(
+            "service_type must be one of: "
+            + ", ".join(enum_value_names(managed_pb2.ManagedServiceType.Value))
+        )
     request_body["service_type"] = service_type
     return None
 
@@ -6007,7 +4666,7 @@ def _managed_service_timeout_field(
         or isinstance(timeout, bool)
         or not 1 <= timeout <= _MANAGED_SERVICE_TIMEOUT_MAX
     ):
-        return error_response("timeout must be an integer from 1 to 255")
+        return error_response("timeout must be an integer between 1 and 255")
     request_body["timeout"] = timeout
     return None
 
@@ -6067,7 +4726,16 @@ async def handle_linode_managed_service_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.update_managed_service(service_id, **request_body)
+        service = await client.update_managed_service(service_id, **request_body)
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Managed service monitor {service_id} updated successfully"
+                ),
+                "service": service,
+            },
+            managed_pb2.ManagedServiceWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode Managed service", _call)
 
@@ -6077,23 +4745,7 @@ def create_linode_managed_linode_settings_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_managed_linode_settings_list",
         description="Lists Managed Linode settings on the account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedLinodeSettingsListInput"),
     ), Capability.Read
 
 
@@ -6102,8 +4754,8 @@ async def handle_linode_managed_linode_settings_list(
 ) -> list[TextContent]:
     """Handle linode_managed_linode_settings_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -6125,10 +4777,7 @@ def create_linode_managed_stats_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_stats_get",
         description="Lists Managed statistics from the last 24 hours.",
-        inputSchema={
-            "type": "object",
-            "properties": ENV_PARAM_SCHEMA,
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedStatsGetInput"),
     ), Capability.Read
 
 
@@ -6138,7 +4787,7 @@ async def handle_linode_managed_stats_get(
     """Handle linode_managed_stats_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_managed_stats()
+        return serialize_struct_response(await client.get_managed_stats())
 
     return await execute_tool(cfg, arguments, "list Linode Managed statistics", _call)
 
@@ -6174,23 +4823,7 @@ def create_linode_managed_service_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_service_list",
         description="Lists Managed services on the Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ManagedServiceListInput"),
     ), Capability.Read
 
 
@@ -6199,8 +4832,8 @@ async def handle_linode_managed_service_list(
 ) -> list[TextContent]:
     """Handle linode_managed_service_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -6276,23 +4909,7 @@ def create_linode_support_ticket_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_list",
         description="Lists Linode support tickets.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.SupportTicketListInput"),
     ), Capability.Read
 
 
@@ -6301,8 +4918,8 @@ async def handle_linode_support_ticket_list(
 ) -> list[TextContent]:
     """Handle linode_support_ticket_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -6348,29 +4965,7 @@ def create_linode_support_ticket_reply_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_reply_list",
         description="Lists replies on a Linode support ticket.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "ticket_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Support ticket ID whose replies to list",
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["ticket_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.SupportTicketReplyListInput"),
     ), Capability.Read
 
 
@@ -6383,8 +4978,8 @@ async def handle_linode_support_ticket_reply_list(
         return error_response("ticket_id must be a positive integer")
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -6408,23 +5003,7 @@ def create_linode_support_ticket_close_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_close",
         description="Closes a Linode support ticket.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "ticket_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Support ticket ID to close",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["ticket_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.SupportTicketCloseInput"),
     ), Capability.Write
 
 
@@ -6481,27 +5060,7 @@ def create_linode_support_ticket_reply_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_reply_create",
         description="Creates a reply on a Linode support ticket.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "ticket_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Support ticket ID to reply to",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Reply body to add to the support ticket",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["ticket_id", "description", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.SupportTicketReplyCreateInput"),
     ), Capability.Write
 
 
@@ -6564,27 +5123,7 @@ def create_linode_support_ticket_attachment_create_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_support_ticket_attachment_create",
         description="Creates an attachment on a Linode support ticket.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "ticket_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Support ticket ID to attach the file to",
-                },
-                "file": {
-                    "type": "string",
-                    "description": ("Local, absolute path to the file to attach"),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["ticket_id", "file", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.SupportTicketAttachmentCreateInput"),
     ), Capability.Write
 
 

@@ -7,7 +7,8 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import firewall_device_pb2, firewall_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import ENV_PARAM_SCHEMA, error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool, required_int_id
+from linodemcp.tools.proto_enum import enum_choice_error
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -26,25 +27,7 @@ def create_linode_firewall_list_tool() -> tuple[Tool, Capability]:
         description=(
             "Lists all Cloud Firewalls on your account. Can filter by status or label."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "status": {
-                    "type": "string",
-                    "description": (
-                        "Filter by firewall status (enabled, disabled, deleted)"
-                    ),
-                },
-                "label_contains": {
-                    "type": "string",
-                    "description": (
-                        "Filter firewalls by label containing this string "
-                        "(case-insensitive)"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallListInput"),
     ), Capability.Read
 
 
@@ -61,9 +44,9 @@ async def handle_linode_firewall_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_get tool request."""
-    firewall_id = arguments.get("firewall_id", 0)
-    if not firewall_id:
-        return error_response("firewall_id is required")
+    firewall_id, error = required_int_id(arguments, "firewall_id")
+    if firewall_id is None:
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
@@ -87,9 +70,9 @@ async def handle_linode_firewall_rules_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_rules_get tool request."""
-    firewall_id = arguments.get("firewall_id", 0)
-    if not firewall_id:
-        return error_response("firewall_id is required")
+    firewall_id, error = required_int_id(arguments, "firewall_id")
+    if firewall_id is None:
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
@@ -138,17 +121,7 @@ def create_linode_firewall_rule_version_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_rule_version_list",
         description=("Lists all rule versions (history) for a Cloud Firewall by ID."),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": ("The ID of the firewall (required)"),
-                },
-            },
-            "required": ["firewall_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallRuleVersionListInput"),
     ), Capability.Read
 
 
@@ -186,24 +159,7 @@ def create_linode_firewall_rule_version_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets a specific version of a Cloud Firewall rule by ID and version."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": ("The ID of the firewall (required)"),
-                },
-                "version": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "The version identifier of the firewall rule (required)"
-                    ),
-                },
-            },
-            "required": ["firewall_id", "version"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallRuleVersionGetInput"),
     ), Capability.Read
 
 
@@ -221,25 +177,7 @@ def create_linode_firewall_device_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_device_list",
         description="Lists devices attached to a Cloud Firewall by ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": ("The ID of the firewall (required)"),
-                },
-                "page": {
-                    "type": "integer",
-                    "description": "Page number for pagination",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "description": "Number of items per page",
-                },
-            },
-            "required": ["firewall_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallDeviceListInput"),
     ), Capability.Read
 
 
@@ -359,20 +297,7 @@ def create_linode_firewall_settings_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_settings_get",
         description="Lists account default firewall settings.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "description": "Page number for pagination",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "description": "Page size for pagination",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallSettingsGetInput"),
     ), Capability.Read
 
 
@@ -390,7 +315,10 @@ async def handle_linode_firewall_settings_get(
         return error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_firewall_settings(page=page, page_size=page_size)
+        return serialize_api_response(
+            await client.get_firewall_settings(page=page, page_size=page_size),
+            firewall_pb2.FirewallSettings(),
+        )
 
     return await execute_tool(cfg, arguments, "list default firewall settings", _call)
 
@@ -400,20 +328,7 @@ def create_linode_firewall_template_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_template_list",
         description="Lists Cloud Firewall Templates.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "page": {
-                    "type": "integer",
-                    "description": "Page number for pagination",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "description": "Page size for pagination",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallTemplateListInput"),
     ), Capability.Read
 
 
@@ -446,27 +361,7 @@ def create_linode_firewall_template_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_template_get",
         description="Gets a Cloud Firewall Template by slug.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "slug": {
-                    "type": "string",
-                    "description": (
-                        "The slug of the firewall template to retrieve (required)"
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "description": "Page number for pagination",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "description": "Page size for pagination",
-                },
-            },
-            "required": ["slug"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallTemplateGetInput"),
     ), Capability.Read
 
 
@@ -478,11 +373,11 @@ async def handle_linode_firewall_template_get(
     if not isinstance(slug, str) or not slug:
         return error_response("slug is required and must be a string")
 
-    # Reject path traversal characters in slug
-    if any(c in slug for c in ("/", "?", "..")):
-        return error_response(
-            "slug must not contain path separators or traversal characters"
-        )
+    slug_error = enum_choice_error(
+        slug, "slug", firewall_pb2.FirewallTemplateSlug.Value
+    )
+    if slug_error is not None:
+        return error_response(slug_error)
 
     # Validate pagination parameters
     page = arguments.get("page")

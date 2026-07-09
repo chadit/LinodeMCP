@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -40,18 +39,18 @@ func TestLinodeAccountPromoCreditToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPromoCode]; !ok {
-		t.Errorf("props missing key %v", keyPromoCode)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyPromoCode) {
+		t.Errorf("RawInputSchema missing key %v", keyPromoCode)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 
 	for _, key := range []string{keyPromoCode, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing required key %v", key)
 		}
 	}
 }

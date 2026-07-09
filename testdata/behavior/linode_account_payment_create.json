@@ -1,0 +1,26 @@
+{
+  "tool": "linode_account_payment_create",
+  "description": "Account payment create: missing usd agrees and the POST body once confirmed. Confirm-gate and invalid-usd texts diverge (see report).",
+  "cases": [
+    {
+      "name": "requires usd",
+      "args": {},
+      "expect_error": "usd is required"
+    },
+    {
+      "name": "creates a payment",
+      "args": { "usd": "10.00", "confirm": true },
+      "api_response": { "id": 123, "usd": "10.00" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/payments",
+        "body": { "usd": "10.00" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"usd": "10.00"},
+      "expect_error": "This makes an account payment. Set confirm=true to proceed."
+    }
+  ]
+}

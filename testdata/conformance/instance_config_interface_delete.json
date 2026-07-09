@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.InstanceConfigInterfaceDeleteResponse",
+  "description": "Instance config interface delete id-echo: a confirmation message plus the instance, configuration-profile, and deleted interface IDs. The delete endpoint returns an empty body, so the response echoes the IDs.",
+  "input": {
+    "message": "Configuration profile interface 777 removed from config 555 on instance 12345",
+    "linode_id": 12345,
+    "config_id": 555,
+    "interface_id": 777
+  },
+  "canonical": {
+    "message": "Configuration profile interface 777 removed from config 555 on instance 12345",
+    "linode_id": 12345,
+    "config_id": 555,
+    "interface_id": 777
+  }
+}

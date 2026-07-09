@@ -10,6 +10,25 @@ message BucketSSL {
   bool ssl = 1;
 }
 
+// ObjectStorageSSLWriteResponse is the {message, ssl} envelope the SSL upload
+// tool returns. The upload endpoint echoes the bucket's TLS status, so ssl
+// carries the BucketSSL element decoded from that response.
+message ObjectStorageSSLWriteResponse {
+  string message = 1;
+  BucketSSL ssl = 2;
+}
+
+// ObjectStorageSSLDeleteResponse is the echo envelope
+// linode_object_storage_ssl_delete returns: a confirmation message plus the
+// region and bucket label identifying the bucket whose certificate was removed.
+// The delete endpoint returns an empty body, so the echo confirms the target.
+// The label is keyed "bucket" to match the tool's established response shape.
+message ObjectStorageSSLDeleteResponse {
+  string message = 1;
+  string region = 2;
+  string bucket = 3;
+}
+
 // BucketSSLGetInput is the input contract for linode_object_storage_ssl_get.
 message BucketSSLGetInput {
   // Linode environment to use (optional, defaults to "default").
@@ -18,4 +37,49 @@ message BucketSSLGetInput {
   string region = 2;
   // The bucket label (required).
   string label = 3;
+}
+
+// ObjectStorageSSLUploadInput is the input contract for
+// linode_object_storage_ssl_upload. region, label, certificate, private_key,
+// and confirm are all required.
+message ObjectStorageSSLUploadInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
+  string region = 2;
+  // The bucket label (name).
+  string label = 3;
+  // The PEM-encoded TLS/SSL certificate to upload.
+  string certificate = 4;
+  // The PEM-encoded private key for the certificate.
+  string private_key = 5;
+  // Must be true to proceed. This uploads a certificate to the bucket. Ignored
+  // when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+}
+
+// ObjectStorageSSLDeleteInput is the input contract for
+// linode_object_storage_ssl_delete. region, label, and confirm are required.
+message ObjectStorageSSLDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
+  string region = 2;
+  // The bucket label (name).
+  string label = 3;
+  // Must be true to proceed. This removes the SSL certificate from the bucket.
+  // Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 6;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 7;
 }

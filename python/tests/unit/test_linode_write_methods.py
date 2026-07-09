@@ -356,7 +356,8 @@ async def test_attach_volume_posts_to_attach_route() -> None:
     assert endpoint == "/volumes/100/attach"
     assert sent["linode_id"] == 7
     assert sent["config_id"] == 3
-    assert sent["persist_across_boots"] is False
+    # persist_across_boots not supplied -> omitted so the API applies its default.
+    assert "persist_across_boots" not in sent
     await client.close()
 
 
@@ -555,14 +556,15 @@ async def test_reboot_instance_wraps_http_errors() -> None:
 
 
 async def test_resize_instance_posts_resize_body() -> None:
-    """resize_instance posts the new type plus resize options."""
+    """resize_instance posts the new type plus any explicitly set resize options,
+    and omits options the caller does not set so the API applies its own defaults."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = _ok_response({})
 
         await client.resize_instance(
-            7, "g6-standard-4", allow_auto_disk_resize=False, migration_type="cold"
+            7, "g6-standard-4", allow_auto_disk_resize=True, migration_type="cold"
         )
 
     method, endpoint, sent = mock_request.await_args_list[0].args
@@ -570,9 +572,17 @@ async def test_resize_instance_posts_resize_body() -> None:
     assert endpoint == "/linode/instances/7/resize"
     assert sent == {
         "type": "g6-standard-4",
-        "allow_auto_disk_resize": False,
+        "allow_auto_disk_resize": True,
         "migration_type": "cold",
     }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = _ok_response({})
+
+        await client.resize_instance(7, "g6-standard-4")
+
+    _, _, sent = mock_request.await_args_list[0].args
+    assert sent == {"type": "g6-standard-4"}
     await client.close()
 
 

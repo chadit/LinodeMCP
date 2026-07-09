@@ -1,0 +1,21 @@
+{
+  "tool": "linode_firewall_settings_update",
+  "description": "Firewall settings update PUTs the default_firewall_ids map once confirmed. The no-confirm and missing/invalid default_firewall_ids messages diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "updates the linode default firewall",
+      "args": { "confirm": true, "default_firewall_ids": { "linode": 5 } },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/firewalls/settings",
+        "body": { "default_firewall_ids": { "linode": 5 } }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"default_firewall_ids": {"linode": 5}},
+      "expect_error": "This updates default Cloud Firewall assignments. Set confirm=true to proceed."
+    }
+  ]
+}

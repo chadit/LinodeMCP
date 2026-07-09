@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.LKENodePoolDeleteResponse",
+  "description": "LKE node pool delete id-echo: a confirmation message plus the parent cluster and deleted node-pool IDs. The delete endpoint returns an empty body, so the response echoes the IDs.",
+  "input": {
+    "message": "Node pool 246 deleted from cluster 135 successfully",
+    "cluster_id": 135,
+    "pool_id": 246
+  },
+  "canonical": {
+    "message": "Node pool 246 deleted from cluster 135 successfully",
+    "cluster_id": 135,
+    "pool_id": 246
+  }
+}

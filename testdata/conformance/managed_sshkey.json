@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.ManagedSSHKey",
+  "description": "linode_managed_sshkey_get: the public SSH key the Managed service installs.",
+  "input": {
+    "ssh_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ managed@linode"
+  },
+  "canonical": {
+    "ssh_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ managed@linode"
+  }
+}

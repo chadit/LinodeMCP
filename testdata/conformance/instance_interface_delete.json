@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.InstanceInterfaceDeleteResponse",
+  "description": "Instance interface delete id-echo: a confirmation message plus the parent instance and deleted interface IDs. The delete endpoint returns an empty body, so the response echoes the IDs.",
+  "input": {
+    "message": "Interface 888 deleted from instance 12345 successfully",
+    "linode_id": 12345,
+    "interface_id": 888
+  },
+  "canonical": {
+    "message": "Interface 888 deleted from instance 12345 successfully",
+    "linode_id": 12345,
+    "interface_id": 888
+  }
+}

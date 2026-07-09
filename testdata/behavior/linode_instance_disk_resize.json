@@ -1,0 +1,31 @@
+{
+  "tool": "linode_instance_disk_resize",
+  "description": "Pins the shared missing-linode_id and missing-disk_id rejections and the disk-resize POST body. size rejection text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects missing disk_id",
+      "args": { "linode_id": 123, "confirm": true },
+      "expect_error": "disk_id is required"
+    },
+    {
+      "name": "resizes a disk",
+      "args": { "linode_id": 123, "disk_id": 5, "size": 2048, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/disks/5/resize",
+        "body": { "size": 2048 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "disk_id": 5, "size": 2048},
+      "expect_error": "This resizes the disk. The instance must be powered off. Set confirm=true to proceed."
+    }
+  ]
+}

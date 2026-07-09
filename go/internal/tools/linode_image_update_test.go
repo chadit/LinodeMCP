@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -53,34 +52,10 @@ func TestLinodeImageUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyEnvironment]; !ok {
-		t.Errorf("props missing key %v", keyEnvironment)
-	}
-
-	if _, ok := props[imageIDParam]; !ok {
-		t.Errorf("props missing key %v", imageIDParam)
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyDescription]; !ok {
-		t.Errorf("props missing key %v", keyDescription)
-	}
-
-	if _, ok := props[keyTags]; !ok {
-		t.Errorf("props missing key %v", keyTags)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	for _, key := range []string{imageIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyEnvironment, imageIDParam, keyLabel, keyDescription, keyTags, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }

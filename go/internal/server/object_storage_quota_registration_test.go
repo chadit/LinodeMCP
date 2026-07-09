@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
@@ -25,12 +26,13 @@ func TestObjectStorageQuotaGetToolRegisteredAsRead(t *testing.T) {
 			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 		}
 
-		if _, ok := info.InputSchema.Properties["obj_quota_id"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "obj_quota_id")
+		raw := string(info.RawInputSchema)
+		if !strings.Contains(raw, "obj_quota_id") {
+			t.Errorf("info.RawInputSchema missing key %v", "obj_quota_id")
 		}
 
-		if _, ok := info.InputSchema.Properties["confirm"]; ok {
-			t.Errorf("info.InputSchema.Properties has unexpected key %v", "confirm")
+		if strings.Contains(raw, "confirm") {
+			t.Errorf("info.RawInputSchema has unexpected key %v", "confirm")
 		}
 
 		return

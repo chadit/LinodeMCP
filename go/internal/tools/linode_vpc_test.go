@@ -733,17 +733,17 @@ func TestLinodeVPCCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLabel) {
+		t.Errorf("RawInputSchema missing key %v", keyLabel)
 	}
 
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
+	if !strings.Contains(rawSchema, keyRegion) {
+		t.Errorf("RawInputSchema missing key %v", keyRegion)
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -873,17 +873,17 @@ func TestLinodeVPCUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyVPCID]; !ok {
-		t.Errorf("props missing key %v", keyVPCID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyVPCID) {
+		t.Errorf("RawInputSchema missing key %v", keyVPCID)
 	}
 
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
+	if !strings.Contains(rawSchema, keyLabel) {
+		t.Errorf("RawInputSchema missing key %v", keyLabel)
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -1110,8 +1110,8 @@ func TestLinodeVPCDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeVPCDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -1293,21 +1293,21 @@ func TestLinodeVPCSubnetCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyVPCID]; !ok {
-		t.Errorf("props missing key %v", keyVPCID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyVPCID) {
+		t.Errorf("RawInputSchema missing key %v", keyVPCID)
 	}
 
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
+	if !strings.Contains(rawSchema, keyLabel) {
+		t.Errorf("RawInputSchema missing key %v", keyLabel)
 	}
 
-	if _, ok := props[keyIPv4]; !ok {
-		t.Errorf("props missing key %v", keyIPv4)
+	if !strings.Contains(rawSchema, keyIPv4) {
+		t.Errorf("RawInputSchema missing key %v", keyIPv4)
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -1439,21 +1439,21 @@ func TestLinodeVPCSubnetUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyVPCID]; !ok {
-		t.Errorf("props missing key %v", keyVPCID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyVPCID) {
+		t.Errorf("RawInputSchema missing key %v", keyVPCID)
 	}
 
-	if _, ok := props["subnet_id"]; !ok {
-		t.Errorf("props missing key %v", "subnet_id")
+	if !strings.Contains(rawSchema, keySubnetID) {
+		t.Errorf("RawInputSchema missing key %v", keySubnetID)
 	}
 
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
+	if !strings.Contains(rawSchema, keyLabel) {
+		t.Errorf("RawInputSchema missing key %v", keyLabel)
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 }
 
@@ -1687,8 +1687,8 @@ func TestLinodeVPCSubnetDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeVPCSubnetDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("RawInputSchema missing key %v", keyDryRun)
 	}
 }
 

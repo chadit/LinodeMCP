@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerConfigDeleteResponse",
+  "description": "NodeBalancer config delete id-echo: a confirmation message plus the parent NodeBalancer and deleted config IDs. The delete endpoint returns an empty body, so the response echoes the IDs.",
+  "input": {
+    "message": "Config 222 removed from NodeBalancer 111 successfully",
+    "nodebalancer_id": 111,
+    "config_id": 222
+  },
+  "canonical": {
+    "message": "Config 222 removed from NodeBalancer 111 successfully",
+    "nodebalancer_id": 111,
+    "config_id": 222
+  }
+}

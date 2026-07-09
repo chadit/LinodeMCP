@@ -118,7 +118,7 @@ func TestClientGetManagedSSHKeySuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.ManagedSSHKey{SSHKey: managedSSHKeyValue}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{keySSHKey: managedSSHKeyValue}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -126,7 +126,7 @@ func TestClientGetManagedSSHKeySuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.GetManagedSSHKey(t.Context())
+	got, err := client.GetManagedSSHKeyProto(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -135,8 +135,8 @@ func TestClientGetManagedSSHKeySuccess(t *testing.T) {
 		t.Fatal("got is nil")
 	}
 
-	if got.SSHKey != managedSSHKeyValue {
-		t.Errorf("got.SSHKey = %v, want %v", got.SSHKey, managedSSHKeyValue)
+	if got.GetSshKey() != managedSSHKeyValue {
+		t.Errorf("got.GetSshKey() = %v, want %v", got.GetSshKey(), managedSSHKeyValue)
 	}
 }
 
@@ -165,7 +165,7 @@ func TestClientGetManagedSSHKeyAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetManagedSSHKey(t.Context())
+	_, err := client.GetManagedSSHKeyProto(t.Context())
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -202,7 +202,7 @@ func TestClientGetManagedSSHKeyRetriesTransientRead(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(linode.ManagedSSHKey{SSHKey: managedSSHKeyValue}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{keySSHKey: managedSSHKeyValue}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -210,7 +210,7 @@ func TestClientGetManagedSSHKeyRetriesTransientRead(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 
-	got, err := client.GetManagedSSHKey(t.Context())
+	got, err := client.GetManagedSSHKeyProto(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -223,8 +223,8 @@ func TestClientGetManagedSSHKeyRetriesTransientRead(t *testing.T) {
 		t.Errorf("attempts.Load() = %v, want %v", attempts.Load(), int32(2))
 	}
 
-	if got.SSHKey != managedSSHKeyValue {
-		t.Errorf("got.SSHKey = %v, want %v", got.SSHKey, managedSSHKeyValue)
+	if got.GetSshKey() != managedSSHKeyValue {
+		t.Errorf("got.GetSshKey() = %v, want %v", got.GetSshKey(), managedSSHKeyValue)
 	}
 }
 

@@ -6,8 +6,10 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -21,19 +23,15 @@ const (
 
 // NewLinodeProfileSecurityQuestionsAnswerTool creates a tool for answering profile security questions.
 func NewLinodeProfileSecurityQuestionsAnswerTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_security_question_answer",
 		"Answers security questions for the authenticated profile. Pass dry_run=true to preview without submitting.",
-		[]mcp.ToolOption{
-			mcp.WithArray(profileSecurityQuestionsParam, mcp.Required(),
-				mcp.Description("Exactly 3 security question answers, each an object with a positive question_id and a 3-to-17-character response.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm submitting profile security question answers. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileSecurityQuestionsAnswerRequest,
+		toolschemas.Schema("linode.mcp.v1.SecurityQuestionAnswerInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileSecurityQuestionsAnswerRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -67,9 +65,9 @@ func handleLinodeProfileSecurityQuestionsAnswerRequest(ctx context.Context, requ
 		return mcp.NewToolResultError(errorMessage), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message string `json:"message"`
-	}{Message: "Profile security questions answered successfully"})
+	return MarshalProtoToolResponse(&linodev1.MessageResponse{
+		Message: "Profile security questions answered successfully",
+	})
 }
 
 func answerProfileSecurityQuestionsRequestFromTool(request *mcp.CallToolRequest) (*linode.AnswerProfileSecurityQuestionsRequest, string) {

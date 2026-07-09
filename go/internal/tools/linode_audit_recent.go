@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -10,16 +9,10 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
-
-// auditRecentResponse is the wire shape of the linode_audit_recent
-// result. Count is the number of events returned (after filtering and
-// the limit), Events is the newest-first list.
-type auditRecentResponse struct {
-	Count  int           `json:"count"`
-	Events []audit.Event `json:"events"`
-}
 
 // NewLinodeAuditRecentTool returns the linode_audit_recent query tool.
 // It reads the most recent audit events from the JSONL sink (active
@@ -34,41 +27,12 @@ type auditRecentResponse struct {
 func NewLinodeAuditRecentTool(
 	_ *config.Config,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_audit_recent",
-		mcp.WithDescription(
-			"Return the most recent audit events (what tools were called, with what "+
-				"outcome), newest first. Reads the on-disk JSONL audit log. Optional "+
-				"filters: limit, since, until, tool (glob), capability, status, include_meta.",
-		),
-		mcp.WithNumber(
-			"limit",
-			mcp.Description("Max events to return. Default 20, capped at 200."),
-		),
-		mcp.WithString(
-			"since",
-			mcp.Description("Only events at or after this RFC 3339 timestamp (e.g. 2026-05-19T00:00:00Z)."),
-		),
-		mcp.WithString(
-			"until",
-			mcp.Description("Only events at or before this RFC 3339 timestamp."),
-		),
-		mcp.WithString(
-			"tool",
-			mcp.Description(`Only events whose tool name matches this glob (e.g. "linode_instance_*").`),
-		),
-		mcp.WithString(
-			"capability",
-			mcp.Description("Only events with this capability: read, write, destroy, admin, or meta."),
-		),
-		mcp.WithString(
-			"status",
-			mcp.Description("Only events with this status: success, error, or refused."),
-		),
-		mcp.WithBoolean(
-			"include_meta",
-			mcp.Description("Include audit/profile meta-tool events. Default false (they are noise for activity review)."),
-		),
+		"Return the most recent audit events (what tools were called, with what "+
+			"outcome), newest first. Reads the on-disk JSONL audit log. Optional "+
+			"filters: limit, since, until, tool (glob), capability, status, include_meta.",
+		toolschemas.Schema("linode.mcp.v1.AuditRecentInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -88,12 +52,15 @@ func NewLinodeAuditRecentTool(
 			return mcp.NewToolResultError(fmt.Sprintf("failed to read audit log: %v", err)), nil
 		}
 
-		body, err := json.Marshal(auditRecentResponse{Count: len(events), Events: events})
+		protoEvents, err := auditEventsProto(events)
 		if err != nil {
-			return nil, fmt.Errorf("marshal audit recent response: %w", err)
+			return nil, err
 		}
 
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.AuditRecentResponse{
+			Count:  linodeIDToInt32(len(events)),
+			Events: protoEvents,
+		})
 	}
 
 	return tool, profiles.CapMeta, handler

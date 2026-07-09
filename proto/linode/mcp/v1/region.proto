@@ -38,6 +38,34 @@ message RegionGetInput {
   string region_id = 2;
 }
 
+// RegionListInput is the input contract for linode_region_list. Both filters
+// are client-side.
+message RegionListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Filter regions by country code (e.g., 'us', 'de', 'jp').
+  optional string country = 2;
+  // Filter regions by capability (e.g., 'Linodes', 'Block Storage', 'GPU
+  // Linodes').
+  optional string capability = 3;
+}
+
+// RegionAvailabilityListInput is the input contract for
+// linode_region_availability_list.
+message RegionAvailabilityListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// RegionAvailabilityGetInput is the input contract for
+// linode_region_availability_get.
+message RegionAvailabilityGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region slug to inspect, for example 'us-east'.
+  string region_id = 2;
+}
+
 // RegionAvailability mirrors a single compute-type availability entry for a
 // region: whether a given plan is available in that region.
 message RegionAvailability {

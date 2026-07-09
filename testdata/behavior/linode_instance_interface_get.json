@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_interface_get",
+  "description": "Pins the instance-interface GET. linode_id/interface_id rejection text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "gets an interface",
+      "args": { "linode_id": 123, "interface_id": 9 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/interfaces/9" }
+    }
+  ]
+}

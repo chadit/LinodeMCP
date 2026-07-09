@@ -44,21 +44,21 @@ func TestLinodeInstanceDiskPasswordResetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLinodeID]; !ok {
-		t.Errorf("props missing key %v", keyLinodeID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 
-	if _, ok := props[keyDiskID]; !ok {
-		t.Errorf("props missing key %v", keyDiskID)
+	if !strings.Contains(rawSchema, keyDiskID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDiskID)
 	}
 
-	if _, ok := props[keyDiskPassword]; !ok {
-		t.Errorf("props missing key %v", keyDiskPassword)
+	if !strings.Contains(rawSchema, keyDiskPassword) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDiskPassword)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyConfirm)
 	}
 }
 

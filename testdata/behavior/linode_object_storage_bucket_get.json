@@ -1,0 +1,32 @@
+{
+  "tool": "linode_object_storage_bucket_get",
+  "description": "Pins the region/label-required rejections, the region/label format rejections (ported to Go, strictest-wins), and the single bucket GET by region+label.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": {},
+      "expect_error": "region is required"
+    },
+    {
+      "name": "rejects a malformed region",
+      "args": { "region": "US-EAST", "label": "my-bucket" },
+      "expect_error": "region must be a valid region or cluster ID"
+    },
+    {
+      "name": "requires label",
+      "args": { "region": "us-east" },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a malformed label",
+      "args": { "region": "us-east", "label": "Bad_Label" },
+      "expect_error": "label must be a valid bucket label"
+    },
+    {
+      "name": "gets a bucket",
+      "args": { "region": "us-east", "label": "my-bucket" },
+      "api_response": { "label": "my-bucket", "region": "us-east" },
+      "expect_request": { "method": "GET", "path": "/object-storage/buckets/us-east/my-bucket" }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "tool": "linode_instance_config_list",
+  "description": "Pins the config-list GET and the shared non-integer page rejection. linode_id missing/invalid text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "linode_id": 123, "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "lists configs for an instance",
+      "args": { "linode_id": 123 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/configs" }
+    }
+  ]
+}

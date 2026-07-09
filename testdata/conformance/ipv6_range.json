@@ -1,0 +1,25 @@
+{
+  "message": "linode.mcp.v1.IPv6Range",
+  "description": "linode_ipv6_range_get detail: is_bgp and the bound Linode IDs. route_target is a list-only field, so it serializes as its empty default.",
+  "input": {
+    "range": "2600:3c03::02:5000:0000:0000:0000",
+    "region": "us-east",
+    "prefix": 64,
+    "is_bgp": false,
+    "linodes": [
+      12345,
+      12346
+    ]
+  },
+  "canonical": {
+    "range": "2600:3c03::02:5000:0000:0000:0000",
+    "region": "us-east",
+    "prefix": 64,
+    "is_bgp": false,
+    "linodes": [
+      12345,
+      12346
+    ],
+    "route_target": ""
+  }
+}

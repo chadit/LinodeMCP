@@ -1,0 +1,17 @@
+{
+  "tool": "linode_managed_issue_get",
+  "description": "Issue get: shared positive-id rejection and the issue GET.",
+  "cases": [
+    {
+      "name": "rejects non-positive issue_id",
+      "args": { "issue_id": 0 },
+      "expect_error": "issue_id must be a positive integer"
+    },
+    {
+      "name": "gets a managed issue",
+      "args": { "issue_id": 88 },
+      "api_response": { "id": 88, "services": [] },
+      "expect_request": { "method": "GET", "path": "/managed/issues/88" }
+    }
+  ]
+}

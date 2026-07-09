@@ -42,7 +42,10 @@ type SupportTicket struct {
 	UpdatedBy   string                    `json:"updated_by"`
 }
 
-// CreateSupportTicketAttachmentRequest contains the request body for POST /support/tickets/{ticket_id}/attachments.
+// CreateSupportTicketAttachmentRequest carries the local file path uploaded to
+// POST /support/tickets/{ticket_id}/attachments. The endpoint consumes
+// multipart/form-data, so File is read from disk and streamed as the "file"
+// form field rather than marshaled into a JSON body.
 type CreateSupportTicketAttachmentRequest struct {
 	File string `json:"file"`
 }

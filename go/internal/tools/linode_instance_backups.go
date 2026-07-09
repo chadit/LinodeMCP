@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -16,16 +17,15 @@ import (
 
 // NewLinodeInstanceBackupListTool creates a tool for listing all backups for a Linode instance.
 func NewLinodeInstanceBackupListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_backup_list",
 		"Lists all backups for a Linode instance, including automatic backups and manual snapshots.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-		},
-		handleInstanceBackupsListRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceBackupListInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceBackupsListRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -90,22 +90,16 @@ func handleInstanceBackupGetRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeInstanceBackupCreateTool creates a tool for taking a manual snapshot of a Linode instance.
 func NewLinodeInstanceBackupCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_backup_create",
 		"Creates a manual snapshot of a Linode instance. "+
 			"WARNING: This overwrites any existing manual snapshot for the instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance to snapshot")),
-			mcp.WithString("label",
-				mcp.Description("Label for the manual snapshot (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm snapshot creation. This overwrites any existing manual snapshot. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceBackupCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceBackupCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceBackupCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -149,26 +143,16 @@ func handleInstanceBackupCreateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeInstanceBackupRestoreTool creates a tool for restoring a backup to a Linode instance.
 func NewLinodeInstanceBackupRestoreTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_backup_restore",
 		"Restores a backup to a Linode instance. "+
 			"WARNING: When overwrite is true, this destroys all disks and configs on the target instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance that owns the backup")),
-			mcp.WithNumber("backup_id", mcp.Required(),
-				mcp.Description("The ID of the backup to restore")),
-			mcp.WithNumber("target_linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance to restore the backup to")),
-			mcp.WithBoolean("overwrite",
-				mcp.Description("If true, deletes all disks and configs on the target before restoring. Defaults to false.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm restore. With overwrite=true, all existing data on the target is destroyed. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceBackupRestoreRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceBackupRestoreInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceBackupRestoreRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -249,20 +233,16 @@ func handleInstanceBackupRestoreRequest(ctx context.Context, request *mcp.CallTo
 
 // NewLinodeInstanceBackupsEnableTool creates a tool for enabling the backup service on a Linode instance.
 func NewLinodeInstanceBackupsEnableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_backups_enable",
 		"Enables the backup service for a Linode instance. "+
 			"WARNING: This adds a recurring charge to your account based on the instance plan.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm enabling backups. This adds a recurring billing charge. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceBackupsEnableRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceBackupsEnableInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceBackupsEnableRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -297,32 +277,23 @@ func handleInstanceBackupsEnableRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to enable backups for instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceActionWriteResponse{
 		Message:  fmt.Sprintf("Backup service enabled for instance %d", linodeID),
-		LinodeID: linodeID,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId: linodeIDToInt32(linodeID),
+	})
 }
 
 // NewLinodeInstanceFirewallsApplyTool creates a tool for reapplying assigned firewalls to a Linode instance.
 func NewLinodeInstanceFirewallsApplyTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_firewall_apply",
 		"Reapplies assigned firewalls to a Linode instance. Use this if firewall assignment was not applied successfully.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm reapplying firewalls to this Linode. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceFirewallsApplyRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceFirewallApplyInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceFirewallsApplyRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -330,12 +301,7 @@ func NewLinodeInstanceFirewallsApplyTool(cfg *config.Config) (mcp.Tool, profiles
 // firewallsApplyLinodeIDFromTool validates and parses the linode_id, returning
 // the ID or an error message. Shared by the real path and the dry-run preview.
 func firewallsApplyLinodeIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args["linode_id"]; !exists {
-		return 0, ErrLinodeIDRequired.Error()
-	}
-
-	return optionalPaginationInt(args, "linode_id", 1, 0)
+	return requiredIDArgument(request, "linode_id")
 }
 
 func handleInstanceFirewallsApplyRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -376,40 +342,47 @@ func handleInstanceFirewallsApplyRequest(ctx context.Context, request *mcp.CallT
 
 // NewLinodeInstanceBackupsCancelTool creates a tool for canceling the backup service on a Linode instance.
 func NewLinodeInstanceBackupsCancelTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_backups_cancel",
 		"Cancels the backup service for a Linode instance. "+
 			"WARNING: This permanently deletes all existing backups for the instance."+
 			" Pass dry_run=true to preview without canceling."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm cancellation. All existing backups will be permanently deleted. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleInstanceBackupsCancelRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceBackupsCancelInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceBackupsCancelRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 func handleInstanceBackupsCancelRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+	linodeID := request.GetInt(paramLinodeID, 0)
+	if linodeID == 0 {
+		return mcp.NewToolResultError(paramLinodeID + " is required"), nil
+	}
+
+	// Full DestructiveAction form (rather than the *WithID wrapper) so the
+	// Success closure returns a proto message, routing both the single-step and
+	// two-stage apply paths through the proto-canonical marshaller to match the
+	// Python side.
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
 		ToolName:       "linode_instance_backups_cancel",
-		IDParam:        paramLinodeID,
 		Method:         httpMethodPost,
-		PathPattern:    "/linode/instances/%d/backups/cancel",
+		Path:           fmt.Sprintf("/linode/instances/%d/backups/cancel", linodeID),
 		ConfirmMessage: "This permanently deletes all backups for the instance. Set confirm=true to proceed.",
-		SuccessFormat:  "Backup service canceled for instance %d. All backups have been deleted.",
-		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
-			return c.GetInstance(ctx, id)
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetInstance(ctx, linodeID)
 		},
-		Execute: func(ctx context.Context, c *linode.Client, id int) error {
-			return c.CancelInstanceBackups(ctx, id)
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.CancelInstanceBackups(ctx, linodeID)
+		},
+		Success: func() proto.Message {
+			return &linodev1.InstanceActionWriteResponse{
+				Message:  fmt.Sprintf("Backup service canceled for instance %d. All backups have been deleted.", linodeID),
+				LinodeId: linodeIDToInt32(linodeID),
+			}
 		},
 		// The plan fetches the parent instance, so reuse the Instance
 		// hash-ignore list to drop its self-moving telemetry fields.

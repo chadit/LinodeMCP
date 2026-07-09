@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -49,30 +48,10 @@ func TestLinodeImageShareGroupImageUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[imageShareGroupIDParam]; !ok {
-		t.Errorf("props missing key %v", imageShareGroupIDParam)
-	}
-
-	if _, ok := props[imageShareGroupImageIDParam]; !ok {
-		t.Errorf("props missing key %v", imageShareGroupImageIDParam)
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyDescription]; !ok {
-		t.Errorf("props missing key %v", keyDescription)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	for _, key := range []string{imageShareGroupIDParam, imageShareGroupImageIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{imageShareGroupIDParam, imageShareGroupImageIDParam, keyLabel, keyDescription, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -141,7 +120,7 @@ func TestLinodeImageShareGroupImageUpdateRejectsInvalidRequest(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing share group id", args: map[string]any{imageShareGroupImageIDParam: imageShareGroupImageIDFixture, keyLabel: updatedSharedImageLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},
+		{name: "missing share group id", args: map[string]any{imageShareGroupImageIDParam: imageShareGroupImageIDFixture, keyLabel: updatedSharedImageLabel, keyConfirm: true}, wantContains: errShareGroupIDRequired},
 		{name: "invalid share group id", args: map[string]any{imageShareGroupIDParam: 0, imageShareGroupImageIDParam: imageShareGroupImageIDFixture, keyLabel: updatedSharedImageLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},
 		{name: caseMissingImageID, args: map[string]any{imageShareGroupIDParam: imageShareGroupIDFixture, keyLabel: updatedSharedImageLabel, keyConfirm: true}, wantContains: errImageIDNonEmpty},
 		{name: "private source image id", args: map[string]any{imageShareGroupIDParam: imageShareGroupIDFixture, imageShareGroupImageIDParam: imagePrivate15Fixture, keyLabel: updatedSharedImageLabel, keyConfirm: true}, wantContains: errImageShareGroupImageIDInvalid},

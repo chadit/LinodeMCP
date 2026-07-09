@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_config_interface_list",
+  "description": "Pins the config-interface list GET. linode_id/config_id rejection text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "lists config interfaces",
+      "args": { "linode_id": 123, "config_id": 7 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/configs/7/interfaces" }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "tool": "linode_image_sharegroup_token_update",
+  "description": "With confirm set both languages reach the token_uuid check. Success PUTs the token label.",
+  "cases": [
+    {
+      "name": "rejects missing token_uuid",
+      "args": { "confirm": true },
+      "expect_error": "token_uuid must be a non-empty string"
+    },
+    {
+      "name": "updates a token label",
+      "args": { "token_uuid": "123e4567-e89b-12d3-a456-426614174000", "label": "new-label", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "PUT", "path": "/images/sharegroups/tokens/123e4567-e89b-12d3-a456-426614174000", "body": { "label": "new-label" } }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"token_uuid": "123e4567-e89b-12d3-a456-426614174000", "label": "new-label"},
+      "expect_error": "This updates an image share group token. Set confirm=true to proceed."
+    }
+  ]
+}

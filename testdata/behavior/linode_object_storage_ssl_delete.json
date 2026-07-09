@@ -1,0 +1,22 @@
+{
+  "tool": "linode_object_storage_ssl_delete",
+  "description": "Destroy-capability. Pins the shared bypass gate (confirm alone), the region-required rejection, and the SSL delete DELETE by region+label.",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": { "region": "us-east", "label": "my-bucket", "confirm": true },
+      "expect_error": "linode_object_storage_ssl_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "requires region",
+      "args": { "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "deletes the ssl certificate",
+      "args": { "region": "us-east", "label": "my-bucket", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/object-storage/buckets/us-east/my-bucket/ssl" }
+    }
+  ]
+}

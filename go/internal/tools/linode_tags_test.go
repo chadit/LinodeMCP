@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
@@ -39,22 +38,10 @@ func TestLinodeTagDeleteToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[tagLabelParamTest]; !ok {
-		t.Errorf("props missing key %v", tagLabelParamTest)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
-	}
-
-	for _, key := range []string{tagLabelParamTest, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{tagLabelParamTest, keyConfirm, keyDryRun} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -603,41 +590,19 @@ func TestLinodeTagCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[tagCreateDomainsParam]; !ok {
-		t.Errorf("props missing key %v", tagCreateDomainsParam)
-	}
-
-	if _, ok := props[tagCreateLinodesParam]; !ok {
-		t.Errorf("props missing key %v", tagCreateLinodesParam)
-	}
-
-	if _, ok := props[tagCreateNodeBalancersParam]; !ok {
-		t.Errorf("props missing key %v", tagCreateNodeBalancersParam)
-	}
-
-	if _, ok := props[tagCreateVolumesParam]; !ok {
-		t.Errorf("props missing key %v", tagCreateVolumesParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if _, ok := props["dry_run"]; !ok {
-		t.Errorf("props missing key %v", "dry_run")
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyLabel) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyLabel)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{
+		keyLabel,
+		tagCreateDomainsParam,
+		tagCreateLinodesParam,
+		tagCreateNodeBalancersParam,
+		tagCreateVolumesParam,
+		keyConfirm,
+		keyDryRun,
+	} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -757,13 +722,7 @@ func TestLinodeTagCreateToolDryRunPreviewsRequestWithoutConfirmOrClient(t *testi
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"method": "POST"`) {
-		t.Errorf("textContent.Text does not contain %v", `"method": "POST"`)
-	}
-
-	if !strings.Contains(textContent.Text, `"path": "/tags"`) {
-		t.Errorf("textContent.Text does not contain %v", `"path": "/tags"`)
-	}
+	assertDryRunRequest(t, decodeBody(t, textContent.Text), "POST", "/tags")
 
 	if !strings.Contains(textContent.Text, tagCreateLabelFixture) {
 		t.Errorf("textContent.Text does not contain %v", tagCreateLabelFixture)

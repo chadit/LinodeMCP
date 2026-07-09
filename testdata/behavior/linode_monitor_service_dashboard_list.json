@@ -1,0 +1,12 @@
+{
+  "tool": "linode_monitor_service_dashboard_list",
+  "description": "Pins the service dashboards GET. The service_type rejection text diverges (see report), so only the success capture is fixtured.",
+  "cases": [
+    {
+      "name": "lists monitor service dashboards",
+      "args": { "service_type": "dbaas" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/monitor/services/dbaas/dashboards" }
+    }
+  ]
+}

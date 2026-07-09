@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
@@ -23,8 +24,8 @@ func TestLinodeAccountServiceTransferCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountServiceTransferCreateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -76,8 +77,10 @@ func TestLinodeAccountServiceTransferAcceptToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountServiceTransferAcceptTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -130,8 +133,10 @@ func TestLinodeAccountServiceTransferDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountServiceTransferDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

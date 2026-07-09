@@ -1,0 +1,36 @@
+{
+  "tool": "linode_account_settings_update",
+  "description": "Shared field-type rejections, the unsupported-field rejection (Go now mirrors Python's allowlist), and the settings PUT body. Empty-field and confirm-gate text diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects an unsupported field",
+      "args": { "network_helper": true, "bogus_field": "x" },
+      "expect_error": "Unsupported account settings field(s): bogus_field"
+    },
+    {
+      "name": "rejects a non-boolean backups_enabled",
+      "args": { "backups_enabled": "yes" },
+      "expect_error": "backups_enabled must be a boolean"
+    },
+    {
+      "name": "rejects a non-string object_storage",
+      "args": { "object_storage": 5 },
+      "expect_error": "object_storage must be a string"
+    },
+    {
+      "name": "updates account settings",
+      "args": { "backups_enabled": true, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/account/settings",
+        "body": { "backups_enabled": true }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"backups_enabled": true},
+      "expect_error": "This updates account-wide settings. Set confirm=true to proceed."
+    }
+  ]
+}

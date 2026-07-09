@@ -1,0 +1,52 @@
+{
+  "tool": "linode_monitor_service_alert_definition_update",
+  "description": "Update validates each present field locally before calling the API, and trims the label. entity_ids must be a non-empty array of non-blank strings on update (unlike create, where an empty array is accepted and omitted).",
+  "cases": [
+    {
+      "name": "rejects integer entity ids",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "entity_ids": [1, 2],
+        "confirm": true
+      },
+      "expect_error": "entity_ids must be an array of non-empty strings"
+    },
+    {
+      "name": "rejects out-of-range severity",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "severity": 4,
+        "confirm": true
+      },
+      "expect_error": "severity must be an integer from 0 through 3"
+    },
+    {
+      "name": "puts the update body with trimmed label",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "  cpu high  ",
+        "entity_ids": ["1", "2"],
+        "confirm": true
+      },
+      "api_response": { "id": 42, "label": "cpu high" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/monitor/services/dbaas/alert-definitions/42",
+        "body": { "label": "cpu high", "entity_ids": ["1", "2"] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "cpu high",
+        "entity_ids": ["1", "2"]
+      },
+      "expect_error": "This updates a monitor alert definition. Set confirm=true to proceed."
+    }
+  ]
+}

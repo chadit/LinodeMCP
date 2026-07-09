@@ -1,0 +1,17 @@
+{
+  "tool": "linode_domain_get",
+  "description": "Domain get requires domain_id and then GETs the domain by ID.",
+  "cases": [
+    {
+      "name": "requires domain_id",
+      "args": {},
+      "expect_error": "domain_id is required"
+    },
+    {
+      "name": "gets the domain",
+      "args": { "domain_id": 5 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/domains/5" }
+    }
+  ]
+}

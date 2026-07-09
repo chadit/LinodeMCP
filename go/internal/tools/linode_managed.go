@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/proto"
@@ -36,29 +38,21 @@ const (
 	managedServiceRegionParam                = "region"
 	managedServiceTimeoutMin                 = 1
 	managedServiceTimeoutMax                 = 255
-	errManagedServiceType                    = "service_type must be url or tcp"
 	errManagedServiceTimeout                 = "timeout must be an integer between 1 and 255"
 	managedLinodeSettingsIDParam             = "linode_id"
-	errManagedLinodeSettingsIDPositive       = "linode_id must be a positive integer"
 	maxManagedLinodeSettingsIDFromJSON       = 9007199254740991
 	managedContactGetIDParam                 = "contact_id"
-	errManagedContactGetIDPositive           = "contact_id must be a positive integer"
 	maxManagedContactGetIDFromJSON           = 9007199254740991
 	managedContactUpdateIDParam              = "contact_id"
 	managedContactUpdateNameParam            = "name"
 	managedContactUpdateEmailParam           = "email"
 	managedContactUpdateGroupParam           = "group"
-	managedContactUpdatePhoneParam           = "phone"
 	managedContactDeleteIDParam              = "contact_id"
-	managedContactDeleteIDMessage            = "contact_id must be a positive integer"
 	managedIssueGetIDParam                   = "issue_id"
-	errManagedIssueGetIDPositive             = "issue_id must be a positive integer"
 	maxManagedIssueGetIDFromJSON             = 9007199254740991
 	managedIssuesPageSizeMin                 = 25
 	managedIssuesPageSizeMax                 = 500
 	managedServiceGetIDParam                 = "service_id"
-	managedServiceDeleteIDParam              = "service_id"
-	errManagedServiceGetIDPositive           = "service_id must be a positive integer"
 	errManagedServiceUpdateFields            = "at least one managed service field is required"
 	maxManagedServiceGetIDFromJSON           = 9007199254740991
 	managedServicesPageSizeMin               = 25
@@ -71,7 +65,6 @@ const (
 	managedLinodeSettingsUpdateIPKey         = "ip"
 	managedLinodeSettingsUpdatePortKey       = "port"
 	managedLinodeSettingsUpdateUserKey       = "user"
-	managedLinodeSettingsUpdateIDMessage     = "linode_id must be a positive integer"
 	managedLinodeSettingsUpdateSSHMessage    = "at least one mutable SSH setting is required"
 	managedLinodeSettingsUpdateSSHReqMsg     = "ssh is required and must be an object"
 	managedLinodeSettingsUpdateSSHTypeMsg    = "ssh must be an object"
@@ -81,25 +74,15 @@ const (
 
 // NewLinodeManagedServiceCreateTool creates a tool for creating a Managed service monitor.
 func NewLinodeManagedServiceCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_service_create",
 		"Creates a Managed service monitor.",
-		[]mcp.ToolOption{
-			mcp.WithString(managedServiceLabelParam, mcp.Required(), mcp.Description("Label for the Managed service.")),
-			mcp.WithString(managedServiceTypeParam, mcp.Required(), mcp.Description("Monitor type: url or tcp.")),
-			mcp.WithString(managedServiceAddressParam, mcp.Required(), mcp.Description("URL or address monitored by the service.")),
-			mcp.WithNumber(managedServiceTimeoutParam, mcp.Required(), mcp.Description("Timeout in seconds, 1-255.")),
-			mcp.WithString(managedServiceBodyParam, mcp.Description("Expected response body text for URL monitors.")),
-			mcp.WithString(managedServiceConsultationParam, mcp.Description("Managed contact group to consult when an issue is detected.")),
-			mcp.WithArray(managedServiceCredentialsParam, mcp.Description("Managed credential IDs used when resolving service issues.")),
-			mcp.WithString(managedServiceNotesParam, mcp.Description("Notes for responders.")),
-			mcp.WithString(managedServiceRegionParam, mcp.Description("Region for private IP services.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Managed service creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedServiceCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedServiceCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedServiceCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -136,27 +119,26 @@ func NewLinodeManagedContactGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 
 // NewLinodeManagedContactDeleteTool creates a tool for deleting one Managed contact.
 func NewLinodeManagedContactDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_contact_delete",
 		"Deletes a contact configured for Linode Managed service alerts. Pass dry_run=true to preview without deleting.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedContactDeleteIDParam, mcp.Required(), mcp.Description("The Managed contact ID to delete.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Managed contact deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedContactDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedContactDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedContactDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedContactsTool creates a tool for listing Managed contacts.
 func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_managed_contact_list",
 		"Lists contacts configured for Linode Managed service alerts.",
+		"linode.mcp.v1.ManagedContactListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedContact, error) {
@@ -176,10 +158,11 @@ func managedContactListResponse(items []*linodev1.ManagedContact, count int32, f
 
 // NewLinodeManagedLinodeSettingsTool creates a tool for listing Managed Linode settings.
 func NewLinodeManagedLinodeSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_managed_linode_settings_list",
 		"Lists Managed service settings for Linodes on the account.",
+		"linode.mcp.v1.ManagedLinodeSettingsListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedLinodeSettings, error) {
@@ -199,83 +182,75 @@ func managedLinodeSettingsListResponse(items []*linodev1.ManagedLinodeSettings, 
 
 // NewLinodeManagedStatsTool creates a tool for retrieving Managed statistics.
 func NewLinodeManagedStatsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_stats_get",
 		"Lists Linode Managed statistics from the last 24 hours.",
-		nil,
-		handleLinodeManagedStatsRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedStatsGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedStatsRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeManagedLinodeSettingsUpdateTool creates a tool for updating Managed settings for one Linode.
 func NewLinodeManagedLinodeSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_linode_settings_update",
 		"Updates Managed service SSH settings for one Linode.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedLinodeSettingsUpdateIDParam, mcp.Required(), mcp.Description("The numeric Linode ID whose Managed settings should be updated.")),
-			mcp.WithObject(managedLinodeSettingsUpdateSSHParam, mcp.Required(),
-				mcp.Description("SSH settings object: { access: bool, ip: string, port: int (1-65535), user: string }")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating Managed Linode settings. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedLinodeSettingsUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedLinodeSettingsUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedLinodeSettingsUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedServiceDeleteTool creates a tool for deleting one Managed service monitor.
 func NewLinodeManagedServiceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_service_delete",
 		"Deletes a service monitored by Linode Managed. Pass dry_run=true to preview without deleting.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedServiceDeleteIDParam, mcp.Required(), mcp.Description("The Managed service monitor ID to delete.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Managed service deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedServiceDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedServiceDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedServiceDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedServiceDisableTool creates a tool for disabling one Managed service monitor.
 func NewLinodeManagedServiceDisableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_service_disable",
 		"Disables monitoring for a Linode Managed service.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedServiceGetIDParam, mcp.Required(), mcp.Description("The Managed service monitor ID to disable.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm disabling Managed service monitoring. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedServiceDisableRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedServiceDisableInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedServiceDisableRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedServiceEnableTool creates a tool for enabling one Managed service monitor.
 func NewLinodeManagedServiceEnableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_service_enable",
 		"Enables monitoring for a Linode Managed service.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedServiceGetIDParam, mcp.Required(), mcp.Description("The Managed service monitor ID to enable.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm enabling Managed service monitoring. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedServiceEnableRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedServiceEnableInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedServiceEnableRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -297,36 +272,26 @@ func NewLinodeManagedServiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 
 // NewLinodeManagedServiceUpdateTool creates a tool for updating one Managed service.
 func NewLinodeManagedServiceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_service_update",
 		"Updates a service monitored by Linode Managed. Pass dry_run=true to preview without modifying.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedServiceGetIDParam, mcp.Required(), mcp.Description("The numeric Managed service monitor ID to update.")),
-			mcp.WithString(managedServiceLabelParam, mcp.Description("Updated label for the Managed service.")),
-			mcp.WithString(managedServiceTypeParam, mcp.Description("Updated monitor type: url or tcp.")),
-			mcp.WithString(managedServiceAddressParam, mcp.Description("Updated URL or address monitored by the service.")),
-			mcp.WithNumber(managedServiceTimeoutParam, mcp.Description("Updated timeout in seconds, 1-255.")),
-			mcp.WithString(managedServiceBodyParam, mcp.Description("Updated expected response body text for URL monitors.")),
-			mcp.WithString(managedServiceConsultationParam, mcp.Description("Updated Managed contact group to consult when an issue is detected.")),
-			mcp.WithArray(managedServiceCredentialsParam, mcp.Description("Updated Managed credential IDs used when resolving service issues.")),
-			mcp.WithString(managedServiceNotesParam, mcp.Description("Updated notes for responders.")),
-			mcp.WithString(managedServiceRegionParam, mcp.Description("Updated region for private IP services.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm Managed service update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedServiceUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedServiceUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedServiceUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedServicesTool creates a tool for listing Managed services.
 func NewLinodeManagedServicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_managed_service_list",
 		"Lists services monitored by Linode Managed.",
+		"linode.mcp.v1.ManagedServiceListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedService, error) {
@@ -361,10 +326,11 @@ func NewLinodeManagedIssueGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 
 // NewLinodeManagedIssuesTool creates a tool for listing Managed issues.
 func NewLinodeManagedIssuesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_managed_issue_list",
 		"Lists recent and ongoing issues detected by Linode Managed service monitors.",
+		"linode.mcp.v1.ManagedIssueListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedIssue, error) {
@@ -384,21 +350,15 @@ func managedIssueListResponse(items []*linodev1.ManagedIssue, count int32, filte
 
 // NewLinodeManagedContactUpdateTool creates a tool for updating a Managed contact.
 func NewLinodeManagedContactUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_contact_update",
 		"Updates a contact configured for Linode Managed service alerts.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedContactUpdateIDParam, mcp.Required(), mcp.Description("The numeric Managed contact ID to update.")),
-			mcp.WithString(managedContactUpdateNameParam, mcp.Description("Updated contact name.")),
-			mcp.WithString(managedContactUpdateEmailParam, mcp.Description("Updated contact email address.")),
-			mcp.WithString(managedContactUpdateGroupParam, mcp.Description("Updated contact group.")),
-			mcp.WithObject(managedContactUpdatePhoneParam, mcp.Description("Updated phone numbers object: { primary: string, secondary: string }.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed contact. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedContactUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedContactUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedContactUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -423,27 +383,7 @@ func handleLinodeManagedLinodeSettingsGetRequest(ctx context.Context, request *m
 }
 
 func managedLinodeSettingsIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()[managedLinodeSettingsIDParam]
-	if !exists {
-		return 0, "linode_id is required"
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON {
-			return 0, errManagedLinodeSettingsIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON || value != float64(int64(value)) {
-			return 0, errManagedLinodeSettingsIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errManagedLinodeSettingsIDPositive
-	}
+	return requiredBoundedIDArgument(request, managedLinodeSettingsIDParam, maxManagedLinodeSettingsIDFromJSON)
 }
 
 func handleLinodeManagedContactGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -523,35 +463,11 @@ func handleLinodeManagedContactDeleteRequest(ctx context.Context, request *mcp.C
 }
 
 func managedContactDeleteIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	return managedContactIDFromToolWithMissingMessage(request, managedContactDeleteIDMessage)
+	return managedContactIDFromTool(request)
 }
 
 func managedContactIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	return managedContactIDFromToolWithMissingMessage(request, "contact_id is required")
-}
-
-func managedContactIDFromToolWithMissingMessage(request *mcp.CallToolRequest, missingMessage string) (int, string) {
-	raw, exists := request.GetArguments()[managedContactGetIDParam]
-	if !exists {
-		return 0, missingMessage
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 || value > maxManagedContactGetIDFromJSON {
-			return 0, errManagedContactGetIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > maxManagedContactGetIDFromJSON || value != float64(int64(value)) {
-			return 0, errManagedContactGetIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errManagedContactGetIDPositive
-	}
+	return requiredBoundedIDArgument(request, managedContactGetIDParam, maxManagedContactGetIDFromJSON)
 }
 
 func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -594,7 +510,7 @@ func handleLinodeManagedStatsRequest(ctx context.Context, request *mcp.CallToolR
 
 	stats, getFailure := client.GetManagedStats(ctx)
 	if getFailure == nil {
-		return MarshalToolResponse(stats)
+		return MarshalStructToolResponse(stats, "Failed to retrieve linode_managed_stats_get")
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_stats_get: " + getFailure.Error()), nil
@@ -640,27 +556,7 @@ func handleLinodeManagedLinodeSettingsUpdateRequest(ctx context.Context, request
 }
 
 func managedLinodeSettingsUpdateIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()[managedLinodeSettingsUpdateIDParam]
-	if !exists {
-		return 0, managedLinodeSettingsUpdateIDMessage
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON {
-			return 0, errManagedLinodeSettingsIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > maxManagedLinodeSettingsIDFromJSON || value != float64(int64(value)) {
-			return 0, errManagedLinodeSettingsIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errManagedLinodeSettingsIDPositive
-	}
+	return requiredBoundedIDArgument(request, managedLinodeSettingsUpdateIDParam, maxManagedLinodeSettingsIDFromJSON)
 }
 
 func managedLinodeSettingsUpdateFromTool(request *mcp.CallToolRequest) (*linode.UpdateManagedLinodeSettingsRequest, string) {
@@ -785,27 +681,7 @@ func handleLinodeManagedServiceGetRequest(ctx context.Context, request *mcp.Call
 }
 
 func managedServiceIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()[managedServiceGetIDParam]
-	if !exists {
-		return 0, "service_id is required"
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 || value > maxManagedServiceGetIDFromJSON {
-			return 0, errManagedServiceGetIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > maxManagedServiceGetIDFromJSON || value != float64(int64(value)) {
-			return 0, errManagedServiceGetIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errManagedServiceGetIDPositive
-	}
+	return requiredBoundedIDArgument(request, managedServiceGetIDParam, maxManagedServiceGetIDFromJSON)
 }
 
 func handleLinodeManagedServiceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -930,11 +806,14 @@ func handleLinodeManagedServiceUpdateRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(updateFailure), nil
 	}
 
-	return MarshalToolResponse(service)
+	return MarshalProtoToolResponse(&linodev1.ManagedServiceWriteResponse{
+		Message: fmt.Sprintf("Managed service monitor %d updated successfully", serviceID),
+		Service: service,
+	})
 }
 
-func updateManagedServiceForTool(ctx context.Context, client *linode.Client, serviceID int, request *linode.UpdateManagedServiceRequest) (*linode.ManagedService, string) {
-	service, err := client.UpdateManagedService(ctx, serviceID, request)
+func updateManagedServiceForTool(ctx context.Context, client *linode.Client, serviceID int, request *linode.UpdateManagedServiceRequest) (*linodev1.ManagedService, string) {
+	service, err := client.UpdateManagedServiceProto(ctx, serviceID, request)
 	if err != nil {
 		return nil, "Failed to update linode_managed_service_update: " + err.Error()
 	}
@@ -958,8 +837,8 @@ func managedServiceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 			return nil, validationMessage
 		}
 
-		if serviceType != "url" && serviceType != "tcp" {
-			return nil, errManagedServiceType
+		if message := enumChoiceError(serviceType, managedServiceTypeParam, linodev1.ManagedServiceType_Value_value); message != "" {
+			return nil, message
 		}
 
 		updateRequest.ServiceType = &serviceType
@@ -1078,27 +957,7 @@ func handleLinodeManagedIssueGetRequest(ctx context.Context, request *mcp.CallTo
 }
 
 func managedIssueIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()[managedIssueGetIDParam]
-	if !exists {
-		return 0, "issue_id is required"
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 || value > maxManagedIssueGetIDFromJSON {
-			return 0, errManagedIssueGetIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > maxManagedIssueGetIDFromJSON || value != float64(int64(value)) {
-			return 0, errManagedIssueGetIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errManagedIssueGetIDPositive
-	}
+	return requiredBoundedIDArgument(request, managedIssueGetIDParam, maxManagedIssueGetIDFromJSON)
 }
 
 func managedIssuesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -1141,11 +1000,14 @@ func handleLinodeManagedServiceCreateRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(createFailureMessage), nil
 	}
 
-	return MarshalToolResponse(service)
+	return MarshalProtoToolResponse(&linodev1.ManagedServiceWriteResponse{
+		Message: fmt.Sprintf("Managed service monitor %d created successfully", service.GetId()),
+		Service: service,
+	})
 }
 
-func createManagedServiceForTool(ctx context.Context, client *linode.Client, request *linode.CreateManagedServiceRequest) (*linode.ManagedService, string) {
-	service, err := client.CreateManagedService(ctx, request)
+func createManagedServiceForTool(ctx context.Context, client *linode.Client, request *linode.CreateManagedServiceRequest) (*linodev1.ManagedService, string) {
+	service, err := client.CreateManagedServiceProto(ctx, request)
 	if err != nil {
 		return nil, "Failed to create linode_managed_service_create: " + err.Error()
 	}
@@ -1153,7 +1015,42 @@ func createManagedServiceForTool(ctx context.Context, client *linode.Client, req
 	return service, ""
 }
 
+// managedServiceReadOnlyReject mirrors Python's guard on managed service create:
+// the API assigns created/id/status/updated, so setting any of them is rejected
+// before other field validation. The fields are already in sorted order, so the
+// joined message matches Python's sorted() output byte-for-byte.
+func managedServiceReadOnlyReject(request *mcp.CallToolRequest) string {
+	return managedReadOnlyFieldsReject(request, []string{"created", "id", "status", "updated"})
+}
+
+// managedReadOnlyFieldsReject rejects any of the given read-only fields that
+// appear in the request, listing them sorted so the message matches Python's
+// sorted() output byte-for-byte.
+func managedReadOnlyFieldsReject(request *mcp.CallToolRequest, fields []string) string {
+	args := request.GetArguments()
+
+	var readOnly []string
+
+	for _, field := range fields {
+		if _, exists := args[field]; exists {
+			readOnly = append(readOnly, field)
+		}
+	}
+
+	if len(readOnly) == 0 {
+		return ""
+	}
+
+	sort.Strings(readOnly)
+
+	return "Read-only fields are not accepted: " + strings.Join(readOnly, ", ")
+}
+
 func managedServiceCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateManagedServiceRequest, string) {
+	if validationMessage := managedServiceReadOnlyReject(request); validationMessage != "" {
+		return nil, validationMessage
+	}
+
 	label, validationMessage := managedServiceRequiredString(request, managedServiceLabelParam)
 	if validationMessage != "" {
 		return nil, validationMessage
@@ -1164,8 +1061,8 @@ func managedServiceCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 		return nil, validationMessage
 	}
 
-	if serviceType != "url" && serviceType != "tcp" {
-		return nil, errManagedServiceType
+	if message := enumChoiceError(serviceType, managedServiceTypeParam, linodev1.ManagedServiceType_Value_value); message != "" {
+		return nil, message
 	}
 
 	address, validationMessage := managedServiceRequiredString(request, managedServiceAddressParam)
@@ -1242,9 +1139,9 @@ func managedServiceOptionalString(request *mcp.CallToolRequest, name string, tar
 }
 
 func handleLinodeManagedContactUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	contactID, ok := getPositiveIntArgument(request, managedContactUpdateIDParam)
-	if !ok {
-		return mcp.NewToolResultError("contact_id must be a positive integer"), nil
+	contactID, validationMessage := requiredIDArgument(request, managedContactUpdateIDParam)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	updateReq, validationMessage := managedContactUpdateFromTool(request)
@@ -1285,11 +1182,11 @@ func managedContactUpdateFromTool(request *mcp.CallToolRequest) (*linode.UpdateM
 
 	var fields int
 
-	if validationMessage := managedContactOptionalString(request, managedContactUpdateNameParam, &req.Name, &fields); validationMessage != "" {
+	if validationMessage := managedContactNonEmptyString(request, managedContactUpdateNameParam, &req.Name, &fields); validationMessage != "" {
 		return nil, validationMessage
 	}
 
-	if validationMessage := managedContactOptionalString(request, managedContactUpdateEmailParam, &req.Email, &fields); validationMessage != "" {
+	if validationMessage := managedContactNonEmptyString(request, managedContactUpdateEmailParam, &req.Email, &fields); validationMessage != "" {
 		return nil, validationMessage
 	}
 
@@ -1327,6 +1224,30 @@ func managedContactOptionalString(request *mcp.CallToolRequest, name string, tar
 	}
 
 	*target = &value
+	(*fields)++
+
+	return ""
+}
+
+// managedContactNonEmptyString mirrors Python's _managed_contact_string_fields:
+// a present email/name must be a non-empty (trimmed) string, ported to Go so
+// both languages reject a blank value instead of forwarding it (strictest-wins).
+func managedContactNonEmptyString(request *mcp.CallToolRequest, name string, target **string, fields *int) string {
+	value, validationMessage := stringArgument(request, name, false)
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if _, exists := request.GetArguments()[name]; !exists {
+		return ""
+	}
+
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return name + " must be a non-empty string"
+	}
+
+	*target = &trimmed
 	(*fields)++
 
 	return ""

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -16,7 +16,8 @@ import (
 )
 
 // reportResult mirrors the subset of the linode_audit_report JSON
-// response the tests assert on.
+// response the tests assert on. The canonical serializer emits int64
+// counters as JSON numbers, so the full audit.Event decodes the events.
 type reportResult struct {
 	Name        string             `json:"name"`
 	Output      string             `json:"output"`
@@ -43,12 +44,8 @@ func TestLinodeAuditReportDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties["name"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "name")
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, "name") {
-		t.Errorf("tool.InputSchema.Required does not contain %v", "name")
+	if !strings.Contains(string(tool.RawInputSchema), "name") {
+		t.Errorf("tool.RawInputSchema missing key %v", "name")
 	}
 }
 

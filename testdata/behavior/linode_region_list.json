@@ -1,0 +1,18 @@
+{
+  "tool": "linode_region_list",
+  "description": "Region list has no local validation; the country filter is client-side so the request stays a bare GET /regions.",
+  "cases": [
+    {
+      "name": "lists all regions",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/regions" }
+    },
+    {
+      "name": "country filter still fetches every region",
+      "args": { "country": "us" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/regions" }
+    }
+  ]
+}

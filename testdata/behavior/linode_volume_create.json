@@ -1,0 +1,46 @@
+{
+  "tool": "linode_volume_create",
+  "description": "Volume create: label-required, region-or-linode_id, and size-below-10GB rejections plus the POST body. Both languages omit size when the caller does not supply it (API defaults to 20 GB); a supplied size is sent verbatim.",
+  "cases": [
+    {
+      "name": "requires label",
+      "args": { "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires region or linode_id",
+      "args": { "confirm": true, "label": "my-vol" },
+      "expect_error": "either region or linode_id is required"
+    },
+    {
+      "name": "rejects size below 10 GB",
+      "args": { "confirm": true, "label": "my-vol", "region": "us-east", "size": 5 },
+      "expect_error": "volume size must be at least 10 GB"
+    },
+    {
+      "name": "creates a volume with the API default size",
+      "args": { "confirm": true, "label": "my-vol", "region": "us-east" },
+      "api_response": { "id": 100, "label": "my-vol", "region": "us-east", "size": 20 },
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes",
+        "body": { "label": "my-vol", "region": "us-east" }
+      }
+    },
+    {
+      "name": "creates a volume with an explicit size",
+      "args": { "confirm": true, "label": "my-vol", "region": "us-east", "size": 20 },
+      "api_response": { "id": 100, "label": "my-vol", "region": "us-east", "size": 20 },
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes",
+        "body": { "label": "my-vol", "region": "us-east", "size": 20 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "my-vol", "region": "us-east", "size": 20},
+      "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
+    }
+  ]
+}

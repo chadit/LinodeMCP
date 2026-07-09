@@ -1,0 +1,61 @@
+{
+  "tool": "linode_firewall_rules_update",
+  "description": "Firewall rules update requires both inbound and outbound rule arrays once confirmed, then PUTs them. Both languages send only inbound/outbound (Go no longer emits empty inbound_policy/outbound_policy strings, which the API treats as optional).",
+  "cases": [
+    {
+      "name": "requires confirm",
+      "args": {
+        "firewall_id": 1
+      },
+      "expect_error": "This replaces Cloud Firewall rules. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-positive firewall_id once confirmed",
+      "args": {
+        "confirm": true,
+        "firewall_id": -1
+      },
+      "expect_error": "firewall_id must be a positive integer"
+    },
+    {
+      "name": "requires inbound rules",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123
+      },
+      "expect_error": "inbound is required"
+    },
+    {
+      "name": "requires outbound rules",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "inbound": []
+      },
+      "expect_error": "outbound is required"
+    },
+    {
+      "name": "replaces the rules with empty rulesets",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "inbound": [],
+        "outbound": []
+      },
+      "api_response": {
+        "inbound": [],
+        "inbound_policy": "ACCEPT",
+        "outbound": [],
+        "outbound_policy": "ACCEPT"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/firewalls/123/rules",
+        "body": {
+          "inbound": [],
+          "outbound": []
+        }
+      }
+    }
+  ]
+}

@@ -32,3 +32,13 @@ message BetaGetInput {
   // The Beta program ID to retrieve (required).
   string beta_id = 2;
 }
+
+// BetaListInput is the input contract for linode_beta_list.
+message BetaListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}

@@ -1,0 +1,26 @@
+{
+  "tool": "linode_ipv6_range_create",
+  "description": "IPv6 range create POSTs prefix_length (and linode_id when routing to an instance), and requires exactly one assignment target (Go now mirrors Python's linode_id-or-route_target requirement). The prefix_length range and route_target format still diverge (see report).",
+  "cases": [
+    {
+      "name": "creates a range routed to a linode",
+      "args": { "confirm": true, "prefix_length": 64, "linode_id": 123 },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/ipv6/ranges",
+        "body": { "prefix_length": 64, "linode_id": 123 }
+      }
+    },
+    {
+      "name": "requires an assignment target",
+      "args": { "confirm": true, "prefix_length": 64 },
+      "expect_error": "linode_id or route_target is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": {"prefix_length": 64, "linode_id": 123},
+      "expect_error": "This creates an IPv6 range and changes networking configuration. Set confirm=true to proceed."
+    }
+  ]
+}

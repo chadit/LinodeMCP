@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -10,6 +9,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // NewLinodeAuditHealthTool returns the linode_audit_health query tool.
@@ -20,13 +20,12 @@ import (
 func NewLinodeAuditHealthTool(
 	cfg *config.Config,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_audit_health",
-		mcp.WithDescription(
-			"Report the audit subsystem's status: log path and disk usage, "+
-				"rotated-file count and oldest date, and (when the SQLite sink "+
-				"is enabled) row count, oldest event, and database size.",
-		),
+		"Report the audit subsystem's status: log path and disk usage, "+
+			"rotated-file count and oldest date, and (when the SQLite sink "+
+			"is enabled) row count, oldest event, and database size.",
+		toolschemas.Schema("linode.mcp.v1.AuditHealthInput"),
 	)
 
 	sqlitePath := resolveAuditSQLitePath(cfg)
@@ -37,12 +36,7 @@ func NewLinodeAuditHealthTool(
 			return mcp.NewToolResultError(fmt.Sprintf("failed to collect audit health: %v", err)), nil
 		}
 
-		body, err := json.Marshal(report)
-		if err != nil {
-			return nil, fmt.Errorf("marshal audit health report: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(auditHealthProto(&report))
 	}
 
 	return tool, profiles.CapMeta, handler

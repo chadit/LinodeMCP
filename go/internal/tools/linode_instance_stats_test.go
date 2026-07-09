@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -20,12 +19,17 @@ func writeToolInstanceStatsFixture(t *testing.T, w http.ResponseWriter) {
 
 	w.Header().Set("Content-Type", "application/json")
 
+	// not_in_proto is a field the InstanceStats proto does not model; the
+	// DiscardUnknown decode must drop it so it never reaches the output.
 	_, err := w.Write([]byte(`{
 		"title":"linode.com - my-linode (linode123456) - day (5 min avg)",
-		"cpu":[[1521483600000,0.42]],
-		"io":{"io":[[1521484800000,0.19]],"swap":[[1521484800000,0]]},
-		"netv4":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]],"private_in":[[1521484800000,0]],"private_out":[[1521484800000,5.6]]},
-		"netv6":{"in":[[1521484800000,0]],"out":[[1521484800000,0]],"private_in":[[1521484800000,195.18]],"private_out":[[1521484800000,5.6]]}
+		"not_in_proto":"dropped",
+		"data":{
+			"cpu":[[1521483600000,0.42]],
+			"io":{"io":[[1521484800000,0.19]],"swap":[[1521484800000,0]]},
+			"netv4":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]],"private_in":[[1521484800000,0]],"private_out":[[1521484800000,5.6]]},
+			"netv6":{"in":[[1521484800000,0]],"out":[[1521484800000,0]],"private_in":[[1521484800000,195.18]],"private_out":[[1521484800000,5.6]]}
+		}
 	}`))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -58,12 +62,8 @@ func TestLinodeInstanceStatsGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyLinodeID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyLinodeID)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyLinodeID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyLinodeID)
+	if !strings.Contains(string(tool.RawInputSchema), keyLinodeID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyLinodeID)
 	}
 }
 
@@ -172,6 +172,10 @@ func TestLinodeInstanceStatsGetToolSuccess(t *testing.T) {
 	if !strings.Contains(textContent.Text, "0.42") {
 		t.Errorf("textContent.Text does not contain %v", "0.42")
 	}
+
+	if strings.Contains(textContent.Text, keyNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
+	}
 }
 
 func TestLinodeInstanceStatsGetToolApiError(t *testing.T) {
@@ -259,8 +263,8 @@ func TestLinodeInstanceStatsByYearMonthToolDefinition(t *testing.T) {
 	}
 
 	for _, key := range []string{keyLinodeID, keyStatsYear, keyStatsMonth} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(string(tool.RawInputSchema), key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -332,11 +336,14 @@ func TestLinodeInstanceStatsByYearMonthToolSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
-			"cpu":   [][]float64{{1521483600000, 0.42}},
-			"io":    map[string]any{"io": [][]float64{{1521484800000, 0.19}}, "swap": [][]float64{{1521484800000, 0}}},
-			"netv4": map[string]any{"in": [][]float64{{1521484800000, 2004.36}}, "out": [][]float64{{1521484800000, 3928.91}}, "private_in": [][]float64{{1521484800000, 0}}, "private_out": [][]float64{{1521484800000, 5.6}}},
-			"netv6": map[string]any{"in": [][]float64{{1521484800000, 10}}, "out": [][]float64{{1521484800000, 20}}, "private_in": [][]float64{{1521484800000, 0}}, "private_out": [][]float64{{1521484800000, 0}}},
-			"title": "linode123 stats",
+			"title":       "linode123 stats",
+			keyNotInProto: valNotInProto,
+			"data": map[string]any{
+				"cpu":   [][]float64{{1521483600000, 0.42}},
+				"io":    map[string]any{"io": [][]float64{{1521484800000, 0.19}}, "swap": [][]float64{{1521484800000, 0}}},
+				"netv4": map[string]any{"in": [][]float64{{1521484800000, 2004.36}}, "out": [][]float64{{1521484800000, 3928.91}}, "private_in": [][]float64{{1521484800000, 0}}, "private_out": [][]float64{{1521484800000, 5.6}}},
+				"netv6": map[string]any{"in": [][]float64{{1521484800000, 10}}, "out": [][]float64{{1521484800000, 20}}, "private_in": [][]float64{{1521484800000, 0}}, "private_out": [][]float64{{1521484800000, 0}}},
+			},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -370,6 +377,10 @@ func TestLinodeInstanceStatsByYearMonthToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "2004.36") {
 		t.Errorf("textContent.Text does not contain %v", "2004.36")
+	}
+
+	if strings.Contains(textContent.Text, keyNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 

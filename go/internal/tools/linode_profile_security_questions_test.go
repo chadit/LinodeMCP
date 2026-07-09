@@ -85,9 +85,10 @@ func TestLinodeProfileSecurityQuestionsAnswerToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keySecurityQuestions, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }

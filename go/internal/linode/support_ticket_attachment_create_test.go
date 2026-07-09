@@ -3,9 +3,12 @@ package linode_test
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -17,6 +20,20 @@ const (
 	supportTicketAttachmentFilename = "diagnostics.txt"
 	supportTicketAttachmentError    = "temporary attachment failure"
 )
+
+// writeTempAttachment writes the attachment content under the test temp dir and
+// returns its absolute path. The client uploads the file as multipart/form-data,
+// so it must read a real local file.
+func writeTempAttachment(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), supportTicketAttachmentFilename)
+	if err := os.WriteFile(path, []byte(supportTicketAttachmentFile), 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	return path
+}
 
 func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
 	t.Parallel()
@@ -40,13 +57,34 @@ func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
 		}
 
-		var got map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "multipart/form-data") {
+			t.Errorf("Content-Type = %q, want multipart/form-data", contentType)
 		}
 
-		if !reflect.DeepEqual(got["file"], supportTicketAttachmentFile) {
-			t.Errorf("got %v, want %v", got["file"], supportTicketAttachmentFile)
+		part, header, formErr := r.FormFile("file")
+		if formErr != nil {
+			t.Errorf("unexpected error: %v", formErr)
+
+			return
+		}
+
+		defer func() {
+			if closeErr := part.Close(); closeErr != nil {
+				t.Errorf("unexpected error: %v", closeErr)
+			}
+		}()
+
+		if header.Filename != supportTicketAttachmentFilename {
+			t.Errorf("uploaded filename = %v, want %v", header.Filename, supportTicketAttachmentFilename)
+		}
+
+		content, readErr := io.ReadAll(part)
+		if readErr != nil {
+			t.Errorf("unexpected error: %v", readErr)
+		}
+
+		if string(content) != supportTicketAttachmentFile {
+			t.Errorf("uploaded content = %q, want %q", content, supportTicketAttachmentFile)
 		}
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
@@ -59,7 +97,7 @@ func TestClientCreateSupportTicketAttachmentSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
+	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: writeTempAttachment(t)})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -104,7 +142,7 @@ func TestClientCreateSupportTicketAttachmentAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
+	got, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: writeTempAttachment(t)})
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -149,7 +187,7 @@ func TestClientCreateSupportTicketAttachmentDoesNotRetryTransientError(t *testin
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	_, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: supportTicketAttachmentFile})
+	_, err := client.CreateSupportTicketAttachment(t.Context(), 123, &linode.CreateSupportTicketAttachmentRequest{File: writeTempAttachment(t)})
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}

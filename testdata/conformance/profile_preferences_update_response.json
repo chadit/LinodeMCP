@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.ProfilePreferencesUpdateResponse",
+  "description": "Profile preferences update envelope: a confirmation message plus the updated preferences. Preferences are per-OAuth-client, free-form key/value data, so preferences is a google.protobuf.Struct that round-trips whatever the caller stored.",
+  "input": {
+    "message": "Profile preferences updated successfully",
+    "preferences": {
+      "dashboard": {
+        "theme": "dark"
+      },
+      "dismissed": ["welcome"]
+    }
+  },
+  "canonical": {
+    "message": "Profile preferences updated successfully",
+    "preferences": {
+      "dashboard": {
+        "theme": "dark"
+      },
+      "dismissed": ["welcome"]
+    }
+  }
+}

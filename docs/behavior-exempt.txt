@@ -1,0 +1,25 @@
+# Tools exempt from behavior-fixture coverage, one per line with a reason.
+# Exemption is for tools the behavior harness structurally cannot pin: they
+# make no HTTP request (nothing to capture) and their outputs are either
+# language/environment-specific by design or stateful local data. Their
+# cross-language contract is enforced elsewhere: input schemas by the
+# input-proto/tool-parity gates, output SHAPE by the meta-proto gate and the
+# conformance corpus. Adding a tool here requires a reason; prefer a fixture
+# whenever the tool makes an HTTP call or has shareable local validation.
+# Format: <tool>\t<reason>
+hello	local greeting, no HTTP, output pinned by meta-proto gate
+version	local build info, values legitimately differ per language/build
+linode_audit_health	reads local audit sink state, output is runtime data
+linode_audit_recent	reads local audit log, output is runtime data
+linode_audit_report	reads local audit log, output is runtime data
+linode_audit_summary	reads local audit log, output is runtime data
+linode_profile_can_run	local profile evaluation, no HTTP
+linode_profile_draft_add_tools	stateful local draft registry, no HTTP
+linode_profile_draft_discard	stateful local draft registry, no HTTP
+linode_profile_draft_new	stateful local draft registry, no HTTP
+linode_profile_draft_remove_tools	stateful local draft registry, no HTTP
+linode_profile_draft_save	writes local config file, no HTTP
+linode_profile_draft_set	stateful local draft registry, no HTTP
+linode_profile_draft_show	stateful local draft registry, no HTTP
+linode_profile_list_categories	local catalog data, output pinned by meta-proto gate
+linode_profile_list_tools	local catalog data, output pinned by meta-proto gate

@@ -1,0 +1,31 @@
+{
+  "tool": "linode_support_ticket_create",
+  "description": "Support ticket create: summary and description required rejections both languages agree on (confirm set so both reach them), plus the POST body once confirmed. Confirm-gate text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires summary",
+      "args": { "confirm": true },
+      "expect_error": "summary is required"
+    },
+    {
+      "name": "requires description",
+      "args": { "confirm": true, "summary": "Cannot reach server" },
+      "expect_error": "description is required"
+    },
+    {
+      "name": "opens a support ticket",
+      "args": { "confirm": true, "summary": "Cannot reach server", "description": "My Linode is unreachable via SSH." },
+      "api_response": { "id": 42, "summary": "Cannot reach server" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/support/tickets",
+        "body": { "summary": "Cannot reach server", "description": "My Linode is unreachable via SSH." }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"summary": "Cannot reach server", "description": "My Linode is unreachable via SSH."},
+      "expect_error": "This creates a support ticket. Set confirm=true to proceed."
+    }
+  ]
+}

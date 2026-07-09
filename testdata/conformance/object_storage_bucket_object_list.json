@@ -32,7 +32,7 @@
         "etag": "9b2cf535f27731c974343645a3985328",
         "last_modified": "2024-06-01T00:00:00Z",
         "owner": "acct-owner",
-        "size": "5242880",
+        "size": 5242880,
         "is_prefix": false
       },
       {
@@ -40,7 +40,7 @@
         "etag": "",
         "last_modified": "",
         "owner": "",
-        "size": "0",
+        "size": 0,
         "is_prefix": true
       }
     ]

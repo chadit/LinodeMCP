@@ -49,3 +49,27 @@ message AccountEventGetInput {
   // The ID of the account event to retrieve (required).
   int32 event_id = 2;
 }
+
+// AccountEventListInput is the input contract for linode_account_event_list.
+message AccountEventListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// AccountEventSeenInput is the input contract for linode_account_event_seen.
+message AccountEventSeenInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Numeric account event ID to mark as seen (required).
+  int32 event_id = 2;
+  // Must be true to confirm marking the account event as seen. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}

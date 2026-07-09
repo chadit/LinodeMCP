@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -34,7 +33,7 @@ const (
 
 // NewLinodeInstanceConfigListTool creates a tool for listing configuration profiles on a Linode instance.
 func NewLinodeInstanceConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	_, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_instance_config_list",
 		"Lists configuration profiles for a Linode instance with optional pagination.",
@@ -53,6 +52,12 @@ func NewLinodeInstanceConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		instanceConfigListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_config_list",
+		"Lists configuration profiles for a Linode instance with optional pagination.",
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -62,21 +67,15 @@ func instanceConfigListResponse(items []*linodev1.InstanceConfig, count int32, f
 
 // NewLinodeInstanceConfigDeleteTool creates a tool for deleting a configuration profile from a Linode instance.
 func NewLinodeInstanceConfigDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_delete",
 		"Deletes a configuration profile from a Linode instance. WARNING: This is irreversible.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm deletion. This action is irreversible. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceConfigDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -100,7 +99,7 @@ func handleInstanceConfigDeleteRequest(ctx context.Context, request *mcp.CallToo
 			})
 	}
 
-	if result := RequireConfirm(request, "This is irreversible. The configuration profile will be permanently deleted. Set confirm=true to proceed."); result != nil {
+	if result := requireDestroyConfirmation(ctx, request, "linode_instance_config_delete", "This is irreversible. The configuration profile will be permanently deleted. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -113,45 +112,19 @@ func handleInstanceConfigDeleteRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to remove configuration profile %d from instance %d: %v", configID, linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-		ConfigID int    `json:"config_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceConfigDeleteResponse{
 		Message:  fmt.Sprintf("Configuration profile %d deleted from instance %d successfully", configID, linodeID),
-		LinodeID: linodeID,
-		ConfigID: configID,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId: linodeIDToInt32(linodeID),
+		ConfigId: linodeIDToInt32(configID),
+	})
 }
 
 func instanceConfigLinodeIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args["linode_id"]; !exists {
-		return 0, ErrLinodeIDRequired.Error()
-	}
-
-	linodeID, validationMessage := optionalPaginationInt(args, "linode_id", 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	return linodeID, ""
+	return requiredIDArgument(request, "linode_id")
 }
 
 func instanceConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args["config_id"]; !exists {
-		return 0, ErrConfigIDRequired.Error()
-	}
-
-	configID, validationMessage := optionalPaginationInt(args, "config_id", 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	return configID, ""
+	return requiredIDArgument(request, "config_id")
 }
 
 func instanceConfigsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -172,18 +145,15 @@ func instanceConfigsPaginationFromTool(request *mcp.CallToolRequest) (int, int, 
 
 // NewLinodeInstanceConfigGetTool creates a tool for retrieving a specific configuration profile on a Linode instance.
 func NewLinodeInstanceConfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_get",
 		"Retrieves details of a specific configuration profile on a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile to retrieve")),
-		},
-		handleInstanceConfigGetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -204,31 +174,21 @@ func handleInstanceConfigGetRequest(ctx context.Context, request *mcp.CallToolRe
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	configProfile, err := client.GetInstanceConfig(ctx, linodeID, configID)
+	configProfile, err := client.GetInstanceConfigProto(ctx, linodeID, configID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve config %d for instance %d: %v", configID, linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(configProfile)
+	return MarshalProtoToolResponse(configProfile)
 }
 
 func configIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args["config_id"]; !exists {
-		return 0, ErrConfigIDRequired.Error()
-	}
-
-	configID, validationMessage := optionalPaginationInt(args, "config_id", 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	return configID, ""
+	return requiredIDArgument(request, "config_id")
 }
 
 // NewLinodeInstanceConfigInterfacesListTool creates a tool for listing interfaces on a Linode configuration profile.
 func NewLinodeInstanceConfigInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource2(
+	_, handler := newProtoListToolSubresource2(
 		cfg,
 		"linode_instance_config_interface_list",
 		"Lists interfaces assigned to a specific configuration profile on a Linode instance.",
@@ -249,6 +209,12 @@ func NewLinodeInstanceConfigInterfacesListTool(cfg *config.Config) (mcp.Tool, pr
 		configInterfaceListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_config_interface_list",
+		"Lists interfaces assigned to a specific configuration profile on a Linode instance.",
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigInterfaceListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -258,47 +224,23 @@ func configInterfaceListResponse(items []*linodev1.ConfigInterfaceResponse, coun
 
 // NewLinodeInstanceConfigCreateTool creates a tool for creating a Linode configuration profile.
 func NewLinodeInstanceConfigCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_create",
 		"Creates a configuration profile on a Linode instance. WARNING: This changes instance boot configuration.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("Label for the configuration profile")),
-			mcp.WithObject("devices", mcp.Required(),
-				mcp.Description("Object mapping device slots to disk/volume IDs, e.g. {\"sda\":{\"disk_id\":123}}")),
-			mcp.WithString("kernel",
-				mcp.Description("Kernel ID to boot, e.g. linode/latest-64bit")),
-			mcp.WithString("comments",
-				mcp.Description("Optional comments for the configuration profile")),
-			mcp.WithNumber("memory_limit",
-				mcp.Description("Optional memory limit in MB")),
-			mcp.WithString("root_device",
-				mcp.Description("Root device to boot, e.g. /dev/sda")),
-			mcp.WithString("run_level",
-				mcp.Description("Run level: default, single, or binbash")),
-			mcp.WithString("virt_mode",
-				mcp.Description("Virtualization mode: paravirt or fullvirt")),
-			mcp.WithString("helpers",
-				mcp.Description("Optional helpers JSON object")),
-			mcp.WithString("interfaces",
-				mcp.Description("Optional interfaces JSON array")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceConfigCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
-	if !linodeIDOK {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	linodeID, validationMessage := requiredIDArgument(request, "linode_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if IsDryRun(request) {
@@ -341,51 +283,28 @@ func handleInstanceConfigCreateRequest(ctx context.Context, request *mcp.CallToo
 
 // NewLinodeInstanceConfigInterfaceAddTool creates a tool for appending a network interface to a Linode configuration profile.
 func NewLinodeInstanceConfigInterfaceAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_interface_add",
 		"Adds a network interface to a Linode configuration profile. WARNING: This changes instance network configuration and requires a reboot to take effect.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile")),
-			mcp.WithString("purpose", mcp.Required(),
-				mcp.Enum("public", "vlan", "vpc"),
-				mcp.Description("The interface purpose (required).")),
-			mcp.WithString("label",
-				mcp.Description("Interface label. Required for vlan interfaces.")),
-			mcp.WithString("ipam_address",
-				mcp.Description("Private CIDR address for vlan interfaces.")),
-			mcp.WithBoolean("primary",
-				mcp.Description("Whether this is the primary non-vlan interface.")),
-			mcp.WithNumber("subnet_id",
-				mcp.Description("The VPC subnet ID. Required for vpc interfaces.")),
-			mcp.WithArray("ip_ranges",
-				mcp.Description("IPv4 CIDR VPC subnet ranges routed to this interface.")),
-			mcp.WithObject("ipv4",
-				mcp.Description("VPC IPv4 configuration for this interface.")),
-			mcp.WithObject("ipv6",
-				mcp.Description("VPC IPv6 configuration for this interface.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile interface creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceConfigInterfaceAddRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigInterfaceAddInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigInterfaceAddRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceConfigInterfaceAddRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
-	if !linodeIDOK {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	linodeID, validationMessage := requiredIDArgument(request, "linode_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	configID, configIDOK := getPositiveIntArgument(request, "config_id")
-	if !configIDOK {
-		return mcp.NewToolResultError("config_id must be a positive integer"), nil
+	configID, validationMessage := requiredIDArgument(request, "config_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if IsDryRun(request) {
@@ -431,8 +350,8 @@ func configInterfaceFromTool(request *mcp.CallToolRequest) (*linode.ConfigInterf
 		return nil, validationMessage
 	}
 
-	if !validConfigInterfacePurpose(purpose) {
-		return nil, "purpose must be public, vlan, or vpc"
+	if message := enumChoiceError(purpose, "purpose", linodev1.ConfigInterfacePurpose_Value_value); message != "" {
+		return nil, message
 	}
 
 	configInterface := &linode.ConfigInterface{Purpose: purpose}
@@ -550,47 +469,33 @@ func formatAddConfigInterfaceError(linodeID, configID int, err error) string {
 
 // NewLinodeInstanceConfigInterfaceUpdateTool creates a tool for updating a configuration profile interface.
 func NewLinodeInstanceConfigInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_interface_update",
 		"Updates a network interface on a Linode configuration profile. WARNING: This changes instance network configuration and requires a reboot to take effect.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile")),
-			mcp.WithNumber(paramConfigInterfaceID, mcp.Required(),
-				mcp.Description("The ID of the configuration profile interface")),
-			mcp.WithArray("ip_ranges",
-				mcp.Description("IPv4 ranges routed to this interface.")),
-			mcp.WithObject("ipv4",
-				mcp.Description("IPv4 configuration for this interface.")),
-			mcp.WithBoolean("primary",
-				mcp.Description("Whether this is the primary interface.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile interface update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceConfigInterfaceUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigInterfaceUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigInterfaceUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceConfigInterfaceUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
-	if !linodeIDOK {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	linodeID, validationMessage := requiredIDArgument(request, "linode_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	configID, configIDOK := getPositiveIntArgument(request, "config_id")
-	if !configIDOK {
-		return mcp.NewToolResultError("config_id must be a positive integer"), nil
+	configID, validationMessage := requiredIDArgument(request, "config_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	interfaceID, interfaceIDOK := getPositiveIntArgument(request, paramConfigInterfaceID)
-	if !interfaceIDOK {
-		return mcp.NewToolResultError("interface_id must be a positive integer"), nil
+	interfaceID, validationMessage := requiredIDArgument(request, paramConfigInterfaceID)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if IsDryRun(request) {
@@ -669,23 +574,15 @@ func formatUpdateConfigInterfaceError(linodeID, configID, interfaceID int, err e
 
 // NewLinodeInstanceConfigInterfacesReorderTool creates a tool for reordering configuration profile interfaces.
 func NewLinodeInstanceConfigInterfacesReorderTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_interface_reorder",
 		"Reorders interfaces on a Linode configuration profile. WARNING: This changes network interface ordering.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile")),
-			mcp.WithArray("ids", mcp.Required(),
-				mcp.Description("Existing configuration profile interface IDs in the desired order, e.g. [101,102,103]")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration interface reorder. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceConfigInterfacesReorderRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigInterfaceReorderInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigInterfacesReorderRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -731,19 +628,12 @@ func handleInstanceConfigInterfacesReorderRequest(ctx context.Context, request *
 		return mcp.NewToolResultError(formatReorderConfigInterfacesError(linodeID, configID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-		ConfigID int    `json:"config_id"`
-		IDs      []int  `json:"ids"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceConfigInterfaceReorderResponse{
 		Message:  fmt.Sprintf("Configuration profile %d interfaces reordered on instance %d", configID, linodeID),
-		LinodeID: linodeID,
-		ConfigID: configID,
-		IDs:      reorderReq.IDs,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId: linodeIDToInt32(linodeID),
+		ConfigId: linodeIDToInt32(configID),
+		Ids:      intSliceToInt32(reorderReq.IDs),
+	})
 }
 
 func buildReorderConfigInterfacesRequest(request *mcp.CallToolRequest) (*linode.ReorderConfigInterfacesRequest, string) {
@@ -791,19 +681,19 @@ func NewLinodeInstanceConfigInterfaceGetTool(cfg *config.Config) (mcp.Tool, prof
 }
 
 func handleInstanceConfigInterfaceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
-	if !linodeIDOK {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	linodeID, validationMessage := requiredIDArgument(request, "linode_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	configID, configIDOK := getPositiveIntArgument(request, "config_id")
-	if !configIDOK {
-		return mcp.NewToolResultError(linode.ErrConfigIDPositive.Error()), nil
+	configID, validationMessage := requiredIDArgument(request, "config_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	interfaceID, interfaceIDOK := getPositiveIntArgument(request, "interface_id")
-	if !interfaceIDOK {
-		return mcp.NewToolResultError(linode.ErrInterfaceIDPositive.Error()), nil
+	interfaceID, validationMessage := requiredIDArgument(request, "interface_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -825,41 +715,33 @@ func formatGetConfigInterfaceError(linodeID, configID, interfaceID int, err erro
 
 // NewLinodeInstanceConfigInterfaceDeleteTool creates a tool for deleting a configuration profile interface.
 func NewLinodeInstanceConfigInterfaceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_interface_delete",
 		"Deletes a network interface from a Linode configuration profile. WARNING: This changes instance network configuration.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile")),
-			mcp.WithNumber("interface_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile interface to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile interface deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceConfigInterfaceDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigInterfaceDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigInterfaceDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
 
 func handleInstanceConfigInterfaceDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
-	if !linodeIDOK {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	linodeID, validationMessage := requiredIDArgument(request, "linode_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	configID, configIDOK := getPositiveIntArgument(request, "config_id")
-	if !configIDOK {
-		return mcp.NewToolResultError(linode.ErrConfigIDPositive.Error()), nil
+	configID, validationMessage := requiredIDArgument(request, "config_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	interfaceID, interfaceIDOK := getPositiveIntArgument(request, "interface_id")
-	if !interfaceIDOK {
-		return mcp.NewToolResultError(linode.ErrInterfaceIDPositive.Error()), nil
+	interfaceID, validationMessage := requiredIDArgument(request, "interface_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if IsDryRun(request) {
@@ -870,7 +752,7 @@ func handleInstanceConfigInterfaceDeleteRequest(ctx context.Context, request *mc
 			})
 	}
 
-	if result := RequireConfirm(request, "This removes a network interface from the configuration profile. Set confirm=true to proceed."); result != nil {
+	if result := requireDestroyConfirmation(ctx, request, "linode_instance_config_interface_delete", "This removes a network interface from the configuration profile. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -883,19 +765,12 @@ func handleInstanceConfigInterfaceDeleteRequest(ctx context.Context, request *mc
 		return mcp.NewToolResultError(formatDeleteConfigInterfaceError(linodeID, configID, interfaceID, err)), nil
 	}
 
-	response := struct {
-		Message     string `json:"message"`
-		LinodeID    int    `json:"linode_id"`
-		ConfigID    int    `json:"config_id"`
-		InterfaceID int    `json:"interface_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceConfigInterfaceDeleteResponse{
 		Message:     fmt.Sprintf("Configuration profile interface %d removed from config %d on instance %d", interfaceID, configID, linodeID),
-		LinodeID:    linodeID,
-		ConfigID:    configID,
-		InterfaceID: interfaceID,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId:    linodeIDToInt32(linodeID),
+		ConfigId:    linodeIDToInt32(configID),
+		InterfaceId: linodeIDToInt32(interfaceID),
+	})
 }
 
 func formatDeleteConfigInterfaceError(linodeID, configID, interfaceID int, err error) string {
@@ -904,54 +779,28 @@ func formatDeleteConfigInterfaceError(linodeID, configID, interfaceID int, err e
 
 // NewLinodeInstanceConfigUpdateTool creates a tool for updating a Linode configuration profile.
 func NewLinodeInstanceConfigUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_config_update",
 		"Updates a configuration profile on a Linode instance. WARNING: This changes instance boot configuration.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id", mcp.Required(),
-				mcp.Description("The ID of the configuration profile")),
-			mcp.WithString("label",
-				mcp.Description("Updated label for the configuration profile")),
-			mcp.WithObject("devices",
-				mcp.Description("Object mapping device slots to disk/volume IDs")),
-			mcp.WithString("kernel",
-				mcp.Description("Kernel ID to boot, e.g. linode/latest-64bit")),
-			mcp.WithString("comments",
-				mcp.Description("Optional comments for the configuration profile")),
-			mcp.WithNumber("memory_limit",
-				mcp.Description("Optional memory limit in MB")),
-			mcp.WithString("root_device",
-				mcp.Description("Root device to boot, e.g. /dev/sda")),
-			mcp.WithString("run_level",
-				mcp.Description("Run level: default, single, or binbash")),
-			mcp.WithString("virt_mode",
-				mcp.Description("Virtualization mode: paravirt or fullvirt")),
-			mcp.WithObject("helpers",
-				mcp.Description("Optional helpers object")),
-			mcp.WithArray("interfaces",
-				mcp.Description("Optional array of interface objects")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm configuration profile update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceConfigUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceConfigUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceConfigUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 func handleInstanceConfigUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, linodeIDOK := getPositiveIntArgument(request, "linode_id")
-	if !linodeIDOK {
-		return mcp.NewToolResultError(ErrLinodeIDRequired.Error()), nil
+	linodeID, validationMessage := requiredIDArgument(request, "linode_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	configID, configIDOK := getPositiveIntArgument(request, "config_id")
-	if !configIDOK {
-		return mcp.NewToolResultError("config_id must be a positive integer"), nil
+	configID, validationMessage := requiredIDArgument(request, "config_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if IsDryRun(request) {
@@ -1036,11 +885,11 @@ func applyUpdateConfigStringOptions(request *mcp.CallToolRequest, req *linode.Up
 		return validationMessage
 	}
 
-	if validationMessage := applyUpdateConfigEnum(request, "run_level", []string{"default", "single", "binbash"}, &req.RunLevel, fields); validationMessage != "" {
+	if validationMessage := applyUpdateConfigEnum(request, "run_level", linodev1.ConfigRunLevel_Value_value, &req.RunLevel, fields); validationMessage != "" {
 		return validationMessage
 	}
 
-	return applyUpdateConfigEnum(request, "virt_mode", []string{"paravirt", "fullvirt"}, &req.VirtMode, fields)
+	return applyUpdateConfigEnum(request, "virt_mode", linodev1.ConfigVirtMode_Value_value, &req.VirtMode, fields)
 }
 
 func applyUpdateConfigLabel(request *mcp.CallToolRequest, req *linode.UpdateConfigRequest, fields *int) string {
@@ -1098,7 +947,7 @@ func applyUpdateConfigMemoryLimit(request *mcp.CallToolRequest, req *linode.Upda
 	return ""
 }
 
-func applyUpdateConfigEnum(request *mcp.CallToolRequest, name string, allowed []string, target **string, fields *int) string {
+func applyUpdateConfigEnum(request *mcp.CallToolRequest, name string, valueMap map[string]int32, target **string, fields *int) string {
 	value, validationMessage := stringArgument(request, name, false)
 	if validationMessage != "" {
 		return validationMessage
@@ -1108,14 +957,16 @@ func applyUpdateConfigEnum(request *mcp.CallToolRequest, name string, allowed []
 		return ""
 	}
 
-	if slices.Contains(allowed, value) {
-		*target = &value
-		*fields++
-
-		return ""
+	if enumMessage := enumChoiceError(value, name, valueMap); enumMessage != "" {
+		return enumMessage
 	}
 
-	return name + " must be " + strings.Join(allowed, ", ")
+	if value != "" {
+		*target = &value
+		*fields++
+	}
+
+	return ""
 }
 
 func applyUpdateConfigJSONOptions(request *mcp.CallToolRequest, req *linode.UpdateConfigRequest, fields *int) string {
@@ -1348,11 +1199,11 @@ func applyConfigStringOptions(request *mcp.CallToolRequest, req *linode.CreateCo
 		return validationMessage
 	}
 
-	if runLevel != "" {
-		if runLevel != "default" && runLevel != "single" && runLevel != "binbash" {
-			return "run_level must be default, single, or binbash"
-		}
+	if enumMessage := enumChoiceError(runLevel, "run_level", linodev1.ConfigRunLevel_Value_value); enumMessage != "" {
+		return enumMessage
+	}
 
+	if runLevel != "" {
 		req.RunLevel = runLevel
 	}
 
@@ -1361,11 +1212,11 @@ func applyConfigStringOptions(request *mcp.CallToolRequest, req *linode.CreateCo
 		return validationMessage
 	}
 
-	if virtMode != "" {
-		if virtMode != "paravirt" && virtMode != "fullvirt" {
-			return "virt_mode must be paravirt or fullvirt"
-		}
+	if enumMessage := enumChoiceError(virtMode, "virt_mode", linodev1.ConfigVirtMode_Value_value); enumMessage != "" {
+		return enumMessage
+	}
 
+	if virtMode != "" {
 		req.VirtMode = virtMode
 	}
 
@@ -1460,19 +1311,14 @@ func parseConfigInterfaces(raw any) ([]linode.ConfigInterface, string) {
 	}
 
 	for index, iface := range *interfaces {
-		if !validConfigInterfacePurpose(iface.Purpose) {
-			return nil, fmt.Sprintf("interfaces[%d].purpose must be public, vlan, or vpc", index)
+		// Each interface object must carry a purpose, so an empty value is
+		// rejected here (unlike the optional-field helper); the message and value
+		// order come from the generated ConfigInterfacePurpose enum.
+		if _, ok := linodev1.ConfigInterfacePurpose_Value_value[iface.Purpose]; !ok || iface.Purpose == enumSentinel {
+			return nil, fmt.Sprintf("interfaces[%d].purpose must be one of: %s", index,
+				strings.Join(enumValueNames(linodev1.ConfigInterfacePurpose_Value_value), ", "))
 		}
 	}
 
 	return *interfaces, ""
-}
-
-func validConfigInterfacePurpose(purpose string) bool {
-	switch purpose {
-	case interfaceFieldPublic, configInterfacePurposeVLAN, configInterfacePurposeVPC:
-		return true
-	default:
-		return false
-	}
 }

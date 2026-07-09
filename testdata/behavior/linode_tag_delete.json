@@ -1,0 +1,27 @@
+{
+  "tool": "linode_tag_delete",
+  "description": "Tag delete (Capability Destroy). The confirm-only bypass gate and the bypass-without-confirm rejection agree; a path-unsafe tag_label is now rejected in both languages (Python gained Go's check; the bypass flags let both reach the handler check).",
+  "cases": [
+    {
+      "name": "rejects a path-unsafe tag_label",
+      "args": { "tag_label": "bad#tag", "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "tag_label must not contain '?', '#', or '..'"
+    },
+    {
+      "name": "confirm alone requires a bypass assertion",
+      "args": { "tag_label": "prod", "confirm": true },
+      "expect_error": "linode_tag_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "bypass without confirm is rejected",
+      "args": { "tag_label": "prod", "confirm_bypass_dry_run": true },
+      "expect_error": "confirm_bypass_dry_run only takes effect with confirm: true"
+    },
+    {
+      "name": "deletes a tag once confirmed with bypass",
+      "args": { "tag_label": "prod", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/tags/prod" }
+    }
+  ]
+}

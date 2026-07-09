@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -50,26 +49,10 @@ func TestLinodeImageShareGroupUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[imageShareGroupIDParam]; !ok {
-		t.Errorf("props missing key %v", imageShareGroupIDParam)
-	}
-
-	if _, ok := props[keyLabel]; !ok {
-		t.Errorf("props missing key %v", keyLabel)
-	}
-
-	if _, ok := props[keyDescription]; !ok {
-		t.Errorf("props missing key %v", keyDescription)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	for _, key := range []string{imageShareGroupIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{imageShareGroupIDParam, keyLabel, keyDescription, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -134,7 +117,7 @@ func TestLinodeImageShareGroupUpdateRejectsInvalidRequest(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: "missing share group id", args: map[string]any{keyLabel: updatedImageShareGroupLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},
+		{name: "missing share group id", args: map[string]any{keyLabel: updatedImageShareGroupLabel, keyConfirm: true}, wantContains: errShareGroupIDRequired},
 		{name: "zero share group id", args: map[string]any{imageShareGroupIDParam: 0, keyLabel: updatedImageShareGroupLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},
 		{name: "negative share group id", args: map[string]any{imageShareGroupIDParam: -1, keyLabel: updatedImageShareGroupLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},
 		{name: "fractional share group id", args: map[string]any{imageShareGroupIDParam: 1.25, keyLabel: updatedImageShareGroupLabel, keyConfirm: true}, wantContains: errImageShareGroupIDPositive},

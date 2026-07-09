@@ -1,0 +1,21 @@
+{
+  "tool": "linode_instance_firewall_update",
+  "description": "Firewall assignment replace: PUTs the firewall_ids body (no query when pagination is unset). Local rejection texts (missing linode_id, missing firewall_ids, confirm) diverge, so only the success request is fixtured (see report).",
+  "cases": [
+    {
+      "name": "replaces firewall assignments with the firewall_ids body",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": [] },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/123/firewalls",
+        "body": { "firewall_ids": [1, 2] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "firewall_ids": [1, 2]},
+      "expect_error": "This replaces firewall assignments for a Linode instance. Set confirm=true to proceed."
+    }
+  ]
+}

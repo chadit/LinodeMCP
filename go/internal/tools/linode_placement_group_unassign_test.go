@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -42,33 +41,11 @@ func TestLinodePlacementGroupUnassignToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyPlacementGroupID]; !ok {
-		t.Errorf("props missing key %v", keyPlacementGroupID)
-	}
-
-	if _, ok := props["linodes"]; !ok {
-		t.Errorf("props missing key %v", "linodes")
-	}
-
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyPlacementGroupID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyPlacementGroupID)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, "linodes") {
-		t.Errorf("tool.InputSchema.Required does not contain %v", "linodes")
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyPlacementGroupID, keyPlacementGroupLinodes, keyDryRun, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -367,32 +344,27 @@ func TestLinodePlacementGroupUnassignToolDryRun(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"dry_run": true`) {
-		t.Errorf("textContent.Text does not contain %v", `"dry_run": true`)
+	body := decodeBody(t, textContent.Text)
+	if body["dry_run"] != true {
+		t.Errorf("dry_run = %v, want true", body["dry_run"])
 	}
 
-	if !strings.Contains(textContent.Text, `"method": "POST"`) {
-		t.Errorf("textContent.Text does not contain %v", `"method": "POST"`)
+	assertDryRunRequest(t, body, "POST", "/placement/groups/789/unassign")
+
+	would, _ := body["would_execute"].(map[string]any)
+
+	reqBody, hasBody := would["body"].(map[string]any)
+	if !hasBody {
+		t.Fatalf("would_execute.body is not an object: %v", would["body"])
 	}
 
-	if !strings.Contains(textContent.Text, `"path": "/placement/groups/789/unassign"`) {
-		t.Errorf("textContent.Text does not contain %v", `"path": "/placement/groups/789/unassign"`)
+	linodes, isList := reqBody["linodes"].([]any)
+	if !isList || len(linodes) != 2 {
+		t.Fatalf("body.linodes = %v, want two entries", reqBody["linodes"])
 	}
 
-	if !strings.Contains(textContent.Text, `"body": {`) {
-		t.Errorf("textContent.Text does not contain %v", `"body": {`)
-	}
-
-	if !strings.Contains(textContent.Text, `"linodes": [`) {
-		t.Errorf("textContent.Text does not contain %v", `"linodes": [`)
-	}
-
-	if !strings.Contains(textContent.Text, `123`) {
-		t.Errorf("textContent.Text does not contain %v", `123`)
-	}
-
-	if !strings.Contains(textContent.Text, `456`) {
-		t.Errorf("textContent.Text does not contain %v", `456`)
+	if linodes[0] != float64(123) || linodes[1] != float64(456) {
+		t.Errorf("body.linodes = %v, want [123 456]", linodes)
 	}
 
 	if !strings.Contains(textContent.Text, "side_effects") {

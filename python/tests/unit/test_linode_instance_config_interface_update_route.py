@@ -156,15 +156,9 @@ def test_create_linode_instance_config_interface_update_tool_schema() -> None:
         "interface_id",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["config_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["interface_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "dry_run" not in tool.inputSchema["required"]
-    assert {"required": ["ip_ranges"]} in tool.inputSchema["anyOf"]
-    assert {"required": ["ipv4"]} in tool.inputSchema["anyOf"]
-    assert {"required": ["primary"]} in tool.inputSchema["anyOf"]
 
 
 @pytest.mark.asyncio
@@ -272,7 +266,10 @@ async def test_handle_update_config_interface_requires_confirm_true(
         arguments, sample_config
     )
 
-    assert result[0].text == "Error: confirm must be true"
+    assert result[0].text == (
+        "Error: This updates a network interface on the configuration profile. Set "
+        "confirm=true to proceed."
+    )
     mock_linode_client.update_instance_config_interface.assert_not_called()
 
 

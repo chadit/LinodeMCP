@@ -7,35 +7,15 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import type_pb2, volume_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import execute_tool
-from linodemcp.tools.proto_response import serialize_list_response
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
-
-
-def volume_to_dict(volume: Any) -> dict[str, Any]:
-    # Proto-canonical shape (linode.mcp.v1.Volume): linode_id and linode_label are
-    # optional message fields, so they are omitted when unset (the API sends null
-    # when the volume is detached). Field order follows the proto field numbers.
-    body: dict[str, Any] = {
-        "id": volume.id,
-        "label": volume.label,
-        "status": volume.status,
-        "size": volume.size,
-        "region": volume.region,
-    }
-    if volume.linode_id is not None:
-        body["linode_id"] = volume.linode_id
-    if volume.linode_label is not None:
-        body["linode_label"] = volume.linode_label
-    body["filesystem_path"] = volume.filesystem_path
-    body["tags"] = volume.tags
-    body["created"] = volume.created
-    body["updated"] = volume.updated
-    body["hardware_type"] = volume.hardware_type
-    return body
 
 
 def create_linode_volume_get_tool() -> tuple[Tool, Capability]:
@@ -56,8 +36,8 @@ async def handle_linode_volume_get(
         return [TextContent(type="text", text="Error: volume_id is required")]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        volume = await client.get_volume(int(volume_id))
-        return {"volume": volume_to_dict(volume)}
+        raw = await client.get_raw(f"/volumes/{int(volume_id)}")
+        return serialize_api_response({"volume": raw}, volume_pb2.VolumeGetResponse())
 
     return await execute_tool(cfg, arguments, "retrieve Linode volume", _call)
 
@@ -70,28 +50,7 @@ def create_linode_volume_list_tool() -> tuple[Tool, Capability]:
             "Lists all block storage volumes for the authenticated user "
             "with optional filtering by region or label"
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": "Filter volumes by region (e.g., 'us-east')",
-                },
-                "label_contains": {
-                    "type": "string",
-                    "description": (
-                        "Filter volumes where label contains this string "
-                        "(case-insensitive)"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeListInput"),
     ), Capability.Read
 
 
@@ -100,17 +59,7 @@ def create_linode_volume_type_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_type_list",
         description="Lists available block storage volume types and prices.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeTypeListInput"),
     ), Capability.Read
 
 

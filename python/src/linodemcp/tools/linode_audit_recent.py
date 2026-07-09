@@ -17,7 +17,10 @@ from typing import Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.audit import RecentQuery, read_recent, resolve_default_audit_dir
+from linodemcp.genpb.linode.mcp.v1 import audit_pb2
 from linodemcp.profiles import Capability
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 # Argument-key constants shared by the schema and the handler so the
 # two can't drift.
@@ -41,57 +44,7 @@ def create_linode_audit_recent_tool() -> tuple[Tool, Capability]:
                 "audit log. Optional filters: limit, since, until, tool "
                 "(glob), capability, status, include_meta."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_LIMIT: {
-                        "type": "integer",
-                        "description": (
-                            "Max events to return. Default 20, capped at 200."
-                        ),
-                    },
-                    _ARG_SINCE: {
-                        "type": "string",
-                        "description": (
-                            "Only events at or after this RFC 3339 timestamp "
-                            "(e.g. 2026-05-19T00:00:00Z)."
-                        ),
-                    },
-                    _ARG_UNTIL: {
-                        "type": "string",
-                        "description": (
-                            "Only events at or before this RFC 3339 timestamp."
-                        ),
-                    },
-                    _ARG_TOOL: {
-                        "type": "string",
-                        "description": (
-                            "Only events whose tool name matches this glob "
-                            '(e.g. "linode_instance_*").'
-                        ),
-                    },
-                    _ARG_CAPABILITY: {
-                        "type": "string",
-                        "description": (
-                            "Only events with this capability: read, write, "
-                            "destroy, admin, or meta."
-                        ),
-                    },
-                    _ARG_STATUS: {
-                        "type": "string",
-                        "description": (
-                            "Only events with this status: success, error, or refused."
-                        ),
-                    },
-                    _ARG_INCLUDE_META: {
-                        "type": "boolean",
-                        "description": (
-                            "Include audit/profile meta-tool events. Default "
-                            "false (they are noise for activity review)."
-                        ),
-                    },
-                },
-            },
+            inputSchema=schema("linode.mcp.v1.AuditRecentInput"),
         ),
         Capability.Meta,
     )
@@ -116,8 +69,9 @@ async def handle_linode_audit_recent(
         "count": len(events),
         "events": [event.to_dict() for event in events],
     }
+    result = serialize_api_response(payload, audit_pb2.AuditRecentResponse())
 
-    return [TextContent(type="text", text=json.dumps(payload))]
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def _build_recent_query(arguments: dict[str, Any]) -> RecentQuery:

@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.HelloResponse",
+  "description": "Hello smoke-test greeting as a proto-canonical JSON object.",
+  "input": {
+    "message": "Hello, World! LinodeMCP server is running and ready."
+  },
+  "canonical": {
+    "message": "Hello, World! LinodeMCP server is running and ready."
+  }
+}

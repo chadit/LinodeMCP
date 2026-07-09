@@ -175,10 +175,10 @@ async def test_update_alert_definition_calls_client_once_without_retry(
     [
         ({"page": True}, "page must be an integer"),
         ({"page": "2"}, "page must be an integer"),
-        ({"page": 0}, "page must be at least 1"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
         ({"page_size": True}, "page_size must be an integer"),
-        ({"page_size": 10}, "page_size must be at least 25"),
-        ({"page_size": 999}, "page_size must be at most 500"),
+        ({"page_size": 10}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": 999}, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_alert_definition_list_validates_pagination(
@@ -238,7 +238,7 @@ async def test_list_handlers_reject_invalid_pagination(
 
     monkeypatch.setattr(monitor_write, "execute_tool", fake_execute_tool)
     result = await handler({"page": 0}, cast("Any", object()))
-    assert "page must be at least 1" in _text(result)
+    assert "page must be an integer greater than or equal to 1" in _text(result)
 
 
 @pytest.mark.asyncio

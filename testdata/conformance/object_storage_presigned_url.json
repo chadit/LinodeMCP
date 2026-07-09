@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.PresignedURLResponse",
+  "description": "linode_object_storage_presigned_url_create: the generated URL.",
+  "input": {
+    "url": "https://us-east-1.linodeobjects.com/b/key?X-Amz-Signature=abc123"
+  },
+  "canonical": {
+    "url": "https://us-east-1.linodeobjects.com/b/key?X-Amz-Signature=abc123"
+  }
+}

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -41,17 +40,17 @@ func TestLinodeAccountUserGrantsToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyUsername]; !ok {
-		t.Errorf("props missing key %v", keyUsername)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyUsername) {
+		t.Errorf("RawInputSchema missing key %v", keyUsername)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("props has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyUsername) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyUsername)
+	if !strings.Contains(rawSchema, keyUsername) {
+		t.Errorf("RawInputSchema missing required key %v", keyUsername)
 	}
 }
 
@@ -135,10 +134,21 @@ func TestLinodeAccountUserGrantsToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.Grants{
-			Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")},
-			Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission("read_write")}},
-		}); err != nil {
+		// The extra top-level field the proto does not model must be dropped by
+		// the DiscardUnknown decode, proving proto-canonical output.
+		grants := struct {
+			linode.Grants
+
+			NotInProto string `json:"not_in_proto"`
+		}{
+			Grants: linode.Grants{
+				Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")},
+				Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission("read_write")}},
+			},
+			NotInProto: valNotInProto,
+		}
+
+		if err := json.NewEncoder(w).Encode(grants); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -173,6 +183,16 @@ func TestLinodeAccountUserGrantsToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "read_write") {
 		t.Errorf("textContent.Text does not contain %v", "read_write")
+	}
+
+	if strings.Contains(textContent.Text, keyNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
+	}
+
+	// The API omits grant sections the user has none of; the proto's repeated
+	// fields normalize the absent lkecluster section to [] in the output.
+	if !strings.Contains(textContent.Text, "lkecluster") {
+		t.Error("absent grant section lkecluster did not normalize into the output")
 	}
 }
 

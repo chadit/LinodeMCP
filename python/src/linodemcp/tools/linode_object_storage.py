@@ -25,7 +25,11 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-_CLUSTER_ID_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$")
+# Lowercase alphanumeric slug with single internal hyphens (us-east-1). Matches
+# Go's isSafeObjectStorageRegion, which is stricter than the previous pattern:
+# it rejects uppercase and consecutive hyphens the live cluster route never uses
+# (strictest-wins; the two languages now reject the same set).
+_CLUSTER_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _BUCKET_LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$")
 _MAX_BUCKET_LABEL_LENGTH = 63
 
@@ -48,17 +52,7 @@ def create_linode_object_storage_bucket_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_bucket_list",
         description="Lists all Object Storage buckets on your Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketListInput"),
     ), Capability.Read
 
 
@@ -85,24 +79,7 @@ def create_linode_object_storage_bucket_by_region_list_tool() -> tuple[
     return Tool(
         name="linode_object_storage_bucket_by_region_list",
         description="Lists Object Storage buckets in a region.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": (
-                        "The region or legacy cluster ID to list buckets for"
-                    ),
-                },
-            },
-            "required": ["region"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketByRegionListInput"),
     ), Capability.Read
 
 
@@ -119,28 +96,15 @@ async def handle_linode_object_storage_bucket_by_region_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         buckets = await client.list_object_storage_buckets_for_region(region)
-        return {
-            "count": len(buckets),
-            "region": region,
-            "buckets": buckets,
-        }
+        return serialize_list_response(
+            {"data": buckets},
+            "buckets",
+            object_storage_pb2.ObjectStorageBucketListResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Object Storage buckets for region", _call
     )
-
-
-def object_storage_bucket_to_response_dict(bucket: dict[str, Any]) -> dict[str, Any]:
-    """Shape a raw Object Storage bucket API dict to proto-canonical form."""
-    return {
-        "label": bucket.get("label", ""),
-        "region": bucket.get("region", ""),
-        "hostname": bucket.get("hostname", ""),
-        "created": bucket.get("created", ""),
-        "objects": bucket.get("objects", 0),
-        "size": bucket.get("size", 0),
-        "cluster": bucket.get("cluster", ""),
-    }
 
 
 def create_linode_object_storage_bucket_get_tool() -> tuple[Tool, Capability]:
@@ -185,49 +149,7 @@ def create_linode_object_storage_bucket_object_list_tool() -> tuple[Tool, Capabi
             "Lists objects in an Object Storage bucket. "
             "Supports pagination and filtering by prefix/delimiter."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "region": {
-                    "type": "string",
-                    "description": (
-                        "The region/cluster ID where the bucket exists (required)"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "The label/name of the bucket (required)",
-                },
-                "prefix": {
-                    "type": "string",
-                    "description": (
-                        "Limits results to object keys that begin with this prefix"
-                    ),
-                },
-                "delimiter": {
-                    "type": "string",
-                    "description": (
-                        "Character used to group keys "
-                        "(e.g., '/' for directory-like listing)"
-                    ),
-                },
-                "marker": {
-                    "type": "string",
-                    "description": "Object key to start listing from (for pagination)",
-                },
-                "page_size": {
-                    "type": "string",
-                    "description": "Number of objects to return per page (1-1000)",
-                },
-            },
-            "required": ["region", "label"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketObjectListInput"),
     ), Capability.Read
 
 
@@ -315,17 +237,7 @@ def create_linode_object_storage_type_list_tool() -> tuple[Tool, Capability]:
             "Lists Object Storage pricing tiers and capabilities. Shows pricing, "
             "storage limits, and transfer allowances."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageTypeListInput"),
     ), Capability.Read
 
 
@@ -348,17 +260,7 @@ def create_linode_object_storage_endpoint_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_object_storage_endpoint_list",
         description="Lists Object Storage endpoints available to your account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageEndpointListInput"),
     ), Capability.Read
 
 
@@ -388,17 +290,7 @@ def create_linode_object_storage_key_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_key_list",
         description="Lists all Object Storage access keys for the authenticated user.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyListInput"),
     ), Capability.Read
 
 
@@ -491,17 +383,7 @@ def create_linode_object_storage_transfer_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets Object Storage outbound data transfer usage for the current month."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageTransferGetInput"),
     ), Capability.Read
 
 
@@ -511,7 +393,10 @@ async def handle_linode_object_storage_transfer_get(
     """Handle linode_object_storage_transfer_get tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_object_storage_transfer()
+        return serialize_api_response(
+            await client.get_object_storage_transfer(),
+            object_storage_pb2.ObjectStorageTransfer(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Object Storage transfer usage", _call
@@ -523,17 +408,7 @@ def create_linode_object_storage_quota_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_quota_list",
         description="Lists Object Storage quotas on your Linode account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageQuotaListInput"),
     ), Capability.Read
 
 
@@ -558,25 +433,7 @@ def create_linode_object_storage_quota_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_quota_get",
         description="Gets a single Object Storage quota by quota ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "obj_quota_id": {
-                    "type": "string",
-                    "description": (
-                        "The Object Storage quota ID, formatted as "
-                        "<quota_type>-<s3_endpoint>."
-                    ),
-                },
-            },
-            "required": ["obj_quota_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageQuotaGetInput"),
     ), Capability.Read
 
 
@@ -603,7 +460,10 @@ async def handle_linode_object_storage_quota_get(
         return _error_response("obj_quota_id must be a valid Object Storage quota ID")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_object_storage_quota(obj_quota_id)
+        return serialize_api_response(
+            await client.get_object_storage_quota(obj_quota_id),
+            object_storage_pb2.ObjectStorageQuota(),
+        )
 
     return await execute_tool(cfg, arguments, "retrieve Object Storage quota", _call)
 
@@ -613,22 +473,7 @@ def create_linode_object_storage_quota_usage_get_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_object_storage_quota_usage_get",
         description="Gets Object Storage quota usage data by quota ID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "obj_quota_id": {
-                    "type": "string",
-                    "description": "The Object Storage quota ID to retrieve usage for.",
-                },
-            },
-            "required": ["obj_quota_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ObjectStorageQuotaUsageGetInput"),
     ), Capability.Read
 
 
@@ -641,7 +486,10 @@ async def handle_linode_object_storage_quota_usage_get(
         return _error_response("obj_quota_id must be a valid Object Storage quota ID")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_object_storage_quota_usage(obj_quota_id)
+        return serialize_api_response(
+            await client.get_object_storage_quota_usage(obj_quota_id),
+            object_storage_pb2.ObjectStorageQuotaUsage(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Object Storage quota usage", _call

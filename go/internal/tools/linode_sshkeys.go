@@ -50,7 +50,7 @@ func handleLinodeSSHKeyGetRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeSSHKeyListTool creates a tool for listing SSH keys.
 func NewLinodeSSHKeyListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	_, handler := newProtoListTool(
 		cfg,
 		"linode_sshkey_list",
 		"Lists all SSH keys associated with your Linode profile. Can filter by label.",
@@ -62,6 +62,12 @@ func NewLinodeSSHKeyListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 				func(k *linodev1.SSHKey) string { return k.GetLabel() }),
 		},
 		sshKeyListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_sshkey_list",
+		"Lists all SSH keys associated with your Linode profile. Can filter by label.",
+		toolschemas.Schema("linode.mcp.v1.SSHKeyListInput"),
 	)
 
 	return tool, profiles.CapRead, handler

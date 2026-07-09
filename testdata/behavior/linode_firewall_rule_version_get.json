@@ -1,0 +1,22 @@
+{
+  "tool": "linode_firewall_rule_version_get",
+  "description": "Firewall rule version get fetches one historical rule version via GET. Both languages reject non-positive firewall_id and version with the same text; the missing-version message diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects a non-positive firewall_id",
+      "args": { "firewall_id": -1, "version": 2 },
+      "expect_error": "firewall_id must be a positive integer"
+    },
+    {
+      "name": "rejects a non-positive version",
+      "args": { "firewall_id": 5, "version": -2 },
+      "expect_error": "version must be a positive integer"
+    },
+    {
+      "name": "gets a firewall rule version",
+      "args": { "firewall_id": 5, "version": 2 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/networking/firewalls/5/history/rules/2" }
+    }
+  ]
+}

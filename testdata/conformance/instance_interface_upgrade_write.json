@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.InstanceInterfaceUpgradeWriteResponse",
+  "description": "Interface upgrade write envelope: a confirmation message plus the upgrade body (config_id, dry_run, and the upgraded interfaces), exercising the repeated interfaces field with a public oneof arm.",
+  "input": {
+    "message": "Linode 123 interface upgrade initiated",
+    "config_id": 789,
+    "dry_run": true,
+    "interfaces": [
+      {
+        "id": 4567,
+        "public": {
+          "ipv4": {
+            "addresses": [
+              {"address": "192.0.2.10", "primary": true}
+            ]
+          }
+        },
+        "mac_address": "22:00:AB:CD:EF:07",
+        "version": 1
+      }
+    ]
+  },
+  "canonical": {
+    "message": "Linode 123 interface upgrade initiated",
+    "config_id": 789,
+    "dry_run": true,
+    "interfaces": [
+      {
+        "id": 4567,
+        "public": {
+          "ipv4": {
+            "addresses": [
+              {"address": "192.0.2.10", "primary": true}
+            ]
+          }
+        },
+        "mac_address": "22:00:AB:CD:EF:07",
+        "version": 1
+      }
+    ]
+  }
+}

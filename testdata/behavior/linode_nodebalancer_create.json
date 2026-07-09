@@ -1,0 +1,26 @@
+{
+  "tool": "linode_nodebalancer_create",
+  "description": "Pins the create POST body and the shared region-required rejection (with confirm set). Missing-confirm text and zero-throttle body diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects missing region",
+      "args": { "confirm": true },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "posts the create body",
+      "args": { "region": "us-east", "client_conn_throttle": 20, "confirm": true },
+      "api_response": { "id": 100, "label": "web-lb", "region": "us-east" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers",
+        "body": { "region": "us-east", "client_conn_throttle": 20 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"region": "us-east", "client_conn_throttle": 20},
+      "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
+    }
+  ]
+}

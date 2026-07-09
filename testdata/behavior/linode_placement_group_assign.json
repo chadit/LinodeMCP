@@ -1,0 +1,21 @@
+{
+  "tool": "linode_placement_group_assign",
+  "description": "Placement group assign: the assign POST once confirmed. Confirm-gate text, group_id validation text, and the linodes-array messages all diverge, so only the success path is pinned (see report).",
+  "cases": [
+    {
+      "name": "assigns Linodes to a placement group",
+      "args": { "confirm": true, "group_id": 123, "linodes": [456, 789] },
+      "api_response": { "id": 123, "label": "my-group" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/placement/groups/123/assign",
+        "body": { "linodes": [456, 789] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"group_id": 123, "linodes": [456, 789]},
+      "expect_error": "This assigns Linodes to a placement group. Set confirm=true to proceed."
+    }
+  ]
+}

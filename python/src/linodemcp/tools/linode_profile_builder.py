@@ -25,8 +25,11 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
 from linodemcp.profiles import Capability
 from linodemcp.profiles.builtin import categories as resolve_categories
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -86,26 +89,7 @@ def create_linode_profile_list_tools_tool() -> tuple[Tool, Capability]:
                 "full menu before composing a user-defined profile. "
                 "Optional filters: category, capability."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_CATEGORY: {
-                        "type": "string",
-                        "description": (
-                            "Filter to tools whose categories include this "
-                            'exact name (e.g. "compute", "dns").'
-                        ),
-                    },
-                    _ARG_CAPABILITY: {
-                        "type": "string",
-                        "description": (
-                            "Filter to tools with this capability. Accepts "
-                            "the short form (read, write, destroy, admin, "
-                            "meta) or the long form (CapRead, CapWrite, ...)."
-                        ),
-                    },
-                },
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileListToolsInput"),
         ),
         Capability.Meta,
     )
@@ -159,7 +143,11 @@ async def handle_linode_profile_list_tools(
             }
         )
 
-    return [TextContent(type="text", text=json.dumps(out))]
+    result = serialize_api_response(
+        {"count": len(out), "tools": out},
+        profile_builder_pb2.ProfileToolListResponse(),
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 def create_linode_profile_list_categories_tool() -> tuple[Tool, Capability]:
@@ -177,7 +165,7 @@ def create_linode_profile_list_categories_tool() -> tuple[Tool, Capability]:
                 "categories before drilling into a category with "
                 "linode_profile_list_tools."
             ),
-            inputSchema={"type": "object", "properties": {}},
+            inputSchema=schema("linode.mcp.v1.ProfileListCategoriesInput"),
         ),
         Capability.Meta,
     )
@@ -202,4 +190,8 @@ async def handle_linode_profile_list_categories(
 
     out = [{"name": name, "tool_count": counts[name]} for name in sorted(counts)]
 
-    return [TextContent(type="text", text=json.dumps(out))]
+    result = serialize_api_response(
+        {"count": len(out), "categories": out},
+        profile_builder_pb2.ProfileCategoryListResponse(),
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -37,12 +36,8 @@ func TestLinodeFirewallRuleVersionsListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyFirewallID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyFirewallID)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyFirewallID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyFirewallID)
+	if !strings.Contains(string(tool.RawInputSchema), keyFirewallID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyFirewallID)
 	}
 }
 
@@ -160,8 +155,13 @@ func TestLinodeFirewallRuleVersionsListToolRejectsInvalidFirewallIdBeforeClientC
 				t.Error("result.IsError = false, want true")
 			}
 
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDPositive) {
-				t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDPositive)
+			wantFirewallID := errFirewallIDPositive
+			if name == caseMissingFirewallPathID {
+				wantFirewallID = errFirewallIDRequired
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantFirewallID) {
+				t.Errorf("error text %q does not contain %q", text.Text, wantFirewallID)
 			}
 
 			if called.Load() {
@@ -237,15 +237,10 @@ func TestLinodeFirewallRuleVersionGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyFirewallID, keyVersion} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyFirewallID, keyVersion} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }

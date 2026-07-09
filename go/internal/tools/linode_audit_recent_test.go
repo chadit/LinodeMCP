@@ -17,7 +17,8 @@ import (
 )
 
 // auditRecentResult mirrors the tool's JSON response so the test can
-// decode and assert on it.
+// decode and assert on it. The canonical serializer emits int64 counters
+// as JSON numbers, so the full audit.Event decodes the response directly.
 type auditRecentResult struct {
 	Count  int           `json:"count"`
 	Events []audit.Event `json:"events"`
@@ -42,15 +43,15 @@ func TestLinodeAuditRecentDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
+	raw := string(tool.RawInputSchema)
 	for _, param := range []string{"limit", keySince, "until", "tool", "capability", "status", "include_meta"} {
-		if _, ok := props[param]; !ok {
-			t.Errorf("props missing key %v", param)
+		if !strings.Contains(raw, param) {
+			t.Errorf("tool.RawInputSchema missing key %v", param)
 		}
 	}
 
-	if _, ok := props["confirm"]; ok {
-		t.Errorf("props has unexpected key %v", "confirm")
+	if strings.Contains(raw, "confirm") {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", "confirm")
 	}
 }
 

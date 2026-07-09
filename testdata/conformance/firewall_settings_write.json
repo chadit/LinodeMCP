@@ -1,0 +1,26 @@
+{
+  "message": "linode.mcp.v1.FirewallSettingsWriteResponse",
+  "description": "linode_firewall_settings_update write envelope: a confirmation message plus the account-wide default Cloud Firewall assignments the API returned.",
+  "input": {
+    "message": "Default firewall settings updated successfully",
+    "settings": {
+      "default_firewall_ids": {
+        "linode": 100,
+        "nodebalancer": 101,
+        "public_interface": 200,
+        "vpc_interface": 201
+      }
+    }
+  },
+  "canonical": {
+    "message": "Default firewall settings updated successfully",
+    "settings": {
+      "default_firewall_ids": {
+        "linode": 100,
+        "nodebalancer": 101,
+        "public_interface": 200,
+        "vpc_interface": 201
+      }
+    }
+  }
+}

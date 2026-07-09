@@ -2,10 +2,12 @@ package tools_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -26,6 +28,20 @@ const (
 	errSupportTicketAttachmentIDPositive  = "ticket_id must be a positive integer"
 )
 
+// tempAttachmentFile writes a small file under the test's temp dir and returns
+// its absolute path. The attachment client uploads the file as multipart, so the
+// path must be absolute and readable.
+func tempAttachmentFile(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), supportTicketAttachmentFilename)
+	if err := os.WriteFile(path, []byte("attachment-content"), 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	return path
+}
+
 func TestLinodeAccountSupportTicketAttachmentCreateToolDefinition(t *testing.T) {
 	t.Parallel()
 
@@ -43,26 +59,10 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolDefinition(t *testing.T) 
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[supportTicketAttachmentTicketID]; !ok {
-		t.Errorf("props missing key %v", supportTicketAttachmentTicketID)
-	}
-
-	if _, ok := props[supportTicketAttachmentFileParam]; !ok {
-		t.Errorf("props missing key %v", supportTicketAttachmentFileParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if _, ok := props[keyDryRun]; !ok {
-		t.Errorf("props missing key %v", keyDryRun)
-	}
-
-	for _, key := range []string{supportTicketAttachmentTicketID, supportTicketAttachmentFileParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{supportTicketAttachmentTicketID, supportTicketAttachmentFileParam, keyConfirm, keyDryRun} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -96,7 +96,7 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolConfirmRequiredBeforeClie
 			cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 			_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
 
-			args := map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: supportTicketAttachmentFile}
+			args := map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: tempAttachmentFile(t)}
 			if testCase.set {
 				args[keyConfirm] = testCase.value
 			}
@@ -145,13 +145,34 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), "Bearer "+tokenTest)
 		}
 
-		var got map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Errorf("unexpected error: %v", err)
+		if contentType := r.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "multipart/form-data") {
+			t.Errorf("Content-Type = %q, want multipart/form-data", contentType)
 		}
 
-		if !reflect.DeepEqual(got[supportTicketAttachmentFileParam], supportTicketAttachmentFile) {
-			t.Errorf("got[supportTicketAttachmentFileParam] = %v, want %v", got[supportTicketAttachmentFileParam], supportTicketAttachmentFile)
+		part, header, formErr := r.FormFile(supportTicketAttachmentFileParam)
+		if formErr != nil {
+			t.Errorf("unexpected error: %v", formErr)
+
+			return
+		}
+
+		defer func() {
+			if closeErr := part.Close(); closeErr != nil {
+				t.Errorf("unexpected error: %v", closeErr)
+			}
+		}()
+
+		if header.Filename != supportTicketAttachmentFilename {
+			t.Errorf("uploaded filename = %v, want %v", header.Filename, supportTicketAttachmentFilename)
+		}
+
+		content, readErr := io.ReadAll(part)
+		if readErr != nil {
+			t.Errorf("unexpected error: %v", readErr)
+		}
+
+		if string(content) != "attachment-content" {
+			t.Errorf("uploaded content = %q, want %q", content, "attachment-content")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -167,7 +188,7 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolSuccess(t *testing.T) {
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		supportTicketAttachmentTicketID:  float64(123),
-		supportTicketAttachmentFileParam: supportTicketAttachmentFile,
+		supportTicketAttachmentFileParam: tempAttachmentFile(t),
 		keyConfirm:                       true,
 	}))
 	if err != nil {
@@ -222,7 +243,7 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolApiError(t *testing.T) {
 	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}}}}
 	_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(cfg)
 
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: supportTicketAttachmentFile, keyConfirm: true}))
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: tempAttachmentFile(t), keyConfirm: true}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -261,6 +282,7 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolRejectsInvalidInput(t *te
 		{name: "missing file", args: map[string]any{supportTicketAttachmentTicketID: float64(123), keyConfirm: true}, wantMessage: "file is required"},
 		{name: "blank file", args: map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: blankString, keyConfirm: true}, wantMessage: "file must be a non-empty string"},
 		{name: "numeric file", args: map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: float64(1), keyConfirm: true}, wantMessage: "file must be a non-empty string"},
+		{name: "relative file", args: map[string]any{supportTicketAttachmentTicketID: float64(123), supportTicketAttachmentFileParam: "relative/path.txt", keyConfirm: true}, wantMessage: "file must be a local, absolute path"},
 	}
 
 	for _, testCase := range cases {
@@ -307,9 +329,11 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolDryRun(t *testing.T) {
 
 	_, _, handler := tools.NewLinodeAccountSupportTicketAttachmentCreateTool(dryRunNoCallServer(t))
 
+	attachmentPath := tempAttachmentFile(t)
+
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		supportTicketAttachmentTicketID:  float64(123),
-		supportTicketAttachmentFileParam: supportTicketAttachmentFile,
+		supportTicketAttachmentFileParam: attachmentPath,
 		keyDryRun:                        true,
 	}))
 	if err != nil {
@@ -339,8 +363,8 @@ func TestLinodeAccountSupportTicketAttachmentCreateToolDryRun(t *testing.T) {
 	}
 
 	bodyPreview, _ := would["body"].(map[string]any)
-	if !reflect.DeepEqual(bodyPreview[supportTicketAttachmentFileParam], supportTicketAttachmentFile) {
-		t.Errorf("bodyPreview[supportTicketAttachmentFileParam] = %v, want %v", bodyPreview[supportTicketAttachmentFileParam], supportTicketAttachmentFile)
+	if !reflect.DeepEqual(bodyPreview[supportTicketAttachmentFileParam], attachmentPath) {
+		t.Errorf("bodyPreview[supportTicketAttachmentFileParam] = %v, want %v", bodyPreview[supportTicketAttachmentFileParam], attachmentPath)
 	}
 
 	if body["current_state"] != nil {

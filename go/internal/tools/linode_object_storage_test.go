@@ -24,6 +24,8 @@ const (
 	keyObjectStorageQuotaID     = "obj_quota_id"
 	objectStorageEndpointUSEast = "us-east-1.linodeobjects.com"
 	objectStorageQuotaTestID    = "obj-buckets-us-sea-1.linodeobjects.com"
+	regionSlashUSEast1          = "us/east-1"
+	msgRegionInvalidClusterID   = "region must be a valid region or cluster ID"
 )
 
 // End-to-end verification of object storage bucket listing.
@@ -167,8 +169,17 @@ func TestLinodeObjectStorageBucketsListByRegionToolDefinition(t *testing.T) {
 func TestLinodeObjectStorageBucketsListByRegionToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	buckets := []linode.ObjectStorageBucket{
-		{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024},
+	// Each element carries a field the proto does not model so the DiscardUnknown
+	// decode must drop it, proving the list routes through the proto serializer.
+	buckets := []struct {
+		linode.ObjectStorageBucket
+
+		NotInProto string `json:"not_in_proto"`
+	}{
+		{
+			ObjectStorageBucket: linode.ObjectStorageBucket{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024},
+			NotInProto:          valNotInProto,
+		},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -232,8 +243,32 @@ func TestLinodeObjectStorageBucketsListByRegionToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", regionUSEast1)
 	}
 
-	if !strings.Contains(textContent.Text, `"count": 1`) {
-		t.Errorf("textContent.Text does not contain %v", `"count": 1`)
+	// protojson varies its whitespace between runs, so parse the body rather than
+	// substring-matching the count. The envelope is {count, buckets}: the region
+	// input echo is not part of the proto contract.
+	var body struct {
+		Count   int              `json:"count"`
+		Region  string           `json:"region"`
+		Buckets []map[string]any `json:"buckets"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if body.Count != 1 {
+		t.Errorf("body.Count = %d, want 1", body.Count)
+	}
+
+	if len(body.Buckets) != 1 {
+		t.Errorf("len(body.Buckets) = %d, want 1", len(body.Buckets))
+	}
+
+	if body.Region != "" {
+		t.Errorf("body.Region = %q, want empty (region echo dropped)", body.Region)
+	}
+
+	if strings.Contains(textContent.Text, keyNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 
@@ -252,7 +287,7 @@ func TestLinodeObjectStorageBucketsListByRegionToolValidation(t *testing.T) {
 		args map[string]any
 	}{
 		{name: caseMissingRegion, args: map[string]any{}},
-		{name: "slash in region", args: map[string]any{keyRegion: "us/east-1"}},
+		{name: "slash in region", args: map[string]any{keyRegion: regionSlashUSEast1}},
 		{name: "query in region", args: map[string]any{keyRegion: "us-east-1?x=1"}},
 		{name: "traversal in region", args: map[string]any{keyRegion: pathTraversalValue}},
 		{name: "encoded separator in region", args: map[string]any{keyRegion: "us%2Feast-1"}},
@@ -434,7 +469,7 @@ func TestLinodeObjectStorageBucketContentsToolDefinition(t *testing.T) {
 
 // objectStorageContentsBody builds the bespoke {data, is_truncated, next_marker}
 // body the S3-style object-list endpoint returns. size is a JSON number on the
-// wire; the proto int64 field serializes it back out as a JSON string.
+// wire and the canonical serializer keeps the proto int64 field a JSON number.
 func objectStorageContentsBody(objects string, isTruncated bool, nextMarker string) string {
 	return `{"data":[` + objects + `],"is_truncated":` + strconv.FormatBool(isTruncated) +
 		`,"next_marker":"` + nextMarker + `"}`
@@ -447,7 +482,7 @@ func decodeObjectListOutput(t *testing.T, text string) struct {
 	NextMarker  string `json:"next_marker"`
 	Objects     []struct {
 		Name string `json:"name"`
-		Size string `json:"size"`
+		Size int64  `json:"size"`
 	} `json:"objects"`
 } {
 	t.Helper()
@@ -459,7 +494,7 @@ func decodeObjectListOutput(t *testing.T, text string) struct {
 		NextMarker  string `json:"next_marker"`
 		Objects     []struct {
 			Name string `json:"name"`
-			Size string `json:"size"`
+			Size int64  `json:"size"`
 		} `json:"objects"`
 	}
 	if err := json.Unmarshal([]byte(text), &out); err != nil {
@@ -528,8 +563,8 @@ func TestLinodeObjectStorageBucketContentsToolSuccess(t *testing.T) {
 		t.Errorf("objects = %v, want file1.txt + file2.jpg", out.Objects)
 	}
 
-	if out.Objects[0].Size != "1024" {
-		t.Errorf("objects[0].size = %q, want \"1024\" (int64 -> JSON string)", out.Objects[0].Size)
+	if out.Objects[0].Size != 1024 {
+		t.Errorf("objects[0].size = %v, want %v (int64 stays a JSON number)", out.Objects[0].Size, 1024)
 	}
 
 	if out.IsTruncated {
@@ -672,6 +707,62 @@ func TestLinodeObjectStorageBucketContentsToolCaseMissingRegion(t *testing.T) {
 
 	if !result.IsError {
 		t.Error("result.IsError = false, want true")
+	}
+}
+
+// TestLinodeObjectStorageBucketReadFormatValidation pins the region/label format
+// checks ported from Python (strictest-wins): bucket_get and bucket_object_list
+// now reject malformed region/label locally with Python's exact texts.
+func TestLinodeObjectStorageBucketReadFormatValidation(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, getHandler := tools.NewLinodeObjectStorageBucketGetTool(cfg)
+	_, _, listHandler := tools.NewLinodeObjectStorageBucketContentsTool(cfg)
+
+	tests := []struct {
+		name     string
+		list     bool
+		args     map[string]any
+		contains string
+	}{
+		{name: "get rejects uppercase region", args: map[string]any{keyRegion: "US-EAST-1", keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
+		{name: "get rejects region with slash", args: map[string]any{keyRegion: regionSlashUSEast1, keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
+		{name: "get rejects double-hyphen region", args: map[string]any{keyRegion: "us--east-1", keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
+		{name: "get rejects uppercase label", args: map[string]any{keyRegion: regionUSEast1, keyLabel: "My_Bucket"}, contains: "label must be a valid bucket label"},
+		{name: "list rejects uppercase region", list: true, args: map[string]any{keyRegion: "US-EAST-1", keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
+		{name: "list rejects malformed label", list: true, args: map[string]any{keyRegion: regionUSEast1, keyLabel: "bad/label"}, contains: "label must be a valid bucket label"},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := getHandler
+			if testCase.list {
+				handler = listHandler
+			}
+
+			req := createRequestWithArgs(t, testCase.args)
+
+			result, err := handler(t.Context(), req)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil || !result.IsError {
+				t.Fatal("expected an error result")
+			}
+
+			text, ok := result.Content[0].(mcp.TextContent)
+			if !ok || !strings.Contains(text.Text, testCase.contains) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.contains)
+			}
+		})
 	}
 }
 
@@ -1459,8 +1550,8 @@ func TestLinodeObjectStorageKeyGetToolInvalidKeyId(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "key_id must be an integer") {
-		t.Errorf("textContent.Text does not contain %v", "key_id must be an integer")
+	if !strings.Contains(textContent.Text, "key_id must be a positive integer") {
+		t.Errorf("textContent.Text does not contain %v", "key_id must be a positive integer")
 	}
 }
 
@@ -1487,8 +1578,7 @@ func TestLinodeObjectStorageQuotaUsageToolDefinition(t *testing.T) {
 func TestLinodeObjectStorageQuotaUsageToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	used := 10
-	usage := linode.ObjectStorageQuotaUsage{QuotaLimit: 100, Usage: &used}
+	usage := map[string]any{"quota_limit": 100, "usage": 10, keyNotInProto: valNotInProto}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -1544,6 +1634,10 @@ func TestLinodeObjectStorageQuotaUsageToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "10") {
 		t.Errorf("textContent.Text does not contain %v", "10")
+	}
+
+	if strings.Contains(textContent.Text, valNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 
@@ -1632,7 +1726,7 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
-		transfer := linode.ObjectStorageTransfer{UsedBytes: 1073741824}
+		transfer := map[string]any{"used": 1073741824, keyNotInProto: valNotInProto}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/object-storage/transfer" {
@@ -1676,6 +1770,10 @@ func TestLinodeObjectStorageTransferTool(t *testing.T) {
 
 		if !strings.Contains(textContent.Text, "1073741824") {
 			t.Errorf("textContent.Text does not contain %v", "1073741824")
+		}
+
+		if strings.Contains(textContent.Text, valNotInProto) {
+			t.Error("unknown field not_in_proto leaked into proto-canonical output")
 		}
 	})
 
@@ -1733,7 +1831,16 @@ func TestLinodeObjectStorageQuotaGetToolDefinition(t *testing.T) {
 func TestLinodeObjectStorageQuotaGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	quota := linode.ObjectStorageQuota{keyBetaID: objectStorageQuotaTestID, "quota": 250}
+	quota := map[string]any{
+		"quota_id":        objectStorageQuotaTestID,
+		"quota_name":      "Number of Objects",
+		"endpoint_type":   "E1",
+		"s3_endpoint":     "us-sea-1.linodeobjects.com",
+		"description":     "Maximum number of objects this endpoint can store",
+		"quota_limit":     250,
+		"resource_metric": "object",
+		keyNotInProto:     valNotInProto,
+	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -1783,12 +1890,20 @@ func TestLinodeObjectStorageQuotaGetToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
+	if !strings.Contains(textContent.Text, `"quota_id"`) {
+		t.Errorf("textContent.Text does not contain %v", `"quota_id"`)
+	}
+
 	if !strings.Contains(textContent.Text, objectStorageQuotaTestID) {
 		t.Errorf("textContent.Text does not contain %v", objectStorageQuotaTestID)
 	}
 
 	if !strings.Contains(textContent.Text, "250") {
 		t.Errorf("textContent.Text does not contain %v", "250")
+	}
+
+	if strings.Contains(textContent.Text, "not_in_proto") {
+		t.Errorf("textContent.Text unexpectedly contains dropped unknown field: %v", textContent.Text)
 	}
 }
 
@@ -2057,25 +2172,11 @@ func TestLinodeObjectStorageBucketCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props["acl"]; !ok {
-		t.Errorf("props missing key %v", "acl")
-	}
-
-	if _, ok := props["cors_enabled"]; !ok {
-		t.Errorf("props missing key %v", "cors_enabled")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyLabel, keyRegion, keyACL, keyCORSEnabled, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -2177,6 +2278,48 @@ func TestLinodeObjectStorageBucketCreateToolLabelStartWithHyphen(t *testing.T) {
 	}
 }
 
+// TestValidateBucketACLMessageReconciled pins the exact invalid-acl message that
+// validateBucketACL surfaces through the create handler. The string must be
+// byte-identical to Python's: no "got '<value>':" prefix and ACLs listed in
+// API/create-endpoint order.
+func TestValidateBucketACLMessageReconciled(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeObjectStorageBucketCreateTool(cfg)
+
+	req := createRequestWithArgs(t, map[string]any{
+		keyLabel:   bucketTest,
+		keyRegion:  regionUSEast1,
+		keyACL:     "bogus",
+		keyConfirm: true,
+	})
+
+	result, err := handler(t.Context(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil || !result.IsError {
+		t.Fatal("want an error result for an invalid acl")
+	}
+
+	const want = "acl must be one of: private, public-read, authenticated-read, public-read-write"
+
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] is not TextContent: %T", result.Content[0])
+	}
+
+	if text.Text != want {
+		t.Errorf("error text = %q, want %q", text.Text, want)
+	}
+}
+
 func TestLinodeObjectStorageBucketCreateToolSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -2275,17 +2418,11 @@ func TestLinodeObjectStorageBucketDeleteToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyRegion, keyLabel, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -2429,13 +2566,11 @@ func TestLinodeObjectStorageCancelToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "WARNING")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
-	}
-
-	if _, ok := props["dry_run"]; !ok {
-		t.Errorf("props missing key %v", "dry_run")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyConfirm, keyDryRun} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -2653,25 +2788,11 @@ func TestLinodeObjectStorageBucketAccessAllowToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["acl"]; !ok {
-		t.Errorf("props missing key %v", "acl")
-	}
-
-	if _, ok := props["cors_enabled"]; !ok {
-		t.Errorf("props missing key %v", "cors_enabled")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyRegion, keyLabel, keyACL, keyCORSEnabled, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -2717,7 +2838,7 @@ func TestLinodeObjectStorageBucketAccessAllowToolValidation(t *testing.T) {
 		},
 		{
 			name:     "region separator rejected",
-			args:     map[string]any{keyRegion: "us/east-1", keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: true},
+			args:     map[string]any{keyRegion: regionSlashUSEast1, keyLabel: bucketTest, keyACL: aclPublicRead, keyConfirm: true},
 			contains: errRegionInvalid,
 		},
 		{
@@ -2887,25 +3008,11 @@ func TestLinodeObjectStorageBucketAccessUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["acl"]; !ok {
-		t.Errorf("props missing key %v", "acl")
-	}
-
-	if _, ok := props["cors_enabled"]; !ok {
-		t.Errorf("props missing key %v", "cors_enabled")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyRegion, keyLabel, keyACL, keyCORSEnabled, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3075,17 +3182,11 @@ func TestLinodeObjectStorageKeyCreateToolDefinition(t *testing.T) {
 		t.Errorf("tool.Description does not contain %v", "secret_key")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["bucket_access"]; !ok {
-		t.Errorf("props missing key %v", "bucket_access")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyLabel, keyBucketAccess, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3297,21 +3398,11 @@ func TestLinodeObjectStorageKeyUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["key_id"]; !ok {
-		t.Errorf("props missing key %v", "key_id")
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["bucket_access"]; !ok {
-		t.Errorf("props missing key %v", "bucket_access")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyKeyID, keyLabel, keyBucketAccess, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3445,13 +3536,11 @@ func TestLinodeObjectStorageKeyDeleteToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["key_id"]; !ok {
-		t.Errorf("props missing key %v", "key_id")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyKeyID, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3596,8 +3685,8 @@ func TestLinodeObjectStorageKeyDeleteToolDryRunSchemaProperty(t *testing.T) {
 
 	t.Parallel()
 
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -3745,25 +3834,11 @@ func TestLinodeObjectStoragePresignedURLToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["name"]; !ok {
-		t.Errorf("props missing key %v", "name")
-	}
-
-	if _, ok := props["method"]; !ok {
-		t.Errorf("props missing key %v", "method")
-	}
-
-	if _, ok := props["expires_in"]; !ok {
-		t.Errorf("props missing key %v", "expires_in")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyRegion, keyLabel, keyName, keyMethod, keyExpiresIn} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -3894,8 +3969,9 @@ func TestLinodeObjectStoragePresignedURLToolInvalidExpiresIn(t *testing.T) {
 func TestLinodeObjectStoragePresignedURLToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	resp := linode.PresignedURLResponse{
-		URL: "https://my-bucket.us-east-1.linodeobjects.com/photo.jpg?signed=abc123",
+	resp := map[string]any{
+		"url":         "https://my-bucket.us-east-1.linodeobjects.com/photo.jpg?signed=abc123",
+		keyNotInProto: valNotInProto,
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -3949,6 +4025,10 @@ func TestLinodeObjectStoragePresignedURLToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "signed=abc123") {
 		t.Errorf("textContent.Text does not contain %v", "signed=abc123")
+	}
+
+	if strings.Contains(textContent.Text, valNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 
@@ -4134,25 +4214,11 @@ func TestLinodeObjectStorageObjectACLUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["name"]; !ok {
-		t.Errorf("props missing key %v", "name")
-	}
-
-	if _, ok := props["acl"]; !ok {
-		t.Errorf("props missing key %v", "acl")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyRegion, keyLabel, keyName, keyACL, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -4419,17 +4485,11 @@ func TestLinodeObjectStorageSSLDeleteToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyRegion, keyLabel, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -4554,8 +4614,8 @@ func TestLinodeObjectStorageBucketDeleteToolDryRunSchemaAdvertisesDryRun(t *test
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeObjectStorageBucketDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -4751,8 +4811,8 @@ func TestLinodeObjectStorageSSLDeleteToolDryRunSchemaAdvertisesDryRun(t *testing
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeObjectStorageSSLDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -4952,25 +5012,11 @@ func TestLinodeObjectStorageSSLUploadToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keySupportTicketRegion]; !ok {
-		t.Errorf("props missing key %v", keySupportTicketRegion)
-	}
-
-	if _, ok := props[monitorAlertDefinitionLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props["certificate"]; !ok {
-		t.Errorf("props missing key %v", "certificate")
-	}
-
-	if _, ok := props["private_key"]; !ok {
-		t.Errorf("props missing key %v", "private_key")
-	}
-
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyRegion, keyLabel, keyCertificate, keyPrivateKey, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -5066,6 +5112,20 @@ func TestLinodeObjectStorageSSLUploadToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "SSL certificate uploaded") {
 		t.Errorf("textContent.Text does not contain %v", "SSL certificate uploaded")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	ssl, isObject := body["ssl"].(map[string]any)
+	if !isObject {
+		t.Fatalf("body[ssl] is not an object: %v", body["ssl"])
+	}
+
+	if ssl["ssl"] != true {
+		t.Errorf("ssl.ssl = %v, want true", ssl["ssl"])
 	}
 }
 

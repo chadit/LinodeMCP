@@ -1,0 +1,17 @@
+{
+  "tool": "linode_lke_cluster_get",
+  "description": "Pins the shared cluster_id-required rejection and the single GET both languages issue. Non-integer cluster_id text diverges (Go appends ': <raw>'), see report.",
+  "cases": [
+    {
+      "name": "rejects missing cluster_id",
+      "args": {},
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "gets a cluster by id",
+      "args": { "cluster_id": "12345" },
+      "api_response": { "id": 12345, "label": "prod", "region": "us-east", "k8s_version": "1.31" },
+      "expect_request": { "method": "GET", "path": "/lke/clusters/12345" }
+    }
+  ]
+}

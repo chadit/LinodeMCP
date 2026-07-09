@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 // DatabaseInstance is one Managed Database instance summary element. The
@@ -69,4 +71,405 @@ message DatabaseInstanceWriteResponse {
 message DatabaseInstanceActionWriteResponse {
   string message = 1;
   int32 instance_id = 2;
+}
+
+// DatabaseInstanceDeleteResponse is the id-echo envelope the MySQL and
+// PostgreSQL instance delete tools return: a confirmation message plus the
+// deleted instance's ID. The delete endpoint returns an empty body, so the id
+// echo confirms the target. Both engines share this shape.
+message DatabaseInstanceDeleteResponse {
+  string message = 1;
+  int32 instance_id = 2;
+}
+
+// DatabaseCredentials is the {username, password} body the MySQL and PostgreSQL
+// credentials-get tools return. The password is secret by design: these tools
+// exist to expose the connection credentials, so the field is emitted in the
+// clear rather than redacted. Both engines share this element.
+message DatabaseCredentials {
+  string username = 1;
+  string password = 2;
+}
+
+// DatabaseInstanceListInput is the input contract for
+// linode_database_instance_list (cross-engine /databases/instances).
+message DatabaseInstanceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// DatabaseMySQLInstanceListInput is the input contract for
+// linode_database_mysql_instance_list.
+message DatabaseMySQLInstanceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// DatabasePostgreSQLInstanceListInput is the input contract for
+// linode_database_postgresql_instance_list.
+message DatabasePostgreSQLInstanceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// DatabaseMySQLInstanceGetInput is the input contract for
+// linode_database_mysql_instance_get.
+message DatabaseMySQLInstanceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The MySQL Managed Database instance ID to retrieve.
+  int32 instance_id = 2;
+}
+
+// DatabasePostgreSQLInstanceGetInput is the input contract for
+// linode_database_postgresql_instance_get.
+message DatabasePostgreSQLInstanceGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The PostgreSQL Managed Database instance ID to retrieve.
+  int32 instance_id = 2;
+}
+
+// DatabaseMySQLInstanceCredentialsGetInput is the input contract for
+// linode_database_mysql_instance_credentials_get.
+message DatabaseMySQLInstanceCredentialsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The MySQL Managed Database instance ID whose credentials to retrieve.
+  int32 instance_id = 2;
+  // Must be true to confirm retrieving the database credentials. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabasePostgreSQLInstanceCredentialsGetInput is the input contract for
+// linode_database_postgresql_instance_credentials_get.
+message DatabasePostgreSQLInstanceCredentialsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The PostgreSQL Managed Database instance ID whose credentials to retrieve.
+  int32 instance_id = 2;
+  // Must be true to confirm retrieving the database credentials. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabaseMySQLInstanceCredentialsResetInput is the input contract for
+// linode_database_mysql_instance_credentials_reset.
+message DatabaseMySQLInstanceCredentialsResetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The MySQL Managed Database instance ID whose credentials to reset.
+  int32 instance_id = 2;
+  // Must be true to confirm resetting database credentials. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabasePostgreSQLInstanceCredentialsResetInput is the input contract for
+// linode_database_postgresql_instance_credentials_reset.
+message DatabasePostgreSQLInstanceCredentialsResetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The PostgreSQL Managed Database instance ID whose credentials to reset.
+  int32 instance_id = 2;
+  // Must be true to confirm resetting PostgreSQL database credentials. Ignored
+  // when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabaseMySQLInstanceDeleteInput is the input contract for
+// linode_database_mysql_instance_delete.
+message DatabaseMySQLInstanceDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The MySQL Managed Database instance ID to delete.
+  int32 instance_id = 2;
+  // Must be true to confirm database deletion. This action is irreversible.
+  // Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// DatabasePostgreSQLInstanceDeleteInput is the input contract for
+// linode_database_postgresql_instance_delete.
+message DatabasePostgreSQLInstanceDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The PostgreSQL Managed Database instance ID to delete.
+  int32 instance_id = 2;
+  // Must be true to confirm PostgreSQL database deletion. This action is
+  // irreversible. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// DatabaseMySQLInstancePatchInput is the input contract for
+// linode_database_mysql_instance_patch.
+message DatabaseMySQLInstancePatchInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The MySQL Managed Database instance ID to patch.
+  int32 instance_id = 2;
+  // Must be true to confirm database patching. This may cause maintenance
+  // downtime for single-node clusters. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabasePostgreSQLInstancePatchInput is the input contract for
+// linode_database_postgresql_instance_patch.
+message DatabasePostgreSQLInstancePatchInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The PostgreSQL Managed Database instance ID to patch.
+  int32 instance_id = 2;
+  // Must be true to confirm PostgreSQL database patching. This may cause
+  // maintenance downtime for single-node clusters. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabaseMySQLInstanceSuspendInput is the input contract for
+// linode_database_mysql_instance_suspend.
+message DatabaseMySQLInstanceSuspendInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The MySQL Managed Database instance ID to suspend.
+  int32 instance_id = 2;
+  // Must be true to confirm suspending the database instance. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabasePostgreSQLInstanceSuspendInput is the input contract for
+// linode_database_postgresql_instance_suspend.
+message DatabasePostgreSQLInstanceSuspendInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The PostgreSQL Managed Database instance ID to suspend.
+  int32 instance_id = 2;
+  // Must be true to confirm suspending the PostgreSQL database instance.
+  // Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabaseMySQLInstanceResumeInput is the input contract for
+// linode_database_mysql_instance_resume.
+message DatabaseMySQLInstanceResumeInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The MySQL Managed Database instance ID to resume.
+  int32 instance_id = 2;
+  // Must be true to confirm resuming the database instance. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabasePostgreSQLInstanceResumeInput is the input contract for
+// linode_database_postgresql_instance_resume.
+message DatabasePostgreSQLInstanceResumeInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The PostgreSQL Managed Database instance ID to resume.
+  int32 instance_id = 2;
+  // Must be true to confirm resuming the PostgreSQL database instance. Ignored
+  // when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// DatabaseMySQLInstanceCreateInput is the input contract for
+// linode_database_mysql_instance_create. The engine_config, fork, and
+// private_network params are free-form objects, so each is a
+// map<string, google.protobuf.Value> that renders top-level {"type":"object"};
+// the runtime handler validates their inner shape.
+message DatabaseMySQLInstanceCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Label for the database instance.
+  string label = 2;
+  // Linode type for the database instance.
+  string type = 3;
+  // Database engine ID, for example mysql/8.0.26.
+  string engine = 4;
+  // Region for the database instance.
+  string region = 5;
+  // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
+  repeated string allow_list = 6;
+  // Number of nodes in the cluster (optional).
+  optional int32 cluster_size = 7;
+  // JSON object of MySQL engine configuration values (optional).
+  map<string, google.protobuf.Value> engine_config = 8;
+  // Object describing source database fork/restore settings (optional).
+  map<string, google.protobuf.Value> fork = 9;
+  // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
+  // Omit for no private networking (optional).
+  map<string, google.protobuf.Value> private_network = 10;
+  // Whether to require SSL connections (optional).
+  optional bool ssl_connection = 11;
+  // Must be true to confirm database creation. This creates a billable
+  // resource. Ignored when dry_run=true.
+  bool confirm = 12;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 13;
+}
+
+// DatabasePostgreSQLInstanceCreateInput is the input contract for
+// linode_database_postgresql_instance_create. The engine_config, fork, and
+// private_network params are free-form objects, so each is a
+// map<string, google.protobuf.Value> that renders top-level {"type":"object"};
+// the runtime handler validates their inner shape.
+message DatabasePostgreSQLInstanceCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Label for the database instance.
+  string label = 2;
+  // Linode type for the database instance.
+  string type = 3;
+  // PostgreSQL database engine ID, for example postgresql/16.
+  string engine = 4;
+  // Region for the database instance.
+  string region = 5;
+  // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
+  repeated string allow_list = 6;
+  // Number of nodes in the cluster (optional).
+  optional int32 cluster_size = 7;
+  // JSON object of PostgreSQL engine configuration values (optional).
+  map<string, google.protobuf.Value> engine_config = 8;
+  // Object describing source database fork/restore settings (optional).
+  map<string, google.protobuf.Value> fork = 9;
+  // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
+  // Omit for no private networking (optional).
+  map<string, google.protobuf.Value> private_network = 10;
+  // Whether to require SSL connections (optional).
+  optional bool ssl_connection = 11;
+  // Must be true to confirm database creation. This creates a billable
+  // resource. Ignored when dry_run=true.
+  bool confirm = 12;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 13;
+}
+
+// DatabaseMySQLInstanceUpdateInput is the input contract for
+// linode_database_mysql_instance_update. The engine_config, updates, and
+// private_network params are free-form objects, so each is a
+// map<string, google.protobuf.Value> that renders top-level {"type":"object"};
+// the runtime handler validates their inner shape. private_network also accepts
+// an explicit JSON null at runtime to detach the VPC.
+message DatabaseMySQLInstanceUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The MySQL Managed Database instance ID to update.
+  int32 instance_id = 2;
+  // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
+  repeated string allow_list = 3;
+  // JSON object of MySQL engine configuration values (optional).
+  map<string, google.protobuf.Value> engine_config = 4;
+  // New label for the database instance (optional).
+  optional string label = 5;
+  // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
+  // Pass null to detach (optional).
+  map<string, google.protobuf.Value> private_network = 6;
+  // New Linode type for the database instance (optional).
+  optional string type = 7;
+  // Object of maintenance update settings (optional).
+  map<string, google.protobuf.Value> updates = 8;
+  // New MySQL version for the database instance (optional).
+  optional string version = 9;
+  // Must be true to confirm database update. Ignored when dry_run=true.
+  bool confirm = 10;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 11;
+}
+
+// DatabasePostgreSQLInstanceUpdateInput is the input contract for
+// linode_database_postgresql_instance_update. The engine_config, updates, and
+// private_network params are free-form objects, so each is a
+// map<string, google.protobuf.Value> that renders top-level {"type":"object"};
+// the runtime handler validates their inner shape. private_network also accepts
+// an explicit JSON null at runtime to detach the VPC.
+message DatabasePostgreSQLInstanceUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The PostgreSQL Managed Database instance ID to update.
+  int32 instance_id = 2;
+  // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
+  repeated string allow_list = 3;
+  // JSON object of PostgreSQL engine configuration values (optional).
+  map<string, google.protobuf.Value> engine_config = 4;
+  // New label for the database instance (optional).
+  optional string label = 5;
+  // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
+  // Pass null to detach (optional).
+  map<string, google.protobuf.Value> private_network = 6;
+  // New Linode type for the database instance (optional).
+  optional string type = 7;
+  // Object of maintenance update settings (optional).
+  map<string, google.protobuf.Value> updates = 8;
+  // New PostgreSQL version for the database instance (optional).
+  optional string version = 9;
+  // Must be true to confirm database update. Ignored when dry_run=true.
+  bool confirm = 10;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 11;
 }

@@ -45,9 +45,10 @@ func TestLinodeProfileTFAEnableConfirmToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyTFACode, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -106,8 +107,23 @@ func TestLinodeProfileTFAEnableConfirmToolSuccess(t *testing.T) {
 		t.Error("result.IsError = true, want false")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tfaConfirmScratchToken) {
-		t.Errorf("error text %q does not contain %q", text.Text, tfaConfirmScratchToken)
+	text, ok := result.Content[0].(mcp.TextContent)
+	if !ok {
+		t.Fatalf("result.Content[0] is not mcp.TextContent")
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(text.Text), &payload); err != nil {
+		t.Fatalf("unexpected error unmarshaling result: %v", err)
+	}
+
+	want := map[string]any{
+		"message":           "Profile two-factor authentication enabled successfully",
+		"scratch":           tfaConfirmScratchToken,
+		keyTFAConfirmExpiry: tfaConfirmExpiry,
+	}
+	if !reflect.DeepEqual(payload, want) {
+		t.Errorf("payload = %v, want %v", payload, want)
 	}
 }
 

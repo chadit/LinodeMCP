@@ -1,0 +1,33 @@
+{
+  "message": "linode.mcp.v1.AuditReportResponse",
+  "description": "Audit report summary-output body: rows populated, events empty. Both arrays always emit.",
+  "input": {
+    "name": "destroys-last-day",
+    "output": "summary",
+    "total_events": 5,
+    "rows": [
+      {
+        "groups": {
+          "status": "success",
+          "tool": "linode_instance_delete"
+        },
+        "count": 5
+      }
+    ]
+  },
+  "canonical": {
+    "name": "destroys-last-day",
+    "output": "summary",
+    "total_events": 5,
+    "rows": [
+      {
+        "groups": {
+          "status": "success",
+          "tool": "linode_instance_delete"
+        },
+        "count": 5
+      }
+    ],
+    "events": []
+  }
+}

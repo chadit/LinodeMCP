@@ -20,40 +20,46 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.28.0,<2.0",
-    "httpx>=0.27.0,<1.0",
-    "pyyaml>=6.0.1,<7.0",
+    "mcp>=1.28.1,<2.0",
+    "httpx>=0.28.1,<1.0",
+    "pyyaml>=6.0.3,<7.0",
     "structlog>=26.1,<26.2",
-    "textual>=8.2.7,<9.0",
+    "textual>=8.2.8,<9.0",
+    # Runtime dep of the generated genpb modules and the canonical serializer.
+    # Floor: the buf python/pyi plugins are pinned to v33.0, whose gencode is
+    # 6.33.0 and must not be newer than the runtime. Ceiling: the
+    # opentelemetry-proto exporter chain requires protobuf<7.0; bump the buf
+    # plugin tags and this range together when that ceiling lifts.
+    "protobuf>=6.33.0,<7.0",
     # Security floors for transitive deps pulled in by mcp. mcp's own
     # constraints are open (starlette>=0.27, python-multipart>=0.0.9), so
     # without these a resolve can land on versions trivy flags HIGH.
     # Remove once mcp's own floors clear these advisories.
-    "cryptography>=48.0.1",
-    "python-multipart>=0.0.30",
+    "cryptography>=49.0.0",
+    "python-multipart>=0.0.32",
     "starlette>=1.3.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "pytest-cov>=4.1.0",
-    "ruff>=0.2.0",
-    "mypy>=1.8.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.20",
+    "mypy>=2.1.0",
     "types-PyYAML>=6.0.12",
-    "build>=1.2.0",
+    "build>=1.5.0",
 ]
 
 observability = [
-    "opentelemetry-api>=1.28.0",
-    "opentelemetry-sdk>=1.28.0",
-    "opentelemetry-exporter-otlp>=1.28.0",
-    "opentelemetry-exporter-prometheus>=0.49b0",
-    "opentelemetry-instrumentation-system-metrics>=0.49b0",
-    "opentelemetry-instrumentation-mcp>=0.1.0",
-    "opentelemetry-instrumentation-httpx>=0.49b0",
-    "prometheus-client>=0.21.0",
+    "opentelemetry-api>=1.43.0",
+    "opentelemetry-sdk>=1.43.0",
+    "opentelemetry-exporter-otlp>=1.43.0",
+    "opentelemetry-exporter-prometheus>=0.64b0",
+    "opentelemetry-instrumentation-system-metrics>=0.64b0",
+    "opentelemetry-instrumentation-mcp>=0.62.1",
+    "opentelemetry-instrumentation-httpx>=0.64b0",
+    "prometheus-client>=0.25.0",
 ]
 
 [project.scripts]

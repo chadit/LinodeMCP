@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.VLANDeleteResponse",
+  "description": "VLAN delete id-echo: a confirmation message plus the region and label identifying the deleted VLAN. The endpoint returns an empty body.",
+  "input": {
+    "message": "VLAN my-vlan deleted successfully from region us-east",
+    "region_id": "us-east",
+    "label": "my-vlan"
+  },
+  "canonical": {
+    "message": "VLAN my-vlan deleted successfully from region us-east",
+    "region_id": "us-east",
+    "label": "my-vlan"
+  }
+}

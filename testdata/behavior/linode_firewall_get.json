@@ -1,0 +1,22 @@
+{
+  "tool": "linode_firewall_get",
+  "description": "Firewall get fetches one firewall by id via a plain GET, and rejects a missing or non-positive firewall_id locally (Python now routes through the strict id helper, matching Go).",
+  "cases": [
+    {
+      "name": "requires firewall_id",
+      "args": {},
+      "expect_error": "firewall_id is required"
+    },
+    {
+      "name": "rejects a negative firewall_id",
+      "args": { "firewall_id": -1 },
+      "expect_error": "firewall_id must be a positive integer"
+    },
+    {
+      "name": "gets a firewall by id",
+      "args": { "firewall_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/networking/firewalls/123" }
+    }
+  ]
+}

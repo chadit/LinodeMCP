@@ -1,0 +1,26 @@
+{
+  "tool": "linode_instance_interface_settings_update",
+  "description": "Pins the shared no-field rejection and the interface-settings update PUT body. linode_id rejection text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing network_helper and default_route",
+      "args": { "linode_id": 123, "confirm": true },
+      "expect_error": "network_helper or default_route is required"
+    },
+    {
+      "name": "updates network helper",
+      "args": { "linode_id": 123, "confirm": true, "network_helper": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/123/interfaces/settings",
+        "body": { "network_helper": true }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "network_helper": true},
+      "expect_error": "This updates interface settings for the Linode instance. Set confirm=true to proceed."
+    }
+  ]
+}

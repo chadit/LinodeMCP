@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.FirewallDeviceDeleteResponse",
+  "description": "Firewall device delete id-echo: a confirmation message plus the parent firewall and removed device IDs. The delete endpoint returns an empty body, so the response echoes the IDs.",
+  "input": {
+    "message": "Firewall device removed successfully",
+    "firewall_id": 456,
+    "device_id": 789
+  },
+  "canonical": {
+    "message": "Firewall device removed successfully",
+    "firewall_id": 456,
+    "device_id": 789
+  }
+}

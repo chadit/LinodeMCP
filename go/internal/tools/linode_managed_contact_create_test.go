@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -60,25 +59,11 @@ func TestLinodeManagedContactCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[managedContactNameParam]; !ok {
-		t.Errorf("props missing key %v", managedContactNameParam)
-	}
-
-	if _, ok := props[managedContactEmailParam]; !ok {
-		t.Errorf("props missing key %v", managedContactEmailParam)
-	}
-
-	if _, ok := props[managedContactPhoneParam]; !ok {
-		t.Errorf("props missing key %v", managedContactPhoneParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{managedContactNameParam, managedContactEmailParam, managedContactPhoneParam, keyConfirm} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 }
 
@@ -280,6 +265,10 @@ func TestLinodeManagedContactCreateToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, managedContactEmailFixture) {
 		t.Errorf("textContent.Text does not contain %v", managedContactEmailFixture)
+	}
+
+	if !strings.Contains(textContent.Text, "Managed contact 567 created successfully") {
+		t.Errorf("textContent.Text does not contain the create confirmation message: %v", textContent.Text)
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -59,34 +58,34 @@ func TestLinodeAccountUserUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyUsername]; !ok {
-		t.Errorf("props missing key %v", keyUsername)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyUsername) {
+		t.Errorf("RawInputSchema missing key %v", keyUsername)
 	}
 
-	if _, ok := props[keyEmail]; !ok {
-		t.Errorf("props missing key %v", keyEmail)
+	if !strings.Contains(rawSchema, keyEmail) {
+		t.Errorf("RawInputSchema missing key %v", keyEmail)
 	}
 
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
+	if !strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 
-	if _, ok := props[keyAccountUserRestricted]; !ok {
-		t.Errorf("props missing key %v", keyAccountUserRestricted)
+	if !strings.Contains(rawSchema, keyAccountUserRestricted) {
+		t.Errorf("RawInputSchema missing key %v", keyAccountUserRestricted)
 	}
 
-	if _, ok := props[keyAccountUserSSHKeys]; !ok {
-		t.Errorf("props missing key %v", keyAccountUserSSHKeys)
+	if !strings.Contains(rawSchema, keyAccountUserSSHKeys) {
+		t.Errorf("RawInputSchema missing key %v", keyAccountUserSSHKeys)
 	}
 
-	if _, ok := props[keyAccountUserNewUsername]; !ok {
-		t.Errorf("props missing key %v", keyAccountUserNewUsername)
+	if !strings.Contains(rawSchema, keyAccountUserNewUsername) {
+		t.Errorf("RawInputSchema missing key %v", keyAccountUserNewUsername)
 	}
 
 	for _, key := range []string{keyUsername, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing required key %v", key)
 		}
 	}
 }

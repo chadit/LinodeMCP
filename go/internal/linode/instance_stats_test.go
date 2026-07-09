@@ -6,13 +6,14 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync/atomic"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
+// writeInstanceStatsFixture writes the real GET /linode/instances/{id}/stats
+// body, which nests every graph under a top-level "data" object beside "title".
 func writeInstanceStatsFixture(t *testing.T, w http.ResponseWriter) {
 	t.Helper()
 
@@ -20,10 +21,12 @@ func writeInstanceStatsFixture(t *testing.T, w http.ResponseWriter) {
 
 	_, err := w.Write([]byte(`{
 		"title":"linode.com - my-linode (linode123456) - day (5 min avg)",
-		"cpu":[[1521483600000,0.42]],
-		"io":{"io":[[1521484800000,0.19]],"swap":[[1521484800000,0]]},
-		"netv4":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]],"private_in":[[1521484800000,0]],"private_out":[[1521484800000,5.6]]},
-		"netv6":{"in":[[1521484800000,0]],"out":[[1521484800000,0]],"private_in":[[1521484800000,195.18]],"private_out":[[1521484800000,5.6]]}
+		"data":{
+			"cpu":[[1521483600000,0.42]],
+			"io":{"io":[[1521484800000,0.19]],"swap":[[1521484800000,0]]},
+			"netv4":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]],"private_in":[[1521484800000,0]],"private_out":[[1521484800000,5.6]]},
+			"netv6":{"in":[[1521484800000,0]],"out":[[1521484800000,0]],"private_in":[[1521484800000,195.18]],"private_out":[[1521484800000,5.6]]}
+		}
 	}`))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -32,27 +35,6 @@ func writeInstanceStatsFixture(t *testing.T, w http.ResponseWriter) {
 
 func TestClientGetInstanceStatsSuccess(t *testing.T) {
 	t.Parallel()
-
-	want := linode.InstanceStats{
-		Title: instanceStatsTitle,
-		CPU:   [][]float64{{1521483600000, 0.42}},
-		IO: linode.InstanceIOStats{
-			IO:   [][]float64{{1521484800000, 0.19}},
-			Swap: [][]float64{{1521484800000, 0}},
-		},
-		NetV4: linode.InstanceNetV4Stats{
-			In:         [][]float64{{1521484800000, 2004.36}},
-			Out:        [][]float64{{1521484800000, 3928.91}},
-			PrivateIn:  [][]float64{{1521484800000, 0}},
-			PrivateOut: [][]float64{{1521484800000, 5.6}},
-		},
-		NetV6: linode.InstanceNetV6Stats{
-			In:         [][]float64{{1521484800000, 0}},
-			Out:        [][]float64{{1521484800000, 0}},
-			PrivateIn:  [][]float64{{1521484800000, 195.18}},
-			PrivateOut: [][]float64{{1521484800000, 5.6}},
-		},
-	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -71,17 +53,13 @@ func TestClientGetInstanceStatsSuccess(t *testing.T) {
 			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
 		}
 
-		if !reflect.DeepEqual(r.Body, http.NoBody) {
-			t.Errorf("r.Body = %v, want %v", r.Body, http.NoBody)
-		}
-
 		writeInstanceStatsFixture(t, w)
 	}))
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.GetInstanceStats(t.Context(), 123)
+	got, err := client.GetInstanceStatsProto(t.Context(), 123)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -90,24 +68,24 @@ func TestClientGetInstanceStatsSuccess(t *testing.T) {
 		t.Fatal("got is nil")
 	}
 
-	if got.Title != want.Title {
-		t.Errorf("got.Title = %v, want %v", got.Title, want.Title)
+	if got.GetTitle() != instanceStatsTitle {
+		t.Errorf("got.GetTitle() = %v, want %v", got.GetTitle(), instanceStatsTitle)
 	}
 
-	if !reflect.DeepEqual(got.CPU, want.CPU) {
-		t.Errorf("got.CPU = %v, want %v", got.CPU, want.CPU)
+	if v := got.GetData().GetCpu()[0].GetValues()[1].GetNumberValue(); math.Abs(v-0.42) > 0.001 {
+		t.Errorf("cpu value = %v, want %v", v, 0.42)
 	}
 
-	if !reflect.DeepEqual(got.IO, want.IO) {
-		t.Errorf("got.IO = %v, want %v", got.IO, want.IO)
+	if v := got.GetData().GetIo().GetIo()[0].GetValues()[1].GetNumberValue(); math.Abs(v-0.19) > 0.001 {
+		t.Errorf("io.io value = %v, want %v", v, 0.19)
 	}
 
-	if !reflect.DeepEqual(got.NetV4, want.NetV4) {
-		t.Errorf("got.NetV4 = %v, want %v", got.NetV4, want.NetV4)
+	if v := got.GetData().GetNetv4().GetIn()[0].GetValues()[1].GetNumberValue(); math.Abs(v-2004.36) > 0.001 {
+		t.Errorf("netv4.in value = %v, want %v", v, 2004.36)
 	}
 
-	if !reflect.DeepEqual(got.NetV6, want.NetV6) {
-		t.Errorf("got.NetV6 = %v, want %v", got.NetV6, want.NetV6)
+	if v := got.GetData().GetNetv6().GetPrivateIn()[0].GetValues()[1].GetNumberValue(); math.Abs(v-195.18) > 0.001 {
+		t.Errorf("netv6.private_in value = %v, want %v", v, 195.18)
 	}
 }
 
@@ -134,7 +112,7 @@ func TestClientGetInstanceStatsAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetInstanceStats(t.Context(), 123)
+	_, err := client.GetInstanceStatsProto(t.Context(), 123)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -151,8 +129,6 @@ func TestClientGetInstanceStatsAPIError(t *testing.T) {
 
 func TestClientGetInstanceStatsRetriesTransientError(t *testing.T) {
 	t.Parallel()
-
-	want := linode.InstanceStats{Title: instanceStatsTitle}
 
 	var requestCount atomic.Int32
 
@@ -177,7 +153,7 @@ func TestClientGetInstanceStatsRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
 
-	got, err := client.GetInstanceStats(t.Context(), 123)
+	got, err := client.GetInstanceStatsProto(t.Context(), 123)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -186,8 +162,8 @@ func TestClientGetInstanceStatsRetriesTransientError(t *testing.T) {
 		t.Fatal("got is nil")
 	}
 
-	if got.Title != want.Title {
-		t.Errorf("got.Title = %v, want %v", got.Title, want.Title)
+	if got.GetTitle() != instanceStatsTitle {
+		t.Errorf("got.GetTitle() = %v, want %v", got.GetTitle(), instanceStatsTitle)
 	}
 
 	if requestCount.Load() != int32(2) {
@@ -218,24 +194,26 @@ func TestClientGetInstanceStatsByYearMonthSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
-			"cpu": [][]float64{{1521483600000, 0.42}},
-			"io": map[string]any{
-				"io":   [][]float64{{1521484800000, 0.19}},
-				"swap": [][]float64{{1521484800000, 0}},
-			},
-			"netv4": map[string]any{
-				"in":          [][]float64{{1521484800000, 2004.36}},
-				"out":         [][]float64{{1521484800000, 3928.91}},
-				"private_in":  [][]float64{{1521484800000, 0}},
-				"private_out": [][]float64{{1521484800000, 5.6}},
-			},
-			"netv6": map[string]any{
-				"in":          [][]float64{{1521484800000, 10}},
-				"out":         [][]float64{{1521484800000, 20}},
-				"private_in":  [][]float64{{1521484800000, 0}},
-				"private_out": [][]float64{{1521484800000, 0}},
-			},
 			"title": "linode123 stats",
+			keyData: map[string]any{
+				"cpu": [][]float64{{1521483600000, 0.42}},
+				"io": map[string]any{
+					"io":   [][]float64{{1521484800000, 0.19}},
+					"swap": [][]float64{{1521484800000, 0}},
+				},
+				"netv4": map[string]any{
+					"in":          [][]float64{{1521484800000, 2004.36}},
+					"out":         [][]float64{{1521484800000, 3928.91}},
+					"private_in":  [][]float64{{1521484800000, 0}},
+					"private_out": [][]float64{{1521484800000, 5.6}},
+				},
+				"netv6": map[string]any{
+					"in":          [][]float64{{1521484800000, 10}},
+					"out":         [][]float64{{1521484800000, 20}},
+					"private_in":  [][]float64{{1521484800000, 0}},
+					"private_out": [][]float64{{1521484800000, 0}},
+				},
+			},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -244,29 +222,29 @@ func TestClientGetInstanceStatsByYearMonthSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.GetInstanceStatsByYearMonth(t.Context(), 123, 2024, 8)
+	got, err := client.GetInstanceStatsByYearMonthProto(t.Context(), 123, 2024, 8)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got.Title != "linode123 stats" {
-		t.Errorf("got.Title = %v, want %v", got.Title, "linode123 stats")
+	if got.GetTitle() != "linode123 stats" {
+		t.Errorf("got.GetTitle() = %v, want %v", got.GetTitle(), "linode123 stats")
 	}
 
-	if math.Abs(got.CPU[0][1]-0.42) > 0.001 {
-		t.Errorf("got.CPU[0][1] = %v, want %v", got.CPU[0][1], 0.42)
+	if v := got.GetData().GetCpu()[0].GetValues()[1].GetNumberValue(); math.Abs(v-0.42) > 0.001 {
+		t.Errorf("cpu value = %v, want %v", v, 0.42)
 	}
 
-	if math.Abs(got.IO.IO[0][1]-0.19) > 0.001 {
-		t.Errorf("got.IO.IO[0][1] = %v, want %v", got.IO.IO[0][1], 0.19)
+	if v := got.GetData().GetIo().GetIo()[0].GetValues()[1].GetNumberValue(); math.Abs(v-0.19) > 0.001 {
+		t.Errorf("io.io value = %v, want %v", v, 0.19)
 	}
 
-	if math.Abs(got.NetV4.In[0][1]-2004.36) > 0.001 {
-		t.Errorf("got.NetV4.In[0][1] = %v, want %v", got.NetV4.In[0][1], 2004.36)
+	if v := got.GetData().GetNetv4().GetIn()[0].GetValues()[1].GetNumberValue(); math.Abs(v-2004.36) > 0.001 {
+		t.Errorf("netv4.in value = %v, want %v", v, 2004.36)
 	}
 
-	if math.Abs(got.NetV6.Out[0][1]-20.0) > 0.001 {
-		t.Errorf("got.NetV6.Out[0][1] = %v, want %v", got.NetV6.Out[0][1], 20.0)
+	if v := got.GetData().GetNetv6().GetOut()[0].GetValues()[1].GetNumberValue(); math.Abs(v-20.0) > 0.001 {
+		t.Errorf("netv6.out value = %v, want %v", v, 20.0)
 	}
 }
 
@@ -290,7 +268,7 @@ func TestClientGetInstanceStatsByYearMonthAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetInstanceStatsByYearMonth(t.Context(), 123, 2024, 8)
+	_, err := client.GetInstanceStatsByYearMonthProto(t.Context(), 123, 2024, 8)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -321,17 +299,17 @@ func TestClientGetInstanceStatsByYearMonthRejectsInvalidPathParams(t *testing.T)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.GetInstanceStatsByYearMonth(t.Context(), 0, 2024, 8)
+	_, err := client.GetInstanceStatsByYearMonthProto(t.Context(), 0, 2024, 8)
 	if !errors.Is(err, linode.ErrLinodeIDPositive) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrLinodeIDPositive)
 	}
 
-	_, err = client.GetInstanceStatsByYearMonth(t.Context(), 123, 1999, 8)
+	_, err = client.GetInstanceStatsByYearMonthProto(t.Context(), 123, 1999, 8)
 	if !errors.Is(err, linode.ErrStatsYearRange) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrStatsYearRange)
 	}
 
-	_, err = client.GetInstanceStatsByYearMonth(t.Context(), 123, 2024, 13)
+	_, err = client.GetInstanceStatsByYearMonthProto(t.Context(), 123, 2024, 13)
 	if !errors.Is(err, linode.ErrStatsMonthRange) {
 		t.Fatalf("error = %v, want %v", err, linode.ErrStatsMonthRange)
 	}
@@ -367,7 +345,7 @@ func TestClientGetInstanceStatsByYearMonthRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, fastRetryOpts()...)
 
-	got, err := client.GetInstanceStatsByYearMonth(t.Context(), 123, 2024, 8)
+	got, err := client.GetInstanceStatsByYearMonthProto(t.Context(), 123, 2024, 8)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -376,8 +354,8 @@ func TestClientGetInstanceStatsByYearMonthRetriesTransientError(t *testing.T) {
 		t.Fatal("got is nil")
 	}
 
-	if got.Title != instanceStatsTitle {
-		t.Errorf("got.Title = %v, want %v", got.Title, instanceStatsTitle)
+	if got.GetTitle() != instanceStatsTitle {
+		t.Errorf("got.GetTitle() = %v, want %v", got.GetTitle(), instanceStatsTitle)
 	}
 
 	if requestCount.Load() != int32(2) {

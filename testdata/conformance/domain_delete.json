@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.DomainDeleteResponse",
+  "description": "Domain delete id-echo: a confirmation message plus the deleted domain's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "Domain 4567 and all its records removed successfully",
+    "domain_id": 4567
+  },
+  "canonical": {
+    "message": "Domain 4567 and all its records removed successfully",
+    "domain_id": 4567
+  }
+}

@@ -35,13 +35,12 @@ def test_create_linode_managed_service_update_tool() -> None:
     assert capability is Capability.Admin
     assert tool.inputSchema["required"] == ["service_id", "confirm"]
     properties = tool.inputSchema["properties"]
-    assert properties["service_id"]["minimum"] == 1
+    assert properties["service_id"]["type"] == "integer"
     assert properties["confirm"]["type"] == "boolean"
     assert properties["dry_run"]["type"] == "boolean"
-    assert properties["service_type"]["enum"] == ["url", "tcp"]
-    assert properties["timeout"]["minimum"] == 1
-    assert properties["timeout"]["maximum"] == 255
-    assert properties["credentials"]["items"]["minimum"] == 1
+    assert properties["service_type"]["type"] == "string"
+    assert properties["timeout"]["type"] == "integer"
+    assert properties["credentials"]["type"] == "array"
     assert "id" not in properties
     assert "created" not in properties
     assert "status" not in properties
@@ -78,7 +77,21 @@ async def test_handle_linode_managed_service_update(sample_config: Config) -> No
             },
             sample_config,
         )
-    assert json.loads(result[0].text) == response_data
+    assert json.loads(result[0].text) == {
+        "message": "Managed service monitor 429 updated successfully",
+        "service": {
+            "address": "",
+            "consultation_group": "",
+            "created": "",
+            "credentials": [],
+            "id": 429,
+            "label": "web monitor",
+            "service_type": "url",
+            "status": "",
+            "timeout": 30,
+            "updated": "",
+        },
+    }
     mock_client.update_managed_service.assert_awaited_once_with(
         429,
         address="https://example.com/health?check=1",
@@ -132,9 +145,9 @@ async def test_handle_linode_managed_service_update_rejects_invalid_service_id(
         ("notes", 123, "notes must be a string or null"),
         ("region", 123, "region must be a string or null"),
         ("service_type", "udp", "service_type must be one of: tcp, url"),
-        ("timeout", 0, "timeout must be an integer from 1 to 255"),
-        ("timeout", 256, "timeout must be an integer from 1 to 255"),
-        ("timeout", True, "timeout must be an integer from 1 to 255"),
+        ("timeout", 0, "timeout must be an integer between 1 and 255"),
+        ("timeout", 256, "timeout must be an integer between 1 and 255"),
+        ("timeout", True, "timeout must be an integer between 1 and 255"),
         ("credentials", "9991", "credentials must be an array of positive integers"),
         ("credentials", [0], "credentials must be an array of positive integers"),
         ("credentials", [True], "credentials must be an array of positive integers"),

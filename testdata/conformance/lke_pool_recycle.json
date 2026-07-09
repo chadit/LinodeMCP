@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.LKEPoolRecycleResponse",
+  "description": "LKE node pool recycle id-echo: a confirmation message plus the parent cluster and recycled node-pool IDs. The endpoint returns an empty body.",
+  "input": {
+    "message": "Node pool 555 in cluster 6789 recycle initiated successfully",
+    "cluster_id": 6789,
+    "pool_id": 555
+  },
+  "canonical": {
+    "message": "Node pool 555 in cluster 6789 recycle initiated successfully",
+    "cluster_id": 6789,
+    "pool_id": 555
+  }
+}

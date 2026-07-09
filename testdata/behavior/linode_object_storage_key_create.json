@@ -1,0 +1,36 @@
+{
+  "tool": "linode_object_storage_key_create",
+  "description": "Pins the shared label validation (behind confirm) and the key create POST body. The secret_key is returned by design; only request behavior is pinned. Every case carries confirm:true because the confirm-gate message text diverges.",
+  "cases": [
+    {
+      "name": "requires label",
+      "args": { "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects label longer than 50 characters",
+      "args": { "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "confirm": true },
+      "expect_error": "access key label must not exceed 50 characters"
+    },
+    {
+      "name": "rejects an invalid bucket_access permission",
+      "args": { "label": "test-key", "confirm": true, "bucket_access": "[{\"bucket_name\": \"my-bucket\", \"region\": \"us-east\", \"permissions\": \"bogus\"}]" },
+      "expect_error": "entry 0: permissions must be one of: read_only, read_write"
+    },
+    {
+      "name": "creates a key",
+      "args": { "label": "test-key", "confirm": true },
+      "api_response": { "id": 55, "label": "test-key", "access_key": "AK", "secret_key": "SK" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/keys",
+        "body": { "label": "test-key" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "test-key"},
+      "expect_error": "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed."
+    }
+  ]
+}

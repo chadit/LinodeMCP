@@ -1,0 +1,12 @@
+{
+  "tool": "linode_volume_type_list",
+  "description": "Volume type list: the bare types GET.",
+  "cases": [
+    {
+      "name": "lists volume types",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/volumes/types" }
+    }
+  ]
+}

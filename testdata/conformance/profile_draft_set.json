@@ -1,0 +1,22 @@
+{
+  "message": "linode.mcp.v1.ProfileDraftSetResponse",
+  "description": "Draft set echo: the fields this call changed, keyed by field name with free-form values.",
+  "input": {
+    "name": "ops-lite",
+    "changes": {
+      "allow_yolo": true,
+      "allowed_environments": [
+        "prod"
+      ]
+    }
+  },
+  "canonical": {
+    "name": "ops-lite",
+    "changes": {
+      "allow_yolo": true,
+      "allowed_environments": [
+        "prod"
+      ]
+    }
+  }
+}

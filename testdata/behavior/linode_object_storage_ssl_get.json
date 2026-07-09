@@ -1,0 +1,22 @@
+{
+  "tool": "linode_object_storage_ssl_get",
+  "description": "Pins the region/label-required rejections both languages share and the bucket SSL-status GET.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": {},
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires label",
+      "args": { "region": "us-east" },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "gets ssl status",
+      "args": { "region": "us-east", "label": "my-bucket" },
+      "api_response": { "ssl": false },
+      "expect_request": { "method": "GET", "path": "/object-storage/buckets/us-east/my-bucket/ssl" }
+    }
+  ]
+}

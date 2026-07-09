@@ -37,37 +37,6 @@ type InstanceBackupSnapshots struct {
 	InProgress *InstanceBackup `json:"in_progress"`
 }
 
-// InstanceStats represents daily CPU, IO, IPv4, and IPv6 statistics for a Linode instance.
-type InstanceStats struct {
-	Title string             `json:"title"`
-	CPU   [][]float64        `json:"cpu"`
-	IO    InstanceIOStats    `json:"io"`
-	NetV4 InstanceNetV4Stats `json:"netv4"`
-	NetV6 InstanceNetV6Stats `json:"netv6"`
-}
-
-// InstanceIOStats contains input/output graphs for a Linode instance.
-type InstanceIOStats struct {
-	IO   [][]float64 `json:"io"`
-	Swap [][]float64 `json:"swap"`
-}
-
-// InstanceNetV4Stats contains IPv4 network graphs for a Linode instance.
-type InstanceNetV4Stats struct {
-	In         [][]float64 `json:"in"`
-	Out        [][]float64 `json:"out"`
-	PrivateIn  [][]float64 `json:"private_in"`
-	PrivateOut [][]float64 `json:"private_out"`
-}
-
-// InstanceNetV6Stats contains IPv6 network graphs for a Linode instance.
-type InstanceNetV6Stats struct {
-	In         [][]float64 `json:"in"`
-	Out        [][]float64 `json:"out"`
-	PrivateIn  [][]float64 `json:"private_in"`
-	PrivateOut [][]float64 `json:"private_out"`
-}
-
 // RestoreBackupRequest represents the request body for restoring an instance backup.
 type RestoreBackupRequest struct {
 	LinodeID  int  `json:"linode_id"`
@@ -327,9 +296,12 @@ type RebuildInstanceRequest struct {
 	Booted          *bool    `json:"booted,omitempty"`
 }
 
-// RescueInstanceRequest represents the request body for booting an instance into rescue mode.
+// RescueInstanceRequest represents the request body for booting an instance into
+// rescue mode. Devices is omitempty so an unset map is dropped from the wire,
+// letting the API apply its own default (matches Python, which omits devices when
+// the caller does not supply them).
 type RescueInstanceRequest struct {
-	Devices map[string]*RescueDeviceAssignment `json:"devices"`
+	Devices map[string]*RescueDeviceAssignment `json:"devices,omitempty"`
 }
 
 // RescueDeviceAssignment represents a device assignment for rescue mode.

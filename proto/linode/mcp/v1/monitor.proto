@@ -20,6 +20,223 @@ message MonitorServiceGetInput {
   string service_type = 2;
 }
 
+// MonitorServiceListInput is the input contract for
+// linode_monitor_service_list.
+message MonitorServiceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// MonitorServiceDashboardListInput is the input contract for
+// linode_monitor_service_dashboard_list.
+message MonitorServiceDashboardListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug whose dashboards should be listed.
+  string service_type = 2;
+}
+
+// MonitorServiceMetricDefinitionListInput is the input contract for
+// linode_monitor_service_metric_definition_list.
+message MonitorServiceMetricDefinitionListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug whose metric definitions should be
+  // listed.
+  string service_type = 2;
+}
+
+// MonitorServiceAlertDefinitionListInput is the input contract for
+// linode_monitor_service_alert_definition_list.
+message MonitorServiceAlertDefinitionListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug whose alert definitions should be
+  // listed.
+  string service_type = 2;
+}
+
+// MonitorServiceMetricQueryInput is the input contract for
+// linode_monitor_service_metric_query. The hand-built schema advertises only
+// service_type (the ground-truth dump confirms).
+message MonitorServiceMetricQueryInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug whose metrics should be retrieved.
+  string service_type = 2;
+}
+
+// MonitorAlertDefinitionGetInput is the input contract for
+// linode_monitor_service_alert_definition_get (service-scoped alert
+// definition, addressed by service_type + alert_id).
+message MonitorAlertDefinitionGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug whose alert definition should be
+  // retrieved.
+  string service_type = 2;
+  // Alert definition ID to retrieve.
+  int32 alert_id = 3;
+}
+
+// MonitorAlertDefinitionDeleteInput is the input contract for
+// linode_monitor_service_alert_definition_delete. Plain confirm destroy.
+// Pairs with MonitorAlertDefinitionDeleteResponse.
+message MonitorAlertDefinitionDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug whose alert definition should be
+  // deleted.
+  string service_type = 2;
+  // Alert definition ID to delete.
+  int32 alert_id = 3;
+  // Must be true to confirm deleting an alert definition. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// MonitorServiceTokenCreateInput is the input contract for
+// linode_monitor_service_token_create. entity_ids is a required array of
+// positive integer entity IDs in the hand-built schema, but repeated fields
+// are never emitted into the generated required set, so it converts to an
+// optional-in-schema field enforced by the handler at runtime.
+message MonitorServiceTokenCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug for the token.
+  string service_type = 2;
+  // Service entity IDs to include in the token (non-empty positive integers).
+  repeated int32 entity_ids = 3;
+  // Must be true to confirm creating a monitor service token. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// MonitorServiceTokenCreateResponse is the linode_monitor_service_token_create
+// success body: the bare token object the Monitor API returns, passed through
+// unwrapped so the caller can capture the token for the metrics query host.
+message MonitorServiceTokenCreateResponse {
+  // Bearer token for querying the monitor metrics API.
+  string token = 1;
+  // Token expiry timestamp.
+  string expiry = 2;
+}
+
+// MonitorServiceAlertDefinitionCreateInput is the input contract for
+// linode_monitor_service_alert_definition_create. rule_criteria and
+// trigger_conditions are free-form objects (map), channel_ids is a required
+// int array, and entity_ids is a string array; the required map/array fields
+// drop out of the generated required set (handler still enforces them).
+message MonitorServiceAlertDefinitionCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug for the alert definition.
+  string service_type = 2;
+  // Alert definition label.
+  string label = 3;
+  // Alert severity: 0 severe, 1 medium, 2 low, or 3 info.
+  int32 severity = 4;
+  // Alert rule criteria object.
+  map<string, google.protobuf.Value> rule_criteria = 5;
+  // Alert trigger conditions object.
+  map<string, google.protobuf.Value> trigger_conditions = 6;
+  // Alert channel IDs (non-empty positive integers).
+  repeated int32 channel_ids = 7;
+  // Optional alert definition description.
+  optional string description = 8;
+  // Optional service entity IDs.
+  repeated string entity_ids = 9;
+  // Must be true to confirm creating an alert definition. Ignored when
+  // dry_run=true.
+  bool confirm = 10;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 11;
+}
+
+// MonitorServiceAlertDefinitionUpdateInput is the input contract for
+// linode_monitor_service_alert_definition_update. rule_criteria and
+// trigger_conditions are optional free-form objects (map); all other mutable
+// fields are optional. service_type, alert_id, and confirm are required.
+message MonitorServiceAlertDefinitionUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug for the alert definition.
+  string service_type = 2;
+  // Alert definition ID to update.
+  int32 alert_id = 3;
+  // Optional alert definition label.
+  optional string label = 4;
+  // Optional alert definition description.
+  optional string description = 5;
+  // Optional alert severity: 0 severe, 1 medium, 2 low, or 3 info.
+  optional int32 severity = 6;
+  // Optional alert status: enabled or disabled.
+  optional string status = 7;
+  // Optional alert rule criteria object.
+  map<string, google.protobuf.Value> rule_criteria = 8;
+  // Optional alert trigger conditions object.
+  map<string, google.protobuf.Value> trigger_conditions = 9;
+  // Optional alert channel IDs.
+  repeated int32 channel_ids = 10;
+  // Optional service entity IDs.
+  repeated string entity_ids = 11;
+  // Must be true to confirm updating an alert definition. Ignored when
+  // dry_run=true.
+  bool confirm = 12;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 13;
+}
+
+// MonitorDashboardListInput is the input contract for
+// linode_monitor_dashboard_list.
+message MonitorDashboardListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// MonitorDashboardGetInput is the input contract for
+// linode_monitor_dashboard_get.
+message MonitorDashboardGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Monitoring dashboard ID to retrieve.
+  int32 dashboard_id = 2;
+}
+
+// MonitorAlertDefinitionListInput is the input contract for the top-level
+// linode_monitor_alert_definition_list (all service types).
+message MonitorAlertDefinitionListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// MonitorAlertChannelListInput is the input contract for
+// linode_monitor_alert_channel_list.
+message MonitorAlertChannelListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
 // MonitorServiceListResponse is the linode_monitor_service_list envelope: count
 // and the full proto MonitorService elements. The tool has no filter param, so
 // filter is omitted.

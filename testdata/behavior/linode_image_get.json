@@ -1,0 +1,12 @@
+{
+  "tool": "linode_image_get",
+  "description": "Success path GETs the image by prefixed ID with the slash percent-encoded. Missing/malformed-id error text diverges (see report).",
+  "cases": [
+    {
+      "name": "gets a private image",
+      "args": { "image_id": "private/123" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/images/private%2F123" }
+    }
+  ]
+}

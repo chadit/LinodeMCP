@@ -1,0 +1,12 @@
+{
+  "tool": "linode_managed_sshkey_get",
+  "description": "Managed SSH public key: the bare sshkey GET (no local validation).",
+  "cases": [
+    {
+      "name": "gets the managed ssh public key",
+      "args": {},
+      "api_response": { "ssh_key": "ssh-rsa AAAA" },
+      "expect_request": { "method": "GET", "path": "/managed/credentials/sshkey" }
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "message": "linode.mcp.v1.InstanceType",
+  "description": "Instance type element: nested Price/Addons populated; the optional successor is unset so it is omitted, while implicit-presence int scalars (gpus=0) emit their zero value.",
+  "input": {
+    "id": "g6-standard-2",
+    "label": "Linode 4GB",
+    "class": "standard",
+    "disk": 81920,
+    "memory": 4096,
+    "vcpus": 2,
+    "gpus": 0,
+    "network_out": 1000,
+    "transfer": 4000,
+    "price": {
+      "hourly": 0.03,
+      "monthly": 20.0
+    },
+    "addons": {
+      "backups": {
+        "price": {
+          "hourly": 0.008,
+          "monthly": 5.0
+        }
+      }
+    }
+  },
+  "canonical": {
+    "id": "g6-standard-2",
+    "label": "Linode 4GB",
+    "class": "standard",
+    "disk": 81920,
+    "memory": 4096,
+    "vcpus": 2,
+    "network_out": 1000,
+    "transfer": 4000,
+    "price": {
+      "hourly": 0.03,
+      "monthly": 20.0
+    },
+    "addons": {
+      "backups": {
+        "price": {
+          "hourly": 0.008,
+          "monthly": 5.0
+        }
+      }
+    },
+    "gpus": 0
+  }
+}

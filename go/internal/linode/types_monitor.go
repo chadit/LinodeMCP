@@ -13,17 +13,8 @@ type MonitorMetricDefinition struct {
 	MetricType string `json:"metric_type"`
 }
 
-// MonitorDashboard describes a monitoring dashboard.
-type MonitorDashboard map[string]any
-
 // MonitorMetrics describes metric data returned for a monitoring service entity.
 type MonitorMetrics map[string]any
-
-// MonitorServiceToken describes a token returned for a monitoring service entity.
-type MonitorServiceToken struct {
-	Token  string `json:"token"`
-	Expiry string `json:"expiry"`
-}
 
 // CreateMonitorServiceTokenRequest describes a monitor service token create request.
 type CreateMonitorServiceTokenRequest struct {

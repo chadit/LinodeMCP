@@ -7,55 +7,22 @@ import (
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // NewLinodeStackScriptCreateTool creates a tool for creating a StackScript.
 func NewLinodeStackScriptCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_stackscript_create",
-		mcp.WithDescription("Creates a new StackScript for automated deployments. The script can be used when creating Linode instances."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Required(),
-			mcp.Description("A label for the StackScript (max 64 characters, must be unique)"),
-		),
-		mcp.WithString(
-			"script",
-			mcp.Required(),
-			mcp.Description("The script content (bash, compatible with the selected images)"),
-		),
-		mcp.WithArray(
-			"images",
-			mcp.Required(),
-			mcp.Description("Image IDs that the StackScript supports (e.g., [\"linode/debian12\", \"linode/ubuntu24.04\"])"),
-		),
-		mcp.WithString(
-			"description",
-			mcp.Description("A description of the StackScript"),
-		),
-		mcp.WithBoolean(
-			"is_public",
-			mcp.Description("Whether the StackScript should be public (default: false)"),
-		),
-		mcp.WithString(
-			"rev_note",
-			mcp.Description("A revision note for this version of the StackScript"),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm StackScript creation. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Creates a new StackScript for automated deployments. The script can be used when creating Linode instances.",
+		toolschemas.Schema("linode.mcp.v1.StackScriptCreateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -88,20 +55,17 @@ func handleLinodeStackScriptCreateRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	created, err := client.CreateStackScript(ctx, &req)
+	created, err := client.CreateStackScriptProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create StackScript: %v", err)), nil
 	}
 
-	response := struct {
-		Message     string              `json:"message"`
-		StackScript *linode.StackScript `json:"stackscript"`
-	}{
-		Message:     fmt.Sprintf("StackScript '%s' (ID: %d) created successfully", created.Label, created.ID),
-		StackScript: created,
+	response := &linodev1.StackScriptWriteResponse{
+		Message:     fmt.Sprintf("StackScript '%s' (ID: %d) created successfully", created.GetLabel(), created.GetId()),
+		Stackscript: created,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // stackScriptCreateRequestFromTool parses and validates the create args.
@@ -144,12 +108,10 @@ func stackScriptCreateRequestFromTool(request *mcp.CallToolRequest) (linode.Crea
 
 // NewLinodeStackScriptDeleteTool creates a tool for deleting a StackScript.
 func NewLinodeStackScriptDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := newDeleteByIDToolConfirm(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_stackscript_delete",
-		"Deletes a StackScript. WARNING: This permanently removes the StackScript from your account.",
-		"stackscript_id",
-		"The ID of the StackScript to delete",
-		"Must be set to true to confirm deletion. Ignored when dry_run=true.",
+		"Deletes a StackScript. WARNING: This permanently removes the StackScript from your account."+twoStageNote,
+		toolschemas.Schema("linode.mcp.v1.StackScriptDeleteInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -159,14 +121,19 @@ func NewLinodeStackScriptDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 	return tool, profiles.CapDestroy, handler
 }
 
-func handleLinodeStackScriptDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	stackScriptID, validationMessage := optionalPaginationInt(request.GetArguments(), "stackscript_id", 1, 0)
-	if validationMessage != "" {
-		return mcp.NewToolResultError(validationMessage), nil
+// stackscriptDeleteProto builds the proto-canonical id-echo body for a
+// successful StackScript delete, keeping the proto literal off the handler's
+// struct literal so the delete handlers stay below the dupl threshold.
+func stackscriptDeleteProto(id int) proto.Message {
+	return &linodev1.StackScriptDeleteResponse{
+		Message:       fmt.Sprintf("StackScript %d deleted successfully", id),
+		StackscriptId: linodeIDToInt32(id),
 	}
+}
 
-	if stackScriptID == 0 {
-		return mcp.NewToolResultError("stackscript_id must be a positive integer"), nil
+func handleLinodeStackScriptDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	if _, validationMessage := requiredIDArgument(request, "stackscript_id"); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
@@ -175,7 +142,7 @@ func handleLinodeStackScriptDeleteRequest(ctx context.Context, request *mcp.Call
 		Method:         httpMethodDelete,
 		PathPattern:    "/linode/stackscripts/%d",
 		ConfirmMessage: destroyConfirmMessage,
-		SuccessFormat:  "StackScript %d deleted successfully",
+		SuccessProto:   stackscriptDeleteProto,
 		FetchState:     func(ctx context.Context, c *linode.Client, id int) (any, error) { return c.GetStackScript(ctx, id) },
 		Execute:        func(ctx context.Context, c *linode.Client, id int) error { return c.DeleteStackScript(ctx, id) },
 		HashIgnore:     twostage.HashIgnoreFields("StackScript"),
@@ -184,48 +151,10 @@ func handleLinodeStackScriptDeleteRequest(ctx context.Context, request *mcp.Call
 
 // NewLinodeStackScriptUpdateTool creates a tool for updating a StackScript.
 func NewLinodeStackScriptUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_stackscript_update",
-		mcp.WithDescription("Updates editable fields on an existing StackScript."),
-		mcp.WithString(
-			paramEnvironment,
-			mcp.Description(paramEnvironmentDesc),
-		),
-		mcp.WithNumber(
-			"stackscript_id",
-			mcp.Required(),
-			mcp.Description("The StackScript ID to update."),
-		),
-		mcp.WithString(
-			"label",
-			mcp.Description("A new label for the StackScript."),
-		),
-		mcp.WithString(
-			"script",
-			mcp.Description("Updated script content."),
-		),
-		mcp.WithArray(
-			"images",
-			mcp.Description("Image IDs that the StackScript supports."),
-		),
-		mcp.WithString(
-			"description",
-			mcp.Description("Updated StackScript description."),
-		),
-		mcp.WithBoolean(
-			"is_public",
-			mcp.Description("Whether the StackScript should be public."),
-		),
-		mcp.WithString(
-			"rev_note",
-			mcp.Description("A revision note for this update."),
-		),
-		mcp.WithBoolean(
-			paramConfirm,
-			mcp.Required(),
-			mcp.Description("Must be set to true to confirm StackScript update. Ignored when dry_run=true."),
-		),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Updates editable fields on an existing StackScript.",
+		toolschemas.Schema("linode.mcp.v1.StackScriptUpdateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -259,20 +188,17 @@ func handleLinodeStackScriptUpdateRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updated, err := client.UpdateStackScript(ctx, stackScriptID, req)
+	updated, err := client.UpdateStackScriptProto(ctx, stackScriptID, req)
 	if err != nil {
 		return mcp.NewToolResultError(formatStackScriptUpdateError(err)), nil
 	}
 
-	response := struct {
-		Message     string              `json:"message"`
-		StackScript *linode.StackScript `json:"stackscript"`
-	}{
-		Message:     fmt.Sprintf("StackScript '%s' (ID: %d) updated successfully", updated.Label, updated.ID),
-		StackScript: updated,
+	response := &linodev1.StackScriptWriteResponse{
+		Message:     fmt.Sprintf("StackScript '%s' (ID: %d) updated successfully", updated.GetLabel(), updated.GetId()),
+		Stackscript: updated,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
 // handleLinodeStackScriptUpdateDryRun validates the update args, fetches the

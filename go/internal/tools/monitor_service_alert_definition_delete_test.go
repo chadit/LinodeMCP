@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -26,6 +25,9 @@ func monitorAlertDefinitionDeleteArgs() map[string]any {
 		monitorServiceTypeParam: monitorServiceToolTypeDatabase,
 		monitorAlertIDParam:     20000,
 		keyConfirm:              true,
+		// The destroy gate requires a prior confirmed dry-run (or an
+		// explicit bypass) on top of confirm, like every CapDestroy tool.
+		keyConfirmedDryRun: true,
 	}
 }
 
@@ -47,9 +49,10 @@ func TestLinodeMonitorServiceAlertDefinitionDeleteToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{monitorServiceTypeParam, monitorAlertIDParam, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 

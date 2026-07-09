@@ -1,0 +1,32 @@
+{
+  "tool": "linode_account_service_transfer_accept",
+  "description": "Shared missing/path-separator token rejections, confirm gate, and the accept POST path. Non-string/empty text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires token",
+      "args": {},
+      "expect_error": "token is required"
+    },
+    {
+      "name": "rejects a token with path separators",
+      "args": { "token": "abc/def" },
+      "expect_error": "token must not contain path separators, query separators, or traversal segments"
+    },
+    {
+      "name": "requires confirm before accepting",
+      "args": { "token": "svc-token-123" },
+      "expect_error": "This accepts an account service transfer. Set confirm=true to proceed."
+    },
+    {
+      "name": "accepts an account service transfer",
+      "args": { "token": "svc-token-123", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/account/service-transfers/svc-token-123/accept" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"token": "svc-token-123"},
+      "expect_error": "This accepts an account service transfer. Set confirm=true to proceed."
+    }
+  ]
+}

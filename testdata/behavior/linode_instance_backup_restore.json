@@ -1,0 +1,37 @@
+{
+  "tool": "linode_instance_backup_restore",
+  "description": "Restore needs confirm; POSTs the target linode_id/overwrite body to the restore endpoint. No-confirm message text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing backup_id once confirmed",
+      "args": { "confirm": true, "linode_id": 123 },
+      "expect_error": "backup_id is required"
+    },
+    {
+      "name": "rejects missing target_linode_id once confirmed",
+      "args": { "confirm": true, "linode_id": 123, "backup_id": 456 },
+      "expect_error": "target_linode_id is required"
+    },
+    {
+      "name": "restores the backup to the target instance",
+      "args": {
+        "linode_id": 123,
+        "backup_id": 456,
+        "target_linode_id": 789,
+        "overwrite": false,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/backups/456/restore",
+        "body": { "linode_id": 789, "overwrite": false }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "backup_id": 456, "target_linode_id": 789, "overwrite": false},
+      "expect_error": "This restores a backup to the target instance. Set confirm=true to proceed."
+    }
+  ]
+}

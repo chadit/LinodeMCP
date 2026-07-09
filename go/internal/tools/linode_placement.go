@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -16,26 +17,15 @@ import (
 
 // NewLinodePlacementGroupAssignTool creates a tool for assigning Linodes to a placement group.
 func NewLinodePlacementGroupAssignTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_placement_group_assign",
 		"Assigns one or more Linodes to a placement group.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(
-				"group_id",
-				mcp.Required(),
-				mcp.Description("The ID of the placement group to assign Linodes to."),
-			),
-			mcp.WithArray(
-				"linodes",
-				mcp.Required(),
-				mcp.Description("Array of Linode IDs to assign to the placement group."),
-			),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm assigning Linodes to the placement group. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handlePlacementGroupAssignRequest,
+		toolschemas.Schema("linode.mcp.v1.PlacementGroupAssignInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handlePlacementGroupAssignRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -123,23 +113,15 @@ func parsePlacementGroupLinodes(request *mcp.CallToolRequest) ([]int, string) {
 
 // NewLinodePlacementGroupDeleteTool creates a tool for deleting a placement group by ID.
 func NewLinodePlacementGroupDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_placement_group_delete",
 		"Deletes a placement group by its ID. This destructive action requires confirm=true."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber(
-				"group_id",
-				mcp.Required(),
-				mcp.Description("The ID of the placement group to delete"),
-			),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm placement group deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handlePlacementGroupDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.PlacementGroupDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handlePlacementGroupDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -196,8 +178,10 @@ func handlePlacementGroupDeleteRequest(ctx context.Context, request *mcp.CallToo
 		Execute: func(ctx context.Context, client *linode.Client) error {
 			return client.DeletePlacementGroup(ctx, groupID)
 		},
-		Success: func() any {
-			return map[string]any{responseKeyMessage: "Placement group " + strconv.Itoa(groupID) + " deleted successfully"}
+		Success: func() proto.Message {
+			return &linodev1.PlacementGroupDeleteResponse{
+				Message: "Placement group " + strconv.Itoa(groupID) + " deleted successfully",
+			}
 		},
 	})
 }

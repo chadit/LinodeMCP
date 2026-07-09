@@ -1,0 +1,32 @@
+{
+  "message": "linode.mcp.v1.AccountServiceTransferWriteResponse",
+  "description": "Service transfer create envelope: a confirmation message and the full AccountEntityTransfer element (which carries the transfer token).",
+  "input": {
+    "message": "Account service transfer created successfully",
+    "transfer": {
+      "created": "2024-06-01T00:00:00",
+      "entities": {
+        "linodes": [123, 456]
+      },
+      "expiry": "2024-06-02T00:00:00",
+      "is_sender": true,
+      "status": "pending",
+      "token": "service-transfer-token",
+      "updated": "2024-06-01T01:00:00"
+    }
+  },
+  "canonical": {
+    "message": "Account service transfer created successfully",
+    "transfer": {
+      "created": "2024-06-01T00:00:00",
+      "entities": {
+        "linodes": [123, 456]
+      },
+      "expiry": "2024-06-02T00:00:00",
+      "is_sender": true,
+      "status": "pending",
+      "token": "service-transfer-token",
+      "updated": "2024-06-01T01:00:00"
+    }
+  }
+}

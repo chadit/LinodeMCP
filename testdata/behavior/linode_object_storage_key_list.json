@@ -1,0 +1,12 @@
+{
+  "tool": "linode_object_storage_key_list",
+  "description": "No local validation; pins the plain access-key list GET. Keys carry no secret material on the list endpoint.",
+  "cases": [
+    {
+      "name": "lists keys",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/object-storage/keys" }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.LKEControlPlaneACL",
+  "description": "linode_lke_acl_get element: the bare control-plane ACL for an LKE cluster. The Linode API wraps it under a top-level \"acl\" key; the handler unwraps it and emits the bare {enabled, addresses} object.",
+  "input": {
+    "enabled": true,
+    "addresses": {
+      "ipv4": [
+        "10.0.0.0/24",
+        "192.168.1.0/24"
+      ],
+      "ipv6": [
+        "2001:db8::1/128"
+      ]
+    }
+  },
+  "canonical": {
+    "enabled": true,
+    "addresses": {
+      "ipv4": [
+        "10.0.0.0/24",
+        "192.168.1.0/24"
+      ],
+      "ipv6": [
+        "2001:db8::1/128"
+      ]
+    }
+  }
+}

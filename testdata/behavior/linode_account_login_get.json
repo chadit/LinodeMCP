@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_login_get",
+  "description": "Shared missing-login_id rejection and the login GET path. Invalid/out-of-range text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires login_id",
+      "args": {},
+      "expect_error": "login_id is required"
+    },
+    {
+      "name": "gets an account login by id",
+      "args": { "login_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/logins/123" }
+    }
+  ]
+}

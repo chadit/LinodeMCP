@@ -1,0 +1,12 @@
+{
+  "tool": "linode_kernel_get",
+  "description": "Kernel get by identifier. Both missing and invalid kernel_id error texts diverge (see report), so only the success GET is pinned; the slash in the id is path-escaped to %2F by both languages.",
+  "cases": [
+    {
+      "name": "gets one kernel by identifier",
+      "args": { "kernel_id": "linode/latest-64bit" },
+      "api_response": { "id": "linode/latest-64bit" },
+      "expect_request": { "method": "GET", "path": "/linode/kernels/linode%2Flatest-64bit" }
+    }
+  ]
+}

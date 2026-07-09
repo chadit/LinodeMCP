@@ -5,17 +5,14 @@ from typing import TYPE_CHECKING, Any, TypeGuard, cast
 import httpx
 from mcp.types import TextContent, Tool
 
-from linodemcp.genpb.linode.mcp.v1 import firewall_pb2, instance_pb2
+from linodemcp.genpb.linode.mcp.v1 import (
+    firewall_device_pb2,
+    firewall_pb2,
+    instance_pb2,
+)
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    ENV_PARAM_SCHEMA,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -24,7 +21,9 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_enum import enum_choice_error, optional_enum_error
 from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -55,14 +54,29 @@ def _is_default_firewall_ids(value: Any) -> TypeGuard[dict[str, int]]:
 def _positive_int_argument(
     arguments: dict[str, Any], name: str
 ) -> tuple[int | None, str | None]:
-    value = arguments.get(name)
-    if value is None or value == "":
+    """Option-B id validation. Returns None (not "") on success so the existing
+    ``if error is not None`` call sites stay correct; the text matches
+    required_int_id."""
+    if name not in arguments:
         return None, f"{name} is required"
-    if not isinstance(value, int) or isinstance(value, bool):
-        return None, f"{name} must be a valid integer"
-    if value <= 0:
+    value = arguments[name]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         return None, f"{name} must be a positive integer"
     return value, None
+
+
+def _firewall_policy_error(arguments: dict[str, Any]) -> str | None:
+    """Validate inbound_policy/outbound_policy against the FirewallPolicy enum,
+    mirroring Go so both languages reject the same values. A policy is validated
+    only when present; the API defaults an absent policy to ACCEPT.
+    """
+    for key in ("inbound_policy", "outbound_policy"):
+        policy_error = optional_enum_error(
+            arguments, key, firewall_pb2.FirewallPolicy.Value
+        )
+        if policy_error is not None:
+            return policy_error
+    return None
 
 
 def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
@@ -72,38 +86,7 @@ def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
         description=(
             "Creates a new Cloud Firewall. The firewall is created with no rules."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "label": {
-                    "type": "string",
-                    "description": "A label for the firewall (required)",
-                },
-                "inbound_policy": {
-                    "type": "string",
-                    "description": (
-                        "Default inbound policy: 'ACCEPT' or 'DROP' (default: 'ACCEPT')"
-                    ),
-                },
-                "outbound_policy": {
-                    "type": "string",
-                    "description": (
-                        "Default outbound policy: 'ACCEPT' or 'DROP' "
-                        "(default: 'ACCEPT')"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm this operation. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallCreateInput"),
     ), Capability.Write
 
 
@@ -114,6 +97,10 @@ async def handle_linode_firewall_create(
     label = arguments.get("label", "")
     inbound_policy = arguments.get("inbound_policy", "ACCEPT")
     outbound_policy = arguments.get("outbound_policy", "ACCEPT")
+
+    policy_error = _firewall_policy_error(arguments)
+    if policy_error is not None:
+        return error_response(policy_error)
 
     if is_dry_run(arguments):
         if not label:
@@ -163,41 +150,7 @@ def create_linode_firewall_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_update",
         description="Updates an existing Cloud Firewall.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": "The ID of the firewall to update (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "New label for the firewall (optional)",
-                },
-                "status": {
-                    "type": "string",
-                    "description": "New status: 'enabled' or 'disabled' (optional)",
-                },
-                "inbound_policy": {
-                    "type": "string",
-                    "description": "New inbound policy: 'ACCEPT' or 'DROP' (optional)",
-                },
-                "outbound_policy": {
-                    "type": "string",
-                    "description": "New outbound policy: 'ACCEPT' or 'DROP' (optional)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["firewall_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallUpdateInput"),
     ), Capability.Write
 
 
@@ -234,6 +187,10 @@ async def handle_linode_firewall_update(
     if not firewall_id:
         return error_response("firewall_id is required")
 
+    policy_error = _firewall_policy_error(arguments)
+    if policy_error is not None:
+        return error_response(policy_error)
+
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
@@ -252,6 +209,11 @@ async def handle_linode_firewall_update(
             f"/networking/firewalls/{int(firewall_id)}",
             _fetch,
             _walk,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This updates a Cloud Firewall. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -283,26 +245,7 @@ def create_linode_firewall_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": "The ID of the firewall to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["firewall_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallDeleteInput"),
     ), Capability.Destroy
 
 
@@ -356,10 +299,13 @@ async def _firewall_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_firewall(firewall_id_int)
-        return {
-            "message": f"Firewall {firewall_id_int} deleted successfully",
-            "firewall_id": firewall_id_int,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Firewall {firewall_id_int} removed successfully",
+                "firewall_id": firewall_id_int,
+            },
+            firewall_pb2.FirewallDeleteResponse(),
+        )
 
     async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
         return await _firewall_delete_dependency_walk(client, firewall_id_int)
@@ -416,19 +362,19 @@ async def handle_linode_firewall_delete(
     confirm = arguments.get("confirm", False)
 
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This operation is destructive. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_firewall(firewall_id_int)
-        return {
-            "message": f"Firewall {firewall_id_int} deleted successfully",
-            "firewall_id": firewall_id_int,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Firewall {firewall_id_int} removed successfully",
+                "firewall_id": firewall_id_int,
+            },
+            firewall_pb2.FirewallDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete firewall", _call)
 
@@ -443,30 +389,7 @@ def create_linode_firewall_device_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without removing."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": "The ID of the firewall (required)",
-                },
-                "device_id": {
-                    "type": "integer",
-                    "description": "The ID of the firewall device (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["firewall_id", "device_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallDeviceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -482,11 +405,14 @@ async def _firewall_device_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_firewall_device(firewall_id, device_id)
-        return {
-            "message": "Firewall device deleted successfully",
-            "firewall_id": firewall_id,
-            "device_id": device_id,
-        }
+        return serialize_api_response(
+            {
+                "message": "Firewall device removed successfully",
+                "firewall_id": firewall_id,
+                "device_id": device_id,
+            },
+            firewall_device_pb2.FirewallDeviceDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -539,17 +465,20 @@ async def handle_linode_firewall_device_delete(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This deletes a Cloud Firewall device assignment. "
-            "Set confirm=true to proceed."
+            "This removes a device assignment from a Cloud Firewall. Set confirm=true "
+            "to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_firewall_device(firewall_id_value, device_id_value)
-        return {
-            "message": "Firewall device deleted successfully",
-            "firewall_id": firewall_id_value,
-            "device_id": device_id_value,
-        }
+        return serialize_api_response(
+            {
+                "message": "Firewall device removed successfully",
+                "firewall_id": firewall_id_value,
+                "device_id": device_id_value,
+            },
+            firewall_device_pb2.FirewallDeviceDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete firewall device", _call)
 
@@ -562,33 +491,7 @@ def create_linode_firewall_rules_update_tool() -> tuple[Tool, Capability]:
             "Replaces the inbound and outbound rules for a Cloud Firewall. "
             "WARNING: This overwrites all existing rules."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Firewall ID (required)",
-                },
-                "inbound": {
-                    "type": "array",
-                    "description": "List of inbound firewall rules to set (required)",
-                    "items": {"type": "object"},
-                },
-                "outbound": {
-                    "type": "array",
-                    "description": "List of outbound firewall rules to set (required)",
-                    "items": {"type": "object"},
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm. Ignored when dry_run=true.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["firewall_id", "inbound", "outbound", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallRulesUpdateInput"),
     ), Capability.Write
 
 
@@ -614,7 +517,7 @@ def _firewall_rules_fields_error(arguments: dict[str, Any]) -> str | None:
 
 def _firewall_rules_update_validation_error(arguments: dict[str, Any]) -> str | None:
     if arguments.get("confirm") is not True:
-        return "This replaces all firewall rules. Set confirm=true to proceed."
+        return "This replaces Cloud Firewall rules. Set confirm=true to proceed."
 
     return _firewall_rules_fields_error(arguments)
 
@@ -674,26 +577,7 @@ def create_linode_instance_firewall_apply_tool() -> tuple[Tool, Capability]:
         description=(
             "Applies the currently assigned Cloud Firewalls to a Linode instance."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to apply Linode firewalls. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceFirewallApplyInput"),
     ), Capability.Write
 
 
@@ -721,7 +605,10 @@ async def handle_linode_instance_firewall_apply(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This reapplies assigned firewalls to the Linode. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.apply_linode_firewalls(linode_id_value)
@@ -744,36 +631,7 @@ def create_linode_firewall_settings_update_tool() -> tuple[Tool, Capability]:
             "Updates the account default firewalls for Linodes, NodeBalancers, "
             "public interfaces, and VPC interfaces."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "default_firewall_ids": {
-                    "type": "object",
-                    "description": (
-                        "Default firewall IDs keyed by linode, nodebalancer, "
-                        "public_interface, or vpc_interface."
-                    ),
-                    "additionalProperties": False,
-                    "minProperties": 1,
-                    "properties": {
-                        "linode": {"type": "integer", "minimum": 1},
-                        "nodebalancer": {"type": "integer", "minimum": 1},
-                        "public_interface": {"type": "integer", "minimum": 1},
-                        "vpc_interface": {"type": "integer", "minimum": 1},
-                    },
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to update default firewalls. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["default_firewall_ids", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallSettingsUpdateInput"),
     ), Capability.Write
 
 
@@ -811,7 +669,10 @@ async def handle_linode_firewall_settings_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This updates default Cloud Firewall assignments. Set confirm=true to "
+            "proceed."
+        )
 
     ids_error = _firewall_settings_ids_error(default_firewall_ids_raw)
     if ids_error is not None:
@@ -820,12 +681,14 @@ async def handle_linode_firewall_settings_update(
     default_firewall_ids = cast("dict[str, int]", default_firewall_ids_raw)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.update_firewall_settings(default_firewall_ids)
-        updated = result.get("default_firewall_ids", default_firewall_ids)
-        return {
-            "message": "Default firewall settings updated successfully",
-            "default_firewall_ids": updated,
-        }
+        raw = await client.update_firewall_settings(default_firewall_ids)
+        return serialize_api_response(
+            {
+                "message": "Default firewall settings updated successfully",
+                "settings": raw,
+            },
+            firewall_pb2.FirewallSettingsWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update default firewalls", _call)
 
@@ -838,38 +701,27 @@ def create_linode_firewall_device_create_tool() -> tuple[Tool, Capability]:
             "Creates a new device for a Cloud Firewall. "
             "WARNING: This operation requires confirmation."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "firewall_id": {
-                    "type": "integer",
-                    "description": (
-                        "The ID of the firewall to attach the device to (required)"
-                    ),
-                },
-                "id": {
-                    "type": "integer",
-                    "description": (
-                        "The ID of the entity to attach as a device (required)"
-                    ),
-                },
-                "type": {
-                    "type": "string",
-                    "description": "The type of entity to attach (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm this operation. "
-                        "Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["firewall_id", "id", "type", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.FirewallDeviceCreateInput"),
     ), Capability.Write
+
+
+def _firewall_device_type_error(arguments: dict[str, Any]) -> str | None:
+    """Validate the device type: present, a non-empty string, and one of the
+    FirewallDeviceType enum values (linode, nodebalancer, linode_interface). The
+    closed-set check mirrors Go so both languages reject the same values.
+    """
+    if "type" not in arguments:
+        return "type is required"
+
+    device_type = arguments.get("type", "")
+    if not isinstance(device_type, str):
+        return "type must be a string"
+    if not device_type.strip():
+        return "type must be a non-empty string"
+
+    return enum_choice_error(
+        device_type, "type", firewall_device_pb2.FirewallDeviceType.Value
+    )
 
 
 def _firewall_device_create_fields_error(
@@ -884,14 +736,9 @@ def _firewall_device_create_fields_error(
     if error is not None:
         return error_response(error)
 
-    if "type" not in arguments:
-        return error_response("type is required")
-
-    device_type = arguments.get("type", "")
-    if not isinstance(device_type, str):
-        return error_response("type must be a string")
-    if not device_type.strip():
-        return error_response("type must be a non-empty string")
+    type_error = _firewall_device_type_error(arguments)
+    if type_error is not None:
+        return error_response(type_error)
 
     return None
 
@@ -921,26 +768,23 @@ async def handle_linode_firewall_device_create(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text=(
-                    "Error: This operation requires confirmation. "
-                    "Set confirm=true to proceed."
-                ),
-            )
-        ]
+        return error_response(
+            "This assigns a device to a Cloud Firewall. Set confirm=true to proceed."
+        )
 
     fields_error = _firewall_device_create_fields_error(arguments)
     if fields_error is not None:
         return fields_error
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        device = await client.create_firewall_device(
+        raw = await client.create_firewall_device(
             firewall_id=int(arguments["firewall_id"]),
             device_id=int(arguments["id"]),
             device_type=str(arguments["type"]),
         )
-        return {"message": "Firewall device created successfully", "device": device}
+        return serialize_api_response(
+            {"message": "Firewall device assigned successfully", "device": raw},
+            firewall_device_pb2.FirewallDeviceWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create firewall device", _call)

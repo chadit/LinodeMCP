@@ -10,7 +10,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
-	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
@@ -48,8 +47,8 @@ func TestLinodeInstanceTransferMonthGetToolDefinition(t *testing.T) {
 	}
 
 	for _, key := range []string{keyLinodeID, transferKeyYear, transferKeyMonth} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(string(tool.RawInputSchema), key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -104,7 +103,7 @@ func TestLinodeInstanceTransferMonthGetToolValidation(t *testing.T) {
 func TestLinodeInstanceTransferMonthGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	transfer := linode.Transfer{In: 1.5, Out: 2.5, Total: 4}
+	transfer := map[string]any{"bytes_in": 30471077120, "bytes_out": 22956600198, "bytes_total": 53427677318, keyNotInProto: valNotInProto}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
@@ -151,7 +150,13 @@ func TestLinodeInstanceTransferMonthGetToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"total": 4`) {
-		t.Errorf("textContent.Text does not contain %v", `"total": 4`)
+	// int64 fields stay JSON numbers under the canonical serializer. Assert the
+	// bare value; the widening pass strips the quotes protojson adds.
+	if !strings.Contains(textContent.Text, `"bytes_total": 53427677318`) {
+		t.Errorf("textContent.Text does not contain unquoted %v", "bytes_total: 53427677318")
+	}
+
+	if strings.Contains(textContent.Text, keyNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }

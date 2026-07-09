@@ -1,0 +1,22 @@
+{
+  "tool": "linode_instance_firewall_apply",
+  "description": "Apply needs confirm; POSTs the apply endpoint with no body. No-confirm message text diverges (see report), so the missing-linode_id rejection carries confirm to reach the shared validation.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id once confirmed",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "reapplies firewalls with a plain POST",
+      "args": { "linode_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/linode/instances/123/firewalls/apply" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123},
+      "expect_error": "This reapplies assigned firewalls to the Linode. Set confirm=true to proceed."
+    }
+  ]
+}

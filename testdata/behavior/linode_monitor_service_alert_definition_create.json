@@ -1,0 +1,74 @@
+{
+  "tool": "linode_monitor_service_alert_definition_create",
+  "description": "Alert-definition entity IDs are strings in the Linode Metrics API, unlike the integer entity IDs the token endpoint takes; these cases pin that split plus the positivity rule on channel_ids.",
+  "cases": [
+    {
+      "name": "rejects integer entity ids",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
+        "trigger_conditions": { "criteria_condition": "ALL" },
+        "channel_ids": [10000],
+        "entity_ids": [12345],
+        "confirm": true
+      },
+      "expect_error": "entity_ids must be an array of non-empty strings"
+    },
+    {
+      "name": "rejects non-positive channel ids",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
+        "trigger_conditions": { "criteria_condition": "ALL" },
+        "channel_ids": [0],
+        "confirm": true
+      },
+      "expect_error": "channel_ids must be a non-empty array of positive integers"
+    },
+    {
+      "name": "posts the create body with string entity ids",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
+        "trigger_conditions": { "criteria_condition": "ALL" },
+        "channel_ids": [10000],
+        "description": "High CPU usage",
+        "entity_ids": ["12345"],
+        "confirm": true
+      },
+      "api_response": { "id": 67890, "label": "CPU high" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/alert-definitions",
+        "body": {
+          "label": "CPU high",
+          "severity": 1,
+          "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
+          "trigger_conditions": { "criteria_condition": "ALL" },
+          "channel_ids": [10000],
+          "description": "High CPU usage",
+          "entity_ids": ["12345"]
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
+        "trigger_conditions": { "criteria_condition": "ALL" },
+        "channel_ids": [10000],
+        "entity_ids": ["12345"]
+      },
+      "expect_error": "This creates a monitor alert definition. Set confirm=true to proceed."
+    }
+  ]
+}

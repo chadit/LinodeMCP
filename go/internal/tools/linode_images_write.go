@@ -13,25 +13,18 @@ import (
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 var imageShareGroupImageIDPattern = regexp.MustCompile(`^shared/[1-9]\d*$`)
 
 // NewLinodeImageUploadTool creates a tool for uploading a custom image.
 func NewLinodeImageUploadTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	options := []mcp.ToolOption{
-		mcp.WithDescription("Creates an upload target for a custom image."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString("label", mcp.Required(), mcp.Description("The custom image label.")),
-		mcp.WithString("region", mcp.Required(), mcp.Description("The region for the image upload.")),
-		mcp.WithString("description", mcp.Description("Detailed description for the image (optional).")),
-		mcp.WithBoolean("cloud_init", mcp.Description("Whether the image supports cloud-init.")),
-		mcp.WithArray("tags", mcp.Description("Tag strings to apply to the image (optional).")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(),
-			mcp.Description("Must be true to confirm image upload creation. Ignored when dry_run=true.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-	}
-	tool := mcp.NewTool("linode_image_upload", options...)
+	tool := mcp.NewToolWithRawSchema(
+		"linode_image_upload",
+		"Creates an upload target for a custom image.",
+		toolschemas.Schema("linode.mcp.v1.ImageUploadInput"),
+	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return handleLinodeImageUploadRequest(ctx, &request, cfg)
@@ -42,41 +35,30 @@ func NewLinodeImageUploadTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 
 // NewLinodeImageReplicateTool creates a tool for replicating an image to regions.
 func NewLinodeImageReplicateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_replicate",
 		"Replicates an image to one or more compute regions.",
-		[]mcp.ToolOption{
-			mcp.WithString("image_id", mcp.Required(), mcp.Description("Image ID, such as private/123.")),
-			mcp.WithArray("regions", mcp.Required(), mcp.Description("Region slug strings to keep or replicate the image to.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm image replication. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeImageReplicateRequest,
+		toolschemas.Schema("linode.mcp.v1.ImageReplicateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageReplicateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeImageUpdateTool creates a tool for updating editable image metadata.
 func NewLinodeImageUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_update",
 		"Updates editable metadata for a Linode image.",
-		[]mcp.ToolOption{
-			mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-			mcp.WithString("image_id", mcp.Required(), mcp.Description("The editable image ID, for example private/12345 or shared/123.")),
-			mcp.WithString("label", mcp.Description("New image label (optional).")),
-			mcp.WithString("description", mcp.Description("New image description (optional).")),
-			mcp.WithArray("tags", mcp.Description("Tag strings to apply to the image (optional).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm image update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeImageUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ImageUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -379,20 +361,15 @@ func formatImageUpdateError(err error) string {
 
 // NewLinodeImageShareGroupCreateTool creates a tool for creating image share groups.
 func NewLinodeImageShareGroupCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_sharegroup_create",
 		"Creates a share group for sharing images with other users.",
-		[]mcp.ToolOption{
-			mcp.WithString("label", mcp.Required(), mcp.Description("The share group's descriptive name.")),
-			mcp.WithString("description", mcp.Description("Detailed description for the share group (optional).")),
-			mcp.WithArray("images", mcp.Description("Array of images to include, each an object with required id and optional label/description.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm image share group creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeImageShareGroupCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.ImageShareGroupCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -465,19 +442,15 @@ func handleLinodeImageShareGroupCreateRequest(ctx context.Context, request *mcp.
 
 // NewLinodeImageShareGroupImagesAddTool creates a tool for adding images to an image share group.
 func NewLinodeImageShareGroupImagesAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_sharegroup_image_add",
 		"Adds one or more private images to an image share group.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to add images to.")),
-			mcp.WithArray("images", mcp.Required(), mcp.Description("Array of images to add, each an object with required id and optional label/description.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm adding images to the share group. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeImageShareGroupImagesAddRequest,
+		toolschemas.Schema("linode.mcp.v1.ImageShareGroupImageAddInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupImagesAddRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -566,17 +539,10 @@ func formatImageShareGroupImagesAddError(err error) string {
 
 // NewLinodeImageShareGroupImageUpdateTool creates a tool for updating a shared image.
 func NewLinodeImageShareGroupImageUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_sharegroup_image_update",
-		mcp.WithDescription("Updates a shared image's label or description within an image share group."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID that contains the shared image.")),
-		mcp.WithString("image_id", mcp.Required(), mcp.Description("The shared image ID, for example shared/1.")),
-		mcp.WithString("label", mcp.Description("New descriptive name for the shared image (optional).")),
-		mcp.WithString("description", mcp.Description("New detailed description for the shared image (optional).")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(),
-			mcp.Description("Must be true to confirm shared image update. Ignored when dry_run=true.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Updates a shared image's label or description within an image share group.",
+		toolschemas.Schema("linode.mcp.v1.ImageShareGroupImageUpdateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -707,16 +673,10 @@ func formatImageShareGroupImageUpdateError(err error) string {
 
 // NewLinodeImageShareGroupMembersAddTool creates a tool for adding members to an image share group.
 func NewLinodeImageShareGroupMembersAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_sharegroup_member_add",
-		mcp.WithDescription("Adds members to an image share group using a membership token."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to add members to.")),
-		mcp.WithString("label", mcp.Required(), mcp.Description("Label for the member being added.")),
-		mcp.WithString("token", mcp.Required(), mcp.Description("Membership token used to add the member.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(),
-			mcp.Description("Must be true to confirm adding members to the share group. Ignored when dry_run=true.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Adds members to an image share group using a membership token.",
+		toolschemas.Schema("linode.mcp.v1.ImageShareGroupMemberAddInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -864,20 +824,15 @@ func imageShareGroupImagesFromTool(raw any) ([]linode.ImageShareGroupImage, erro
 
 // NewLinodeImageShareGroupUpdateTool creates a tool for updating image share groups.
 func NewLinodeImageShareGroupUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_sharegroup_update",
 		"Updates an image share group's label or description.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric image share group ID to update.")),
-			mcp.WithString("label", mcp.Description("New descriptive name for the share group (optional).")),
-			mcp.WithString("description", mcp.Description("New detailed description for the share group (optional).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm image share group update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeImageShareGroupUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ImageShareGroupUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -943,17 +898,7 @@ func handleLinodeImageShareGroupUpdateRequest(ctx context.Context, request *mcp.
 }
 
 func imageShareGroupIDFromWriteTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()["sharegroup_id"]
-	if !exists {
-		return 0, errImageShareGroupIDPositive
-	}
-
-	shareGroupID, ok := numberArgToInt(raw)
-	if !ok || shareGroupID <= 0 {
-		return 0, errImageShareGroupIDPositive
-	}
-
-	return shareGroupID, ""
+	return requiredIDArgument(request, "sharegroup_id")
 }
 
 func imageShareGroupUpdateFromTool(args map[string]any) (*linode.UpdateImageShareGroupRequest, string) {
@@ -994,18 +939,10 @@ func formatImageShareGroupUpdateError(err error) string {
 
 // NewLinodeImageCreateTool creates a tool for creating private Linode images.
 func NewLinodeImageCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_create",
-		mcp.WithDescription("Creates a private Linode image from an existing Linode disk."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber("disk_id", mcp.Required(), mcp.Description("The ID of the Linode disk to image.")),
-		mcp.WithString("label", mcp.Description("Short label for the new image (optional).")),
-		mcp.WithString("description", mcp.Description("Detailed description for the new image (optional).")),
-		mcp.WithBoolean("cloud_init", mcp.Description("Whether the image supports cloud-init (optional).")),
-		mcp.WithArray("tags", mcp.Description("Tag strings to apply to the image (optional).")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(),
-			mcp.Description("Must be true to confirm private image creation. Ignored when dry_run=true.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Creates a private Linode image from an existing Linode disk.",
+		toolschemas.Schema("linode.mcp.v1.ImageCreateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1017,15 +954,10 @@ func NewLinodeImageCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 
 // NewLinodeImageShareGroupTokenCreateTool creates a tool for creating image share group membership tokens.
 func NewLinodeImageShareGroupTokenCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_sharegroup_token_create",
-		mcp.WithDescription("Creates a single-use image share group membership token. The response includes token material that is only useful if handled carefully."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString("valid_for_sharegroup_uuid", mcp.Required(), mcp.Description("The UUID of the share group this token is valid for.")),
-		mcp.WithString("label", mcp.Description("Optional descriptive label for the token.")),
-		mcp.WithBoolean(paramConfirm, mcp.Required(),
-			mcp.Description("Must be true to confirm image share group token creation. Ignored when dry_run=true.")),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
+		"Creates a single-use image share group membership token. The response includes token material that is only useful if handled carefully.",
+		toolschemas.Schema("linode.mcp.v1.ImageShareGroupTokenCreateInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1037,39 +969,30 @@ func NewLinodeImageShareGroupTokenCreateTool(cfg *config.Config) (mcp.Tool, prof
 
 // NewLinodeImageShareGroupTokenUpdateTool creates a tool for updating image share group membership token labels.
 func NewLinodeImageShareGroupTokenUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_sharegroup_token_update",
 		"Updates an image share group membership token label.",
-		[]mcp.ToolOption{
-			mcp.WithString("token_uuid", mcp.Required(), mcp.Description("The UUID of the token to update.")),
-			mcp.WithString("label", mcp.Required(), mcp.Description("The new descriptive label for the token.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm image share group token update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeImageShareGroupTokenUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ImageShareGroupTokenUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupTokenUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeImageShareGroupMemberUpdateTool creates a tool for updating image share group member token labels.
 func NewLinodeImageShareGroupMemberUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_image_sharegroup_member_token_update",
 		"Updates a member token label for an owned image share group.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("The numeric ID of the image share group.")),
-			mcp.WithString("token_uuid", mcp.Required(), mcp.Description("The UUID of the member token to update.")),
-			mcp.WithString("label", mcp.Required(), mcp.Description("The new descriptive label for the member token.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm image share group member token update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeImageShareGroupMemberUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ImageShareGroupMemberTokenUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeImageShareGroupMemberUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -1214,10 +1137,41 @@ func formatImageShareGroupMemberUpdateError(err error) string {
 	return "Failed to update image share group member token: " + err.Error()
 }
 
+// isUUIDFormat reports whether s parses as a UUID the way CPython's uuid.UUID
+// does: the canonical 8-4-4-4-12 form plus the 32-hex, brace-wrapped, and
+// urn:uuid: variants Python accepts. It mirrors _image_sharegroup_token_uuid_error
+// so both languages accept and reject valid_for_sharegroup_uuid identically.
+func isUUIDFormat(s string) bool {
+	normalized := strings.TrimSpace(s)
+	normalized = strings.ReplaceAll(normalized, "urn:", "")
+	normalized = strings.ReplaceAll(normalized, "uuid:", "")
+	normalized = strings.Trim(normalized, "{}")
+	normalized = strings.ReplaceAll(normalized, "-", "")
+
+	return len(normalized) == 32 && isHexString(normalized)
+}
+
+// isHexString reports whether every rune in s is a hexadecimal digit.
+func isHexString(s string) bool {
+	for _, r := range s {
+		isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+		if !isHex {
+			return false
+		}
+	}
+
+	return true
+}
+
 func handleLinodeImageShareGroupTokenCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
-		if strings.TrimSpace(request.GetString("valid_for_sharegroup_uuid", "")) == "" {
+		shareGroupUUID := strings.TrimSpace(request.GetString("valid_for_sharegroup_uuid", ""))
+		if shareGroupUUID == "" {
 			return mcp.NewToolResultError("valid_for_sharegroup_uuid is required"), nil
+		}
+
+		if !isUUIDFormat(shareGroupUUID) {
+			return mcp.NewToolResultError("valid_for_sharegroup_uuid must be a valid UUID"), nil
 		}
 
 		return RunDryRunPreview(ctx, request, cfg, "linode_image_sharegroup_token_create", httpMethodPost, "/images/sharegroups/tokens", nil)
@@ -1230,6 +1184,10 @@ func handleLinodeImageShareGroupTokenCreateRequest(ctx context.Context, request 
 	shareGroupUUID := strings.TrimSpace(request.GetString("valid_for_sharegroup_uuid", ""))
 	if shareGroupUUID == "" {
 		return mcp.NewToolResultError("valid_for_sharegroup_uuid is required"), nil
+	}
+
+	if !isUUIDFormat(shareGroupUUID) {
+		return mcp.NewToolResultError("valid_for_sharegroup_uuid must be a valid UUID"), nil
 	}
 
 	environment := request.GetString(paramEnvironment, "")

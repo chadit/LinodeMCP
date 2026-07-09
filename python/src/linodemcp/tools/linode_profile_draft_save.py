@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.config import load_from_file, write_atomic
+from linodemcp.genpb.linode.mcp.v1 import profile_builder_pb2
 from linodemcp.profiles import Capability
 from linodemcp.profiles.builder import (
     DraftNotFoundError,
@@ -29,6 +30,8 @@ from linodemcp.tools.linode_profile_draft import (
     DraftNameMissingError,
     get_draft_registry,
 )
+from linodemcp.tools.proto_response import serialize_api_response
+from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -113,23 +116,7 @@ def create_linode_profile_draft_save_tool() -> tuple[Tool, Capability]:
                 "use <name>` separately. Saving over a built-in "
                 "profile name is refused."
             ),
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    _ARG_NAME: {
-                        "type": "string",
-                        "description": "Draft name to save.",
-                    },
-                    _ARG_CONFIRM: {
-                        "type": "boolean",
-                        "description": (
-                            "Must be true. The save is a write "
-                            "operation that mutates the config file."
-                        ),
-                    },
-                },
-                "required": [_ARG_NAME, _ARG_CONFIRM],
-            },
+            inputSchema=schema("linode.mcp.v1.ProfileDraftSaveInput"),
         ),
         Capability.Meta,
     )
@@ -180,8 +167,10 @@ async def handle_linode_profile_draft_save(
     cfg.profiles[name] = draft_cfg
     write_atomic(path, cfg)
 
-    payload = json.dumps(diff.to_payload())
-    return [TextContent(type="text", text=payload)]
+    result = serialize_api_response(
+        diff.to_payload(), profile_builder_pb2.ProfileDraftSaveResponse()
+    )
+    return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
 __all__ = [

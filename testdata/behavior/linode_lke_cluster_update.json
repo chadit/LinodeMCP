@@ -1,0 +1,22 @@
+{
+  "tool": "linode_lke_cluster_update",
+  "description": "Pins the cluster_id-required rejection and the confirmed PUT with a minimal label body. Confirm-message text diverges (see report), so no confirm-required case here.",
+  "cases": [
+    {
+      "name": "rejects missing cluster_id",
+      "args": {},
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "updates a cluster label",
+      "args": { "cluster_id": 12345, "label": "renamed", "confirm": true },
+      "api_response": { "id": 12345, "label": "renamed" },
+      "expect_request": { "method": "PUT", "path": "/lke/clusters/12345", "body": { "label": "renamed" } }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"cluster_id": 12345, "label": "renamed"},
+      "expect_error": "This modifies the LKE cluster configuration. Set confirm=true to proceed."
+    }
+  ]
+}

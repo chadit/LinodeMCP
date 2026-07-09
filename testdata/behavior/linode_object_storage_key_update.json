@@ -1,0 +1,26 @@
+{
+  "tool": "linode_object_storage_key_update",
+  "description": "Pins the shared key_id validation (with confirm) and the key update PUT body. The key_id case carries confirm:true because Go validates behind the confirm gate while Python validates ahead of it; they only agree once confirm is set.",
+  "cases": [
+    {
+      "name": "requires positive key_id",
+      "args": { "label": "renamed-key", "confirm": true },
+      "expect_error": "key_id is required and must be a positive integer"
+    },
+    {
+      "name": "updates a key label",
+      "args": { "key_id": 123, "label": "renamed-key", "confirm": true },
+      "api_response": { "id": 123, "label": "renamed-key" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/object-storage/keys/123",
+        "body": { "label": "renamed-key" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"key_id": 123, "label": "renamed-key"},
+      "expect_error": "This modifies access key permissions. Set confirm=true to proceed."
+    }
+  ]
+}

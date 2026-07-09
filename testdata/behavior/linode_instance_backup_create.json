@@ -1,0 +1,26 @@
+{
+  "tool": "linode_instance_backup_create",
+  "description": "Snapshot create needs confirm; POSTs the label body. No-confirm message text diverges (see report), so only the post-confirm linode_id rejection is fixtured.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id once confirmed",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "creates a snapshot with the label body",
+      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "api_response": { "id": 999 },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/backups",
+        "body": { "label": "snap-1" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "label": "snap-1"},
+      "expect_error": "This creates a manual snapshot and overwrites any existing one. Set confirm=true to proceed."
+    }
+  ]
+}

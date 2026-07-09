@@ -1,0 +1,35 @@
+{
+  "tool": "linode_lke_cluster_regenerate",
+  "description": "Destroy-capability but Go uses a plain confirm gate (no bypass gate); Python enforces the dispatch bypass gate. Only the agreed cases are pinned: cluster_id-required and the confirmed+bypassed POST. The confirm-alone gate diverges (see report). Regenerates a service token by design.",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": {
+        "cluster_id": 123,
+        "confirm": true
+      },
+      "expect_error": "linode_lke_cluster_regenerate is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "requires cluster_id",
+      "args": {
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "regenerates the service token",
+      "args": {
+        "cluster_id": 12345,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/lke/clusters/12345/regenerate"
+      }
+    }
+  ]
+}

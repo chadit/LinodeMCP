@@ -7,15 +7,10 @@ from typing import TYPE_CHECKING, Any, cast
 import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import ip_pb2, vpc_pb2
 from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -23,8 +18,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    valid_ipv6_prefix,
 )
-from linodemcp.tools.linode_vpc import vpc_subnet_to_dict, vpc_to_response_dict
+from linodemcp.tools.proto_response import raw_int, raw_str, serialize_api_response
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -32,58 +29,11 @@ if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
 
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-
-_VPC_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the VPC (required)",
-}
-
-_SUBNET_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the subnet (required)",
-}
-
-_CONFIRM_PROP: dict[str, Any] = {
-    "type": "boolean",
-    "description": "Must be true to confirm this operation.",
-}
-
 _IPV6_RANGE_KEY = "range"
-_IPV6_RANGE_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": (
-        "The IPv6 range to delete, without prefix length (for example 2001:0db8::)"
-    ),
-}
 
 _IPV6_PREFIX_LENGTH_KEY = "prefix_length"
 _LINODE_ID_KEY = "linode_id"
 _ROUTE_TARGET_KEY = "route_target"
-_IPV6_PREFIX_LENGTH_PROP: dict[str, Any] = {
-    "type": "integer",
-    "enum": [56, 64],
-    "description": "The prefix length of the IPv6 range. Must be 56 or 64.",
-}
-_LINODE_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "description": (
-        "The ID of the Linode to assign this range to. Required when "
-        "route_target is omitted."
-    ),
-}
-_ROUTE_TARGET_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": (
-        "The IPv6 SLAAC address to assign this range to. Required when "
-        "linode_id is omitted."
-    ),
-}
 
 
 def _parse_vpc_subnet_ids(
@@ -173,37 +123,7 @@ def create_linode_vpc_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_create",
         description="Creates a new VPC",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "Label for the VPC (required)",
-                },
-                "region": {
-                    "type": "string",
-                    "description": "Region for the VPC (required)",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Description of the VPC",
-                },
-                "subnets": {
-                    "type": "array",
-                    "description": "Initial subnets: [{label, ipv4}]",
-                    "items": {"type": "object"},
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "region", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcCreateInput"),
     ), Capability.Write
 
 
@@ -238,7 +158,9 @@ async def handle_linode_vpc_create(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This creates a billable VPC resource. Set confirm=true to proceed."
+        )
 
     fields_error = _vpc_create_error(label, region)
     if fields_error is not None:
@@ -251,13 +173,16 @@ async def handle_linode_vpc_create(
             description=arguments.get("description"),
             subnets=arguments.get("subnets"),
         )
-        return {
-            "message": (
-                f"VPC '{vpc.get('label', '')}' (ID: {vpc.get('id', 0)}) "
-                f"created in {vpc.get('region', '')}"
-            ),
-            "vpc": vpc_to_response_dict(vpc),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"VPC '{raw_str(vpc, 'label')}' (ID: {raw_int(vpc, 'id')}) "
+                    f"created in {raw_str(vpc, 'region')}"
+                ),
+                "vpc": vpc,
+            },
+            vpc_pb2.VpcWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create VPC", _call)
 
@@ -267,24 +192,7 @@ def create_linode_vpc_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_update",
         description="Updates an existing VPC",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "New label for the VPC",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "New description for the VPC",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["vpc_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcUpdateInput"),
     ), Capability.Write
 
 
@@ -342,7 +250,9 @@ async def handle_linode_vpc_update(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This modifies the VPC configuration. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         vpc = await client.update_vpc(
@@ -350,10 +260,13 @@ async def handle_linode_vpc_update(
             label=arguments.get("label"),
             description=arguments.get("description"),
         )
-        return {
-            "message": f"VPC {vpc_id} modified successfully",
-            "vpc": vpc_to_response_dict(vpc),
-        }
+        return serialize_api_response(
+            {
+                "message": f"VPC {vpc_id} modified successfully",
+                "vpc": vpc,
+            },
+            vpc_pb2.VpcWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update VPC", _call)
 
@@ -364,24 +277,7 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
         name="linode_vpc_delete",
         description="Deletes a VPC. Pass dry_run=true to preview without deleting."
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["vpc_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcDeleteInput"),
     ), Capability.Destroy
 
 
@@ -437,10 +333,13 @@ async def _vpc_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vpc(vpc_id)
-        return {
-            "message": f"VPC {vpc_id} deleted",
-            "vpc_id": vpc_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"VPC {vpc_id} removed successfully",
+                "vpc_id": vpc_id,
+            },
+            vpc_pb2.VpcDeleteResponse(),
+        )
 
     async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
         return await _vpc_delete_dependency_walk(client, vpc_id)
@@ -497,14 +396,20 @@ async def handle_linode_vpc_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
+        return error_response(
+            "This is irreversible. All subnets in the VPC will also be deleted. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vpc(vpc_id)
-        return {
-            "message": f"VPC {vpc_id} deleted",
-            "vpc_id": vpc_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"VPC {vpc_id} removed successfully",
+                "vpc_id": vpc_id,
+            },
+            vpc_pb2.VpcDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete VPC", _call)
 
@@ -514,36 +419,7 @@ def create_linode_vpc_subnet_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_subnet_create",
         description="Creates a new subnet in a VPC",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "Label for the subnet (required)",
-                },
-                "ipv4": {
-                    "type": "string",
-                    "description": (
-                        "IPv4 range in CIDR format, e.g. 10.0.0.0/24 (required)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "vpc_id",
-                "label",
-                "ipv4",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcSubnetCreateInput"),
     ), Capability.Write
 
 
@@ -591,7 +467,9 @@ async def handle_linode_vpc_subnet_create(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This creates a new subnet in the VPC. Set confirm=true to proceed."
+        )
 
     if fields_error is not None:
         return fields_error
@@ -602,13 +480,16 @@ async def handle_linode_vpc_subnet_create(
             label=label,
             ipv4=ipv4,
         )
-        return {
-            "message": (
-                f"Subnet '{subnet.get('label', '')}' (ID: {subnet.get('id', 0)}) "
-                f"created in VPC {vpc_id}"
-            ),
-            "subnet": vpc_subnet_to_dict(subnet),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Subnet '{raw_str(subnet, 'label')}' "
+                    f"(ID: {raw_int(subnet, 'id')}) created in VPC {vpc_id}"
+                ),
+                "subnet": subnet,
+            },
+            vpc_pb2.VpcSubnetWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create VPC subnet", _call)
 
@@ -618,26 +499,7 @@ def create_linode_vpc_subnet_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_subnet_update",
         description="Updates a VPC subnet",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-                "subnet_id": _SUBNET_ID_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "New label for the subnet (required)",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "vpc_id",
-                "subnet_id",
-                "label",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcSubnetUpdateInput"),
     ), Capability.Write
 
 
@@ -670,7 +532,9 @@ async def handle_linode_vpc_subnet_update(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This modifies the subnet configuration. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         subnet = await client.update_vpc_subnet(
@@ -678,10 +542,15 @@ async def handle_linode_vpc_subnet_update(
             subnet_id=subnet_id,
             label=label,
         )
-        return {
-            "message": f"Subnet {subnet_id} in VPC {vpc_id} modified successfully",
-            "subnet": vpc_subnet_to_dict(subnet),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Subnet {subnet_id} in VPC {vpc_id} modified successfully"
+                ),
+                "subnet": subnet,
+            },
+            vpc_pb2.VpcSubnetWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update VPC subnet", _call)
 
@@ -694,29 +563,7 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a VPC subnet. Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "vpc_id": _VPC_ID_PROP,
-                "subnet_id": _SUBNET_ID_PROP,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": [
-                "vpc_id",
-                "subnet_id",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.VpcSubnetDeleteInput"),
     ), Capability.Destroy
 
 
@@ -761,11 +608,14 @@ async def _vpc_subnet_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vpc_subnet(vpc_id, subnet_id)
-        return {
-            "message": f"Subnet {subnet_id} deleted from VPC {vpc_id}",
-            "vpc_id": vpc_id,
-            "subnet_id": subnet_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Subnet {subnet_id} deleted from VPC {vpc_id} successfully",
+                "vpc_id": vpc_id,
+                "subnet_id": subnet_id,
+            },
+            vpc_pb2.VpcSubnetDeleteResponse(),
+        )
 
     async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
         return _vpc_subnet_delete_dependency_walk(state)
@@ -818,15 +668,21 @@ async def handle_linode_vpc_subnet_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
+        return error_response(
+            "This is irreversible. The subnet will be permanently deleted. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vpc_subnet(vpc_id, subnet_id)
-        return {
-            "message": f"Subnet {subnet_id} deleted from VPC {vpc_id}",
-            "vpc_id": vpc_id,
-            "subnet_id": subnet_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Subnet {subnet_id} deleted from VPC {vpc_id} successfully",
+                "vpc_id": vpc_id,
+                "subnet_id": subnet_id,
+            },
+            vpc_pb2.VpcSubnetDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete VPC subnet", _call)
 
@@ -836,23 +692,7 @@ def create_linode_ipv6_range_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_ipv6_range_create",
         description="Creates an IPv6 range",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                _IPV6_PREFIX_LENGTH_KEY: _IPV6_PREFIX_LENGTH_PROP,
-                _LINODE_ID_KEY: _LINODE_ID_PROP,
-                _ROUTE_TARGET_KEY: _ROUTE_TARGET_PROP,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [_IPV6_PREFIX_LENGTH_KEY, "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.IPv6RangeCreateInput"),
     ), Capability.Write
 
 
@@ -883,7 +723,10 @@ async def handle_linode_ipv6_range_create(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("Set confirm=true to proceed.")
+        return error_response(
+            "This creates an IPv6 range and changes networking configuration. Set "
+            "confirm=true to proceed."
+        )
 
     parsed_args = _parse_ipv6_range_create_args(arguments)
     if isinstance(parsed_args, list):
@@ -891,12 +734,15 @@ async def handle_linode_ipv6_range_create(
     prefix_length, linode_id, route_target = parsed_args
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        ipv6_range = await client.create_ipv6_range(
+        raw = await client.create_ipv6_range(
             prefix_length=prefix_length,
             linode_id=linode_id,
             route_target=route_target,
         )
-        return {"message": "IPv6 range created", _IPV6_RANGE_KEY: ipv6_range}
+        return serialize_api_response(
+            {"message": "IPv6 range created", _IPV6_RANGE_KEY: raw},
+            ip_pb2.IPv6RangeWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create IPv6 range", _call)
 
@@ -909,24 +755,7 @@ def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
             "Deletes an IPv6 range. Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                _IPV6_RANGE_KEY: _IPV6_RANGE_PROP,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": [_IPV6_RANGE_KEY, "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.IPv6RangeDeleteInput"),
     ), Capability.Destroy
 
 
@@ -942,10 +771,13 @@ async def _ipv6_range_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ipv6_range(ipv6_range)
-        return {
-            "message": "IPv6 range deleted",
-            _IPV6_RANGE_KEY: ipv6_range,
-        }
+        return serialize_api_response(
+            {
+                "message": "IPv6 range deleted",
+                _IPV6_RANGE_KEY: ipv6_range,
+            },
+            ip_pb2.IPv6RangeDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -967,6 +799,8 @@ async def handle_linode_ipv6_range_delete(
     if not isinstance(range_value, str) or not range_value.strip():
         return error_response("range is required")
     ipv6_range = range_value.strip()
+    if not valid_ipv6_prefix(ipv6_range):
+        return error_response("range must be a valid IPv6 prefix")
 
     two_stage = await _ipv6_range_delete_two_stage(arguments, cfg, ipv6_range)
     if two_stage is not None:
@@ -988,13 +822,19 @@ async def handle_linode_ipv6_range_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
+        return error_response(
+            "This deletes an IPv6 range and changes networking configuration. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_ipv6_range(ipv6_range)
-        return {
-            "message": "IPv6 range deleted",
-            _IPV6_RANGE_KEY: ipv6_range,
-        }
+        return serialize_api_response(
+            {
+                "message": "IPv6 range deleted",
+                _IPV6_RANGE_KEY: ipv6_range,
+            },
+            ip_pb2.IPv6RangeDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete IPv6 range", _call)

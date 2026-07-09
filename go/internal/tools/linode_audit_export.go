@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
@@ -10,17 +9,10 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
-
-// auditExportResponse is the wire shape of the linode_audit_export
-// result: the temp-file path the model surfaces to the user, the
-// format written, and the number of records exported.
-type auditExportResponse struct {
-	Path        string `json:"path"`
-	Format      string `json:"format"`
-	RecordCount int    `json:"record_count"`
-}
 
 // NewLinodeAuditExportTool returns the linode_audit_export query tool.
 // It dumps a filtered window of audit events to a temp file in JSON,
@@ -33,38 +25,12 @@ type auditExportResponse struct {
 func NewLinodeAuditExportTool(
 	cfg *config.Config,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_audit_export",
-		mcp.WithDescription(
-			"Export a range of audit events to a temp file and return its path. "+
-				"Reads SQLite when enabled, else the JSONL log. Optional filters: "+
-				"since, until, tool (glob), max_records, include_meta.",
-		),
-		mcp.WithString(
-			"format",
-			mcp.Required(),
-			mcp.Description("Output format: json, csv, or ndjson."),
-		),
-		mcp.WithString(
-			"since",
-			mcp.Description("Only events at or after this RFC 3339 timestamp."),
-		),
-		mcp.WithString(
-			"until",
-			mcp.Description("Only events at or before this RFC 3339 timestamp."),
-		),
-		mcp.WithString(
-			"tool",
-			mcp.Description(`Only events whose tool name matches this glob (e.g. "linode_instance_*").`),
-		),
-		mcp.WithNumber(
-			"max_records",
-			mcp.Description("Max events to export. Default 10000, capped at 100000."),
-		),
-		mcp.WithBoolean(
-			"include_meta",
-			mcp.Description("Include audit/profile meta-tool events. Default false."),
-		),
+		"Export a range of audit events to a temp file and return its path. "+
+			"Reads SQLite when enabled, else the JSONL log. Optional filters: "+
+			"since, until, tool (glob), max_records, include_meta.",
+		toolschemas.Schema("linode.mcp.v1.AuditExportInput"),
 	)
 
 	sqlitePath := resolveAuditSQLitePath(cfg)
@@ -78,10 +44,11 @@ func NewLinodeAuditExportTool(
 
 		format := request.GetString("format", "")
 
-		ext, ok := exportFileExtension(format)
-		if !ok {
-			return mcp.NewToolResultError(fmt.Sprintf("unknown format %q: expected json, csv, or ndjson", format)), nil
+		if msg := requiredEnumChoice(&request, "format", linodev1.AuditExportFormat_Value_value); msg != "" {
+			return mcp.NewToolResultError(msg), nil
 		}
+
+		ext, _ := exportFileExtension(format)
 
 		query, err := buildExportQuery(&request)
 		if err != nil {
@@ -98,12 +65,11 @@ func NewLinodeAuditExportTool(
 			return mcp.NewToolResultError(fmt.Sprintf("failed to write export file: %v", err)), nil
 		}
 
-		body, err := json.Marshal(auditExportResponse{Path: path, Format: format, RecordCount: len(events)})
-		if err != nil {
-			return nil, fmt.Errorf("marshal audit export response: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(&linodev1.AuditExportResponse{
+			Path:        path,
+			Format:      format,
+			RecordCount: linodeIDToInt32(len(events)),
+		})
 	}
 
 	return tool, profiles.CapMeta, handler

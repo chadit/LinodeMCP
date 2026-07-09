@@ -1,0 +1,31 @@
+{
+  "tool": "linode_vpc_create",
+  "description": "VPC create requires label and region (with confirm), then POSTs them to /vpcs. The no-confirm text diverges so rejections use confirm:true plus a missing field; see report.",
+  "cases": [
+    {
+      "name": "requires label",
+      "args": { "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires region",
+      "args": { "confirm": true, "label": "my-vpc" },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "creates the VPC",
+      "args": { "confirm": true, "label": "my-vpc", "region": "us-east" },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/vpcs",
+        "body": { "label": "my-vpc", "region": "us-east" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "my-vpc", "region": "us-east"},
+      "expect_error": "This creates a billable VPC resource. Set confirm=true to proceed."
+    }
+  ]
+}

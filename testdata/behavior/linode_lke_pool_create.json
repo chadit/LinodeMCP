@@ -1,0 +1,31 @@
+{
+  "tool": "linode_lke_pool_create",
+  "description": "Pins the cluster_id/type-required rejections (checked in order) and the confirmed POST body. The count-required text and the confirm-required text both diverge (see report), so those cases are reported, not pinned.",
+  "cases": [
+    {
+      "name": "rejects missing cluster_id",
+      "args": {},
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "rejects missing type",
+      "args": { "cluster_id": 12345 },
+      "expect_error": "type is required"
+    },
+    {
+      "name": "creates a node pool",
+      "args": { "cluster_id": 12345, "type": "g6-standard-1", "count": 3, "confirm": true },
+      "api_response": { "id": 7, "type": "g6-standard-1", "count": 3 },
+      "expect_request": {
+        "method": "POST",
+        "path": "/lke/clusters/12345/pools",
+        "body": { "type": "g6-standard-1", "count": 3 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"cluster_id": 12345, "type": "g6-standard-1", "count": 3},
+      "expect_error": "This creates billable compute resources. Set confirm=true to proceed."
+    }
+  ]
+}

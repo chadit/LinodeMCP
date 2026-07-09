@@ -1,0 +1,17 @@
+{
+  "tool": "linode_longview_client_list",
+  "description": "Pins the non-integer page rejection both languages share and the unpaginated list GET.",
+  "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "page": "1" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "lists longview clients",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/longview/clients" }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.NodeBalancerDeleteResponse",
+  "description": "NodeBalancer delete id-echo: a confirmation message plus the deleted NodeBalancer's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "NodeBalancer 7788 removed successfully",
+    "nodebalancer_id": 7788
+  },
+  "canonical": {
+    "message": "NodeBalancer 7788 removed successfully",
+    "nodebalancer_id": 7788
+  }
+}

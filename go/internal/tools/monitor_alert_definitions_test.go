@@ -42,17 +42,18 @@ func TestLinodeMonitorAlertDefinitionsToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[canRunKeyEnv]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", canRunKeyEnv)
+	raw := string(tool.RawInputSchema)
+	if !strings.Contains(raw, canRunKeyEnv) {
+		t.Errorf("tool.RawInputSchema missing key %v", canRunKeyEnv)
 	}
 
-	if _, ok := tool.InputSchema.Properties["confirm"]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", "confirm")
+	if strings.Contains(raw, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
 	for _, key := range []string{keyPage, keyPageSize} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 

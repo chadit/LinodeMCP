@@ -2,37 +2,16 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
-
-// DryRunResponse is the v0 wire shape returned by mutating tools when
-// invoked with dry_run:true. Phase 1 ships this with the top-level
-// fields populated; Phase 2 per-tool dependency walks elevate it with
-// Dependencies, BillingDelta, and Warnings.
-//
-// The struct field set is intentionally small in Phase 1 so the wire
-// shape stays stable as Phase 2 lands. Clients (including the model)
-// must treat unset optional fields as "not provided", not "empty".
-type DryRunResponse struct {
-	DryRun       bool          `json:"dry_run"`
-	Tool         string        `json:"tool"`
-	Environment  string        `json:"environment,omitempty"`
-	WouldExecute DryRunRequest `json:"would_execute"`
-	CurrentState any           `json:"current_state"`
-
-	// Phase 2 enrichment, all optional (omitempty). Phase 1 tools and
-	// Tier C tools leave these unset, keeping the v0 wire shape stable
-	// across every tool wired before Phase 2.
-	Dependencies []DryRunDependency  `json:"dependencies,omitempty"`
-	SideEffects  []string            `json:"side_effects,omitempty"`
-	BillingDelta *DryRunBillingDelta `json:"billing_delta,omitempty"`
-	Warnings     []string            `json:"warnings,omitempty"`
-}
 
 // DryRunDependency is one resource a destructive call would affect. The
 // dependency walk for a Tier A tool returns a slice of these. Kind names
@@ -99,18 +78,12 @@ func BuildDryRunResponse(
 	currentState any,
 	body ...any,
 ) (*mcp.CallToolResult, error) {
-	request := DryRunRequest{Method: method, Path: path}
-	if len(body) > 0 {
-		request.Body = body[0]
+	msg, err := buildDryRunProto(toolName, environment, method, path, currentState, nil, body...)
+	if err != nil {
+		return nil, err
 	}
 
-	return MarshalToolResponse(DryRunResponse{
-		DryRun:       true,
-		Tool:         toolName,
-		Environment:  environment,
-		WouldExecute: request,
-		CurrentState: currentState,
-	})
+	return MarshalProtoToolResponse(msg)
 }
 
 // BuildDryRunResponseDetailed is the Phase 2 builder: same v0 shape plus
@@ -124,27 +97,158 @@ func BuildDryRunResponseDetailed(
 	details *DryRunDetails,
 	body ...any,
 ) (*mcp.CallToolResult, error) {
-	var detail DryRunDetails
-	if details != nil {
-		detail = *details
+	msg, err := buildDryRunProto(toolName, environment, method, path, currentState, details, body...)
+	if err != nil {
+		return nil, err
 	}
 
-	request := DryRunRequest{Method: method, Path: path}
-	if len(body) > 0 {
-		request.Body = body[0]
+	return MarshalProtoToolResponse(msg)
+}
+
+// buildDryRunProto assembles the DryRunResponse proto from the builder inputs.
+// currentState is always emitted (JSON null when nil, so a create preview still
+// reports the would-be request); the sanitized body stays absent unless a
+// non-nil one is supplied. When details is non-nil its dependency-walk fields
+// are attached. current_state and body serialize through structpb.Value so
+// protojson sorts their object keys on both languages.
+func buildDryRunProto(
+	toolName, environment, method, path string,
+	currentState any,
+	details *DryRunDetails,
+	body ...any,
+) (*linodev1.DryRunResponse, error) {
+	request, err := buildWouldExecute(method, path, body...)
+	if err != nil {
+		return nil, err
 	}
 
-	return MarshalToolResponse(DryRunResponse{
+	stateValue, err := toProtoValue(currentState)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := &linodev1.DryRunResponse{
 		DryRun:       true,
 		Tool:         toolName,
-		Environment:  environment,
 		WouldExecute: request,
-		CurrentState: currentState,
-		Dependencies: detail.Dependencies,
-		SideEffects:  detail.SideEffects,
-		BillingDelta: detail.BillingDelta,
-		Warnings:     detail.Warnings,
-	})
+		CurrentState: stateValue,
+	}
+
+	if environment != "" {
+		msg.Environment = new(environment)
+	}
+
+	if details != nil {
+		deps, depErr := dependenciesToProto(details.Dependencies)
+		if depErr != nil {
+			return nil, depErr
+		}
+
+		msg.Dependencies = deps
+		msg.SideEffects = details.SideEffects
+		msg.BillingDelta = billingDeltaToProto(details.BillingDelta)
+		msg.Warnings = details.Warnings
+	}
+
+	return msg, nil
+}
+
+// buildWouldExecute builds the would_execute preview. The sanitized body is
+// attached only when a non-nil one is supplied, matching the old omitempty tag.
+func buildWouldExecute(method, path string, body ...any) (*linodev1.DryRunRequest, error) {
+	request := &linodev1.DryRunRequest{Method: method, Path: path}
+
+	if len(body) > 0 && body[0] != nil {
+		bodyValue, err := toProtoValue(body[0])
+		if err != nil {
+			return nil, err
+		}
+
+		request.Body = bodyValue
+	}
+
+	return request, nil
+}
+
+// dependenciesToProto converts the walk's Go dependencies into their proto
+// form. An empty slice yields nil so the proto emits an empty array only when
+// the marshaller's EmitDefaultValues fills it, matching the other repeated
+// fields. Optional label/note stay absent when empty.
+func dependenciesToProto(deps []DryRunDependency) ([]*linodev1.DryRunDependency, error) {
+	if len(deps) == 0 {
+		return nil, nil
+	}
+
+	out := make([]*linodev1.DryRunDependency, 0, len(deps))
+
+	for idx := range deps {
+		source := deps[idx]
+		dep := &linodev1.DryRunDependency{Kind: source.Kind, Action: source.Action}
+
+		if source.ID != nil {
+			idValue, err := toProtoValue(source.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			dep.Id = idValue
+		}
+
+		if source.Label != "" {
+			dep.Label = new(source.Label)
+		}
+
+		if source.Note != "" {
+			dep.Note = new(source.Note)
+		}
+
+		out = append(out, dep)
+	}
+
+	return out, nil
+}
+
+// billingDeltaToProto converts the optional billing estimate; nil stays nil so
+// the proto field is omitted.
+func billingDeltaToProto(delta *DryRunBillingDelta) *linodev1.DryRunBillingDelta {
+	if delta == nil {
+		return nil
+	}
+
+	out := &linodev1.DryRunBillingDelta{MonthlyChangeUsd: delta.MonthlyChangeUSD}
+	if delta.Note != "" {
+		out.Note = new(delta.Note)
+	}
+
+	return out
+}
+
+// toProtoValue converts an arbitrary current_state or body value into a
+// structpb.Value. A nil value becomes an explicit JSON null. Everything else
+// round-trips through JSON first so typed read-sibling models (the shape the
+// dependency walks fetch) collapse to the plain map/slice/scalar form
+// structpb.NewValue accepts, keeping their JSON field names.
+func toProtoValue(value any) (*structpb.Value, error) {
+	if value == nil {
+		return structpb.NewNullValue(), nil
+	}
+
+	data, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("marshal value for proto: %w", err)
+	}
+
+	var generic any
+	if err := json.Unmarshal(data, &generic); err != nil {
+		return nil, fmt.Errorf("unmarshal value for proto: %w", err)
+	}
+
+	protoValue, err := structpb.NewValue(generic)
+	if err != nil {
+		return nil, fmt.Errorf("build proto value: %w", err)
+	}
+
+	return protoValue, nil
 }
 
 // RunDryRunPreview is the shared dry-run branch for non-destroy mutating

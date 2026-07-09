@@ -1,0 +1,12 @@
+{
+  "tool": "linode_firewall_list",
+  "description": "Firewall list issues a single GET to the firewalls collection; filters are client-side so the request is unchanged.",
+  "cases": [
+    {
+      "name": "lists firewalls with a plain GET",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/networking/firewalls" }
+    }
+  ]
+}

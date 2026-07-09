@@ -1,0 +1,17 @@
+{
+  "tool": "linode_profile_login_get",
+  "description": "Shared non-positive login_id rejection and the login GET path. Missing-login_id text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive login_id",
+      "args": { "login_id": 0 },
+      "expect_error": "login_id must be a positive integer"
+    },
+    {
+      "name": "gets a profile login by id",
+      "args": { "login_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/profile/logins/123" }
+    }
+  ]
+}

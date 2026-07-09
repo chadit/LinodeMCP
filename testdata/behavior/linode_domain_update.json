@@ -1,0 +1,26 @@
+{
+  "tool": "linode_domain_update",
+  "description": "Domain update requires domain_id (with confirm), then PUTs only the fields that were set.",
+  "cases": [
+    {
+      "name": "requires domain_id",
+      "args": { "confirm": true },
+      "expect_error": "domain_id is required"
+    },
+    {
+      "name": "updates the domain description",
+      "args": { "confirm": true, "domain_id": 5, "description": "updated desc" },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/domains/5",
+        "body": { "description": "updated desc" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"domain_id": 5, "description": "updated desc"},
+      "expect_error": "This updates a DNS domain. Set confirm=true to proceed."
+    }
+  ]
+}

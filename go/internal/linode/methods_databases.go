@@ -264,6 +264,55 @@ func (c *Client) httpGetDatabasePostgreSQLInstance(ctx context.Context, instance
 	return &instance, nil
 }
 
+// httpGetDatabaseInstanceProto retrieves one MySQL Managed Database instance and
+// decodes it into the DatabaseInstance proto element for the proto-backed read
+// path. The GET returns the bare instance object, so the body decodes straight
+// into the element with DiscardUnknown, matching the list decode.
+func (c *Client) httpGetDatabaseInstanceProto(ctx context.Context, instanceID int) (*linodev1.DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabaseInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instance := &linodev1.DatabaseInstance{}
+	if err := c.handleProtoResponse(resp, instance); err != nil {
+		return nil, err
+	}
+
+	return instance, nil
+}
+
+// httpGetDatabasePostgreSQLInstanceProto retrieves one PostgreSQL Managed
+// Database instance and decodes it into the DatabaseInstance proto element for
+// the proto-backed read path.
+func (c *Client) httpGetDatabasePostgreSQLInstanceProto(ctx context.Context, instanceID int) (*linodev1.DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instance := &linodev1.DatabaseInstance{}
+	if err := c.handleProtoResponse(resp, instance); err != nil {
+		return nil, err
+	}
+
+	return instance, nil
+}
+
 // GetDatabaseInstanceSSL retrieves the SSL CA certificate for a MySQL Managed Database instance.
 func (c *Client) httpGetDatabaseInstanceSSL(ctx context.Context, instanceID int) (*DatabaseSSL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)

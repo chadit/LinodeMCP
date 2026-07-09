@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.InstanceConfigInterfaceReorderResponse",
+  "description": "Instance config interface reorder echo: a confirmation message, the instance and configuration-profile IDs, and the interface IDs in their new order. The reorder endpoint returns an empty body, so the response echoes the applied order.",
+  "input": {
+    "message": "Configuration profile 555 interfaces reordered on instance 12345",
+    "linode_id": 12345,
+    "config_id": 555,
+    "ids": [777, 888, 999]
+  },
+  "canonical": {
+    "message": "Configuration profile 555 interfaces reordered on instance 12345",
+    "linode_id": 12345,
+    "config_id": 555,
+    "ids": [777, 888, 999]
+  }
+}

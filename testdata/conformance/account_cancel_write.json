@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.AccountCancelWriteResponse",
+  "description": "Account cancel envelope: a confirmation message and the AccountCancelResponse element carrying the survey link.",
+  "input": {
+    "message": "Account canceled successfully",
+    "cancel_info": {
+      "survey_link": "https://example.test/survey"
+    }
+  },
+  "canonical": {
+    "message": "Account canceled successfully",
+    "cancel_info": {
+      "survey_link": "https://example.test/survey"
+    }
+  }
+}

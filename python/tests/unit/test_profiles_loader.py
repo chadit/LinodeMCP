@@ -19,6 +19,7 @@ from linodemcp.profiles import (
     ActiveProfileUnknownError,
     Capability,
     ToolDescriptor,
+    lookup_profile,
     resolve_active_profile,
 )
 
@@ -264,3 +265,78 @@ def test_override_naming_non_builtin_is_ignored_with_warning(
         and "does not name a built-in" in record.getMessage()
     ]
     assert ignored_warnings, "expected a warning about the non-builtin override"
+
+
+def test_lookup_profile_empty_name_returns_none() -> None:
+    """An empty name resolves to None so callers can fall back to default."""
+    assert lookup_profile("", _config_with(), _synthetic_registry()) is None
+
+
+def test_lookup_profile_resolves_user_defined_entry() -> None:
+    """A user-defined name resolves to that profile's expanded tool set."""
+    registry = _synthetic_registry()
+    cfg = _config_with(
+        profiles={
+            "my-prof": UserProfileConfig(
+                description="just volume list",
+                allowed_tools=("linode_volume_list",),
+            ),
+        },
+    )
+
+    profile = lookup_profile("my-prof", cfg, registry)
+
+    assert profile is not None
+    assert profile.name == "my-prof"
+    assert profile.allowed_tools == ("linode_volume_list",)
+
+
+def test_lookup_profile_resolves_builtin_without_disabled_flag() -> None:
+    """A built-in name resolves and comes back with the disabled flag cleared.
+
+    lookup_profile intentionally strips ``disabled`` so a clone seeded from a
+    built-in never carries the flag into the new draft.
+    """
+    registry = _synthetic_registry()
+
+    profile = lookup_profile("compute-admin", _config_with(), registry)
+
+    assert profile is not None
+    assert profile.name == "compute-admin"
+    assert profile.disabled is False
+    assert "linode_instance_create" in profile.allowed_tools
+
+
+def test_lookup_profile_unknown_name_returns_none() -> None:
+    """A name that is neither user-defined nor a built-in resolves to None."""
+    assert (
+        lookup_profile("no-such-profile", _config_with(), _synthetic_registry()) is None
+    )
+
+
+def test_literal_allowed_tool_absent_from_registry_warns_and_drops(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A literal allowed_tools entry not in the registry warns and is dropped."""
+    registry = _synthetic_registry()
+    cfg = _config_with(
+        active_profile="p",
+        profiles={
+            "p": UserProfileConfig(
+                description="references a tool that does not exist",
+                allowed_tools=("linode_bogus_tool",),
+            ),
+        },
+    )
+
+    with caplog.at_level(logging.WARNING, logger="linodemcp.profiles.loader"):
+        profile = resolve_active_profile(cfg, registry)
+
+    assert profile.allowed_tools == ()
+    matched = [
+        record
+        for record in caplog.records
+        if "linode_bogus_tool" in record.getMessage()
+        and "not a registered tool name" in record.getMessage()
+    ]
+    assert matched, "expected a warning about the unknown literal tool name"

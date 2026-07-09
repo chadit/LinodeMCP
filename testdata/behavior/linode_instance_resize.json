@@ -1,0 +1,57 @@
+{
+  "tool": "linode_instance_resize",
+  "description": "Pins instance_id-required, type-required, and the resize POST body. Both languages omit allow_auto_disk_resize and migration_type unless the caller sets them (the API applies its own defaults: allow_auto_disk_resize=true, migration_type=cold), so a minimal call sends just type. Explicit values are sent verbatim.",
+  "cases": [
+    {
+      "name": "requires instance_id",
+      "args": { "confirm": true },
+      "expect_error": "instance_id is required"
+    },
+    {
+      "name": "requires type",
+      "args": { "instance_id": 5, "confirm": true },
+      "expect_error": "type is required"
+    },
+    {
+      "name": "resizes the instance with API defaults",
+      "args": {
+        "instance_id": 5,
+        "type": "g6-standard-2",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/resize",
+        "body": {
+          "type": "g6-standard-2"
+        }
+      }
+    },
+    {
+      "name": "resizes the instance with explicit options",
+      "args": {
+        "instance_id": 5,
+        "type": "g6-standard-2",
+        "allow_auto_disk_resize": true,
+        "migration_type": "warm",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/resize",
+        "body": {
+          "type": "g6-standard-2",
+          "allow_auto_disk_resize": true,
+          "migration_type": "warm"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"instance_id": 5, "type": "g6-standard-2"},
+      "expect_error": "This operation causes downtime and may affect billing. Set confirm=true to proceed."
+    }
+  ]
+}

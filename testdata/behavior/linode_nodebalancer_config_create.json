@@ -1,0 +1,81 @@
+{
+  "tool": "linode_nodebalancer_config_create",
+  "description": "Pins the config-create POST body plus Go's port/check/ssl body validation now ported to Python (strictest-wins). Rejection cases set confirm:true so both languages reach the body check despite the confirm-vs-body ordering difference.",
+  "cases": [
+    {
+      "name": "posts the config create body",
+      "args": { "nodebalancer_id": 100, "port": 8080, "confirm": true },
+      "api_response": { "id": 12, "nodebalancer_id": 100, "port": 8080, "protocol": "http" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers/100/configs",
+        "body": { "port": 8080 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"nodebalancer_id": 100, "port": 8080},
+      "expect_error": "This creates a NodeBalancer config. Set confirm=true to proceed."
+    },
+    {
+      "name": "requires port",
+      "args": {"nodebalancer_id": 100, "confirm": true},
+      "expect_error": "port is required"
+    },
+    {
+      "name": "rejects an out-of-range port",
+      "args": {"nodebalancer_id": 100, "port": 99999, "confirm": true},
+      "expect_error": "port must be an integer from 1 through 65535"
+    },
+    {
+      "name": "rejects an invalid check",
+      "args": {"nodebalancer_id": 100, "port": 8080, "check": "bogus", "confirm": true},
+      "expect_error": "check must be one of: none, connection, http, http_body"
+    },
+    {
+      "name": "accepts udp protocol (was wrongly rejected before the proto-enum migration)",
+      "args": { "nodebalancer_id": 100, "port": 8080, "protocol": "udp", "confirm": true },
+      "api_response": { "id": 13, "nodebalancer_id": 100, "port": 8080, "protocol": "udp" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers/100/configs",
+        "body": { "port": 8080, "protocol": "udp" }
+      }
+    },
+    {
+      "name": "accepts ring_hash algorithm (was wrongly rejected before the proto-enum migration)",
+      "args": { "nodebalancer_id": 100, "port": 8080, "algorithm": "ring_hash", "confirm": true },
+      "api_response": { "id": 14, "nodebalancer_id": 100, "port": 8080, "protocol": "http" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers/100/configs",
+        "body": { "port": 8080, "algorithm": "ring_hash" }
+      }
+    },
+    {
+      "name": "rejects an invalid protocol",
+      "args": {"nodebalancer_id": 100, "port": 8080, "protocol": "ftp", "confirm": true},
+      "expect_error": "protocol must be one of: http, https, tcp, udp"
+    },
+    {
+      "name": "rejects an invalid algorithm",
+      "args": {"nodebalancer_id": 100, "port": 8080, "algorithm": "random", "confirm": true},
+      "expect_error": "algorithm must be one of: roundrobin, leastconn, source, ring_hash"
+    },
+    {
+      "name": "rejects an invalid stickiness",
+      "args": {"nodebalancer_id": 100, "port": 8080, "stickiness": "cookie", "confirm": true},
+      "expect_error": "stickiness must be one of: none, table, http_cookie, session, source_ip"
+    },
+    {
+      "name": "rejects an invalid proxy_protocol",
+      "args": {"nodebalancer_id": 100, "port": 8080, "proxy_protocol": "bogus", "confirm": true},
+      "expect_error": "proxy_protocol must be one of: none, v1, v2"
+    },
+    {
+      "name": "requires ssl_cert and ssl_key for https",
+      "args": {"nodebalancer_id": 100, "port": 443, "protocol": "https", "confirm": true},
+      "expect_error": "ssl_cert and ssl_key are required when protocol is https"
+    }
+  ]
+}

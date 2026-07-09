@@ -1,0 +1,18 @@
+{
+  "tool": "linode_stackscript_list",
+  "description": "StackScript list has no local validation; the is_public/mine/label_contains filters are client-side so the request stays a bare GET /linode/stackscripts.",
+  "cases": [
+    {
+      "name": "lists StackScripts",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/stackscripts" }
+    },
+    {
+      "name": "label_contains filter still fetches every StackScript",
+      "args": { "label_contains": "nginx" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/stackscripts" }
+    }
+  ]
+}

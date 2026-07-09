@@ -586,7 +586,11 @@ class Server:
                     else:
                         gate_error = _destroy_bypass_error(name, arguments)
                         if gate_error is not None:
-                            return [TextContent(type="text", text=gate_error)]
+                            # "Error: " framing matches error_response and the
+                            # Go side, where the gate returns an error result.
+                            return [
+                                TextContent(type="text", text=f"Error: {gate_error}")
+                            ]
 
                 handler = self._config_handlers[name]
                 if self._config_takes_config[name]:

@@ -1,0 +1,28 @@
+{
+  "message": "linode.mcp.v1.AccountSettingsWriteResponse",
+  "description": "Account settings update envelope: a confirmation message and the full AccountSettings element.",
+  "input": {
+    "message": "Account settings updated successfully",
+    "settings": {
+      "backups_enabled": true,
+      "managed": false,
+      "network_helper": true,
+      "longview_subscription": "longview-3",
+      "object_storage": "active",
+      "interfaces_for_new_linodes": "legacy_config",
+      "maintenance_policy": "linode/migrate"
+    }
+  },
+  "canonical": {
+    "message": "Account settings updated successfully",
+    "settings": {
+      "backups_enabled": true,
+      "managed": false,
+      "network_helper": true,
+      "longview_subscription": "longview-3",
+      "object_storage": "active",
+      "interfaces_for_new_linodes": "legacy_config",
+      "maintenance_policy": "linode/migrate"
+    }
+  }
+}

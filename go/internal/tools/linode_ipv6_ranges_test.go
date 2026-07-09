@@ -29,9 +29,10 @@ func TestLinodeIPv6RangesListToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyPage, keyPageSize} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -217,9 +218,10 @@ func TestLinodeIPv6RangeCreateToolCreateDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyPrefixLength, keyLinodeID, keyRouteTarget, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -256,12 +258,8 @@ func TestLinodeIPv6RangeCreateToolCreateSuccess(t *testing.T) {
 			return
 		}
 
-		if body.LinodeID == nil {
-			t.Fatal("linode_id should be sent")
-		}
-
-		if *body.LinodeID != 12345 {
-			t.Errorf("*body.LinodeID = %v, want %v", *body.LinodeID, 12345)
+		if body.LinodeID != nil {
+			t.Errorf("body.LinodeID = %v, want nil (route_target is the target)", *body.LinodeID)
 		}
 
 		if body.PrefixLength != 124 {
@@ -287,7 +285,6 @@ func TestLinodeIPv6RangeCreateToolCreateSuccess(t *testing.T) {
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyPrefixLength: 124,
-		keyLinodeID:     12345,
 		keyRouteTarget:  ipv6RouteTarget,
 		keyConfirm:      true,
 	}))
@@ -314,6 +311,42 @@ func TestLinodeIPv6RangeCreateToolCreateSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, ipv6RangeFixture) {
 		t.Errorf("textContent.Text does not contain %v", ipv6RangeFixture)
+	}
+}
+
+// TestLinodeIPv6RangeCreateToolTargetValidation pins the assignment-target rule
+// ported from Python (strictest-wins): exactly one of linode_id/route_target.
+func TestLinodeIPv6RangeCreateToolTargetValidation(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeIPv6RangeCreateTool(&config.Config{})
+	cases := []struct {
+		name         string
+		args         map[string]any
+		wantContains string
+	}{
+		{name: "no target", args: map[string]any{keyPrefixLength: 64, keyConfirm: true}, wantContains: "linode_id or route_target is required"},
+		{name: "both targets", args: map[string]any{keyPrefixLength: 64, keyLinodeID: 123, keyRouteTarget: ipv6RouteTarget, keyConfirm: true}, wantContains: "linode_id and route_target are mutually exclusive"},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if result == nil || !result.IsError {
+				t.Fatal("expected an error result")
+			}
+
+			text, ok := result.Content[0].(mcp.TextContent)
+			if !ok || !strings.Contains(text.Text, testCase.wantContains) {
+				t.Errorf("error text %q does not contain %q", text.Text, testCase.wantContains)
+			}
+		})
 	}
 }
 
@@ -424,8 +457,8 @@ func TestLinodeIPv6RangeGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyIPv6Range]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyIPv6Range)
+	if !strings.Contains(string(tool.RawInputSchema), keyIPv6Range) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyIPv6Range)
 	}
 
 	if capability != profiles.CapRead {
@@ -440,11 +473,21 @@ func TestLinodeIPv6RangeGetToolDefinition(t *testing.T) {
 func TestLinodeIPv6RangeGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	rangeResult := linode.IPv6Range{
-		Range:       ipv6RangeCIDR,
-		Region:      regionUSEast,
-		Prefix:      64,
-		RouteTarget: ipv6RangeRouteTarget,
+	// The single-range detail endpoint returns is_bgp and the bound Linode IDs
+	// and drops route_target. The extra field the proto does not model must be
+	// dropped by the DiscardUnknown decode, proving the output routes through the
+	// proto serializer.
+	rangeResult := struct {
+		linode.IPv6Range
+
+		IsBgp      bool   `json:"is_bgp"`
+		Linodes    []int  `json:"linodes"`
+		NotInProto string `json:"not_in_proto"`
+	}{
+		IPv6Range:  linode.IPv6Range{Range: ipv6RangeCIDR, Region: regionUSEast, Prefix: 64},
+		IsBgp:      false,
+		Linodes:    []int{12345, 12346},
+		NotInProto: valNotInProto,
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -497,6 +540,14 @@ func TestLinodeIPv6RangeGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, regionUSEast) {
 		t.Errorf("textContent.Text does not contain %v", regionUSEast)
+	}
+
+	if !strings.Contains(textContent.Text, "12345") {
+		t.Errorf("textContent.Text does not contain the bound Linode ID 12345")
+	}
+
+	if strings.Contains(textContent.Text, valNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 
@@ -607,9 +658,10 @@ func TestLinodeIPv6RangeDeleteToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyIPv6Range, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -821,8 +873,8 @@ func TestLinodeIPv6RangeDeleteToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeIPv6RangeDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 

@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// OAuthClientThumbnail is the linode_account_oauth_client_thumbnail_get response.
+// The thumbnail endpoint returns raw image/png bytes; both languages base64-encode
+// them and return the echoed client_id alongside. thumbnail_png_base64 is a plain
+// string (already-encoded, standard padding) rather than proto bytes, so the value
+// passes through verbatim without either language's bytes codec re-encoding it.
+message OAuthClientThumbnail {
+  string client_id = 1;
+  string thumbnail_png_base64 = 2;
+}
+
+// AccountOAuthClientThumbnailGetInput is the input contract for
+// linode_account_oauth_client_thumbnail_get.
+message AccountOAuthClientThumbnailGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // OAuth client ID (required).
+  string client_id = 2;
+}
+
+// AccountOAuthClientThumbnailUpdateInput is the input contract for
+// linode_account_oauth_client_thumbnail_update.
+message AccountOAuthClientThumbnailUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // OAuth client ID (required).
+  string client_id = 2;
+  // Base64-encoded PNG image for the OAuth client thumbnail (required).
+  string thumbnail_png_base64 = 3;
+  // Must be true to confirm OAuth client thumbnail update. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}

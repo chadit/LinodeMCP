@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"path"
 	"slices"
@@ -12,18 +11,10 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
-
-// auditReportResponse is the wire shape of the linode_audit_report
-// result. Rows is set for summary output; Events for list output.
-type auditReportResponse struct {
-	Name        string             `json:"name"`
-	Output      string             `json:"output"`
-	TotalEvents int                `json:"total_events"`
-	Rows        []audit.SummaryRow `json:"rows,omitempty"`
-	Events      []audit.Event      `json:"events,omitempty"`
-}
 
 // NewLinodeAuditReportTool returns the linode_audit_report query tool.
 // It runs a user-defined named report from audit.reports against the
@@ -33,19 +24,13 @@ type auditReportResponse struct {
 func NewLinodeAuditReportTool(
 	cfg *config.Config,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_audit_report",
-		mcp.WithDescription(
-			"Run a named custom audit report from config (audit.reports). "+
-				"Reads SQLite when enabled, else the JSONL log. Returns a "+
-				"summary of counts or a list of matching events depending on "+
-				"the report's output mode.",
-		),
-		mcp.WithString(
-			"name",
-			mcp.Required(),
-			mcp.Description("Name of the report from audit.reports."),
-		),
+		"Run a named custom audit report from config (audit.reports). "+
+			"Reads SQLite when enabled, else the JSONL log. Returns a "+
+			"summary of counts or a list of matching events depending on "+
+			"the report's output mode.",
+		toolschemas.Schema("linode.mcp.v1.AuditReportInput"),
 	)
 
 	sqlitePath := resolveAuditSQLitePath(cfg)
@@ -72,12 +57,7 @@ func NewLinodeAuditReportTool(
 			return mcp.NewToolResultError(fmt.Sprintf("failed to run report: %v", err)), nil
 		}
 
-		body, err := json.Marshal(result)
-		if err != nil {
-			return nil, fmt.Errorf("marshal audit report response: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(result)
 	}
 
 	return tool, profiles.CapMeta, handler
@@ -92,7 +72,7 @@ func runReport(
 	sqlitePath, dir, name string,
 	report *config.ReportConfig,
 	now time.Time,
-) (*auditReportResponse, error) {
+) (*linodev1.AuditReportResponse, error) {
 	query, err := buildReportLoadQuery(&report.Filter, now)
 	if err != nil {
 		return nil, err
@@ -112,10 +92,10 @@ func runReport(
 		}
 	}
 
-	result := &auditReportResponse{
+	result := &linodev1.AuditReportResponse{
 		Name:        name,
 		Output:      report.Output,
-		TotalEvents: len(filtered),
+		TotalEvents: linodeIDToInt32(len(filtered)),
 	}
 
 	if report.Output == config.ReportOutputSummary {
@@ -124,7 +104,7 @@ func runReport(
 			return nil, fmt.Errorf("validate report group_by: %w", gbErr)
 		}
 
-		result.Rows = audit.Summarize(filtered, groupBy)
+		result.Rows = auditSummaryRowsProto(audit.Summarize(filtered, groupBy))
 
 		return result, nil
 	}
@@ -132,10 +112,15 @@ func runReport(
 	// list output
 	if report.Limit > 0 && len(filtered) > report.Limit {
 		filtered = filtered[:report.Limit]
-		result.TotalEvents = len(filtered)
+		result.TotalEvents = linodeIDToInt32(len(filtered))
 	}
 
-	result.Events = filtered
+	protoEvents, err := auditEventsProto(filtered)
+	if err != nil {
+		return nil, err
+	}
+
+	result.Events = protoEvents
 
 	return result, nil
 }

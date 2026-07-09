@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -23,7 +25,6 @@ import (
 const (
 	managedIDParam                     = "credential_" + "id"
 	managedUpdateIDParam               = managedIDParam
-	errManagedIDPositive               = managedIDParam + " must be a positive integer"
 	maxManagedIDFromJSON               = 9007199254740991
 	accountAvailabilityPageSizeMin     = 25
 	accountAvailabilityPageSizeMax     = 500
@@ -42,9 +43,6 @@ const (
 	profileTokenIDParam                = "token_id"
 	profileAppIDMaxFromJSON            = 9007199254740991
 	profileDeviceIDMaxFromJSON         = 9007199254740991
-	errProfileAppIDPositive            = "app_id must be a positive integer"
-	errProfileDeviceIDPositive         = "device_id must be a positive integer"
-	errProfileTokenIDPositive          = "token_id must be a positive integer"
 	longviewClientsPageSizeMin         = 25
 	longviewClientsPageSizeMax         = 500
 	longviewSubscriptionsPageSizeMin   = 25
@@ -60,7 +58,6 @@ const (
 	accountOAuthClientsPath            = "/account/oauth-clients"
 	accountPaymentsPath                = "/account/payments"
 	accountPaymentMethodsPath          = "/account/payment-methods"
-	accountEntityTransfersPath         = "/account/entity-transfers"
 	accountServiceTransfersPath        = "/account/service-transfers"
 	accountServiceTransfersPageSizeMin = 25
 	accountServiceTransfersPageSizeMax = 500
@@ -76,7 +73,6 @@ const (
 	accountChildAccountsPath           = "/account/child-accounts"
 	longviewSubscriptionIDParam        = "subscription_id"
 	maxLongviewClientIDFromJSON        = 9007199254740991
-	errLongviewClientIDPositive        = "client_id must be a positive integer"
 	errLongviewClientLabelRequired     = "label is required"
 	errLongviewClientLabelPattern      = "label must be 3-32 characters and contain only letters, digits, hyphen, or underscore"
 	accountPaymentMethodsPageSizeMin   = 25
@@ -96,7 +92,6 @@ const (
 	taggedObjectsPageSizeMin           = 25
 	taggedObjectsPageSizeMax           = 500
 	tagLabelParam                      = "tag_label"
-	errTagLabelRequired                = "tag_label is required"
 	errTagLabelPathParam               = "tag_label must not contain '?', '#', or '..'"
 	accountUsersPageSizeMin            = 25
 	accountUsersPageSizeMax            = 500
@@ -158,9 +153,6 @@ const (
 	accountPaymentsPageSizeMax         = 500
 	accountInvoiceItemsPageSizeMin     = 25
 	accountInvoiceItemsPageSizeMax     = 500
-	errAccountInvoiceIDPositive        = "invoice_id must be a positive integer"
-	errAccountPaymentIDPositive        = "payment_id must be a positive integer"
-	errAccountLoginIDPositive          = "login_id must be a positive integer"
 	errLabelRequired                   = "label is required"
 	errRegionRequired                  = "region is required"
 	errRedirectURIRequired             = "redirect_uri is required"
@@ -217,41 +209,30 @@ func NewLinodeAccountSettingsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 
 // NewLinodeAccountSettingsUpdateTool creates a tool for updating account-wide settings.
 func NewLinodeAccountSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_settings_update",
 		"Updates account-wide settings such as backups, network helper, Longview, object storage, interfaces, and maintenance policy.",
-		[]mcp.ToolOption{
-			mcp.WithBoolean("backups_enabled", mcp.Description("Whether backups are enabled by default for new Linodes (optional).")),
-			mcp.WithString("interfaces_for_new_linodes", mcp.Description("Default interface generation mode for new Linodes (optional).")),
-			mcp.WithString("longview_subscription", mcp.Description("Longview subscription tier, or an empty string to disable it (optional).")),
-			mcp.WithString("maintenance_policy", mcp.Description("Default maintenance policy for the account (optional).")),
-			mcp.WithBoolean("managed", mcp.Description("Whether managed services are enabled for the account (optional).")),
-			mcp.WithBoolean("network_helper", mcp.Description("Whether Network Helper is enabled by default (optional).")),
-			mcp.WithString("object_storage", mcp.Description("Object Storage subscription status or tier (optional).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm account settings update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountSettingsUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountSettingsUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountSettingsUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountSettingsManagedEnableTool creates a tool for enabling Linode Managed.
 func NewLinodeAccountSettingsManagedEnableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_settings_managed_enable",
 		"Enables Linode Managed for the account. Pass dry_run=true to preview without enabling.",
-		[]mcp.ToolOption{
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm enabling Linode Managed. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountSettingsManagedEnableRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountSettingsManagedEnableInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountSettingsManagedEnableRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -272,10 +253,11 @@ func NewLinodeAccountAgreementsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 
 // NewLinodeManagedCredentialsTool creates a tool for listing managed credentials.
 func NewLinodeManagedCredentialsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_managed_credential_list",
 		"Lists stored managed credentials for the authenticated account.",
+		"linode.mcp.v1.ManagedCredentialListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedCredential, error) {
@@ -295,76 +277,60 @@ func managedCredentialListResponse(items []*linodev1.ManagedCredential, count in
 
 // NewLinodeManagedCredentialUpdateTool creates a tool for updating one managed credential.
 func NewLinodeManagedCredentialUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_credential_update",
 		"Updates one stored managed credential by ID. Pass dry_run=true to preview without modifying.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedUpdateIDParam, mcp.Required(), mcp.Description("The numeric Managed credential ID to update.")),
-			mcp.WithString("label", mcp.Required(), mcp.Description("Updated credential label.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating the Managed credential. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedCredentialUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedCredentialUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedCredentialUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedCredentialUsernamePasswordUpdateTool creates a tool for updating a Managed credential's username and password.
 func NewLinodeManagedCredentialUsernamePasswordUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_credential_username_password_update",
 		"Updates a stored Managed credential's username and password by ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedIDParam, mcp.Required(), mcp.Description("Managed credential ID to update.")),
-			mcp.WithString(managedCredentialCreatePassParam, mcp.Required(),
-				mcp.Description("Updated password to store for the Managed credential.")),
-			mcp.WithString(managedCredentialCreateUserParam,
-				mcp.Description("Updated username to store for the Managed credential.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm updating a stored Managed credential's username and password. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedCredentialUsernamePasswordUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedCredentialUsernamePasswordUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedCredentialUsernamePasswordUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeManagedSSHKeyTool creates a tool for retrieving the account Managed SSH public key.
 func NewLinodeManagedSSHKeyTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_sshkey_get",
 		"Retrieves the Managed SSH public key assigned to the authenticated account.",
-		nil,
-		handleLinodeManagedSSHKeyRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedSSHKeyGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedSSHKeyRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeManagedCredentialCreateTool creates a tool for creating a Managed credential.
 func NewLinodeManagedCredentialCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_credential_create",
 		"Creates a stored Managed credential for the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithString(managedCredentialCreateLabelParam, mcp.Required(),
-				mcp.Description("Label for the Managed credential.")),
-			mcp.WithString(managedCredentialCreatePassParam, mcp.Required(),
-				mcp.Description("Password to store for the Managed credential.")),
-			mcp.WithString(managedCredentialCreateUserParam,
-				mcp.Description("Username to store for the Managed credential.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm creating a stored Managed credential. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedCredentialCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedCredentialCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedCredentialCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -386,25 +352,22 @@ func NewLinodeManagedCredentialGetTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 // NewLinodeManagedCredentialRevokeTool creates a tool for revoking one managed credential.
 func NewLinodeManagedCredentialRevokeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_credential_revoke",
 		"Revokes one stored managed credential by ID. This credential-affecting action requires admin capability and confirm=true. Pass dry_run=true to preview without revoking.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(managedIDParam, mcp.Required(), mcp.Description("Managed credential ID to revoke.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm revoking the stored Managed credential. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedCredentialRevokeRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedCredentialRevokeInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedCredentialRevokeRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountMaintenanceTool creates a tool for listing account maintenance records.
 func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_maintenance_list",
 		"Lists maintenance records visible to the authenticated account.",
@@ -418,6 +381,12 @@ func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		accountMaintenanceListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_maintenance_list",
+		"Lists maintenance records visible to the authenticated account.",
+		toolschemas.Schema("linode.mcp.v1.AccountMaintenanceListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -427,10 +396,11 @@ func accountMaintenanceListResponse(items []*linodev1.AccountMaintenance, count 
 
 // NewLinodeMaintenancePoliciesTool creates a tool for listing available Linode maintenance policies.
 func NewLinodeMaintenancePoliciesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_maintenance_policy_list",
 		"Lists available Linode maintenance policies.",
+		"linode.mcp.v1.MaintenancePolicyListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.MaintenancePolicy, error) {
@@ -450,7 +420,7 @@ func maintenancePolicyListResponse(items []*linodev1.MaintenancePolicy, count in
 
 // NewLinodeAccountNotificationsTool creates a tool for listing account notifications.
 func NewLinodeAccountNotificationsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_notification_list",
 		"Lists active notifications for the authenticated account.",
@@ -464,6 +434,12 @@ func NewLinodeAccountNotificationsTool(cfg *config.Config) (mcp.Tool, profiles.C
 		accountNotificationListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_notification_list",
+		"Lists active notifications for the authenticated account.",
+		toolschemas.Schema("linode.mcp.v1.AccountNotificationListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -473,7 +449,7 @@ func accountNotificationListResponse(items []*linodev1.AccountNotification, coun
 
 // NewLinodeAccountBetasTool creates a tool for listing enrolled account beta programs.
 func NewLinodeAccountBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_beta_list",
 		"Lists beta programs that the account is enrolled in.",
@@ -487,6 +463,12 @@ func NewLinodeAccountBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		accountBetaListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_beta_list",
+		"Lists beta programs that the account is enrolled in.",
+		toolschemas.Schema("linode.mcp.v1.AccountBetaListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -496,7 +478,7 @@ func accountBetaListResponse(items []*linodev1.AccountBetaProgram, count int32, 
 
 // NewLinodeAccountEventsTool creates a tool for listing account events.
 func NewLinodeAccountEventsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_event_list",
 		"Lists events that represent actions taken on the account over the last 90 days.",
@@ -510,6 +492,12 @@ func NewLinodeAccountEventsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		accountEventListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_event_list",
+		"Lists events that represent actions taken on the account over the last 90 days.",
+		toolschemas.Schema("linode.mcp.v1.AccountEventListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -519,24 +507,22 @@ func accountEventListResponse(items []*linodev1.AccountEvent, count int32, filte
 
 // NewLinodeTaggedObjectsTool creates a tool for listing objects with a tag label.
 func NewLinodeTaggedObjectsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_tag_object_list",
 		"Lists Linode objects that have the supplied tag label.",
-		[]mcp.ToolOption{
-			mcp.WithString(tagLabelParam, mcp.Required(), mcp.Description("Tag label to list objects for.")),
-			mcp.WithNumber("page", mcp.Description("Page of results to return (optional, minimum 1).")),
-			mcp.WithNumber("page_size", mcp.Description("Number of results per page (optional, 25-500).")),
-		},
-		handleLinodeTaggedObjectsRequest,
+		toolschemas.Schema("linode.mcp.v1.TaggedObjectListInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeTaggedObjectsRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeAccountUsersTool creates a tool for listing account users.
 func NewLinodeAccountUsersTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_user_list",
 		"Lists users on the account.",
@@ -548,6 +534,12 @@ func NewLinodeAccountUsersTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		accountUsersPaginationFromTool,
 		nil,
 		accountUserListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_user_list",
+		"Lists users on the account.",
+		toolschemas.Schema("linode.mcp.v1.AccountUserListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -574,211 +566,157 @@ func NewLinodeAccountUserGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 
 // NewLinodeProfileTokenGetTool creates a tool for retrieving one personal access token.
 func NewLinodeProfileTokenGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_token_get",
 		"Gets one personal access token by ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(profileTokenIDParam, mcp.Required(), mcp.Description("Personal access token ID to retrieve.")),
-		},
-		handleLinodeProfileTokenGetRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileTokenGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileTokenGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeAccountUserGrantsTool creates a tool for retrieving one account user's grants.
 func NewLinodeAccountUserGrantsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_user_grants_get",
 		"Gets grants for one account user by username.",
-		[]mcp.ToolOption{
-			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username whose grants should be retrieved.")),
-		},
-		handleLinodeAccountUserGrantsRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountUserGrantsGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountUserGrantsRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeAccountUserGrantsUpdateTool creates a tool for updating one account user's grants.
 func NewLinodeAccountUserGrantsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_user_grants_update",
 		"Updates grants for one account user by username.",
-		[]mcp.ToolOption{
-			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username whose grants should be updated.")),
-			mcp.WithObject(accountUserGrantsGlobalParam, mcp.Description("Optional global grants object.")),
-			mcp.WithArray(accountUserGrantsLinodeParam, mcp.Description("Optional Linode resource grants.")),
-			mcp.WithArray(accountUserGrantsDomainParam, mcp.Description("Optional domain resource grants.")),
-			mcp.WithArray(accountUserGrantsNodeBalancerParam, mcp.Description("Optional NodeBalancer resource grants.")),
-			mcp.WithArray(accountUserGrantsImageParam, mcp.Description("Optional image resource grants.")),
-			mcp.WithArray(accountUserGrantsLongviewParam, mcp.Description("Optional Longview resource grants.")),
-			mcp.WithArray(accountUserGrantsStackScriptParam, mcp.Description("Optional StackScript resource grants.")),
-			mcp.WithArray(accountUserGrantsVolumeParam, mcp.Description("Optional volume resource grants.")),
-			mcp.WithArray(accountUserGrantsDatabaseParam, mcp.Description("Optional database resource grants.")),
-			mcp.WithArray(accountUserGrantsFirewallParam, mcp.Description("Optional firewall resource grants.")),
-			mcp.WithArray(accountUserGrantsVPCParam, mcp.Description("Optional VPC resource grants.")),
-			mcp.WithArray(accountUserGrantsLKEClusterParam, mcp.Description("Optional LKE cluster resource grants.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user grants update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountUserGrantsUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountUserGrantsUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountUserGrantsUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountUserUpdateTool creates a tool for updating one account user.
 func NewLinodeAccountUserUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_user_update",
 		"Updates one account user by username.",
-		[]mcp.ToolOption{
-			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username to update.")),
-			mcp.WithString(accountUserEmailParam, mcp.Description("New email address for the account user.")),
-			mcp.WithBoolean("restricted", mcp.Description("Whether the account user is restricted.")),
-			mcp.WithArray("ssh_keys", mcp.Description("SSH public keys for the account user.")),
-			mcp.WithString("new_username", mcp.Description("New username for the account user.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountUserUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountUserUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountUserUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountUserDeleteTool creates a tool for deleting one account user.
 func NewLinodeAccountUserDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_user_delete",
 		"Deletes one account user by username.",
-		[]mcp.ToolOption{
-			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Account username to delete.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountUserDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountUserDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountUserDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountUserCreateTool creates a tool for creating account users.
 func NewLinodeAccountUserCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_user_create",
 		"Creates a user on the account.",
-		[]mcp.ToolOption{
-			mcp.WithString(accountUserUsernameParam, mcp.Required(), mcp.Description("Username for the new account user.")),
-			mcp.WithString(accountUserEmailParam, mcp.Required(), mcp.Description("Email address for the new account user.")),
-			mcp.WithBoolean("restricted", mcp.Description("Whether the new account user is restricted (optional, defaults to false).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm account user creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountUserCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountUserCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountUserCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountSupportTicketCreateTool creates a tool for opening support tickets.
 func NewLinodeAccountSupportTicketCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_support_ticket_create",
 		"Opens a support ticket for the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithString(supportTicketSummaryParam, mcp.Required(), mcp.Description("Short summary for the support ticket.")),
-			mcp.WithString(supportTicketDescriptionParam, mcp.Required(), mcp.Description("Detailed support ticket description.")),
-			mcp.WithString(supportTicketBucketParam, mcp.Description("Object Storage bucket related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketDatabaseIDParam, mcp.Description("Database ID related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketDomainIDParam, mcp.Description("Domain ID related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketFirewallIDParam, mcp.Description("Firewall ID related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketLinodeIDParam, mcp.Description("Linode ID related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketLKEClusterIDParam, mcp.Description("LKE cluster ID related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketLongviewClientIDParam, mcp.Description("Longview client ID related to the ticket (optional).")),
-			mcp.WithBoolean(supportTicketManagedIssueParam, mcp.Description("Whether the ticket concerns a Managed service issue (optional).")),
-			mcp.WithNumber(supportTicketNodeBalancerIDParam, mcp.Description("NodeBalancer ID related to the ticket (optional).")),
-			mcp.WithString(supportTicketRegionParam, mcp.Description("Region related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketSeverityParam, mcp.Description("Support ticket severity level 1, 2, or 3 (optional).")),
-			mcp.WithString(supportTicketVLANParam, mcp.Description("VLAN related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketVolumeIDParam, mcp.Description("Volume ID related to the ticket (optional).")),
-			mcp.WithNumber(supportTicketVPCIDParam, mcp.Description("VPC ID related to the ticket (optional).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm support ticket creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountSupportTicketCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.SupportTicketCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountSupportTicketCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeAccountSupportTicketAttachmentCreateTool creates a tool for adding support ticket attachments.
 func NewLinodeAccountSupportTicketAttachmentCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_support_ticket_attachment_create",
 		"Creates an attachment on an existing support ticket.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(supportTicketTicketIDParam, mcp.Required(), mcp.Description("Support ticket ID to attach the file to.")),
-			mcp.WithString(supportTicketAttachmentFileParam, mcp.Required(), mcp.Description("Attachment file content or reference accepted by the Linode API.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm support ticket attachment creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountSupportTicketAttachmentCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.SupportTicketAttachmentCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountSupportTicketAttachmentCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeAccountSupportTicketReplyCreateTool creates a tool for adding support ticket replies.
 func NewLinodeAccountSupportTicketReplyCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_support_ticket_reply_create",
 		"Creates a reply on an existing support ticket.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(supportTicketTicketIDParam, mcp.Required(), mcp.Description("Support ticket ID to reply to.")),
-			mcp.WithString(supportTicketDescriptionParam, mcp.Required(), mcp.Description("Reply description to add to the support ticket.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm support ticket reply creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountSupportTicketReplyCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.SupportTicketReplyCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountSupportTicketReplyCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeManagedContactCreateTool creates a tool for creating managed contacts.
 func NewLinodeManagedContactCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_managed_contact_create",
 		"Creates a managed contact for service monitor issue handling. Pass dry_run=true to preview without creating.",
-		[]mcp.ToolOption{
-			mcp.WithString(managedContactNameParam, mcp.Description("Name for the managed contact.")),
-			mcp.WithString(managedContactEmailParam, mcp.Description("Email address for the managed contact.")),
-			mcp.WithString(managedContactGroupParam, mcp.Description("Display grouping for the managed contact.")),
-			mcp.WithObject(managedContactPhoneParam, mcp.Description("Phone numbers object: { primary: string, secondary: string }.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm managed contact creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeManagedContactCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.ManagedContactCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeManagedContactCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountLoginsTool creates a tool for listing account user logins.
 func NewLinodeAccountLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_login_list",
 		"Lists user logins for the account.",
@@ -790,6 +728,12 @@ func NewLinodeAccountLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		accountLoginsPaginationFromTool,
 		nil,
 		accountLoginListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_login_list",
+		"Lists user logins for the account.",
+		toolschemas.Schema("linode.mcp.v1.AccountLoginListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -816,7 +760,7 @@ func NewLinodeAccountLoginGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 
 // NewLinodeAccountInvoicesTool creates a tool for listing account invoices.
 func NewLinodeAccountInvoicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_invoice_list",
 		"Lists invoices for the authenticated account.",
@@ -830,6 +774,12 @@ func NewLinodeAccountInvoicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		accountInvoiceListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_invoice_list",
+		"Lists invoices for the authenticated account.",
+		toolschemas.Schema("linode.mcp.v1.AccountInvoiceListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -839,7 +789,7 @@ func accountInvoiceListResponse(items []*linodev1.AccountInvoice, count int32, f
 
 // NewLinodeAccountPaymentsTool creates a tool for listing account payments.
 func NewLinodeAccountPaymentsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_payment_list",
 		"Lists payments made on the authenticated account.",
@@ -851,6 +801,12 @@ func NewLinodeAccountPaymentsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		accountPaymentsPaginationFromTool,
 		nil,
 		accountPaymentListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_payment_list",
+		"Lists payments made on the authenticated account.",
+		toolschemas.Schema("linode.mcp.v1.AccountPaymentListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -877,35 +833,30 @@ func NewLinodeAccountPaymentGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 
 // NewLinodeAccountPaymentCreateTool creates a tool for making an account payment.
 func NewLinodeAccountPaymentCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_payment_create",
 		"Makes a payment on the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("payment_method_id", mcp.Description("Payment method ID to charge (optional).")),
-			mcp.WithString("usd", mcp.Required(), mcp.Description("Payment amount in USD, as a decimal string (e.g. \"25.50\").")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm making an account payment. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountPaymentCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountPaymentCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountPaymentCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountPromoCreditTool creates a tool for applying a promo credit to the account.
 func NewLinodeAccountPromoCreditTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_promo_credit_add",
 		"Applies a promo credit to the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithString("promo_code", mcp.Required(), mcp.Description("Promo code to apply to the account.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm applying a promo credit. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountPromoCreditRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountPromoCreditAddInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountPromoCreditRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -927,7 +878,7 @@ func NewLinodeAccountInvoiceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 
 // NewLinodeAccountInvoiceItemsTool creates a tool for listing items on one account invoice.
 func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	_, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_account_invoice_item_list",
 		"Lists line items for one account invoice by ID.",
@@ -946,6 +897,12 @@ func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		accountInvoiceItemListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_invoice_item_list",
+		"Lists line items for one account invoice by ID.",
+		toolschemas.Schema("linode.mcp.v1.AccountInvoiceItemListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -955,117 +912,97 @@ func accountInvoiceItemListResponse(items []*linodev1.AccountInvoiceItem, count 
 
 // NewLinodeProfileTFAEnableTool creates a tool for generating a two-factor authentication secret.
 func NewLinodeProfileTFAEnableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_tfa_enable",
 		"Generates a two-factor authentication secret for the authenticated profile. The secret must be confirmed with the API before two-factor authentication is enabled.",
-		[]mcp.ToolOption{
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm generating a two-factor authentication secret. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileTFAEnableRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileTfaEnableInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileTFAEnableRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfilePhoneNumberSendTool creates a tool for sending a profile phone verification code.
 func NewLinodeProfilePhoneNumberSendTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_phone_number_send",
 		"Sends a verification code to a profile phone number.",
-		[]mcp.ToolOption{
-			mcp.WithString(profilePhoneISOCodeParam, mcp.Required(),
-				mcp.Description("ISO 3166-1 alpha-2 country code for the phone number.")),
-			mcp.WithString(profilePhoneNumberParam, mcp.Required(),
-				mcp.Description("Phone number that should receive the verification code.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm sending the verification code. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfilePhoneNumberSendRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfilePhoneNumberSendInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfilePhoneNumberSendRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfilePhoneNumberDeleteTool creates a tool for deleting a profile phone number.
 func NewLinodeProfilePhoneNumberDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_phone_number_delete",
 		"Deletes the authenticated profile phone number.",
-		[]mcp.ToolOption{
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm deleting the profile phone number. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfilePhoneNumberDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfilePhoneNumberDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfilePhoneNumberDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfilePhoneNumberVerifyTool creates a tool for verifying a profile phone number.
 func NewLinodeProfilePhoneNumberVerifyTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_phone_number_verify",
 		"Verifies a profile phone number with a one-time SMS code.",
-		[]mcp.ToolOption{
-			mcp.WithString(profilePhoneOTPCodeParam, mcp.Required(),
-				mcp.Description("One-time SMS code sent to the profile phone number.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm verifying the phone number. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfilePhoneNumberVerifyRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfilePhoneNumberVerifyInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfilePhoneNumberVerifyRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfileTFADisableTool creates a tool for disabling profile two-factor authentication.
 func NewLinodeProfileTFADisableTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_tfa_disable",
 		"Disables two-factor authentication for the authenticated profile.",
-		[]mcp.ToolOption{
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disabling profile two-factor authentication. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileTFADisableRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileTfaDisableInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileTFADisableRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfileTFAEnableConfirmTool creates a tool for confirming profile two-factor authentication enablement.
 func NewLinodeProfileTFAEnableConfirmTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_tfa_enable_confirm",
 		"Confirms two-factor authentication enablement for the authenticated profile with a TFA code.",
-		[]mcp.ToolOption{
-			mcp.WithString(profileTFACodeParam, mcp.Required(),
-				mcp.Description("Two-factor authentication code to confirm enablement.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm enabling profile two-factor authentication. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileTFAEnableConfirmRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileTfaEnableConfirmInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileTFAEnableConfirmRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfileDevicesTool creates a tool for listing trusted devices for the profile.
 func NewLinodeProfileDevicesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_profile_device_list",
 		"Lists trusted devices for the authenticated profile.",
@@ -1077,6 +1014,12 @@ func NewLinodeProfileDevicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		profileDevicesPaginationFromTool,
 		nil,
 		profileDeviceListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_profile_device_list",
+		"Lists trusted devices for the authenticated profile.",
+		toolschemas.Schema("linode.mcp.v1.ProfileDeviceListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1118,61 +1061,52 @@ func NewLinodeProfileAppGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 
 // NewLinodeProfileAppDeleteTool creates a tool for revoking one profile authorized OAuth app.
 func NewLinodeProfileAppDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_app_delete",
 		"Revokes OAuth app access from the authenticated profile.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(profileAppIDParam, mcp.Required(),
-				mcp.Description("Profile authorized app ID to revoke.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm revoking OAuth app access. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileAppDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileAppDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileAppDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeProfileDeviceGetTool creates a tool for retrieving one profile trusted device.
 func NewLinodeProfileDeviceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_device_get",
 		"Gets one trusted device from the profile.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(profileDeviceIDParam, mcp.Required(),
-				mcp.Description("Profile trusted device ID.")),
-		},
-		handleLinodeProfileDeviceGetRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileDeviceGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileDeviceGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeProfileDeviceRevokeTool creates a tool for revoking one profile trusted device.
 func NewLinodeProfileDeviceRevokeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_device_revoke",
 		"Revokes a trusted device from the authenticated profile.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(profileDeviceIDParam, mcp.Required(),
-				mcp.Description("Profile trusted device ID to revoke.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm revoking a trusted device. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileDeviceRevokeRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileDeviceRevokeInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileDeviceRevokeRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountOAuthClientsTool creates a tool for listing OAuth clients registered on the account.
 func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_oauth_client_list",
 		"Lists OAuth clients registered on the account.",
@@ -1186,6 +1120,12 @@ func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		accountOAuthClientListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_oauth_client_list",
+		"Lists OAuth clients registered on the account.",
+		toolschemas.Schema("linode.mcp.v1.AccountOAuthClientListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -1195,7 +1135,7 @@ func accountOAuthClientListResponse(items []*linodev1.OAuthClient, count int32, 
 
 // NewLinodeProfileAppsTool creates a tool for listing OAuth app authorizations for the profile.
 func NewLinodeProfileAppsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_profile_app_list",
 		"Lists OAuth app authorizations for the authenticated profile.",
@@ -1209,6 +1149,12 @@ func NewLinodeProfileAppsTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		profileAppListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_profile_app_list",
+		"Lists OAuth app authorizations for the authenticated profile.",
+		toolschemas.Schema("linode.mcp.v1.ProfileAppListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -1218,7 +1164,7 @@ func profileAppListResponse(items []*linodev1.ProfileApp, count int32, filter *s
 
 // NewLinodeLongviewClientsTool creates a tool for listing Longview clients.
 func NewLinodeLongviewClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_longview_client_list",
 		"Lists Longview clients configured for the account.",
@@ -1232,6 +1178,12 @@ func NewLinodeLongviewClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		longviewClientListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_longview_client_list",
+		"Lists Longview clients configured for the account.",
+		toolschemas.Schema("linode.mcp.v1.LongviewClientListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -1241,40 +1193,30 @@ func longviewClientListResponse(items []*linodev1.LongviewClient, count int32, f
 
 // NewLinodeLongviewClientUpdateTool creates a tool for updating one Longview client's label.
 func NewLinodeLongviewClientUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_longview_client_update",
 		"Updates the label for one Longview client. Pass dry_run=true to preview without modifying.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(longviewClientIDParam, mcp.Required(),
-				mcp.Description("Longview client ID to update.")),
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("New Longview client label. Must be 3-32 letters, digits, hyphens, or underscores.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm Longview client update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeLongviewClientUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.LongviewClientUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeLongviewClientUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeLongviewClientDeleteTool creates a tool for deleting one Longview client.
 func NewLinodeLongviewClientDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_longview_client_delete",
 		"Deletes one Longview client. Pass dry_run=true to preview without deleting.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(longviewClientIDParam, mcp.Required(),
-				mcp.Description("Longview client ID to delete.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm Longview client deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeLongviewClientDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.LongviewClientDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeLongviewClientDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -1311,7 +1253,7 @@ func NewLinodeLongviewSubscriptionGetTool(cfg *config.Config) (mcp.Tool, profile
 
 // NewLinodeAccountPaymentMethodsTool creates a tool for listing payment methods for the account.
 func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_payment_method_list",
 		"Lists payment methods for the authenticated account.",
@@ -1325,6 +1267,12 @@ func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.
 		accountPaymentMethodListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_payment_method_list",
+		"Lists payment methods for the authenticated account.",
+		toolschemas.Schema("linode.mcp.v1.AccountPaymentMethodListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -1334,71 +1282,60 @@ func accountPaymentMethodListResponse(items []*linodev1.AccountPaymentMethod, co
 
 // NewLinodeAccountPaymentMethodGetTool creates a tool for retrieving one payment method.
 func NewLinodeAccountPaymentMethodGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_payment_method_get",
 		"Gets one payment method for the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("payment_method_id", mcp.Required(),
-				mcp.Description("Payment method ID.")),
-		},
-		handleLinodeAccountPaymentMethodGetRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountPaymentMethodGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountPaymentMethodGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeAccountPaymentMethodCreateTool creates a tool for adding a payment method to the account.
 func NewLinodeAccountPaymentMethodCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_payment_method_create",
 		"Adds a payment method to the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithString("type", mcp.Required(), mcp.Description("Payment method type.")),
-			mcp.WithObject("data", mcp.Required(), mcp.Description("Payment method provider data.")),
-			mcp.WithBoolean("is_default", mcp.Required(), mcp.Description("Whether the payment method should become the account default.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountPaymentMethodCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountPaymentMethodCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountPaymentMethodCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountPaymentMethodDeleteTool creates a tool for deleting one payment method.
 func NewLinodeAccountPaymentMethodDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_payment_method_delete",
 		"Deletes a payment method from the authenticated account.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("payment_method_id", mcp.Required(),
-				mcp.Description("Payment method ID.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm payment method deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountPaymentMethodDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountPaymentMethodDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountPaymentMethodDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountPaymentMethodMakeDefaultTool creates a tool for setting the account default payment method.
 func NewLinodeAccountPaymentMethodMakeDefaultTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_payment_method_make_default",
 		"Sets a payment method as the authenticated account default.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("payment_method_id", mcp.Required(),
-				mcp.Description("Payment method ID.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm changing the default payment method. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountPaymentMethodMakeDefaultRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountPaymentMethodMakeDefaultInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountPaymentMethodMakeDefaultRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -1420,112 +1357,97 @@ func NewLinodeAccountOAuthClientGetTool(cfg *config.Config) (mcp.Tool, profiles.
 
 // NewLinodeAccountOAuthClientCreateTool creates a tool for creating an OAuth client.
 func NewLinodeAccountOAuthClientCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_oauth_client_create",
 		"Creates an account OAuth client. WARNING: The secret is only shown once in the response and cannot be retrieved later.",
-		[]mcp.ToolOption{
-			mcp.WithString("label", mcp.Required(), mcp.Description("Label for the OAuth client.")),
-			mcp.WithString("redirect_uri", mcp.Required(), mcp.Description("Redirect URI for the OAuth client.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client creation. The secret is only shown once. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountOAuthClientCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountOAuthClientCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountOAuthClientCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountOAuthClientUpdateTool creates a tool for updating one OAuth client.
 func NewLinodeAccountOAuthClientUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_oauth_client_update",
 		"Updates label, redirect URI, or public setting for one account OAuth client.",
-		[]mcp.ToolOption{
-			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
-			mcp.WithString("label", mcp.Description("New label for the OAuth client.")),
-			mcp.WithString("redirect_uri", mcp.Description("New redirect URI for the OAuth client.")),
-			mcp.WithBoolean("public", mcp.Description("Whether this OAuth client is public.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountOAuthClientUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountOAuthClientUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountOAuthClientUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountOAuthClientThumbnailUpdateTool creates a tool for updating one OAuth client's thumbnail.
 func NewLinodeAccountOAuthClientThumbnailUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_oauth_client_thumbnail_update",
 		"Updates one account OAuth client's thumbnail by ID.",
-		[]mcp.ToolOption{
-			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
-			mcp.WithString(oauthClientThumbnailPNGParam, mcp.Required(), mcp.Description("Base64-encoded PNG image for the OAuth client thumbnail.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client thumbnail update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountOAuthClientThumbnailUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountOAuthClientThumbnailUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountOAuthClientThumbnailUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountOAuthClientThumbnailGetTool creates a tool for retrieving one OAuth client's thumbnail.
 func NewLinodeAccountOAuthClientThumbnailGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_oauth_client_thumbnail_get",
 		"Gets one account OAuth client's thumbnail by ID. Returns base64-encoded PNG image data.",
-		[]mcp.ToolOption{
-			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
-		},
-		handleLinodeAccountOAuthClientThumbnailGetRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountOAuthClientThumbnailGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountOAuthClientThumbnailGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeAccountOAuthClientDeleteTool creates a tool for deleting one OAuth client.
 func NewLinodeAccountOAuthClientDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_oauth_client_delete",
 		"Deletes one account OAuth client by ID.",
-		[]mcp.ToolOption{
-			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountOAuthClientDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountOAuthClientDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountOAuthClientDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountOAuthClientResetSecretTool creates a tool for resetting one OAuth client secret.
 func NewLinodeAccountOAuthClientResetSecretTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_oauth_client_secret_reset",
 		"Resets one account OAuth client secret by ID. WARNING: The new secret is only shown once in the response and cannot be retrieved later.",
-		[]mcp.ToolOption{
-			mcp.WithString("client_id", mcp.Required(), mcp.Description("OAuth client ID.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm OAuth client secret reset. The new secret is only shown once. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountOAuthClientResetSecretRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountOAuthClientSecretResetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountOAuthClientResetSecretRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountChildAccountsTool creates a tool for listing child-level accounts.
 func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_child_account_list",
 		"Lists child-level accounts the authenticated account can access.",
@@ -1539,6 +1461,12 @@ func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.C
 		accountChildAccountListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_child_account_list",
+		"Lists child-level accounts the authenticated account can access.",
+		toolschemas.Schema("linode.mcp.v1.AccountChildAccountListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -1548,7 +1476,7 @@ func accountChildAccountListResponse(items []*linodev1.ChildAccount, count int32
 
 // NewLinodeAccountServiceTransfersTool creates a tool for listing account service transfers.
 func NewLinodeAccountServiceTransfersTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_service_transfer_list",
 		"Lists account service transfer requests.",
@@ -1560,6 +1488,12 @@ func NewLinodeAccountServiceTransfersTool(cfg *config.Config) (mcp.Tool, profile
 		accountServiceTransfersPaginationFromTool,
 		nil,
 		accountServiceTransferListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_service_transfer_list",
+		"Lists account service transfer requests.",
+		toolschemas.Schema("linode.mcp.v1.AccountServiceTransferListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1586,57 +1520,45 @@ func NewLinodeAccountServiceTransferGetTool(cfg *config.Config) (mcp.Tool, profi
 
 // NewLinodeAccountServiceTransferCreateTool creates a tool for creating an account service transfer.
 func NewLinodeAccountServiceTransferCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_service_transfer_create",
 		"Creates an account service transfer for the provided Linode IDs.",
-		[]mcp.ToolOption{
-			mcp.WithArray("linode_ids", mcp.Required(),
-				mcp.Description("Linode IDs to include in the service transfer.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm service transfer creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountServiceTransferCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountServiceTransferCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountServiceTransferCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountServiceTransferDeleteTool creates a tool for canceling one account service transfer.
 func NewLinodeAccountServiceTransferDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_service_transfer_delete",
 		"Cancels one account service transfer request by token.",
-		[]mcp.ToolOption{
-			mcp.WithString("token", mcp.Required(),
-				mcp.Description("Service transfer token to cancel.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm service transfer cancellation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountServiceTransferDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountServiceTransferDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountServiceTransferDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountServiceTransferAcceptTool creates a tool for accepting one account service transfer.
 func NewLinodeAccountServiceTransferAcceptTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_service_transfer_accept",
 		"Accepts one account service transfer request by token.",
-		[]mcp.ToolOption{
-			mcp.WithString("token", mcp.Required(),
-				mcp.Description("Service transfer token to accept.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm service transfer acceptance. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountServiceTransferAcceptRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountServiceTransferAcceptInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountServiceTransferAcceptRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -1658,64 +1580,56 @@ func NewLinodeAccountEventGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 
 // NewLinodeAccountEventSeenTool creates a tool for marking one account event as seen.
 func NewLinodeAccountEventSeenTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_event_seen",
 		"Marks one account event as seen by ID.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(accountEventIDParam, mcp.Required(),
-				mcp.Description("Numeric account event ID to mark as seen.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm marking the account event as seen. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountEventSeenRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountEventSeenInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountEventSeenRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
 
 // NewLinodeAccountChildAccountGetTool creates a tool for retrieving one child-level account.
 func NewLinodeAccountChildAccountGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_child_account_get",
 		"Gets one child-level account the authenticated account can access.",
-		[]mcp.ToolOption{
-			mcp.WithString("euuid", mcp.Required(),
-				mcp.Description("External unique identifier for the child account.")),
-		},
-		handleLinodeAccountChildAccountGetRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountChildAccountGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountChildAccountGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeAccountChildAccountTokenTool creates a tool for creating a child account proxy user token.
 func NewLinodeAccountChildAccountTokenTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_child_account_token_create",
 		"Creates a short-lived proxy user token for one child-level account.",
-		[]mcp.ToolOption{
-			mcp.WithString("euuid", mcp.Required(),
-				mcp.Description("External unique identifier for the child account.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm proxy user token creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountChildAccountTokenRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountChildAccountTokenCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountChildAccountTokenRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeBetasTool creates a tool for listing available beta programs.
 func NewLinodeBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_beta_list",
 		"Lists available beta programs.",
+		"linode.mcp.v1.BetaListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.BetaProgram, error) {
@@ -1765,26 +1679,22 @@ func NewLinodeAccountBetaGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 
 // NewLinodeAccountBetaEnrollTool creates a tool for enrolling in an account beta program.
 func NewLinodeAccountBetaEnrollTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_beta_enroll",
 		"Enrolls the account in a beta program.",
-		[]mcp.ToolOption{
-			mcp.WithString("id", mcp.Required(),
-				mcp.Description("Unique identifier for the beta program.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm beta program enrollment. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountBetaEnrollRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountBetaEnrollInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountBetaEnrollRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountAvailabilityTool creates a tool for listing account service availability by region.
 func NewLinodeAccountAvailabilityTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_account_availability_list",
 		"Lists services available and unavailable to the account in each region.",
@@ -1796,6 +1706,12 @@ func NewLinodeAccountAvailabilityTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		accountAvailabilityPaginationFromTool,
 		nil,
 		accountAvailabilityListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_account_availability_list",
+		"Lists services available and unavailable to the account in each region.",
+		toolschemas.Schema("linode.mcp.v1.AccountAvailabilityListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -1822,68 +1738,45 @@ func NewLinodeAccountAvailabilityGetTool(cfg *config.Config) (mcp.Tool, profiles
 
 // NewLinodeAccountAgreementsAcknowledgeTool creates a tool for acknowledging account agreements.
 func NewLinodeAccountAgreementsAcknowledgeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_agreement_acknowledge",
 		"Acknowledges one or more account agreements.",
-		[]mcp.ToolOption{
-			mcp.WithBoolean("billing_agreement", mcp.Description("Acknowledge the billing agreement (optional)")),
-			mcp.WithBoolean("eu_model", mcp.Description("Acknowledge the EU model agreement (optional)")),
-			mcp.WithBoolean("master_service_agreement", mcp.Description("Acknowledge the master service agreement (optional)")),
-			mcp.WithBoolean("privacy_policy", mcp.Description("Acknowledge the privacy policy (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm account agreement acknowledgement. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountAgreementsAcknowledgeRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountAgreementsAcknowledgeInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountAgreementsAcknowledgeRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountCancelTool creates a tool for canceling the account.
 func NewLinodeAccountCancelTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_cancel",
 		"Cancels the active account and returns the exit survey link.",
-		[]mcp.ToolOption{
-			mcp.WithString("comments", mcp.Description("Reason for canceling the account or other feedback (optional).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm account cancellation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountCancelRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountCancelInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountCancelRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 // NewLinodeAccountUpdateTool creates a tool for updating account billing/contact fields.
 func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_account_update",
 		"Updates account billing and contact information. Pass dry_run=true to preview without updating.",
-		[]mcp.ToolOption{
-			mcp.WithString("address_1", mcp.Description("First line of the account billing address (optional)")),
-			mcp.WithString("address_2", mcp.Description("Second line of the account billing address (optional)")),
-			mcp.WithString("city", mcp.Description("City for the account address (optional)")),
-			mcp.WithString("company", mcp.Description("Company name assigned to the account (optional)")),
-			mcp.WithString("country", mcp.Description("Two-letter ISO 3166 country code (optional)")),
-			mcp.WithString("email", mcp.Description("Email address assigned to the account (optional)")),
-			mcp.WithString("first_name", mcp.Description("First name assigned to the account (optional)")),
-			mcp.WithString("last_name", mcp.Description("Last name assigned to the account (optional)")),
-			mcp.WithString("phone", mcp.Description("Phone number assigned to the account (optional)")),
-			mcp.WithString("state", mcp.Description("State, province, or territory for the account address (optional)")),
-			mcp.WithString("tax_id", mcp.Description("Tax identification number, or an empty string if not applicable (optional)")),
-			mcp.WithString("zip", mcp.Description("Zip or postal code for the account address (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm account update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeAccountUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.AccountUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeAccountUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -1953,7 +1846,7 @@ func runProfilePhoneAction(
 		return mcp.NewToolResultError(failureMessage), nil
 	}
 
-	return MarshalToolResponse(map[string]any{responseKeyMessage: successMessage})
+	return MarshalProtoToolResponse(&linodev1.MessageResponse{Message: successMessage})
 }
 
 func handleLinodeProfilePhoneNumberSendRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -1998,7 +1891,9 @@ func handleLinodeProfilePhoneNumberDeleteRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(deleteFailureMessage), nil
 	}
 
-	return MarshalToolResponse(map[string]any{responseKeyMessage: "Profile phone number deleted successfully"})
+	return MarshalProtoToolResponse(&linodev1.MessageResponse{
+		Message: "Profile phone number deleted successfully",
+	})
 }
 
 func deleteProfilePhoneNumberErrorMessage(ctx context.Context, client *linode.Client) string {
@@ -2110,7 +2005,23 @@ func handleLinodeProfileTFAEnableConfirmRequest(ctx context.Context, request *mc
 		return mcp.NewToolResultError(confirmFailureMessage), nil
 	}
 
-	return MarshalToolResponse(confirmed)
+	// scratch is the one-time backup code the API returns on confirmation; it is
+	// returned to the user by design (account recovery) and not output-redacted.
+	return MarshalProtoToolResponse(&linodev1.ProfileTfaEnableConfirmResponse{
+		Message: "Profile two-factor authentication enabled successfully",
+		Scratch: tfaEnableConfirmString(confirmed, "scratch"),
+		Expiry:  tfaEnableConfirmString(confirmed, "expiry"),
+	})
+}
+
+// tfaEnableConfirmString reads a string field from the confirm endpoint's
+// untyped response body, returning "" when the field is absent or non-string.
+func tfaEnableConfirmString(body linode.ProfileTFAEnableConfirmResponse, key string) string {
+	if value, ok := body[key].(string); ok {
+		return value
+	}
+
+	return ""
 }
 
 func confirmProfileTFAEnableResult(ctx context.Context, client *linode.Client, body *linode.ProfileTFAEnableConfirmRequest) (linode.ProfileTFAEnableConfirmResponse, string) {
@@ -2292,27 +2203,7 @@ func handleProfileRevokeRequest(
 }
 
 func profileAppIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()[profileAppIDParam]
-	if !exists {
-		return 0, "app_id is required"
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 {
-			return 0, errProfileAppIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > profileAppIDMaxFromJSON || value != float64(int64(value)) {
-			return 0, errProfileAppIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errProfileAppIDPositive
-	}
+	return requiredBoundedIDArgument(request, profileAppIDParam, profileAppIDMaxFromJSON)
 }
 
 func handleLinodeProfileDeviceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -2326,36 +2217,16 @@ func handleLinodeProfileDeviceGetRequest(ctx context.Context, request *mcp.CallT
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	device, getFailure := client.GetProfileDevice(ctx, deviceID)
+	device, getFailure := client.GetProfileDeviceProto(ctx, deviceID)
 	if getFailure == nil {
-		return MarshalToolResponse(device)
+		return MarshalProtoToolResponse(device)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_profile_device_get: " + getFailure.Error()), nil
 }
 
 func profileDeviceIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()[profileDeviceIDParam]
-	if !exists {
-		return 0, "device_id is required"
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 {
-			return 0, errProfileDeviceIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > profileDeviceIDMaxFromJSON || value != float64(int64(value)) {
-			return 0, errProfileDeviceIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errProfileDeviceIDPositive
-	}
+	return requiredBoundedIDArgument(request, profileDeviceIDParam, profileDeviceIDMaxFromJSON)
 }
 
 func accountOAuthClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -2450,27 +2321,7 @@ func handleLinodeLongviewClientUpdateRequest(ctx context.Context, request *mcp.C
 }
 
 func longviewClientIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	value, exists := request.GetArguments()[longviewClientIDParam]
-	if !exists {
-		return 0, errLongviewClientIDPositive
-	}
-
-	switch typed := value.(type) {
-	case int:
-		if typed <= 0 {
-			return 0, errLongviewClientIDPositive
-		}
-
-		return typed, ""
-	case float64:
-		if typed <= 0 || typed > maxLongviewClientIDFromJSON || math.Trunc(typed) != typed {
-			return 0, errLongviewClientIDPositive
-		}
-
-		return int(typed), ""
-	default:
-		return 0, errLongviewClientIDPositive
-	}
+	return requiredBoundedIDArgument(request, longviewClientIDParam, maxLongviewClientIDFromJSON)
 }
 
 func longviewClientUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateLongviewClientRequest, string) {
@@ -2543,7 +2394,7 @@ func handleLinodeLongviewClientDeleteRequest(ctx context.Context, request *mcp.C
 			})
 	}
 
-	if result := RequireConfirm(request, "This deletes a Longview client. Set confirm=true to proceed."); result != nil {
+	if result := requireDestroyConfirmation(ctx, request, "linode_longview_client_delete", "This deletes a Longview client. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -2644,13 +2495,9 @@ func handleLinodeLongviewClientGetRequest(ctx context.Context, request *mcp.Call
 }
 
 func longviewClientGetIDFromTool(request *mcp.CallToolRequest) (string, string) {
-	id, validationMessage := optionalPaginationInt(request.GetArguments(), "client_id", 1, 0)
+	id, validationMessage := requiredIDArgument(request, "client_id")
 	if validationMessage != "" {
 		return "", validationMessage
-	}
-
-	if id == 0 {
-		return "", "client_id is required"
 	}
 
 	return strconv.Itoa(id), ""
@@ -2667,22 +2514,18 @@ func handleLinodeAccountPaymentMethodGetRequest(ctx context.Context, request *mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	method, getFailure := client.GetAccountPaymentMethod(ctx, paymentMethodID)
+	method, getFailure := client.GetAccountPaymentMethodProto(ctx, paymentMethodID)
 	if getFailure == nil {
-		return MarshalToolResponse(method)
+		return MarshalProtoToolResponse(method)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_payment_method_get: " + getFailure.Error()), nil
 }
 
 func accountPaymentMethodIDFromTool(request *mcp.CallToolRequest) (string, string) {
-	id, validationMessage := optionalPaginationInt(request.GetArguments(), "payment_method_id", 1, 0)
+	id, validationMessage := requiredIDArgument(request, "payment_method_id")
 	if validationMessage != "" {
 		return "", validationMessage
-	}
-
-	if id == 0 {
-		return "", "payment_method_id is required"
 	}
 
 	return strconv.Itoa(id), ""
@@ -2724,6 +2567,12 @@ func paymentMethodCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.C
 	paymentType, typeOK := args["type"].(string)
 	if !typeOK || strings.TrimSpace(paymentType) == "" {
 		return nil, errPaymentMethodTypeRequired
+	}
+
+	// The API accepts only credit_card here; Google Pay/PayPal are added through
+	// the Cloud Manager, not this endpoint. Reject other types before the call.
+	if paymentType != "credit_card" {
+		return nil, "type must be credit_card"
 	}
 
 	data, dataOK := args["data"].(map[string]any)
@@ -2990,17 +2839,14 @@ func handleLinodeAccountOAuthClientUpdateRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError("Failed to update linode_account_oauth_client_update: " + updateFailureMessage), nil
 	}
 
-	return MarshalToolResponse(struct {
-		Message string              `json:"message"`
-		Client  *linode.OAuthClient `json:"client"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.OAuthClientWriteResponse{
 		Message: "OAuth client updated successfully",
 		Client:  oauthClient,
 	})
 }
 
-func updateOAuthClient(ctx context.Context, client *linode.Client, clientID string, req *linode.UpdateOAuthClientRequest) (*linode.OAuthClient, string) {
-	oauthClient, err := client.UpdateOAuthClient(ctx, clientID, req)
+func updateOAuthClient(ctx context.Context, client *linode.Client, clientID string, req *linode.UpdateOAuthClientRequest) (*linodev1.OAuthClient, string) {
+	oauthClient, err := client.UpdateOAuthClientProto(ctx, clientID, req)
 	if err != nil {
 		return nil, err.Error()
 	}
@@ -3094,12 +2940,9 @@ func handleLinodeAccountOAuthClientThumbnailGetRequest(ctx context.Context, requ
 
 	encoded := base64.StdEncoding.EncodeToString(thumbnailPNG)
 
-	return MarshalToolResponse(struct {
-		ClientID           string `json:"client_id"`
-		ThumbnailPNGBase64 string `json:"thumbnail_png_base64"`
-	}{
-		ClientID:           clientID,
-		ThumbnailPNGBase64: encoded,
+	return MarshalProtoToolResponse(&linodev1.OAuthClientThumbnail{
+		ClientId:           clientID,
+		ThumbnailPngBase64: encoded,
 	})
 }
 
@@ -3358,16 +3201,16 @@ func handleLinodeProfileTokenGetRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	token, getFailure := client.GetProfileToken(ctx, tokenID)
+	token, getFailure := client.GetProfileTokenProto(ctx, tokenID)
 	if getFailure == nil {
-		return MarshalToolResponse(token)
+		return MarshalProtoToolResponse(token)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_profile_token_get: " + getFailure.Error()), nil
 }
 
 func profileTokenIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	return requiredPositiveIntArgument(request, profileTokenIDParam, errProfileTokenIDPositive, errProfileTokenIDPositive)
+	return requiredIDArgument(request, profileTokenIDParam)
 }
 
 func handleLinodeAccountUserGrantsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -3381,9 +3224,9 @@ func handleLinodeAccountUserGrantsRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	grants, getFailure := client.GetAccountUserGrants(ctx, username)
+	grants, getFailure := client.GetAccountUserGrantsProto(ctx, username)
 	if getFailure == nil {
-		return MarshalToolResponse(grants)
+		return MarshalProtoToolResponse(grants)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_user_grants_get: " + getFailure.Error()), nil
@@ -3561,8 +3404,12 @@ func accountUserGrantsUpdateRequestFromTool(request *mcp.CallToolRequest) (*lino
 		}
 
 		var grants []linode.UpdateAccountUserGrant
-		if !decodeToolJSONValue(raw, &grants) || !accountUserGrantUpdatesValid(grants) {
+		if !decodeToolJSONValue(raw, &grants) {
 			return nil, errAccountUserGrantsArray
+		}
+
+		if msg := accountUserGrantUpdatesError(section.name, grants); msg != "" {
+			return nil, msg
 		}
 
 		section.set(&grants)
@@ -3586,28 +3433,28 @@ func accountUserGlobalGrantUpdateValid(global *linode.UpdateAccountUserGlobalGra
 		return true
 	}
 
-	switch *global.AccountAccess {
-	case "", grantPermissionReadOnly, grantPermissionReadWrite:
-		return true
-	default:
-		return false
-	}
+	return grantPermissionValid(string(*global.AccountAccess))
 }
 
-func accountUserGrantUpdatesValid(grants []linode.UpdateAccountUserGrant) bool {
-	for _, grant := range grants {
+// accountUserGrantUpdatesError validates a decoded per-resource grant list. It
+// returns "" when every entry is valid, else a message identifying the first
+// bad entry. An invalid permission produces the per-field
+// "<section>[<index>].permissions must be one of: read_only, read_write" text
+// that matches the Python validator, so a shared behavior fixture pins both
+// languages; a missing id or permission keeps the generic array-shape message.
+func accountUserGrantUpdatesError(section string, grants []linode.UpdateAccountUserGrant) string {
+	for index, grant := range grants {
 		if grant.ID <= 0 || grant.Permissions == nil {
-			return false
+			return errAccountUserGrantsArray
 		}
 
-		switch *grant.Permissions {
-		case "", grantPermissionReadOnly, grantPermissionReadWrite:
-		default:
-			return false
+		if !grantPermissionValid(string(*grant.Permissions)) {
+			return fmt.Sprintf("%s[%d].permissions must be one of: %s", section, index,
+				strings.Join(enumValueNames(linodev1.GrantPermission_Value_value), ", "))
 		}
 	}
 
-	return true
+	return ""
 }
 
 func decodeToolJSONValue(raw, target any) bool {
@@ -4029,7 +3876,37 @@ func supportTicketAttachmentCreateRequestFromTool(request *mcp.CallToolRequest) 
 		return 0, nil, validationMessage
 	}
 
+	// The endpoint uploads a local file as multipart/form-data, so the path must
+	// point at a readable local file. Require an absolute path (Python does the
+	// same) so both languages reject a relative path identically.
+	file = strings.TrimSpace(file)
+	if !filepath.IsAbs(file) {
+		return 0, nil, "file must be a local, absolute path"
+	}
+
+	if !supportAttachmentExtensionAllowed(file) {
+		return 0, nil, supportAttachmentExtensionMessage
+	}
+
 	return ticketID, &linode.CreateSupportTicketAttachmentRequest{File: file}, ""
+}
+
+// supportAttachmentExtensionMessage lists the file types the ticket-attachment
+// endpoint documents as accepted. Kept identical to the Python handler's text
+// so the behavior fixture pins it cross-language.
+const supportAttachmentExtensionMessage = "file must have an accepted extension: " +
+	".gif, .jpg, .jpeg, .pjpg, .pjpeg, .tif, .tiff, .png, .pdf, or .txt"
+
+// supportAttachmentExtensionAllowed enforces the API's documented attachment
+// allowlist. Rejecting other extensions BEFORE the file read also keeps
+// arbitrary local files (keys, configs) from being uploaded to a ticket.
+func supportAttachmentExtensionAllowed(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".gif", ".jpg", ".jpeg", ".pjpg", ".pjpeg", ".tif", ".tiff", ".png", ".pdf", ".txt":
+		return true
+	default:
+		return false
+	}
 }
 
 func requiredSupportTicketAttachmentTicketID(args map[string]any) (int, string) {
@@ -4064,9 +3941,12 @@ func handleLinodeManagedContactCreateRequest(ctx context.Context, request *mcp.C
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	contact, createFailure := client.CreateManagedContact(ctx, createRequest)
+	contact, createFailure := client.CreateManagedContactProto(ctx, createRequest)
 	if createFailure == nil {
-		return MarshalToolResponse(contact)
+		return MarshalProtoToolResponse(&linodev1.ManagedContactWriteResponse{
+			Message: fmt.Sprintf("Managed contact %d created successfully", contact.GetId()),
+			Contact: contact,
+		})
 	}
 
 	return mcp.NewToolResultError("Failed to create linode_managed_contact_create: " + createFailure.Error()), nil
@@ -4232,27 +4112,7 @@ func handleLinodeAccountLoginGetRequest(ctx context.Context, request *mcp.CallTo
 }
 
 func accountLoginIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()["login_id"]
-	if !exists {
-		return 0, "login_id is required"
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 {
-			return 0, errAccountLoginIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > maxAccountLoginIDFromJSON || value != float64(int64(value)) {
-			return 0, errAccountLoginIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errAccountLoginIDPositive
-	}
+	return requiredBoundedIDArgument(request, "login_id", maxAccountLoginIDFromJSON)
 }
 
 func accountInvoicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -4307,27 +4167,7 @@ func handleLinodeAccountPaymentGetRequest(ctx context.Context, request *mcp.Call
 }
 
 func accountPaymentIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()["payment_id"]
-	if !exists {
-		return 0, "payment_id is required"
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 {
-			return 0, errAccountPaymentIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > maxAccountPaymentIDFromJSON || value != float64(int64(value)) {
-			return 0, errAccountPaymentIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errAccountPaymentIDPositive
-	}
+	return requiredBoundedIDArgument(request, "payment_id", maxAccountPaymentIDFromJSON)
 }
 
 func handleLinodeAccountPaymentCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -4468,27 +4308,7 @@ func handleLinodeAccountInvoiceGetRequest(ctx context.Context, request *mcp.Call
 }
 
 func accountInvoiceIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()["invoice_id"]
-	if !exists {
-		return 0, "invoice_id is required"
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 {
-			return 0, errAccountInvoiceIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value != float64(int(value)) {
-			return 0, errAccountInvoiceIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errAccountInvoiceIDPositive
-	}
+	return requiredIDArgument(request, "invoice_id")
 }
 
 func accountInvoiceItemsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -4534,9 +4354,9 @@ func handleLinodeAccountChildAccountGetRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	childAccount, getFailure := client.GetAccountChildAccount(ctx, euuid)
+	childAccount, getFailure := client.GetAccountChildAccountProto(ctx, euuid)
 	if getFailure == nil {
-		return MarshalToolResponse(childAccount)
+		return MarshalProtoToolResponse(childAccount)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_account_child_account_get: " + getFailure.Error()), nil
@@ -4570,9 +4390,12 @@ func handleLinodeAccountChildAccountTokenRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	token, createFailure := client.CreateAccountChildAccountToken(ctx, euuid)
+	token, createFailure := client.CreateAccountChildAccountTokenProto(ctx, euuid)
 	if createFailure == nil {
-		return MarshalToolResponse(token)
+		return MarshalProtoToolResponse(&linodev1.AccountChildAccountTokenWriteResponse{
+			Message: "Child account proxy token created successfully",
+			Token:   token,
+		})
 	}
 
 	return mcp.NewToolResultError("Failed to create linode_account_child_account_token_create: " + createFailure.Error()), nil
@@ -4740,27 +4563,7 @@ func markAccountEventSeen(ctx context.Context, client *linode.Client, eventID in
 }
 
 func accountEventIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()[accountEventIDParam]
-	if !exists {
-		return 0, accountEventIDParam + " is required"
-	}
-
-	switch value := raw.(type) {
-	case float64:
-		if value <= 0 || value != float64(int(value)) {
-			return 0, accountEventIDParam + " must be a positive integer"
-		}
-
-		return int(value), ""
-	case int:
-		if value <= 0 {
-			return 0, accountEventIDParam + " must be a positive integer"
-		}
-
-		return value, ""
-	default:
-		return 0, accountEventIDParam + " must be a positive integer"
-	}
+	return requiredIDArgument(request, accountEventIDParam)
 }
 
 func accountTransferTokenFromTool(request *mcp.CallToolRequest) (string, string) {
@@ -4816,9 +4619,12 @@ func handleLinodeAccountServiceTransferCreateRequest(ctx context.Context, reques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	transfer, createFailure := client.CreateAccountServiceTransfer(ctx, req)
+	transfer, createFailure := client.CreateAccountServiceTransferProto(ctx, req)
 	if createFailure == nil {
-		return MarshalToolResponse(transfer)
+		return MarshalProtoToolResponse(&linodev1.AccountServiceTransferWriteResponse{
+			Message:  "Account service transfer created successfully",
+			Transfer: transfer,
+		})
 	}
 
 	return mcp.NewToolResultError("Failed to create linode_account_service_transfer_create: " + createFailure.Error()), nil
@@ -4996,15 +4802,10 @@ func handleLinodeAccountBetaEnrollRequest(ctx context.Context, request *mcp.Call
 
 	enrollErr := client.EnrollAccountBeta(ctx, req)
 	if enrollErr == nil {
-		response := struct {
-			Message string `json:"message"`
-			ID      string `json:"id"`
-		}{
+		return MarshalProtoToolResponse(&linodev1.AccountBetaEnrollResponse{
 			Message: "Account beta enrollment requested successfully",
-			ID:      req.ID,
-		}
-
-		return MarshalToolResponse(response)
+			Id:      req.ID,
+		})
 	}
 
 	return mcp.NewToolResultError("Failed to enroll linode_account_beta_enroll: " + enrollErr.Error()), nil
@@ -5061,19 +4862,40 @@ func isAccountBetaID(id string) bool {
 	return true
 }
 
-func handleLinodeManagedCredentialUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	credentialID, ok := getPositiveIntArgument(request, managedUpdateIDParam)
-	if !ok {
-		return mcp.NewToolResultError(errManagedIDPositive), nil
+// managedCredentialUpdateLabel mirrors Python's _managed_credential_update_body:
+// it rejects the read-only {id, last_decrypted} fields and a blank label, ported
+// to Go so both languages reject them locally instead of forwarding (strictest-wins).
+func managedCredentialUpdateLabel(request *mcp.CallToolRequest) (string, string) {
+	if message := managedReadOnlyFieldsReject(request, []string{"id", "last_decrypted"}); message != "" {
+		return "", message
+	}
+
+	if _, exists := request.GetArguments()["label"]; !exists {
+		return "", errLongviewClientLabelRequired
 	}
 
 	label, validationMessage := stringArgument(request, "label", false)
 	if validationMessage != "" {
+		return "", validationMessage
+	}
+
+	trimmed := strings.TrimSpace(label)
+	if trimmed == "" {
+		return "", "label must be a non-empty string"
+	}
+
+	return trimmed, ""
+}
+
+func handleLinodeManagedCredentialUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	credentialID, validationMessage := requiredIDArgument(request, managedUpdateIDParam)
+	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	if _, exists := request.GetArguments()["label"]; !exists {
-		return mcp.NewToolResultError("label is required"), nil
+	label, validationMessage := managedCredentialUpdateLabel(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if IsDryRun(request) {
@@ -5198,9 +5020,9 @@ func handleLinodeManagedSSHKeyRequest(ctx context.Context, request *mcp.CallTool
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	sshKey, getFailure := client.GetManagedSSHKey(ctx)
+	sshKey, getFailure := client.GetManagedSSHKeyProto(ctx)
 	if getFailure == nil {
-		return MarshalToolResponse(sshKey)
+		return MarshalProtoToolResponse(sshKey)
 	}
 
 	return mcp.NewToolResultError("Failed to retrieve linode_managed_sshkey_get: " + getFailure.Error()), nil
@@ -5268,27 +5090,7 @@ func handleLinodeManagedCredentialRevokeRequest(ctx context.Context, request *mc
 }
 
 func managedCredentialIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()[managedIDParam]
-	if !exists {
-		return 0, errManagedIDPositive
-	}
-
-	switch value := raw.(type) {
-	case int:
-		if value <= 0 || value > maxManagedIDFromJSON {
-			return 0, errManagedIDPositive
-		}
-
-		return value, ""
-	case float64:
-		if value <= 0 || value > maxManagedIDFromJSON || value != float64(int64(value)) {
-			return 0, errManagedIDPositive
-		}
-
-		return int(value), ""
-	default:
-		return 0, errManagedIDPositive
-	}
+	return requiredBoundedIDArgument(request, managedIDParam, maxManagedIDFromJSON)
 }
 
 func managedCredentialsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
@@ -5328,9 +5130,12 @@ func handleLinodeManagedCredentialCreateRequest(ctx context.Context, request *mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	credential, createFailure := client.CreateManagedCredential(ctx, createReq)
+	credential, createFailure := client.CreateManagedCredentialProto(ctx, createReq)
 	if createFailure == nil {
-		return MarshalToolResponse(credential)
+		return MarshalProtoToolResponse(&linodev1.ManagedCredentialWriteResponse{
+			Message:    fmt.Sprintf("Managed credential %d created successfully", credential.GetId()),
+			Credential: credential,
+		})
 	}
 
 	return mcp.NewToolResultError("Failed to create linode_managed_credential_create: " + createFailure.Error()), nil
@@ -5543,13 +5348,9 @@ func handleLinodeAccountAgreementsAcknowledgeRequest(ctx context.Context, reques
 
 	ackErr := client.AcknowledgeAccountAgreements(ctx, req)
 	if ackErr == nil {
-		response := struct {
-			Message string `json:"message"`
-		}{
+		return MarshalProtoToolResponse(&linodev1.MessageResponse{
 			Message: "Account agreements acknowledged successfully",
-		}
-
-		return MarshalToolResponse(response)
+		})
 	}
 
 	return mcp.NewToolResultError("Failed to acknowledge account agreements: " + ackErr.Error()), nil
@@ -5625,17 +5426,12 @@ func handleLinodeAccountCancelRequest(ctx context.Context, request *mcp.CallTool
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cancelResponse, cancelErr := client.CancelAccount(ctx, req)
+	cancelResponse, cancelErr := client.CancelAccountProto(ctx, req)
 	if cancelErr == nil {
-		response := struct {
-			Message    string                        `json:"message"`
-			CancelInfo *linode.CancelAccountResponse `json:"cancel_info"`
-		}{
+		return MarshalProtoToolResponse(&linodev1.AccountCancelWriteResponse{
 			Message:    "Account canceled successfully",
 			CancelInfo: cancelResponse,
-		}
-
-		return MarshalToolResponse(response)
+		})
 	}
 
 	return mcp.NewToolResultError("Failed to cancel account: " + cancelErr.Error()), nil
@@ -5829,17 +5625,12 @@ func handleLinodeAccountSettingsUpdateRequest(ctx context.Context, request *mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updatedSettings, updateErr := client.UpdateAccountSettings(ctx, req)
+	updatedSettings, updateErr := client.UpdateAccountSettingsProto(ctx, req)
 	if updateErr == nil {
-		response := struct {
-			Message  string                  `json:"message"`
-			Settings *linode.AccountSettings `json:"settings"`
-		}{
+		return MarshalProtoToolResponse(&linodev1.AccountSettingsWriteResponse{
 			Message:  "Account settings updated successfully",
 			Settings: updatedSettings,
-		}
-
-		return MarshalToolResponse(response)
+		})
 	}
 
 	return mcp.NewToolResultError("Failed to update account settings: " + updateErr.Error()), nil
@@ -5848,6 +5639,29 @@ func handleLinodeAccountSettingsUpdateRequest(ctx context.Context, request *mcp.
 func updateAccountSettingsRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateAccountSettingsRequest, string) {
 	args := request.GetArguments()
 	req := linode.UpdateAccountSettingsRequest{}
+
+	// Reject unknown fields locally (mirrors Python's
+	// _account_settings_update_body_error), which Go previously ignored.
+	allowedSettings := map[string]struct{}{
+		paramEnvironment: {}, "confirm": {}, paramDryRun: {},
+		"backups_enabled": {}, "managed": {}, "network_helper": {},
+		"interfaces_for_new_linodes": {}, "longview_subscription": {},
+		"maintenance_policy": {}, "object_storage": {},
+	}
+
+	var unknownSettings []string
+
+	for key := range args {
+		if _, ok := allowedSettings[key]; !ok {
+			unknownSettings = append(unknownSettings, key)
+		}
+	}
+
+	if len(unknownSettings) > 0 {
+		sort.Strings(unknownSettings)
+
+		return nil, "Unsupported account settings field(s): " + strings.Join(unknownSettings, ", ")
+	}
 
 	var setCount int
 

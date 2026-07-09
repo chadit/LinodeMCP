@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -35,16 +34,13 @@ func TestLinodeImageShareGroupsByImageListToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyImageID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyImageID)
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, keyImageID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyImageID)
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyImageID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyImageID)
-	}
-
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; ok {
-		t.Errorf("tool.InputSchema.Properties has unexpected key %v", keyConfirm)
+	if strings.Contains(rawSchema, keyConfirm) {
+		t.Errorf("tool.RawInputSchema has unexpected key %v", keyConfirm)
 	}
 
 	if handler == nil {

@@ -1,0 +1,14 @@
+{
+  "message": "linode.mcp.v1.AuditExportResponse",
+  "description": "Audit export echo: the written file path, format, and record count.",
+  "input": {
+    "path": "/tmp/audit-export.csv",
+    "format": "csv",
+    "record_count": 42
+  },
+  "canonical": {
+    "path": "/tmp/audit-export.csv",
+    "format": "csv",
+    "record_count": 42
+  }
+}

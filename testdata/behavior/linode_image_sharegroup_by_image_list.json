@@ -1,0 +1,12 @@
+{
+  "tool": "linode_image_sharegroup_by_image_list",
+  "description": "Lists share groups that contain a private image. Missing-id error text diverges (see report).",
+  "cases": [
+    {
+      "name": "lists share groups for an image",
+      "args": { "image_id": "private/123" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/images/private%2F123/sharegroups" }
+    }
+  ]
+}

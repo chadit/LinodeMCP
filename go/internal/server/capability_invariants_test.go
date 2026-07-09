@@ -290,11 +290,11 @@ func TestLinodeInstanceStatsToolRegistered(t *testing.T) {
 				t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 			}
 
-			if _, ok := info.InputSchema.Properties["linode_id"]; !ok {
+			if _, ok := toolSchemaProps(t, &info)["linode_id"]; !ok {
 				t.Errorf("info.InputSchema.Properties missing key %v", "linode_id")
 			}
 
-			if !slices.Contains(info.InputSchema.Required, "linode_id") {
+			if !slices.Contains(toolSchemaRequired(t, &info), "linode_id") {
 				t.Errorf("info.InputSchema.Required does not contain %v", "linode_id")
 			}
 		}
@@ -320,12 +320,12 @@ func TestLinodeNodeBalancerStatsToolRegistered(t *testing.T) {
 				t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 			}
 
-			if _, ok := info.InputSchema.Properties["nodebalancer_id"]; !ok {
-				t.Errorf("info.InputSchema.Properties missing key %v", "nodebalancer_id")
+			if _, ok := toolSchemaProps(t, &info)["nodebalancer_id"]; !ok {
+				t.Errorf("toolSchemaProps missing key %v", "nodebalancer_id")
 			}
 
-			if !slices.Contains(info.InputSchema.Required, "nodebalancer_id") {
-				t.Errorf("info.InputSchema.Required does not contain %v", "nodebalancer_id")
+			if !slices.Contains(toolSchemaRequired(t, &info), "nodebalancer_id") {
+				t.Errorf("toolSchemaRequired does not contain %v", "nodebalancer_id")
 			}
 		}
 	}
@@ -394,12 +394,14 @@ func TestLinodeFirewallTemplatesToolRegistered(t *testing.T) {
 			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 		}
 
-		if _, ok := info.InputSchema.Properties["page"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "page")
+		props := toolSchemaProps(t, &info)
+
+		if _, ok := props["page"]; !ok {
+			t.Errorf("info schema properties missing key %v", "page")
 		}
 
-		if _, ok := info.InputSchema.Properties["page_size"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "page_size")
+		if _, ok := props["page_size"]; !ok {
+			t.Errorf("info schema properties missing key %v", "page_size")
 		}
 	}
 
@@ -426,20 +428,22 @@ func TestLinodeFirewallTemplateGetToolRegistered(t *testing.T) {
 			t.Errorf("info.Capability = %v, want %v", info.Capability, profiles.CapRead)
 		}
 
-		if _, ok := info.InputSchema.Properties["slug"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "slug")
+		props := toolSchemaProps(t, &info)
+
+		if _, ok := props["slug"]; !ok {
+			t.Errorf("info schema properties missing key %v", "slug")
 		}
 
-		if !slices.Contains(info.InputSchema.Required, "slug") {
-			t.Errorf("info.InputSchema.Required does not contain %v", "slug")
+		if !slices.Contains(toolSchemaRequired(t, &info), "slug") {
+			t.Errorf("info schema required does not contain %v", "slug")
 		}
 
-		if _, ok := info.InputSchema.Properties["page"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "page")
+		if _, ok := props["page"]; !ok {
+			t.Errorf("info schema properties missing key %v", "page")
 		}
 
-		if _, ok := info.InputSchema.Properties["page_size"]; !ok {
-			t.Errorf("info.InputSchema.Properties missing key %v", "page_size")
+		if _, ok := props["page_size"]; !ok {
+			t.Errorf("info schema properties missing key %v", "page_size")
 		}
 	}
 

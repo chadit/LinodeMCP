@@ -1,0 +1,12 @@
+{
+  "tool": "linode_object_storage_transfer_get",
+  "description": "No local validation; pins the transfer usage GET.",
+  "cases": [
+    {
+      "name": "gets transfer usage",
+      "args": {},
+      "api_response": { "used": 0 },
+      "expect_request": { "method": "GET", "path": "/object-storage/transfer" }
+    }
+  ]
+}

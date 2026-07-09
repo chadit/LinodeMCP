@@ -3,10 +3,8 @@ package linode_test
 import (
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -124,7 +122,7 @@ func TestClientGetMonitorDashboardSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.GetMonitorDashboard(t.Context(), monitorDashboardID)
+	got, err := client.GetMonitorDashboardProto(t.Context(), monitorDashboardID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -133,16 +131,16 @@ func TestClientGetMonitorDashboardSuccess(t *testing.T) {
 		t.Fatal("got is nil")
 	}
 
-	if numVal, numOK := got[keyID].(float64); !numOK || math.Abs(numVal-float64(monitorDashboardID)) > math.Abs(float64(monitorDashboardID))*0.001 {
-		t.Errorf("got[keyID] = %v, want ~%v", got[keyID], monitorDashboardID)
+	if got.GetId() != monitorDashboardID {
+		t.Errorf("got.GetId() = %v, want %v", got.GetId(), monitorDashboardID)
 	}
 
-	if !reflect.DeepEqual(got[keyLabel], monitorDashboardLabel) {
-		t.Errorf("got[keyLabel] = %v, want %v", got[keyLabel], monitorDashboardLabel)
+	if got.GetLabel() != monitorDashboardLabel {
+		t.Errorf("got.GetLabel() = %v, want %v", got.GetLabel(), monitorDashboardLabel)
 	}
 
-	if !reflect.DeepEqual(got[keyType], monitorDashboardType) {
-		t.Errorf("got[keyType] = %v, want %v", got[keyType], monitorDashboardType)
+	if got.GetType() != monitorDashboardType {
+		t.Errorf("got.GetType() = %v, want %v", got.GetType(), monitorDashboardType)
 	}
 }
 
@@ -169,7 +167,7 @@ func TestClientGetMonitorDashboardAPIError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.GetMonitorDashboard(t.Context(), monitorDashboardID)
+	got, err := client.GetMonitorDashboardProto(t.Context(), monitorDashboardID)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -222,7 +220,7 @@ func TestClientGetMonitorDashboardRetriesTransientError(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(1))
 
-	got, err := client.GetMonitorDashboard(t.Context(), monitorDashboardID)
+	got, err := client.GetMonitorDashboardProto(t.Context(), monitorDashboardID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -235,8 +233,8 @@ func TestClientGetMonitorDashboardRetriesTransientError(t *testing.T) {
 		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(2))
 	}
 
-	if numVal, numOK := got[keyID].(float64); !numOK || math.Abs(numVal-float64(monitorDashboardID)) > math.Abs(float64(monitorDashboardID))*0.001 {
-		t.Errorf("got[keyID] = %v, want ~%v", got[keyID], monitorDashboardID)
+	if got.GetId() != monitorDashboardID {
+		t.Errorf("got.GetId() = %v, want %v", got.GetId(), monitorDashboardID)
 	}
 }
 

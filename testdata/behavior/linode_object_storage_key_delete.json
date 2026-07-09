@@ -1,0 +1,22 @@
+{
+  "tool": "linode_object_storage_key_delete",
+  "description": "Destroy-capability. Pins the shared bypass gate (confirm alone with a valid key_id), the negative-key_id rejection, and the revoke DELETE by ID.",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": { "key_id": 456, "confirm": true },
+      "expect_error": "linode_object_storage_key_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "rejects negative key_id",
+      "args": { "key_id": -1, "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "key_id is required and must be a positive integer"
+    },
+    {
+      "name": "revokes a key",
+      "args": { "key_id": 456, "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/object-storage/keys/456" }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_type_get",
+  "description": "Type get by slug. Both missing and invalid type_id error texts diverge (see report), so only the success GET is pinned.",
+  "cases": [
+    {
+      "name": "gets one instance type by id",
+      "args": { "type_id": "g6-nanode-1" },
+      "api_response": { "id": "g6-nanode-1" },
+      "expect_request": { "method": "GET", "path": "/linode/types/g6-nanode-1" }
+    }
+  ]
+}

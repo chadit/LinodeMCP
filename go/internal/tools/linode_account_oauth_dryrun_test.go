@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
@@ -26,8 +27,10 @@ func TestLinodeAccountOAuthClientCreateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountOAuthClientCreateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -80,8 +83,10 @@ func TestLinodeAccountOAuthClientUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountOAuthClientUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -135,8 +140,10 @@ func TestLinodeAccountOAuthClientThumbnailUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountOAuthClientThumbnailUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -190,8 +197,10 @@ func TestLinodeAccountOAuthClientDeleteToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountOAuthClientDeleteTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -244,8 +253,10 @@ func TestLinodeAccountOAuthClientResetSecretToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeAccountOAuthClientResetSecretTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+
+		rawSchema := string(tool.RawInputSchema)
+		if !strings.Contains(rawSchema, keyDryRun) {
+			t.Errorf("RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

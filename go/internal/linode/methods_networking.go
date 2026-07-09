@@ -256,7 +256,9 @@ func (c *Client) httpUpdateFirewallRules(ctx context.Context, firewallID int, re
 	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
 	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/rules"
 
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	body := firewallRulesReplaceBody{Inbound: req.Inbound, Outbound: req.Outbound}
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, body)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateFirewallRules", Err: err}
 	}
@@ -443,6 +445,51 @@ func (c *Client) httpCreateFirewallDevice(ctx context.Context, firewallID int, r
 	return &device, nil
 }
 
+// httpCreateFirewallDeviceProto assigns a device to a Cloud Firewall and decodes
+// the response into the FirewallDevice proto element so the write tool emits the
+// same shape as the firewall device read path.
+func (c *Client) httpCreateFirewallDeviceProto(ctx context.Context, firewallID int, req *CreateFirewallDeviceRequest) (*linodev1.FirewallDevice, error) {
+	if firewallID <= 0 {
+		return nil, ErrFirewallIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrFirewallDeviceIDPositive
+	}
+
+	if req.ID <= 0 {
+		return nil, ErrFirewallDeviceIDPositive
+	}
+
+	if req.Type == "" {
+		return nil, ErrFirewallDeviceTypeRequired
+	}
+
+	if !isFirewallDeviceType(req.Type) {
+		return nil, ErrInvalidFirewallDeviceType
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
+	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/devices"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateFirewallDevice", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	device := &linodev1.FirewallDevice{}
+	if err := c.handleProtoResponse(resp, device); err != nil {
+		return nil, err
+	}
+
+	return device, nil
+}
+
 // GetFirewallDevice retrieves one device assigned to a Cloud Firewall.
 func (c *Client) httpGetFirewallDevice(ctx context.Context, firewallID, deviceID int) (*FirewallDevice, error) {
 	if firewallID <= 0 {
@@ -565,6 +612,30 @@ func (c *Client) httpListFirewallSettings(ctx context.Context, page, pageSize in
 	return &settings, nil
 }
 
+// httpListFirewallSettingsProto retrieves default firewall assignments and
+// decodes the single-object response into the FirewallSettings proto element so
+// the read tool emits the same shape as the firewall settings write path.
+func (c *Client) httpListFirewallSettingsProto(ctx context.Context, page, pageSize int) (*linodev1.FirewallSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointFirewallSettings, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListFirewallSettings", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	settings := &linodev1.FirewallSettings{}
+	if err := c.handleProtoResponse(resp, settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
+}
+
 // httpUpdateFirewallSettings updates default firewall assignments.
 func (c *Client) httpUpdateFirewallSettings(ctx context.Context, req *UpdateFirewallSettingsRequest) (*FirewallSettings, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -583,6 +654,28 @@ func (c *Client) httpUpdateFirewallSettings(ctx context.Context, req *UpdateFire
 	}
 
 	return &settings, nil
+}
+
+// httpUpdateFirewallSettingsProto updates default firewall assignments and
+// decodes the response into the FirewallSettings proto element so the write tool
+// emits the same shape as the firewall settings read path.
+func (c *Client) httpUpdateFirewallSettingsProto(ctx context.Context, req *UpdateFirewallSettingsRequest) (*linodev1.FirewallSettings, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpointFirewallSettings, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateFirewallSettings", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	settings := &linodev1.FirewallSettings{}
+	if err := c.handleProtoResponse(resp, settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
 }
 
 // httpListFirewallTemplatesProto retrieves reusable Cloud Firewall templates as
@@ -741,7 +834,7 @@ func (c *Client) httpCreateFirewall(ctx context.Context, req CreateFirewallReque
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointFirewalls, req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointFirewalls, firewallCreateBodyFromRequest(req))
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateFirewall", Err: err}
 	}
@@ -802,7 +895,7 @@ func (c *Client) httpCreateFirewallProto(ctx context.Context, req CreateFirewall
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointFirewalls, req)
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointFirewalls, firewallCreateBodyFromRequest(req))
 	if err != nil {
 		return nil, &NetworkError{Operation: "CreateFirewall", Err: err}
 	}
@@ -858,7 +951,9 @@ func (c *Client) httpUpdateFirewallRulesProto(ctx context.Context, firewallID in
 	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
 	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/rules"
 
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	body := firewallRulesReplaceBody{Inbound: req.Inbound, Outbound: req.Outbound}
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, body)
 	if err != nil {
 		return nil, &NetworkError{Operation: "UpdateFirewallRules", Err: err}
 	}
@@ -1357,6 +1452,43 @@ func (c *Client) httpCreateIPv6Range(ctx context.Context, req CreateIPv6RangeReq
 	return &ipv6Range, nil
 }
 
+// httpCreateIPv6RangeProto creates an IPv6 range and decodes the response into
+// the IPv6Range proto element so the write tool emits the same shape as the
+// IPv6 range read path.
+func (c *Client) httpCreateIPv6RangeProto(ctx context.Context, req CreateIPv6RangeRequest) (*linodev1.IPv6Range, error) {
+	if req.PrefixLength < 1 || req.PrefixLength > 128 {
+		return nil, ErrIPv6RangePrefixRange
+	}
+
+	if req.LinodeID != nil && *req.LinodeID <= 0 {
+		return nil, ErrLinodeIDPositive
+	}
+
+	if req.RouteTarget != "" {
+		routeTarget, err := netip.ParseAddr(req.RouteTarget)
+		if err != nil || !routeTarget.Is6() || routeTarget.Zone() != "" {
+			return nil, ErrIPv6RangeRouteTargetInvalid
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingIPv6Ranges, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateIPv6Range", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	ipv6Range := &linodev1.IPv6Range{}
+	if err := c.handleProtoResponse(resp, ipv6Range); err != nil {
+		return nil, err
+	}
+
+	return ipv6Range, nil
+}
+
 // ListNodeBalancerTypes retrieves available NodeBalancer types.
 func (c *Client) httpListNodeBalancerTypes(ctx context.Context) (*PaginatedResponse[NodeBalancerType], error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1606,6 +1738,35 @@ func (c *Client) httpUpdateNodeBalancerFirewalls(ctx context.Context, nodeBalanc
 	}
 
 	return response.Data, nil
+}
+
+// httpUpdateNodeBalancerFirewallsProto replaces firewall assignments for a
+// NodeBalancer and decodes the returned page into Firewall proto elements so the
+// write tool emits the same shape as the NodeBalancer firewall list path.
+func (c *Client) httpUpdateNodeBalancerFirewallsProto(ctx context.Context, nodeBalancerID, page, pageSize int, req *UpdateNodeBalancerFirewallsRequest) ([]*linodev1.Firewall, error) {
+	if nodeBalancerID <= 0 {
+		return nil, ErrNodeBalancerIDPositive
+	}
+
+	if req == nil {
+		return nil, ErrUpdateNodeBalancerFirewallsRequestRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	encodedNodeBalancerID := url.PathEscape(strconv.Itoa(nodeBalancerID))
+	endpoint := withPaginationQuery(endpointNodeBalancers+"/"+encodedNodeBalancerID+"/firewalls", page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateNodeBalancerFirewalls", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return decodeProtoElementsBareOrData(resp, c, "UpdateNodeBalancerFirewalls",
+		func() *linodev1.Firewall { return &linodev1.Firewall{} })
 }
 
 // ListNodeBalancerConfigNodes retrieves nodes for a NodeBalancer config.
@@ -2167,8 +2328,10 @@ func (c *Client) httpUpdateNodeBalancerNodeProto(ctx context.Context, nodeBalanc
 	return node, nil
 }
 
-// GetNodeBalancerStats retrieves statistics for a NodeBalancer by its ID.
-func (c *Client) httpGetNodeBalancerStats(ctx context.Context, nodeBalancerID int) (*NodeBalancerStats, error) {
+// httpGetNodeBalancerStatsProto retrieves statistics for a NodeBalancer by its
+// ID as a proto message. The API nests the graphs under a top-level "data"
+// object modeled by NodeBalancerStats.
+func (c *Client) httpGetNodeBalancerStatsProto(ctx context.Context, nodeBalancerID int) (*linodev1.NodeBalancerStats, error) {
 	if nodeBalancerID <= 0 {
 		return nil, ErrNodeBalancerIDPositive
 	}
@@ -2186,12 +2349,12 @@ func (c *Client) httpGetNodeBalancerStats(ctx context.Context, nodeBalancerID in
 
 	defer drainClose(resp)
 
-	var stats NodeBalancerStats
-	if err := c.handleResponse(resp, &stats); err != nil {
+	stats := &linodev1.NodeBalancerStats{}
+	if err := c.handleProtoResponse(resp, stats); err != nil {
 		return nil, err
 	}
 
-	return &stats, nil
+	return stats, nil
 }
 
 // CreateNodeBalancer creates a new NodeBalancer.

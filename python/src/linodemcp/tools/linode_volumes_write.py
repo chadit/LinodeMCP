@@ -4,14 +4,10 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import volume_pb2
+from linodemcp.linode import validate_label, validate_volume_size
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -19,8 +15,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    required_int_id,
 )
-from linodemcp.tools.linode_volumes import volume_to_dict
+from linodemcp.tools.proto_response import raw_int, raw_str, serialize_api_response
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -37,43 +35,30 @@ def create_linode_volume_create_tool() -> tuple[Tool, Capability]:
             "Creates a new block storage volume. WARNING: Billing starts immediately."
             " Pass dry_run=true to preview without creating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label for the volume (required)",
-                },
-                "region": {
-                    "type": "string",
-                    "description": "Region for the volume (required if not attaching)",
-                },
-                "size": {
-                    "type": "integer",
-                    "description": "Size in GB (default: 20, min: 10, max: 10240)",
-                },
-                "linode_id": {
-                    "type": "integer",
-                    "description": "Linode ID to attach to (optional)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm creation. This incurs billing."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeCreateInput"),
     ), Capability.Write
+
+
+def _volume_create_error(arguments: dict[str, Any]) -> list[TextContent] | None:
+    """Validate volume create fields; return an error response or None."""
+    label = arguments.get("label", "")
+    if not label:
+        return error_response("label is required")
+    # The API needs a region or an attach target to place the volume; Go
+    # enforces this, so mirror it here for identical cross-language rejection.
+    if not arguments.get("region") and not arguments.get("linode_id"):
+        return error_response("either region or linode_id is required")
+    try:
+        validate_label(label)
+        # Validate size only when the caller supplied it. An omitted size defers
+        # to the API's documented default (20 GB), matching Go, which validates
+        # only when size > 0.
+        size = arguments.get("size", 0)
+        if size:
+            validate_volume_size(size)
+    except ValueError as exc:
+        return error_response(str(exc))
+    return None
 
 
 async def handle_linode_volume_create(
@@ -109,30 +94,40 @@ async def handle_linode_volume_create(
     confirm = arguments.get("confirm", False)
 
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This creates a billable resource. Set confirm=true.",
-            )
-        ]
+        return error_response(
+            "This operation creates a billable resource. Set confirm=true to proceed."
+        )
 
-    if not label:
-        return error_response("label is required")
+    fields_error = _volume_create_error(arguments)
+    if fields_error is not None:
+        return fields_error
+
+    body: dict[str, Any] = {"label": label}
+    # Send size only when the caller provided it; an omitted size lets the API
+    # apply its documented 20 GB default, matching Go's omitempty on size.
+    size = arguments.get("size", 0)
+    if size:
+        body["size"] = size
+    if arguments.get("region"):
+        body["region"] = arguments.get("region")
+    if arguments.get("linode_id") is not None:
+        body["linode_id"] = arguments.get("linode_id")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        volume = await client.create_volume(
-            label=label,
-            region=arguments.get("region"),
-            linode_id=arguments.get("linode_id"),
-            size=arguments.get("size", 20),
+        raw = await client.post_raw("/volumes", body)
+        vol_label = raw_str(raw, "label")
+        vol_id = raw_int(raw, "id")
+        vol_region = raw_str(raw, "region")
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Volume '{vol_label}' (ID: {vol_id}) "
+                    f"created successfully in {vol_region}"
+                ),
+                "volume": raw,
+            },
+            volume_pb2.VolumeWriteResponse(),
         )
-        return {
-            "message": (
-                f"Volume '{volume.label}' (ID: {volume.id}) "
-                f"created successfully in {volume.region}"
-            ),
-            "volume": volume_to_dict(volume),
-        }
 
     return await execute_tool(cfg, arguments, "create volume", _call)
 
@@ -146,42 +141,21 @@ def create_linode_volume_clone_tool() -> tuple[Tool, Capability]:
             "new billable resource."
             " Pass dry_run=true to preview without cloning."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "volume_id": {
-                    "type": "integer",
-                    "description": "The ID of the volume to clone (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label for the cloned volume (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm cloning. This incurs billing."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["volume_id", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeCloneInput"),
     ), Capability.Write
 
 
-def _volume_clone_error(volume_id: Any, label: str) -> list[TextContent] | None:
-    """Validate clone args; return an error response or None."""
-    if not volume_id:
-        return error_response("volume_id is required")
-    if not label:
+def _volume_clone_error(arguments: dict[str, Any]) -> list[TextContent] | None:
+    """Validate clone args; return an error response or None.
+
+    volume_id runs through required_int_id so a non-positive id is rejected
+    locally ("volume_id must be a positive integer") instead of being sent as
+    /volumes/-1/clone, matching Go's requiredIDArgument (strictest-wins).
+    """
+    _, error = required_int_id(arguments, "volume_id")
+    if error:
+        return error_response(error)
+    if not arguments.get("label"):
         return error_response("label is required")
     return None
 
@@ -194,7 +168,7 @@ async def handle_linode_volume_clone(
     label = arguments.get("label", "")
 
     if is_dry_run(arguments):
-        fields_error = _volume_clone_error(volume_id, label)
+        fields_error = _volume_clone_error(arguments)
         if fields_error is not None:
             return fields_error
 
@@ -211,23 +185,31 @@ async def handle_linode_volume_clone(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text="Error: This creates a billable resource. Set confirm=true.",
-            )
-        ]
+        return error_response(
+            "This operation creates a billable cloned volume. Set confirm=true to "
+            "proceed."
+        )
 
-    fields_error = _volume_clone_error(volume_id, label)
+    fields_error = _volume_clone_error(arguments)
     if fields_error is not None:
         return fields_error
 
+    try:
+        validate_label(label)
+    except ValueError as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        volume = await client.clone_volume(int(volume_id), label)
-        return {
-            "message": (f'Volume {volume_id} cloned successfully as "{volume.label}"'),
-            "volume": volume_to_dict(volume),
-        }
+        endpoint = f"/volumes/{int(volume_id)}/clone"
+        raw = await client.post_raw(endpoint, {"label": label})
+        vol_label = raw_str(raw, "label")
+        return serialize_api_response(
+            {
+                "message": f'Volume {volume_id} cloned successfully as "{vol_label}"',
+                "volume": raw,
+            },
+            volume_pb2.VolumeWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "clone volume", _call)
 
@@ -237,42 +219,7 @@ def create_linode_volume_attach_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_attach",
         description="Attaches a block storage volume to a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "volume_id": {
-                    "type": "integer",
-                    "description": "The ID of the volume to attach (required)",
-                },
-                "linode_id": {
-                    "type": "integer",
-                    "description": "The ID of the Linode to attach to (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "description": "Config profile ID (optional)",
-                },
-                "persist_across_boots": {
-                    "type": "boolean",
-                    "description": "Keep attached across reboots (default: false)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["volume_id", "linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeAttachInput"),
     ), Capability.Write
 
 
@@ -295,11 +242,12 @@ async def handle_linode_volume_attach(
     volume_id = arguments.get("volume_id", 0)
     linode_id = arguments.get("linode_id", 0)
 
+    if not volume_id:
+        return error_response("volume_id is required")
+    if not linode_id:
+        return error_response("linode_id is required")
+
     if is_dry_run(arguments):
-        if not volume_id:
-            return error_response("volume_id is required")
-        if not linode_id:
-            return error_response("linode_id is required")
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_volume(int(volume_id))
@@ -317,24 +265,32 @@ async def handle_linode_volume_attach(
             _walk,
         )
 
-    if not volume_id:
-        return error_response("volume_id is required")
-    if not linode_id:
-        return error_response("linode_id is required")
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This attaches a block storage volume to an instance. "
+            "Set confirm=true to proceed."
+        )
+
+    body: dict[str, Any] = {"linode_id": int(linode_id)}
+    # Send persist_across_boots only when the caller set it true; an omitted or
+    # false value defers to the API default, matching Go's omitempty on the bool.
+    if arguments.get("persist_across_boots"):
+        body["persist_across_boots"] = True
+    if arguments.get("config_id") is not None:
+        body["config_id"] = arguments.get("config_id")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        volume = await client.attach_volume(
-            volume_id=int(volume_id),
-            linode_id=int(linode_id),
-            config_id=arguments.get("config_id"),
-            persist_across_boots=arguments.get("persist_across_boots", False),
+        endpoint = f"/volumes/{int(volume_id)}/attach"
+        raw = await client.post_raw(endpoint, body)
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Volume {volume_id} attached to Linode {linode_id} successfully"
+                ),
+                "volume": raw,
+            },
+            volume_pb2.VolumeWriteResponse(),
         )
-        return {
-            "message": (
-                f"Volume {volume_id} attached to Linode {linode_id} successfully"
-            ),
-            "volume": volume_to_dict(volume),
-        }
 
     return await execute_tool(cfg, arguments, "attach volume", _call)
 
@@ -344,30 +300,7 @@ def create_linode_volume_detach_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_detach",
         description="Detaches a block storage volume from a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "volume_id": {
-                    "type": "integer",
-                    "description": "The ID of the volume to detach (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["volume_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeDetachInput"),
     ), Capability.Write
 
 
@@ -418,12 +351,21 @@ async def handle_linode_volume_detach(
             _walk,
         )
 
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This detaches a block storage volume from an instance. "
+            "Set confirm=true to proceed."
+        )
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.detach_volume(int(volume_id))
-        return {
-            "message": f"Volume {volume_id} detached successfully",
-            "volume_id": volume_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Volume {volume_id} detached successfully",
+                "volume_id": volume_id,
+            },
+            volume_pb2.VolumeDetachResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "detach volume", _call)
 
@@ -436,34 +378,7 @@ def create_linode_volume_resize_tool() -> tuple[Tool, Capability]:
             "Resizes a block storage volume. WARNING: Volumes can only be resized "
             "up, not down. This increases billing."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "volume_id": {
-                    "type": "integer",
-                    "description": "The ID of the volume to resize (required)",
-                },
-                "size": {
-                    "type": "integer",
-                    "description": "New size in GB (must be larger than current)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm resize. This increases billing."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["volume_id", "size", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeResizeInput"),
     ), Capability.Write
 
 
@@ -522,25 +437,32 @@ async def handle_linode_volume_resize(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text="Error: This increases billing. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This operation may increase billing. Volumes cannot be downsized. Set "
+            "confirm=true to proceed."
+        )
 
     fields_error = _volume_resize_error(volume_id, size)
     if fields_error is not None:
         return fields_error
 
+    try:
+        validate_volume_size(int(size))
+    except ValueError as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        volume = await client.resize_volume(int(volume_id), int(size))
-        return {
-            "message": (
-                f"Volume {volume_id} resize to {size} GB initiated successfully"
-            ),
-            "volume": volume_to_dict(volume),
-        }
+        endpoint = f"/volumes/{int(volume_id)}/resize"
+        raw = await client.post_raw(endpoint, {"size": int(size)})
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Volume {volume_id} resize to {size} GB initiated successfully"
+                ),
+                "volume": raw,
+            },
+            volume_pb2.VolumeWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "resize volume", _call)
 
@@ -550,38 +472,7 @@ def create_linode_volume_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_update",
         description="Updates a block storage volume label or tags.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "volume_id": {
-                    "type": "integer",
-                    "description": "The ID of the volume to update (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "New volume label (optional)",
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Replacement tags for the volume (optional)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm update. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["volume_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeUpdateInput"),
     ), Capability.Write
 
 
@@ -644,27 +535,35 @@ async def handle_linode_volume_update(
         )
 
     if not arguments.get("confirm"):
-        return [
-            TextContent(
-                type="text",
-                text="Error: This updates a volume. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This updates a block storage volume. Set confirm=true to proceed."
+        )
 
     fields_error = _volume_update_error(volume_id, label, tags)
     if fields_error is not None:
         return fields_error
 
+    if label is not None:
+        try:
+            validate_label(label)
+        except ValueError as exc:
+            return error_response(str(exc))
+
+    body: dict[str, Any] = {}
+    if label is not None:
+        body["label"] = label
+    if tags is not None:
+        body["tags"] = tags
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        volume = await client.update_volume(
-            volume_id=int(volume_id),
-            label=label,
-            tags=tags,
+        raw = await client.put_raw(f"/volumes/{int(volume_id)}", body)
+        return serialize_api_response(
+            {
+                "message": f"Volume {volume_id} updated successfully",
+                "volume": raw,
+            },
+            volume_pb2.VolumeWriteResponse(),
         )
-        return {
-            "message": f"Volume {volume_id} updated successfully",
-            "volume": volume_to_dict(volume),
-        }
 
     return await execute_tool(cfg, arguments, "update volume", _call)
 
@@ -679,31 +578,7 @@ def create_linode_volume_delete_tool() -> tuple[Tool, Capability]:
             "Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "volume_id": {
-                    "type": "integer",
-                    "description": "The ID of the volume to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["volume_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VolumeDeleteInput"),
     ), Capability.Destroy
 
 
@@ -754,10 +629,13 @@ async def _volume_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_volume(int(volume_id))
-        return {
-            "message": f"Volume {volume_id} removed successfully",
-            "volume_id": volume_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Volume {volume_id} removed successfully",
+                "volume_id": volume_id,
+            },
+            volume_pb2.VolumeDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -802,21 +680,22 @@ async def handle_linode_volume_delete(
     confirm = arguments.get("confirm", False)
 
     if not confirm:
-        return [
-            TextContent(
-                type="text",
-                text="Error: This is destructive. Set confirm=true to proceed.",
-            )
-        ]
+        return error_response(
+            "This operation is destructive and irreversible. Set confirm=true to "
+            "proceed."
+        )
 
     if not volume_id:
         return error_response("volume_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_volume(int(volume_id))
-        return {
-            "message": f"Volume {volume_id} removed successfully",
-            "volume_id": volume_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Volume {volume_id} removed successfully",
+                "volume_id": volume_id,
+            },
+            volume_pb2.VolumeDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete volume", _call)

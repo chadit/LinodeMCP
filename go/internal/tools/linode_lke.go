@@ -17,10 +17,11 @@ import (
 
 // NewLinodeLKEClusterListTool creates a tool for listing all LKE clusters.
 func NewLinodeLKEClusterListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_lke_cluster_list",
 		"Lists all Linode Kubernetes Engine (LKE) clusters. Can filter by label.",
+		"linode.mcp.v1.LKEClusterListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.LKECluster, error) {
 			return client.ListLKEClustersProto(ctx)
 		},
@@ -74,10 +75,11 @@ func handleLKEClusterGetRequest(ctx context.Context, request *mcp.CallToolReques
 
 // NewLinodeLKEPoolListTool creates a tool for listing node pools in an LKE cluster.
 func NewLinodeLKEPoolListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	tool, handler := newProtoListToolSubresourceRawSchema(
 		cfg,
 		"linode_lke_pool_list",
 		"Lists all node pools for a specific LKE cluster",
+		"linode.mcp.v1.LKENodePoolListInput",
 		protoListPathID{
 			option: mcp.WithString("cluster_id", mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
@@ -257,10 +259,11 @@ func handleLKEDashboardGetRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeLKEAPIEndpointListTool creates a tool for listing API endpoints of an LKE cluster.
 func NewLinodeLKEAPIEndpointListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	tool, handler := newProtoListToolSubresourceRawSchema(
 		cfg,
 		"linode_lke_api_endpoint_list",
 		"Lists the API endpoints for an LKE cluster",
+		"linode.mcp.v1.LKEAPIEndpointListInput",
 		protoListPathID{
 			option: mcp.WithString("cluster_id", mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
@@ -282,15 +285,10 @@ func lkeAPIEndpointListResponse(items []*linodev1.LKEAPIEndpoint, count int32, f
 
 // NewLinodeLKEACLGetTool creates a tool for getting the control plane ACL of an LKE cluster.
 func NewLinodeLKEACLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_lke_acl_get",
-		mcp.WithDescription("Retrieves the control plane ACL configuration for an LKE cluster"),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(
-			"cluster_id",
-			mcp.Required(),
-			mcp.Description("The ID of the LKE cluster"),
-		),
+		"Retrieves the control plane ACL configuration for an LKE cluster",
+		toolschemas.Schema("linode.mcp.v1.LKEACLGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -311,20 +309,21 @@ func handleLKEACLGetRequest(ctx context.Context, request *mcp.CallToolRequest, c
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	acl, err := client.GetLKEControlPlaneACL(ctx, clusterID)
+	acl, err := client.GetLKEControlPlaneACLProto(ctx, clusterID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve control plane ACL for cluster %d: %v", clusterID, err)), nil
 	}
 
-	return MarshalToolResponse(acl)
+	return MarshalProtoToolResponse(acl)
 }
 
 // NewLinodeLKEVersionListTool creates a tool for listing available Kubernetes versions.
 func NewLinodeLKEVersionListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_lke_version_list",
 		"Lists available Kubernetes versions for LKE clusters",
+		"linode.mcp.v1.LKEVersionListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.LKEVersion, error) {
 			return client.ListLKEVersionsProto(ctx)
 		},
@@ -387,10 +386,11 @@ func validateLKEVersionID(versionID string) string {
 
 // NewLinodeLKETypeListTool creates a tool for listing available LKE node types.
 func NewLinodeLKETypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_lke_type_list",
 		"Lists available node types for LKE clusters with pricing information",
+		"linode.mcp.v1.LKETypeListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.LinodeType, error) {
 			return client.ListLKETypesProto(ctx)
 		},
@@ -407,10 +407,11 @@ func lkeTypeListResponse(items []*linodev1.LinodeType, count int32, filter *stri
 
 // NewLinodeLKETierVersionListTool creates a tool for listing available LKE tier versions.
 func NewLinodeLKETierVersionListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourceString(
+	tool, handler := newProtoListToolSubresourceStringRawSchema(
 		cfg,
 		"linode_lke_tier_version_list",
 		"Lists available LKE tier versions for the requested tier",
+		"linode.mcp.v1.LKETierVersionListInput",
 		protoListPathIDString{
 			option: mcp.WithString("tier", mcp.Required(), mcp.Description("LKE tier: standard or enterprise.")),
 			parse:  lkeTierVersionListTierFromTool,
@@ -429,16 +430,11 @@ func lkeTierVersionListResponse(items []*linodev1.LKETierVersion, count int32, f
 	return &linodev1.LKETierVersionListResponse{Count: count, Filter: filter, TierVersions: items}
 }
 
-// lkeTierVersionListTierFromTool validates the required tier path-id the same way
-// the pre-proto handler did (parseLKETier accepts only standard or enterprise),
-// returning the validated tier and any error message.
+// lkeTierVersionListTierFromTool validates the required tier path-id against the
+// generated LKETier enum (standard or enterprise), returning the validated tier
+// and any error message.
 func lkeTierVersionListTierFromTool(request *mcp.CallToolRequest) (string, string) {
-	tier, err := parseLKETier(request.GetString("tier", ""))
-	if err != nil {
-		return "", err.Error()
-	}
-
-	return tier, ""
+	return validateLKETierParam(request.GetString("tier", ""))
 }
 
 // NewLinodeLKETierVersionGetTool creates a tool for getting a specific Kubernetes version for an LKE tier.
@@ -494,35 +490,15 @@ func validateLKETierVersionID(raw string) (string, string) {
 }
 
 func validateLKETierParam(raw string) (string, string) {
-	value := strings.TrimSpace(raw)
-	if value == "" {
+	if raw == "" {
 		return "", ErrLKETierRequired.Error()
 	}
 
-	if value != raw || strings.ContainsAny(value, "/?#") || strings.Contains(value, "..") {
-		return "", "tier must not contain path separators, query separators, fragments, or traversal segments"
+	if enumMessage := enumChoiceError(raw, "tier", linodev1.LKETier_Value_value); enumMessage != "" {
+		return "", enumMessage
 	}
 
-	tier, err := parseLKETier(value)
-	if err != nil {
-		return "", err.Error()
-	}
-
-	return tier, ""
-}
-
-// parseLKEClusterID validates and converts the cluster ID string to an integer.
-func parseLKETier(raw string) (string, error) {
-	if raw == "" {
-		return "", ErrLKETierRequired
-	}
-
-	switch raw {
-	case "standard", "enterprise":
-		return raw, nil
-	default:
-		return "", fmt.Errorf("%w: %s", ErrLKETierInvalid, raw)
-	}
+	return raw, ""
 }
 
 func parseLKEClusterID(raw string) (int, error) {

@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.DatabaseInstanceDeleteResponse",
+  "description": "Managed Database instance delete id-echo shared by the MySQL and PostgreSQL delete tools: a confirmation message plus the deleted instance's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "Managed Database instance 123 deleted",
+    "instance_id": 123
+  },
+  "canonical": {
+    "message": "Managed Database instance 123 deleted",
+    "instance_id": 123
+  }
+}

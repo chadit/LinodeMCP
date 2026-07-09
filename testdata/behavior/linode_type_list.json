@@ -1,0 +1,18 @@
+{
+  "tool": "linode_type_list",
+  "description": "Type list has no local validation; the class filter is client-side so the request stays a bare GET /linode/types.",
+  "cases": [
+    {
+      "name": "lists all instance types",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/types" }
+    },
+    {
+      "name": "class filter still fetches every type",
+      "args": { "class": "standard" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/types" }
+    }
+  ]
+}

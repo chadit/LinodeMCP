@@ -1,0 +1,31 @@
+{
+  "tool": "linode_domain_import",
+  "description": "Domain import requires domain and remote_nameserver, then POSTs both to /domains/import. The no-confirm text diverges (Go says 'DNS domain zone', Python 'DNS domain') so rejections use confirm:true plus a missing field; see report.",
+  "cases": [
+    {
+      "name": "requires domain",
+      "args": { "confirm": true },
+      "expect_error": "domain is required"
+    },
+    {
+      "name": "requires remote_nameserver",
+      "args": { "confirm": true, "domain": "example.com" },
+      "expect_error": "remote_nameserver is required"
+    },
+    {
+      "name": "imports the domain zone",
+      "args": { "confirm": true, "domain": "example.com", "remote_nameserver": "ns1.example.com" },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/domains/import",
+        "body": { "domain": "example.com", "remote_nameserver": "ns1.example.com" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"domain": "example.com", "remote_nameserver": "ns1.example.com"},
+      "expect_error": "This imports a DNS domain zone. Set confirm=true to proceed."
+    }
+  ]
+}

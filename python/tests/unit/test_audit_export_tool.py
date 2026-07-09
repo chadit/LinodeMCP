@@ -95,4 +95,4 @@ async def test_unknown_format_returns_error() -> None:
     result = await handle_linode_audit_export({"format": "xml"})
 
     assert len(result) == 1
-    assert "xml" in result[0].text
+    assert "format must be one of: json, csv, ndjson" in result[0].text

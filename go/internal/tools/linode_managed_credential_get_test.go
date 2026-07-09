@@ -220,8 +220,13 @@ func TestLinodeManagedCredentialGetToolInvalidCredentialId(t *testing.T) {
 				t.Error("result.IsError = false, want true")
 			}
 
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errManagedCredentialIDPositive) {
-				t.Errorf("error text %q does not contain %q", text.Text, errManagedCredentialIDPositive)
+			wantCredentialID := errManagedCredentialIDPositive
+			if testCase.name == caseMissingCredentialID {
+				wantCredentialID = errCredentialIDRequired
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantCredentialID) {
+				t.Errorf("error text %q does not contain %q", text.Text, wantCredentialID)
 			}
 		})
 	}

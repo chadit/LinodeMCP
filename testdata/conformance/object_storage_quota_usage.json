@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageQuotaUsage",
+  "description": "linode_object_storage_quota_usage_get: int64 byte counts serialized as JSON strings; usage is present when the API has recorded usage.",
+  "input": {
+    "quota_limit": 1000000000000,
+    "usage": 5368709120
+  },
+  "canonical": {
+    "quota_limit": 1000000000000,
+    "usage": 5368709120
+  }
+}

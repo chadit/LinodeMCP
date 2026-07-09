@@ -1,0 +1,21 @@
+{
+  "tool": "linode_database_postgresql_instance_update",
+  "description": "Confirm-gated update PUT body. Instance-id and empty-payload error text diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "updates a postgresql instance label",
+      "args": { "instance_id": 123, "label": "renamed-pg", "confirm": true },
+      "api_response": { "id": 123, "label": "renamed-pg" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/databases/postgresql/instances/123",
+        "body": { "label": "renamed-pg" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": { "instance_id": 123, "label": "renamed-db" },
+      "expect_error": "This updates a PostgreSQL Managed Database instance. Set confirm=true to proceed."
+    }
+  ]
+}

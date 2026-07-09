@@ -1,0 +1,47 @@
+{
+  "tool": "linode_lke_cluster_create",
+  "description": "Pins the label/region/k8s_version-required rejections (checked in order) and the confirmed POST body. The node_pools-required text and the confirm-required text both diverge (see report), so those cases are reported, not pinned.",
+  "cases": [
+    {
+      "name": "rejects missing label",
+      "args": {},
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects missing region",
+      "args": { "label": "prod" },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "rejects missing k8s_version",
+      "args": { "label": "prod", "region": "us-east" },
+      "expect_error": "k8s_version is required"
+    },
+    {
+      "name": "creates a cluster",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [ { "type": "g6-standard-1", "count": 3 } ],
+        "confirm": true
+      },
+      "api_response": { "id": 12345, "label": "prod", "region": "us-east", "k8s_version": "1.31" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/lke/clusters",
+        "body": {
+          "label": "prod",
+          "region": "us-east",
+          "k8s_version": "1.31",
+          "node_pools": [ { "type": "g6-standard-1", "count": 3 } ]
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "prod", "region": "us-east", "k8s_version": "1.31", "node_pools": [{"type": "g6-standard-1", "count": 3}]},
+      "expect_error": "This creates billable Kubernetes resources. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "tool": "linode_account_oauth_client_delete",
+  "description": "OAuth client delete: missing client_id agrees, confirm gate, and the single DELETE once confirmed.",
+  "cases": [
+    {
+      "name": "requires client_id",
+      "args": {},
+      "expect_error": "client_id is required"
+    },
+    {
+      "name": "requires confirm before deleting",
+      "args": { "client_id": "abc123" },
+      "expect_error": "This deletes an OAuth client. Set confirm=true to proceed."
+    },
+    {
+      "name": "deletes an OAuth client",
+      "args": { "client_id": "abc123", "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/account/oauth-clients/abc123" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"client_id": "abc123"},
+      "expect_error": "This deletes an OAuth client. Set confirm=true to proceed."
+    }
+  ]
+}

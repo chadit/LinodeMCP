@@ -1,0 +1,16 @@
+{
+  "message": "linode.mcp.v1.ProfileDraftRemoveToolsResponse",
+  "description": "Draft remove-tools echo: the names this call removed.",
+  "input": {
+    "name": "ops-lite",
+    "removed": [
+      "linode_volume_get"
+    ]
+  },
+  "canonical": {
+    "name": "ops-lite",
+    "removed": [
+      "linode_volume_get"
+    ]
+  }
+}

@@ -19,8 +19,8 @@ func TestLinodeFirewallCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T) {
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeFirewallCreateTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -112,8 +112,8 @@ func TestLinodeFirewallUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeFirewallUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -200,8 +200,8 @@ func TestLinodeFirewallDeviceCreateToolDryRunSchemaAdvertisesDryRun(t *testing.T
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeFirewallDeviceCreateTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+	if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 	}
 }
 
@@ -283,8 +283,8 @@ func TestLinodeFirewallDeviceCreateToolDryRunStillValidatesFirewallId(t *testing
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDPositive) {
-		t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDPositive)
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDRequired) {
+		t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDRequired)
 	}
 }
 
@@ -295,8 +295,8 @@ func TestLinodeFirewallRulesUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeFirewallRulesUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 
@@ -358,8 +358,8 @@ func TestLinodeFirewallRulesUpdateToolDryRun(t *testing.T) {
 			t.Error("result.IsError = false, want true")
 		}
 
-		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDPositive) {
-			t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDPositive)
+		if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDRequired) {
+			t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDRequired)
 		}
 	})
 }
@@ -371,8 +371,8 @@ func TestLinodeFirewallSettingsUpdateToolDryRun(t *testing.T) {
 		t.Parallel()
 
 		tool, _, _ := tools.NewLinodeFirewallSettingsUpdateTool(&config.Config{})
-		if _, ok := tool.InputSchema.Properties[keyDryRun]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", keyDryRun)
+		if !strings.Contains(string(tool.RawInputSchema), keyDryRun) {
+			t.Errorf("tool.RawInputSchema missing key %v", keyDryRun)
 		}
 	})
 

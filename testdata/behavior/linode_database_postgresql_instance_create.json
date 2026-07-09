@@ -1,0 +1,32 @@
+{
+  "tool": "linode_database_postgresql_instance_create",
+  "description": "Confirm-gated create POST body. Create-arg validation messages diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "creates a postgresql instance",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": { "id": 123, "label": "prod-pg" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/databases/postgresql/instances",
+        "body": {
+          "label": "prod-pg",
+          "type": "g6-nanode-1",
+          "engine": "postgresql/16",
+          "region": "us-east"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": { "label": "prod-pg", "type": "g6-nanode-1", "engine": "postgresql/16", "region": "us-east" },
+      "expect_error": "This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed."
+    }
+  ]
+}

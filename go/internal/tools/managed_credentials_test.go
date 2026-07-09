@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -269,7 +268,7 @@ func TestLinodeManagedSSHKeyToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.ManagedSSHKey{SSHKey: managedSSHKeyToolValue}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]any{keySSHKey: managedSSHKeyToolValue, keyNotInProto: valNotInProto}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -300,6 +299,10 @@ func TestLinodeManagedSSHKeyToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, managedSSHKeyToolValue) {
 		t.Errorf("textContent.Text does not contain %v", managedSSHKeyToolValue)
+	}
+
+	if strings.Contains(textContent.Text, valNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 
@@ -378,9 +381,10 @@ func TestLinodeManagedCredentialCreateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyConfirm, keyLabel, keyDiskPassword} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -594,6 +598,10 @@ func TestLinodeManagedCredentialCreateToolSuccess(t *testing.T) {
 	if strings.Contains(textContent.Text, managedCredentialsToolPassword) {
 		t.Errorf("textContent.Text should not contain %v", managedCredentialsToolPassword)
 	}
+
+	if !strings.Contains(textContent.Text, "Managed credential 9991 created successfully") {
+		t.Errorf("textContent.Text does not contain the create confirmation message: %v", textContent.Text)
+	}
 }
 
 func TestLinodeManagedCredentialCreateToolSuccessWithoutUsernameOmitsUsername(t *testing.T) {
@@ -731,12 +739,8 @@ func TestLinodeManagedCredentialUpdateToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	if !strings.Contains(string(tool.RawInputSchema), keyConfirm) {
+		t.Errorf("RawInputSchema missing key %v", keyConfirm)
 	}
 
 	if handler == nil {
@@ -874,13 +878,15 @@ func TestLinodeManagedCredentialUpdateToolValidationRejectsBeforeClient(t *testi
 		args        map[string]any
 		wantMessage string
 	}{
-		{name: caseMissingCredentialID, args: map[string]any{keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
+		{name: caseMissingCredentialID, args: map[string]any{keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDRequired},
 		{name: caseZeroCredentialID, args: map[string]any{keyCredentialID: 0, keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
 		{name: "slash credential id", args: map[string]any{keyCredentialID: "9991/2", keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
 		{name: "query credential id", args: map[string]any{keyCredentialID: "9991?x=1", keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
 		{name: caseTraversalCredentialID, args: map[string]any{keyCredentialID: pathTraversalValue, keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: errCredentialIDPositive},
 		{name: caseMissingLabel, args: map[string]any{keyCredentialID: 9991, keyConfirm: true}, wantMessage: errLabelRequired},
 		{name: caseNonStringLabel, args: map[string]any{keyCredentialID: 9991, keyLabel: 42, keyConfirm: true}, wantMessage: errLabelString},
+		{name: "read-only fields", args: map[string]any{keyCredentialID: 9991, keySupportTicketID: 9991, "last_decrypted": "2026-01-01T00:00:00", keyLabel: managedCredentialsToolLabel, keyConfirm: true}, wantMessage: "Read-only fields are not accepted: id, last_decrypted"},
+		{name: caseEmptyLabel, args: map[string]any{keyCredentialID: 9991, keyLabel: "", keyConfirm: true}, wantMessage: databaseLabelRequiredMessage},
 	}
 
 	for _, testCase := range cases {

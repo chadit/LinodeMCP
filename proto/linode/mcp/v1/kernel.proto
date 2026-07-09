@@ -31,3 +31,13 @@ message KernelGetInput {
   // The ID of the kernel to retrieve, such as linode/latest-64bit (required).
   string kernel_id = 2;
 }
+
+// KernelListInput is the input contract for linode_kernel_list.
+message KernelListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}

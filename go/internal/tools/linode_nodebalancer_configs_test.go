@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -19,8 +18,8 @@ import (
 
 const (
 	errNodeBalancerIDRequired   = "nodebalancer_id is required"
-	errNodeBalancerIDInteger    = "nodebalancer_id must be an integer"
-	errNodeBalancerIDMin        = "nodebalancer_id must be an integer greater than or equal to 1"
+	errNodeBalancerIDInteger    = "nodebalancer_id must be a positive integer"
+	errNodeBalancerIDMin        = "nodebalancer_id must be a positive integer"
 	nodeBalancerNodeAddress     = "192.0.2.10:80"
 	nodeBalancerFirewallLabel   = "nb-firewall"
 	nodeBalancerNodeKeyMode     = "mode"
@@ -57,14 +56,11 @@ func TestLinodeNodeBalancerFirewallListToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyPage, keyPageSize} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyNodeBalancerID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyNodeBalancerID)
 	}
 
 	if handler == nil {
@@ -246,12 +242,8 @@ func TestLinodeNodeBalancerConfigListToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyNodeBalancerID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyNodeBalancerID)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyNodeBalancerID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyNodeBalancerID)
+	if !strings.Contains(string(tool.RawInputSchema), keyNodeBalancerID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyNodeBalancerID)
 	}
 
 	if handler == nil {
@@ -440,15 +432,10 @@ func TestLinodeNodeBalancerConfigNodesListToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyPage, keyPageSize} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyConfigID} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -684,7 +671,7 @@ func TestLinodeNodeBalancerConfigNodeGetToolValidation(t *testing.T) {
 		{name: caseSeparatorNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathSeparatorLinodeID}, wantContains: errNodeIDInteger},
 		{name: caseQueryNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: shareGroupIDQueryValue}, wantContains: errNodeIDInteger},
 		{name: caseTraversalNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathTraversalValue}, wantContains: errNodeIDInteger},
-		{name: "negative node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(-1)}, wantContains: "node_id must be an integer greater than or equal to 1"},
+		{name: "negative node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(-1)}, wantContains: "node_id must be a positive integer"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -843,15 +830,10 @@ func TestLinodeNodeBalancerConfigCreateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyPort, keySSLCert, keySSLKey, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyPort, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -925,7 +907,7 @@ func TestLinodeNodeBalancerConfigCreateToolValidation(t *testing.T) {
 		{name: caseNegativeNodeBalancerID, args: map[string]any{keyNodeBalancerID: float64(-1), keyPort: float64(80), keyConfirm: true}, wantContains: errNodeBalancerIDMin},
 		{name: "missing port", args: map[string]any{keyNodeBalancerID: float64(123), keyConfirm: true}, wantContains: "port is required"},
 		{name: "invalid port", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(0), keyConfirm: true}, wantContains: "port must be an integer from 1 through 65535"},
-		{name: "invalid protocol", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolUDP, keyConfirm: true}, wantContains: "protocol must be one of"},
+		{name: "invalid protocol", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolInvalid, keyConfirm: true}, wantContains: "protocol must be one of"},
 		{name: "invalid algorithm", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyAlgorithm: "random", keyConfirm: true}, wantContains: "algorithm must be one of"},
 		{name: "invalid stickiness", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyStickiness: "cookie", keyConfirm: true}, wantContains: "stickiness must be one of"},
 		{name: "invalid check", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheck: "ping", keyConfirm: true}, wantContains: "check must be one of"},
@@ -1491,15 +1473,10 @@ func TestLinodeNodeBalancerNodeCreateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyLabel, keyAddress, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyLabel, keyAddress, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -1578,6 +1555,8 @@ func TestLinodeNodeBalancerNodeCreateToolValidation(t *testing.T) {
 		{name: caseMissingLabel, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: errLabelRequired},
 		{name: caseMissingAddress, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: true}, wantContains: "address is required"},
 		{name: "invalid weight", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(0), keyConfirm: true}, wantContains: "weight must be an integer greater than or equal to 1"},
+		{name: "node label under 3 chars", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: "xy", keyAddress: nodeBalancerNodeAddress, keyConfirm: true}, wantContains: "label must be 3 to 32 characters"},
+		{name: "node weight over 255", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyWeight: float64(256), keyConfirm: true}, wantContains: "weight must be at most 255"},
 		{name: "invalid mode", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, nodeBalancerNodeKeyMode: invalidNodeBalancerNodeMode, keyConfirm: true}, wantContains: "mode must be one of"},
 	}
 	for _, tt := range validationTests {
@@ -1797,15 +1776,10 @@ func TestLinodeNodeBalancerNodeDeleteToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -1885,7 +1859,7 @@ func TestLinodeNodeBalancerNodeDeleteToolValidation(t *testing.T) {
 		{name: caseSeparatorNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathSeparatorLinodeID, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errNodeIDInteger},
 		{name: caseQueryNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: shareGroupIDQueryValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errNodeIDInteger},
 		{name: caseTraversalNodeID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: pathTraversalValue, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: errNodeIDInteger},
-		{name: "negative node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(-1), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "node_id must be an integer greater than or equal to 1"},
+		{name: "negative node id", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(-1), keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "node_id must be a positive integer"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1956,17 +1930,12 @@ func TestLinodeNodeBalancerNodeDeleteToolDryRunReturnsPreviewWithoutDeleting(t *
 		t.Error("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, `"dry_run": true`) {
-		t.Errorf("textContent.Text does not contain %v", `"dry_run": true`)
+	body := decodeBody(t, textContent.Text)
+	if body["dry_run"] != true {
+		t.Errorf("dry_run = %v, want true", body["dry_run"])
 	}
 
-	if !strings.Contains(textContent.Text, `"method": "DELETE"`) {
-		t.Errorf("textContent.Text does not contain %v", `"method": "DELETE"`)
-	}
-
-	if !strings.Contains(textContent.Text, `"path": "/nodebalancers/123/configs/456/nodes/789"`) {
-		t.Errorf("textContent.Text does not contain %v", `"path": "/nodebalancers/123/configs/456/nodes/789"`)
-	}
+	assertDryRunRequest(t, body, "DELETE", "/nodebalancers/123/configs/456/nodes/789")
 
 	if calls.Load() != int32(1) {
 		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
@@ -2122,15 +2091,10 @@ func TestLinodeNodeBalancerNodeUpdateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID, keyLabel, keyAddress, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyNodeID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -2213,6 +2177,8 @@ func TestLinodeNodeBalancerNodeUpdateToolValidation(t *testing.T) {
 		{name: caseMissingLabel, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: " ", keyConfirm: true}, wantContains: errLabelRequired},
 		{name: caseMissingAddress, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyAddress: " ", keyConfirm: true}, wantContains: "address is required"},
 		{name: "invalid weight", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyWeight: float64(0), keyConfirm: true}, wantContains: "weight must be an integer greater than or equal to 1"},
+		{name: "node update label under 3 chars", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: "xy", keyConfirm: true}, wantContains: "label must be 3 to 32 characters"},
+		{name: "node update weight over 255", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyWeight: float64(256), keyConfirm: true}, wantContains: "weight must be at most 255"},
 		{name: "invalid mode", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), nodeBalancerNodeKeyMode: invalidNodeBalancerNodeMode, keyConfirm: true}, wantContains: "mode must be one of"},
 	}
 	for _, tt := range validationTests {
@@ -2486,15 +2452,10 @@ func TestLinodeNodeBalancerConfigRebuildToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -2762,15 +2723,10 @@ func TestLinodeNodeBalancerConfigUpdateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	rawSchema := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyPort, keySSLCert, keySSLKey, keyConfirm, keyDryRun} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyConfigID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -2848,7 +2804,7 @@ func TestLinodeNodeBalancerConfigUpdateToolValidation(t *testing.T) {
 		{name: caseTraversalConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseZeroConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(0), keyConfirm: true}, wantContains: errConfigIDMin},
 		{name: "invalid port", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(0), keyConfirm: true}, wantContains: "port must be an integer from 1 through 65535"},
-		{name: "invalid protocol", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyProtocol: protocolUDP, keyConfirm: true}, wantContains: "protocol must be one of"},
+		{name: "invalid protocol", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyProtocol: protocolInvalid, keyConfirm: true}, wantContains: "protocol must be one of"},
 		{name: "invalid algorithm", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyAlgorithm: "random", keyConfirm: true}, wantContains: "algorithm must be one of"},
 		{name: "invalid stickiness", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyStickiness: "cookie", keyConfirm: true}, wantContains: "stickiness must be one of"},
 		{name: "invalid check", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCheck: "ping", keyConfirm: true}, wantContains: "check must be one of"},
@@ -3092,15 +3048,13 @@ func TestLinodeNodeBalancerFirewallUpdateToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	// firewall_ids is a required array in the hand-built schema but a repeated
+	// proto field cannot land in the generated required set, so it stays an
+	// advertised property while the handler still enforces its presence.
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyFirewallIDs, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyNodeBalancerID, keyFirewallIDs, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 

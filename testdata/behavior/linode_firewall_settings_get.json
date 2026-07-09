@@ -1,0 +1,12 @@
+{
+  "tool": "linode_firewall_settings_get",
+  "description": "Firewall settings get issues a single GET to the settings endpoint. Pagination-bound rejection messages diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "gets default firewall settings",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/networking/firewalls/settings" }
+    }
+  ]
+}

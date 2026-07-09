@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -16,7 +17,7 @@ import (
 
 // NewLinodeInstanceDiskListTool creates a tool for listing all disks on a Linode instance.
 func NewLinodeInstanceDiskListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	_, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_instance_disk_list",
 		"Lists all disks attached to a Linode instance.",
@@ -30,6 +31,12 @@ func NewLinodeInstanceDiskListTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		},
 		nil,
 		instanceDiskListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_disk_list",
+		"Lists all disks attached to a Linode instance.",
+		toolschemas.Schema("linode.mcp.v1.InstanceDiskListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -91,33 +98,15 @@ func handleInstanceDiskGetRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeInstanceDiskCreateTool creates a tool for adding a new disk to a Linode instance.
 func NewLinodeInstanceDiskCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_disk_create",
 		"Creates a new disk on a Linode instance. WARNING: This modifies the instance's storage allocation.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("label", mcp.Required(),
-				mcp.Description("Label for the disk")),
-			mcp.WithNumber("size", mcp.Required(),
-				mcp.Description("Size of the disk in MB")),
-			mcp.WithString("filesystem",
-				mcp.Description("Filesystem type: raw, swap, ext3, ext4, initrd (defaults to ext4)")),
-			mcp.WithString("image",
-				mcp.Description("Image ID to deploy to the disk (e.g. linode/ubuntu22.04)")),
-			mcp.WithString("root_pass",
-				mcp.Description("Root password for the disk (required when deploying an image, min 12 chars with upper/lower/digits)")),
-			mcp.WithString("authorized_keys",
-				mcp.Description("Comma-separated list of SSH public keys to install")),
-			mcp.WithString("authorized_users",
-				mcp.Description("Comma-separated list of Linode usernames whose SSH keys to install")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceDiskCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceDiskCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceDiskCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -213,23 +202,15 @@ func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeInstanceDiskUpdateTool creates a tool for updating a disk's label on a Linode instance.
 func NewLinodeInstanceDiskUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_disk_update",
 		"Updates the label of a disk on a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("disk_id", mcp.Required(),
-				mcp.Description("The ID of the disk to update")),
-			mcp.WithString("label",
-				mcp.Description("New label for the disk")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceDiskUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceDiskUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceDiskUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -297,26 +278,29 @@ func handleInstanceDiskUpdateRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeInstanceDiskDeleteTool creates a tool for deleting a disk from a Linode instance.
 func NewLinodeInstanceDiskDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_disk_delete",
 		"Deletes a disk from a Linode instance. WARNING: This is irreversible and all data on the disk will be lost."+
 			" Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("disk_id", mcp.Required(),
-				mcp.Description("The ID of the disk to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm deletion. This action is irreversible and all disk data will be lost. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleInstanceDiskDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceDiskDeleteInput"),
 	)
 
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceDiskDeleteRequest(ctx, &request, cfg)
+	}
+
 	return tool, profiles.CapDestroy, handler
+}
+
+// instanceDiskDeleteProto builds the proto-canonical id-echo body for a
+// successful disk delete, keeping the proto literal off the handler's struct
+// literal so the delete handlers stay below the dupl threshold.
+func instanceDiskDeleteProto(linodeID, diskID int) proto.Message {
+	return &linodev1.InstanceDiskDeleteResponse{
+		Message:  fmt.Sprintf("Disk %d deleted from instance %d successfully", diskID, linodeID),
+		LinodeId: linodeIDToInt32(linodeID),
+		DiskId:   linodeIDToInt32(diskID),
+	}
 }
 
 func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -330,7 +314,7 @@ func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolR
 		Method:         httpMethodDelete,
 		PathPattern:    "/linode/instances/%d/disks/%d",
 		ConfirmMessage: "This is irreversible. All data on the disk will be permanently deleted. Set confirm=true to proceed.",
-		SuccessFormat:  "Disk %d deleted from instance %d successfully",
+		SuccessProto:   instanceDiskDeleteProto,
 		FetchState: func(ctx context.Context, c *linode.Client, linodeID, diskID int) (any, error) {
 			return c.GetInstanceDisk(ctx, linodeID, diskID)
 		},
@@ -344,21 +328,15 @@ func handleInstanceDiskDeleteRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeInstanceDiskCloneTool creates a tool for cloning a disk on a Linode instance.
 func NewLinodeInstanceDiskCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_disk_clone",
 		"Clones a disk on a Linode instance. The instance must have enough unallocated storage for the clone.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("disk_id", mcp.Required(),
-				mcp.Description("The ID of the disk to clone")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk clone. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceDiskCloneRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceDiskCloneInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceDiskCloneRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -408,24 +386,16 @@ func handleInstanceDiskCloneRequest(ctx context.Context, request *mcp.CallToolRe
 
 // NewLinodeInstanceDiskResizeTool creates a tool for resizing a disk on a Linode instance.
 func NewLinodeInstanceDiskResizeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_disk_resize",
 		"Resizes a disk on a Linode instance. The instance must be powered off to resize. "+
 			"Growing a disk requires sufficient unallocated storage. Shrinking requires the data to fit in the new size.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("disk_id", mcp.Required(),
-				mcp.Description("The ID of the disk to resize")),
-			mcp.WithNumber("size", mcp.Required(),
-				mcp.Description("New size for the disk in MB")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk resize. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceDiskResizeRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceDiskResizeInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceDiskResizeRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -487,23 +457,15 @@ func handleInstanceDiskResizeRequest(ctx context.Context, request *mcp.CallToolR
 
 // NewLinodeInstanceDiskPasswordResetTool creates a tool for resetting a disk root password.
 func NewLinodeInstanceDiskPasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_disk_password_reset",
 		"Resets the root password for a disk on a Linode instance. The instance must be powered off.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("disk_id", mcp.Required(),
-				mcp.Description("The ID of the disk")),
-			mcp.WithString("password", mcp.Required(),
-				mcp.Description("New disk root password (min 12 chars, must include upper, lower, and digits)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm disk password reset.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceDiskPasswordResetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceDiskPasswordResetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceDiskPasswordResetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -551,15 +513,9 @@ func handleInstanceDiskPasswordResetRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to reset password for disk %d on instance %d: %v", diskID, linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-		DiskID   int    `json:"disk_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceDiskActionResponse{
 		Message:  fmt.Sprintf("Password reset for disk %d on instance %d", diskID, linodeID),
-		LinodeID: linodeID,
-		DiskID:   diskID,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId: linodeIDToInt32(linodeID),
+		DiskId:   linodeIDToInt32(diskID),
+	})
 }

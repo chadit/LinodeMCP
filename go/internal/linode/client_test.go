@@ -2644,7 +2644,7 @@ func TestClientListObjectStorageBucketsByRegionSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	result, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us-east-1")
+	result, err := client.ListObjectStorageBucketsByRegionProto(t.Context(), "us-east-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -2653,8 +2653,8 @@ func TestClientListObjectStorageBucketsByRegionSuccess(t *testing.T) {
 		t.Fatalf("len(result) = %d, want %d", len(result), 1)
 	}
 
-	if result[0].Label != "my-bucket" {
-		t.Errorf("result[0].Label = %v, want %v", result[0].Label, "my-bucket")
+	if result[0].GetLabel() != "my-bucket" {
+		t.Errorf("result[0].GetLabel() = %v, want %v", result[0].GetLabel(), "my-bucket")
 	}
 }
 
@@ -2685,7 +2685,7 @@ func TestClientListObjectStorageBucketsByRegionEscapesPathParam(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	_, err := client.ListObjectStorageBucketsByRegion(t.Context(), "us/east?1")
+	_, err := client.ListObjectStorageBucketsByRegionProto(t.Context(), "us/east?1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -1,0 +1,22 @@
+{
+  "tool": "linode_account_availability_get",
+  "description": "Missing-region_id, non-slug region_id rejections, and the availability GET path. Both languages now share Go's slug validator and texts.",
+  "cases": [
+    {
+      "name": "requires region_id",
+      "args": {},
+      "expect_error": "region_id is required"
+    },
+    {
+      "name": "rejects a non-slug region_id",
+      "args": { "region_id": "US-EAST" },
+      "expect_error": "region_id must be a lowercase region slug containing only letters, numbers, and hyphens"
+    },
+    {
+      "name": "gets account availability for one region",
+      "args": { "region_id": "us-east" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/availability/us-east" }
+    }
+  ]
+}

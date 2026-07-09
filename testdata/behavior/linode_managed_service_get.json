@@ -1,0 +1,17 @@
+{
+  "tool": "linode_managed_service_get",
+  "description": "Service get: shared positive-id rejection and the service GET.",
+  "cases": [
+    {
+      "name": "rejects non-positive service_id",
+      "args": { "service_id": 0 },
+      "expect_error": "service_id must be a positive integer"
+    },
+    {
+      "name": "gets a managed service",
+      "args": { "service_id": 77 },
+      "api_response": { "id": 77, "label": "web" },
+      "expect_request": { "method": "GET", "path": "/managed/services/77" }
+    }
+  ]
+}

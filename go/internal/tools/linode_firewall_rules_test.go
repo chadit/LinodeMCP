@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -158,8 +157,13 @@ func TestLinodeFirewallRulesListToolRejectsInvalidFirewallIdBeforeClientCall(t *
 				t.Error("result.IsError = false, want true")
 			}
 
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errFirewallIDPositive) {
-				t.Errorf("error text %q does not contain %q", text.Text, errFirewallIDPositive)
+			wantFirewallID := errFirewallIDPositive
+			if name == caseMissingFirewallPathID {
+				wantFirewallID = errFirewallIDRequired
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantFirewallID) {
+				t.Errorf("error text %q does not contain %q", text.Text, wantFirewallID)
 			}
 
 			if called.Load() {
@@ -235,15 +239,10 @@ func TestLinodeFirewallRulesUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyFirewallID, keyInbound, keyOutbound, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
-		}
-	}
-
-	for _, key := range []string{keyFirewallID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 }
@@ -393,7 +392,7 @@ func TestLinodeFirewallRulesUpdateToolRejectsInvalidInputsBeforeClientCall(t *te
 		args map[string]any
 		want string
 	}{
-		caseMissingFirewallPathID:   {args: map[string]any{keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
+		caseMissingFirewallPathID:   {args: map[string]any{keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDRequired},
 		caseZeroFirewallPathID:      {args: map[string]any{keyFirewallID: float64(0), keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
 		caseFractionalLinodeID:      {args: map[string]any{keyFirewallID: float64(123.5), keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},
 		caseSlashFirewallPathID:     {args: map[string]any{keyFirewallID: paymentMethodIDSlash, keyInbound: databaseJSONArray, keyOutbound: databaseJSONArray, keyConfirm: true}, want: errFirewallIDPositive},

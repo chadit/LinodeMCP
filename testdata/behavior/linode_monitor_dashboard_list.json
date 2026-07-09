@@ -1,0 +1,17 @@
+{
+  "tool": "linode_monitor_dashboard_list",
+  "description": "Pins the non-integer page rejection both languages share and the unpaginated dashboards list GET.",
+  "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "page": "1" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "lists monitor dashboards",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/monitor/dashboards" }
+    }
+  ]
+}

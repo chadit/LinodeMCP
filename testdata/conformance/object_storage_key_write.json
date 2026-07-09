@@ -1,0 +1,52 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageKeyWriteResponse",
+  "description": "Object Storage key write envelope: warning notice, confirmation message, and the full key element with synthetic (non-real) key material.",
+  "input": {
+    "warning": "IMPORTANT: The secret_key below is shown ONLY ONCE. Save it now - it cannot be retrieved later.",
+    "message": "Access key 'ci-deploy-key' created successfully (ID: 314)",
+    "key": {
+      "label": "ci-deploy-key",
+      "access_key": "SYNTHETICACCESSKEY000000",
+      "secret_key": "SYNTHETICSECRETKEYPLACEHOLDER00000000000",
+      "bucket_access": [
+        {
+          "bucket_name": "assets-prod",
+          "region": "us-east-1",
+          "permissions": "read_write"
+        }
+      ],
+      "regions": [
+        {
+          "id": "us-east-1",
+          "s3_endpoint": "us-east-1.linodeobjects.com"
+        }
+      ],
+      "id": 314,
+      "limited": true
+    }
+  },
+  "canonical": {
+    "message": "Access key 'ci-deploy-key' created successfully (ID: 314)",
+    "key": {
+      "label": "ci-deploy-key",
+      "access_key": "SYNTHETICACCESSKEY000000",
+      "secret_key": "SYNTHETICSECRETKEYPLACEHOLDER00000000000",
+      "bucket_access": [
+        {
+          "bucket_name": "assets-prod",
+          "region": "us-east-1",
+          "permissions": "read_write"
+        }
+      ],
+      "regions": [
+        {
+          "id": "us-east-1",
+          "s3_endpoint": "us-east-1.linodeobjects.com"
+        }
+      ],
+      "id": 314,
+      "limited": true
+    },
+    "warning": "IMPORTANT: The secret_key below is shown ONLY ONCE. Save it now - it cannot be retrieved later."
+  }
+}

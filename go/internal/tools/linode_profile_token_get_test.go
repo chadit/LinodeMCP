@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -44,17 +43,17 @@ func TestLinodeProfileTokenGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyTokenID]; !ok {
-		t.Errorf("props missing key %v", keyTokenID)
+	raw := string(tool.RawInputSchema)
+	if !strings.Contains(raw, keyTokenID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyTokenID)
 	}
 
-	if _, ok := props[keyConfirm]; ok {
-		t.Errorf("read-only get tool must not require confirm: props unexpectedly has key %q", keyConfirm)
+	if strings.Contains(raw, keyConfirm) {
+		t.Errorf("read-only get tool must not require confirm: tool.RawInputSchema unexpectedly has key %q", keyConfirm)
 	}
 
-	if !slices.Contains(tool.InputSchema.Required, keyTokenID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyTokenID)
+	if !strings.Contains(raw, keyTokenID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyTokenID)
 	}
 }
 
@@ -100,8 +99,13 @@ func TestLinodeProfileTokenGetToolInvalidTokenIdRejectedBeforeClientCall(t *test
 				t.Error("result.IsError = false, want true")
 			}
 
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "token_id must be a positive integer") {
-				t.Errorf("error text %q does not contain %q", text.Text, "token_id must be a positive integer")
+			wantTokenID := "token_id must be a positive integer"
+			if testCase.name == "missing token_id" {
+				wantTokenID = errTokenIDRequired
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantTokenID) {
+				t.Errorf("error text %q does not contain %q", text.Text, wantTokenID)
 			}
 
 			if calls != int32(0) {
@@ -133,7 +137,7 @@ func TestLinodeProfileTokenGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: "api-token", profileTokenScopesParam: "*"}); err != nil {
+		if err := json.NewEncoder(w).Encode(linode.ProfileToken{keyID: float64(12345), keyLabel: "api-token", profileTokenScopesParam: "*", "token": "super-secret-token-value"}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -164,8 +168,12 @@ func TestLinodeProfileTokenGetToolSuccess(t *testing.T) {
 		t.Errorf("textContent.Text does not contain %v", "api-token")
 	}
 
-	if !strings.Contains(textContent.Text, `"id": 12345`) {
-		t.Errorf("textContent.Text does not contain %v", `"id": 12345`)
+	if !strings.Contains(textContent.Text, `"id"`) || !strings.Contains(textContent.Text, "12345") {
+		t.Errorf("textContent.Text does not contain id 12345: %v", textContent.Text)
+	}
+
+	if strings.Contains(textContent.Text, "super-secret-token-value") {
+		t.Errorf("token secret leaked into proto-canonical output: %v", textContent.Text)
 	}
 }
 

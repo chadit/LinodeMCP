@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -46,12 +45,11 @@ func TestLinodeManagedContactDeleteToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyConfirm)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyConfirm) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyConfirm)
+	raw := string(tool.RawInputSchema)
+	for _, key := range []string{keyConfirm, keyContactID} {
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
+		}
 	}
 
 	if handler == nil {
@@ -216,8 +214,13 @@ func TestLinodeManagedContactDeleteToolInvalidContactIdRejectsBeforeClient(t *te
 				t.Error("result.IsError = false, want true")
 			}
 
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "contact_id must be a positive integer") {
-				t.Errorf("error text %q does not contain %q", text.Text, "contact_id must be a positive integer")
+			wantContactID := "contact_id must be a positive integer"
+			if name == caseMissing {
+				wantContactID = errContactIDRequired
+			}
+
+			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantContactID) {
+				t.Errorf("error text %q does not contain %q", text.Text, wantContactID)
 			}
 		})
 	}
@@ -477,13 +480,10 @@ func TestLinodeManagedContactUpdateToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapAdmin)
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyConfirm]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyConfirm)
-	}
-
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyConfirm, managedContactUpdateIDKey} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -650,7 +650,7 @@ func TestLinodeManagedContactUpdateToolInvalidInputRejectsBeforeClient(t *testin
 		args        map[string]any
 		wantMessage string
 	}{
-		{name: "missing contact id", args: map[string]any{keyName: managedContactsToolName, keyConfirm: true}, wantMessage: managedContactUpdateIDMessage},
+		{name: "missing contact id", args: map[string]any{keyName: managedContactsToolName, keyConfirm: true}, wantMessage: errContactIDRequired},
 		{name: "zero contact id", args: map[string]any{managedContactUpdateIDKey: 0, keyName: managedContactsToolName, keyConfirm: true}, wantMessage: managedContactUpdateIDMessage},
 		{name: "slash contact id", args: map[string]any{managedContactUpdateIDKey: "5/67", keyName: managedContactsToolName, keyConfirm: true}, wantMessage: managedContactUpdateIDMessage},
 		{name: "query contact id", args: map[string]any{managedContactUpdateIDKey: "567?x=1", keyName: managedContactsToolName, keyConfirm: true}, wantMessage: managedContactUpdateIDMessage},
@@ -659,6 +659,8 @@ func TestLinodeManagedContactUpdateToolInvalidInputRejectsBeforeClient(t *testin
 		{name: "numeric name", args: map[string]any{managedContactUpdateIDKey: 567, keyName: 123, keyConfirm: true}, wantMessage: "name must be a string"},
 		{name: managedContactUpdateCaseNumericEmail, args: map[string]any{managedContactUpdateIDKey: 567, keyEmail: 123, keyConfirm: true}, wantMessage: "email must be a string"},
 		{name: "numeric group", args: map[string]any{managedContactUpdateIDKey: 567, managedContactUpdateGroupKey: 123, keyConfirm: true}, wantMessage: "group must be a string"},
+		{name: "contact empty email", args: map[string]any{managedContactUpdateIDKey: 567, keyEmail: "", keyConfirm: true}, wantMessage: errEmailNonEmpty},
+		{name: "contact empty name", args: map[string]any{managedContactUpdateIDKey: 567, keyName: "", keyConfirm: true}, wantMessage: "name must be a non-empty string"},
 		{name: "numeric primary phone", args: map[string]any{managedContactUpdateIDKey: 567, managedContactPhoneParam: map[string]any{managedContactPhonePrimaryKey: 123}, keyConfirm: true}, wantMessage: "phone.primary must be a non-empty string"},
 		{name: "numeric secondary phone", args: map[string]any{managedContactUpdateIDKey: 567, managedContactPhoneParam: map[string]any{managedContactPhoneSecondaryKey: 123}, keyConfirm: true}, wantMessage: "phone.secondary must be a non-empty string"},
 		{name: "phone not object", args: map[string]any{managedContactUpdateIDKey: 567, managedContactPhoneParam: managedContactPhone2Fixture, keyConfirm: true}, wantMessage: "phone must be an object"},

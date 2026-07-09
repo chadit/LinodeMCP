@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_nodebalancer_list",
+  "description": "GETs the instance NodeBalancers collection. The missing-linode_id rejection text diverges (Go 'linode_id is required' vs Python 'linode_id must be a positive integer'), so only the success request is fixtured (see report).",
+  "cases": [
+    {
+      "name": "lists NodeBalancers with a plain GET",
+      "args": { "linode_id": 123 },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/nodebalancers" }
+    }
+  ]
+}

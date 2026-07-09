@@ -1,0 +1,30 @@
+{
+  "tool": "linode_lke_acl_update",
+  "description": "Pins the cluster_id-required rejection (with confirm so both reach it; the languages check cluster_id vs confirm in a different order) and the confirmed PUT with a fully-populated acl body. The acl-required text and the confirm-required text both diverge (see report).",
+  "cases": [
+    {
+      "name": "requires cluster_id",
+      "args": { "confirm": true },
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "updates the control plane acl",
+      "args": {
+        "cluster_id": 12345,
+        "acl": { "enabled": true, "addresses": { "ipv4": [ "203.0.113.1/32" ], "ipv6": [ "2001:db8::/32" ] } },
+        "confirm": true
+      },
+      "api_response": { "acl": { "enabled": true, "addresses": { "ipv4": [ "203.0.113.1/32" ], "ipv6": [ "2001:db8::/32" ] } } },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/lke/clusters/12345/control_plane_acl",
+        "body": { "acl": { "enabled": true, "addresses": { "ipv4": [ "203.0.113.1/32" ], "ipv6": [ "2001:db8::/32" ] } } }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"cluster_id": 12345, "acl": {"enabled": true, "addresses": {"ipv4": ["203.0.113.1/32"], "ipv6": ["2001:db8::/32"]}}},
+      "expect_error": "This modifies the control plane ACL, which controls API server access. Set confirm=true to proceed."
+    }
+  ]
+}

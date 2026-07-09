@@ -1,0 +1,31 @@
+{
+  "tool": "linode_stackscript_update",
+  "description": "StackScript update. With confirm the id rejection agrees; the at-least-one-editable-field requirement is now enforced in both languages (Python gained Go's check). Success PUTs only the changed field.",
+  "cases": [
+    {
+      "name": "rejects non-positive stackscript_id",
+      "args": { "confirm": true, "stackscript_id": 0, "label": "renamed" },
+      "expect_error": "stackscript_id must be a positive integer"
+    },
+    {
+      "name": "requires at least one editable field",
+      "args": { "confirm": true, "stackscript_id": 123 },
+      "expect_error": "at least one editable field is required"
+    },
+    {
+      "name": "updates a StackScript field",
+      "args": { "confirm": true, "stackscript_id": 123, "label": "renamed" },
+      "api_response": { "id": 123, "label": "renamed" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/stackscripts/123",
+        "body": { "label": "renamed" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"stackscript_id": 123, "label": "renamed"},
+      "expect_error": "This updates a StackScript in your account. Set confirm=true to proceed."
+    }
+  ]
+}

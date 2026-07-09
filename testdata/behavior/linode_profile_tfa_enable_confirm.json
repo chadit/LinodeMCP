@@ -1,0 +1,26 @@
+{
+  "tool": "linode_profile_tfa_enable_confirm",
+  "description": "Shared tfa_code rejection and the confirm POST body. Confirm text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing tfa_code",
+      "args": {},
+      "expect_error": "tfa_code must be a non-empty string"
+    },
+    {
+      "name": "confirms two-factor enablement",
+      "args": { "tfa_code": "123456", "confirm": true },
+      "api_response": { "scratch": "abcd", "expiry": "2030-01-01T00:00:00" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/tfa-enable-confirm",
+        "body": { "tfa_code": "123456" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"tfa_code": "123456"},
+      "expect_error": "This enables two-factor authentication for the profile. Set confirm=true to proceed."
+    }
+  ]
+}

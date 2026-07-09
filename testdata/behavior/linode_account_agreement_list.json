@@ -1,0 +1,12 @@
+{
+  "tool": "linode_account_agreement_list",
+  "description": "Pins the account agreements GET path (a single GET, no pagination).",
+  "cases": [
+    {
+      "name": "lists account agreement acknowledgment status",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/agreements" }
+    }
+  ]
+}

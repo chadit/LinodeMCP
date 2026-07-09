@@ -1,0 +1,36 @@
+{
+  "tool": "linode_volume_clone",
+  "description": "Volume clone: volume_id-required and label-required rejections both languages agree on (confirm set so both reach them), plus the clone POST. Confirm-gate text and negative-id handling diverge (see report).",
+  "cases": [
+    {
+      "name": "requires volume_id",
+      "args": { "confirm": true },
+      "expect_error": "volume_id is required"
+    },
+    {
+      "name": "rejects a negative volume_id",
+      "args": { "confirm": true, "volume_id": -1, "label": "clone-vol" },
+      "expect_error": "volume_id must be a positive integer"
+    },
+    {
+      "name": "requires label",
+      "args": { "confirm": true, "volume_id": 123 },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "clones a volume",
+      "args": { "confirm": true, "volume_id": 123, "label": "clone-vol" },
+      "api_response": { "id": 200, "label": "clone-vol" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes/123/clone",
+        "body": { "label": "clone-vol" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"volume_id": 123, "label": "clone-vol"},
+      "expect_error": "This operation creates a billable cloned volume. Set confirm=true to proceed."
+    }
+  ]
+}

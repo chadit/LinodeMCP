@@ -4,6 +4,23 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+// InstanceIPType is the address family requested by the IP allocate tools
+// (linode_instance_ip_allocate and linode_networking_ip_allocate). Values are
+// the exact lowercase Linode API strings authored from the live OpenAPI spec.
+// See the enum-wrapper convention in nodebalancer_config.proto. Only the
+// allocate INPUT type is this enum; the IPAddress.type read field stays a plain
+// string because the API returns richer values there (ipv4/public, ipv6/range,
+// and so on).
+message InstanceIPType {
+  enum Value {
+    unspecified = 0;
+    // The allocate endpoints (POST .../ips, POST /networking/ips) accept only
+    // ipv4; ipv6 is assigned via ranges, not allocation. The old code accepted
+    // ipv6 here (rejected downstream by the API); the sync-enums gate caught it.
+    ipv4 = 1;
+  }
+}
+
 // IPAddress mirrors a Linode networking IP address. vpc_nat_1_1 is nullable
 // (omitted when unset).
 message IPAddress {
@@ -77,13 +94,20 @@ message IPv6PoolListResponse {
   repeated IPv6Pool ipv6_pools = 3;
 }
 
-// IPv6Range mirrors an IPv6 range on the account: a CIDR range, its region, the
-// prefix length, and the route target it forwards to.
+// IPv6Range mirrors an IPv6 range on the account. The list element carries
+// range, region, prefix, and the route target it forwards to; the single-range
+// detail GET drops route_target and instead reports is_bgp and the Linode IDs
+// the range is bound to. The two shapes share this one message: route_target is
+// implicit-presence so it serializes as "" on the detail GET, is_bgp is optional
+// so a genuine false still serializes, and linodes is repeated so the list
+// element emits it as [].
 message IPv6Range {
   string range = 1;
   string region = 2;
   int32 prefix = 3;
   string route_target = 4;
+  optional bool is_bgp = 5;
+  repeated int32 linodes = 6;
 }
 
 // IPv6RangeListResponse is the linode_ipv6_range_list envelope: count and the
@@ -93,6 +117,96 @@ message IPv6RangeListResponse {
   int32 count = 1;
   optional string filter = 2;
   repeated IPv6Range ipv6_ranges = 3;
+}
+
+// IPv6RangeWriteResponse is the {message, range} envelope the
+// linode_ipv6_range_create tool returns: a confirmation string plus the full
+// IPv6Range element the API returned.
+message IPv6RangeWriteResponse {
+  string message = 1;
+  IPv6Range range = 2;
+}
+
+// IPv6RangeDeleteResponse is the confirmation envelope linode_ipv6_range_delete
+// returns: a message plus the deleted range. The delete endpoint returns an
+// empty body, so the response echoes the range CIDR.
+message IPv6RangeDeleteResponse {
+  string message = 1;
+  string range = 2;
+}
+
+// IPv6PoolListInput is the input contract for linode_ipv6_pool_list.
+message IPv6PoolListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// IPv6RangeListInput is the input contract for linode_ipv6_range_list.
+message IPv6RangeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// IPv6RangeGetInput is the input contract for linode_ipv6_range_get.
+message IPv6RangeGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // IPv6 range prefix, for example 2001:0db8::/64.
+  string range = 2;
+}
+
+// IPv6RangeCreateInput is the input contract for linode_ipv6_range_create.
+message IPv6RangeCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The IPv6 prefix length for the created range.
+  int32 prefix_length = 2;
+  // Optional Linode ID to assign the new range to.
+  optional int32 linode_id = 3;
+  // Optional route target for the new IPv6 range.
+  optional string route_target = 4;
+  // Must be true to confirm IPv6 range creation. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// IPv6RangeDeleteInput is the input contract for linode_ipv6_range_delete.
+message IPv6RangeDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // IPv6 range prefix, for example 2001:0db8::/64.
+  string range = 2;
+  // Must be true to confirm IPv6 range deletion. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// InstanceIPDeleteResponse is the id-echo envelope linode_instance_ip_delete
+// returns: a confirmation message plus the parent instance ID and the removed
+// address. The delete endpoint returns an empty body, so the echo confirms the
+// target.
+message InstanceIPDeleteResponse {
+  string message = 1;
+  int32 linode_id = 2;
+  string address = 3;
 }
 
 // IPv6SLAAC mirrors a Linode instance's SLAAC or link-local IPv6 address.
@@ -153,4 +267,206 @@ message InstanceIPGetInput {
   int32 linode_id = 2;
   // The IP address to retrieve (required).
   string address = 3;
+}
+
+// InstanceIPListInput is the input contract for linode_instance_ip_list.
+message InstanceIPListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+}
+
+// InstanceIPAllocateInput is the input contract for
+// linode_instance_ip_allocate. linode_id, type, public, and confirm are all
+// required (public is a required boolean in the hand-built schema, so it stays
+// non-optional here).
+message InstanceIPAllocateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The type of IP address to allocate: ipv4 or ipv6.
+  InstanceIPType.Value type = 3;
+  // Whether the IP address should be public (true) or private (false).
+  bool public = 4;
+  // Must be true to confirm IP allocation. Additional IPs may incur charges.
+  // Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// InstanceIPUpdateInput is the input contract for linode_instance_ip_update.
+// linode_id, address, rdns, and confirm are required.
+message InstanceIPUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The IP address to update (e.g. 203.0.113.1).
+  string address = 3;
+  // The reverse DNS hostname to assign to the IP address.
+  string rdns = 4;
+  // Must be true to confirm the RDNS update. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// InstanceIPDeleteInput is the input contract for linode_instance_ip_delete,
+// a two-stage destroy: linode_id, address, and confirm are required, and
+// mode/plan_id drive the plan/apply flow.
+message InstanceIPDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The IP address to remove (e.g. 203.0.113.1).
+  string address = 3;
+  // Must be true to confirm IP removal. This action is irreversible. Ignored
+  // when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
+  // plan_id re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 6;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 7;
+}
+
+// NetworkingIPListInput is the input contract for linode_networking_ip_list.
+message NetworkingIPListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Skip IPv6 reverse DNS lookups (optional).
+  optional bool skip_ipv6_rdns = 2;
+}
+
+// IPAddressUpdateInput is the input contract for linode_networking_ip_update.
+message IPAddressUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The IPv4 or IPv6 address to update.
+  string address = 2;
+  // The reverse DNS value to set.
+  string rdns = 3;
+  // Must be true to confirm changing reverse DNS. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// IPAddressAllocateInput is the input contract for
+// linode_networking_ip_allocate. public is a required boolean beyond confirm,
+// so it stays a plain (non-optional) bool.
+message IPAddressAllocateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode that receives the new IP address.
+  int32 linode_id = 2;
+  // The type of IP address to allocate: ipv4 or ipv6.
+  InstanceIPType.Value type = 3;
+  // Whether the IP address should be public.
+  bool public = 4;
+  // Must be true to confirm IP allocation. Additional IPs may incur charges.
+  // Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// NetworkingIPAssignmentItem is one address-to-Linode binding submitted by the
+// IP assign tools: the IP address and the Linode that should receive it. It
+// mirrors the linode.IPAssignment request struct (address, linode_id), so the
+// generated array item preserves the object shape rather than regressing to a
+// bare Struct.
+message NetworkingIPAssignmentItem {
+  // The IP address to assign.
+  string address = 1;
+  // The ID of the Linode that receives the address.
+  int32 linode_id = 2;
+}
+
+// NetworkingIPAssignInput is the input contract for linode_networking_ip_assign.
+// assignments is required at the handler level, but a repeated message field
+// can never land in the generated required array, so the advertised required
+// set is [confirm, region] (see the required-flag-loss log).
+message NetworkingIPAssignInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The region for the IP assignments.
+  string region = 2;
+  // Assignment objects, each with an address and the Linode that receives it.
+  repeated NetworkingIPAssignmentItem assignments = 3;
+  // Must be true to confirm IP reassignment. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// NetworkingIPv4AssignInput is the input contract for
+// linode_networking_ipv4_assign. Same shape as NetworkingIPAssignInput, reusing
+// the shared NetworkingIPAssignmentItem; assignments is required at the handler
+// level but drops from the generated required set (see the loss log).
+message NetworkingIPv4AssignInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The region for the IPv4 assignments.
+  string region = 2;
+  // Assignment objects, each with an address and the Linode that receives it.
+  repeated NetworkingIPAssignmentItem assignments = 3;
+  // Must be true to confirm IPv4 reassignment. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// NetworkingIPShareInput is the input contract for linode_networking_ip_share.
+// ips is required at the handler level, but a repeated field can never land in
+// the generated required array, so the advertised required set is
+// [confirm, linode_id] (see the required-flag-loss log).
+message NetworkingIPShareInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the primary Linode that receives the shared IP addresses.
+  int32 linode_id = 2;
+  // IP addresses or IPv6 ranges to share. Use [] to remove all shared IP
+  // addresses.
+  repeated string ips = 3;
+  // Must be true to confirm changing shared IP assignments. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// NetworkingIPv4ShareInput is the input contract for
+// linode_networking_ipv4_share. Same shape as NetworkingIPShareInput; ips is
+// required at the handler level but drops from the generated required set (see
+// the loss log).
+message NetworkingIPv4ShareInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the primary Linode that receives the shared IP addresses.
+  int32 linode_id = 2;
+  // IP addresses or IPv6 ranges to share. Use [] to remove all shared IP
+  // addresses.
+  repeated string ips = 3;
+  // Must be true to confirm changing shared IP assignments. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
 }

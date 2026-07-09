@@ -1,0 +1,22 @@
+{
+  "tool": "linode_instance_backups_enable",
+  "description": "Enable needs confirm; POSTs the enable endpoint with no body. No-confirm message text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing linode_id once confirmed",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "enables backups with a plain POST",
+      "args": { "linode_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/linode/instances/123/backups/enable" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123},
+      "expect_error": "Enabling backups adds a recurring charge to your account. Set confirm=true to proceed."
+    }
+  ]
+}

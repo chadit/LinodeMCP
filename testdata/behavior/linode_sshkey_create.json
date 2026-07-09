@@ -1,0 +1,38 @@
+{
+  "tool": "linode_sshkey_create",
+  "description": "Shared label/ssh_key required rejections and the create POST body once confirmed. Invalid-format text and confirm text diverge (see report).",
+  "cases": [
+    {
+      "name": "requires label",
+      "args": { "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "requires ssh_key",
+      "args": { "label": "my-key", "confirm": true },
+      "expect_error": "ssh_key is required"
+    },
+    {
+      "name": "creates an SSH key",
+      "args": {
+        "label": "my-key",
+        "ssh_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyDataExampleKeyDataExampleKeyDataExampleKeyData test@example.com",
+        "confirm": true
+      },
+      "api_response": { "id": 42, "label": "my-key" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/sshkeys",
+        "body": {
+          "label": "my-key",
+          "ssh_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyDataExampleKeyDataExampleKeyDataExampleKeyData test@example.com"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "my-key", "ssh_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyDataExampleKeyDataExampleKeyDataExampleKeyData test@example.com"},
+      "expect_error": "This adds an SSH key to your Linode profile. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "tool": "linode_instance_ip_update",
+  "description": "RDNS update needs confirm; PUTs the rdns body. No-confirm message text diverges (see report). Both languages check confirm before parsing, so the fixtured rejections carry confirm.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id once confirmed",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects missing rdns once confirmed",
+      "args": { "confirm": true, "linode_id": 123, "address": "203.0.113.5" },
+      "expect_error": "rdns is required"
+    },
+    {
+      "name": "updates RDNS with the rdns body",
+      "args": {
+        "linode_id": 123,
+        "address": "203.0.113.5",
+        "rdns": "host.example.com",
+        "confirm": true
+      },
+      "api_response": { "address": "203.0.113.5" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/123/ips/203.0.113.5",
+        "body": { "rdns": "host.example.com" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "address": "203.0.113.5", "rdns": "host.example.com"},
+      "expect_error": "This updates reverse DNS for the IP address. Set confirm=true to proceed."
+    }
+  ]
+}

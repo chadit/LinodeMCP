@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
@@ -44,29 +44,6 @@ func twoStageSettings(cfg *config.Config) twostage.Settings {
 	}
 
 	return settings
-}
-
-// planResponse is the wire shape a mode:"plan" call returns: a richer dry-run
-// that also carries a plan_id, an expiry, and a hash of the current state. A
-// later mode:"apply" call re-fetches the state, re-hashes, and refuses if the
-// hash moved.
-type planResponse struct {
-	PlanID           string        `json:"plan_id"`
-	CreatedAt        string        `json:"created_at"`
-	ExpiresAt        string        `json:"expires_at"`
-	Tool             string        `json:"tool"`
-	Environment      string        `json:"environment"`
-	WouldExecute     DryRunRequest `json:"would_execute"`
-	CurrentState     any           `json:"current_state"`
-	CurrentStateHash string        `json:"current_state_hash"`
-
-	// Dependency-walk enrichment, mirroring the dry-run response so a plan is
-	// a strict superset of a dry-run. A tool with no DependencyWalk leaves
-	// these unset (omitempty), keeping the shape stable.
-	Dependencies []DryRunDependency  `json:"dependencies,omitempty"`
-	SideEffects  []string            `json:"side_effects,omitempty"`
-	BillingDelta *DryRunBillingDelta `json:"billing_delta,omitempty"`
-	Warnings     []string            `json:"warnings,omitempty"`
 }
 
 // runTwoStageBranch handles the plan and apply branches for a destroy tool. It
@@ -279,18 +256,7 @@ func executeDestroy(
 		return mcp.NewToolResultError(fmt.Sprintf("%s failed: %v", action.ToolName, execErr)), nil
 	}
 
-	return marshalDestroySuccess(action.Success())
-}
-
-// marshalDestroySuccess serializes a destroy Success body. A proto.Message goes
-// through the proto-canonical marshaller so its output matches the Python side;
-// everything else falls back to plain JSON for the legacy id-echo maps.
-func marshalDestroySuccess(success any) (*mcp.CallToolResult, error) {
-	if msg, ok := success.(proto.Message); ok {
-		return MarshalProtoToolResponse(msg)
-	}
-
-	return MarshalToolResponse(success)
+	return MarshalProtoToolResponse(action.Success())
 }
 
 // stateHash returns a stable hash of the resource state with the named cosmetic
@@ -380,7 +346,10 @@ func jsonEqual(left, right any) bool {
 	return bytes.Equal(leftBytes, rightBytes)
 }
 
-// buildPlanResponse renders the plan preview a mode:"plan" call returns.
+// buildPlanResponse renders the plan preview a mode:"plan" call returns. It
+// serializes through the PlanResponse proto so the plan envelope is
+// proto-canonical on both languages: current_state routes through structpb.Value
+// (protojson sorts its keys) and the timestamps are RFC3339 with a Z suffix.
 func buildPlanResponse(
 	planID string,
 	createdAt, expiresAt time.Time,
@@ -390,18 +359,28 @@ func buildPlanResponse(
 	hash string,
 	details *DryRunDetails,
 ) *mcp.CallToolResult {
-	result, err := MarshalToolResponse(planResponse{
-		PlanID:           planID,
+	stateValue, err := toProtoValue(state)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error())
+	}
+
+	deps, err := dependenciesToProto(details.Dependencies)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error())
+	}
+
+	result, err := MarshalProtoToolResponse(&linodev1.PlanResponse{
+		PlanId:           planID,
 		CreatedAt:        createdAt.UTC().Format(time.RFC3339),
 		ExpiresAt:        expiresAt.UTC().Format(time.RFC3339),
 		Tool:             action.ToolName,
 		Environment:      environment,
-		WouldExecute:     DryRunRequest{Method: action.Method, Path: action.Path},
-		CurrentState:     state,
+		WouldExecute:     &linodev1.DryRunRequest{Method: action.Method, Path: action.Path},
+		CurrentState:     stateValue,
 		CurrentStateHash: hash,
-		Dependencies:     details.Dependencies,
+		Dependencies:     deps,
 		SideEffects:      details.SideEffects,
-		BillingDelta:     details.BillingDelta,
+		BillingDelta:     billingDeltaToProto(details.BillingDelta),
 		Warnings:         details.Warnings,
 	})
 	if err != nil {

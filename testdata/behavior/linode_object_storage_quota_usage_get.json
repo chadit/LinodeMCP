@@ -1,0 +1,12 @@
+{
+  "tool": "linode_object_storage_quota_usage_get",
+  "description": "Pins the quota-usage GET by ID. The empty/invalid-id rejection text diverges between languages (see report), so only the success path is pinned.",
+  "cases": [
+    {
+      "name": "gets quota usage",
+      "args": { "obj_quota_id": "obj-bucket-quota" },
+      "api_response": { "quota_id": "obj-bucket-quota" },
+      "expect_request": { "method": "GET", "path": "/object-storage/quotas/obj-bucket-quota/usage" }
+    }
+  ]
+}

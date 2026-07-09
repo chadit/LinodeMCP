@@ -1,0 +1,18 @@
+{
+  "message": "linode.mcp.v1.ObjectStorageObjectACLWriteResponse",
+  "description": "Object Storage object ACL update envelope: a confirmation message plus the ACL element echoed by the update endpoint.",
+  "input": {
+    "message": "ACL for object 'photo.jpg' in bucket 'my-bucket' modified successfully",
+    "acl": {
+      "acl": "public-read",
+      "acl_xml": "<AccessControlPolicy>...</AccessControlPolicy>"
+    }
+  },
+  "canonical": {
+    "message": "ACL for object 'photo.jpg' in bucket 'my-bucket' modified successfully",
+    "acl": {
+      "acl": "public-read",
+      "acl_xml": "<AccessControlPolicy>...</AccessControlPolicy>"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_lke_type_list",
+  "description": "No required args. Both languages issue a single GET.",
+  "cases": [
+    {
+      "name": "lists node types",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/lke/types" }
+    }
+  ]
+}

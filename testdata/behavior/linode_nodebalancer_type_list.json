@@ -1,0 +1,12 @@
+{
+  "tool": "linode_nodebalancer_type_list",
+  "description": "No local validation; pins the single GET the list handler issues.",
+  "cases": [
+    {
+      "name": "lists nodebalancer types",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/nodebalancers/types" }
+    }
+  ]
+}

@@ -4,8 +4,35 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+// ObjectStorageKeyPermission is the per-bucket grant level for an Object Storage
+// access key. Values are the exact lowercase Linode API strings, authored from
+// the live OpenAPI spec. See the enum-wrapper convention in
+// nodebalancer_config.proto. The key create/update tools carry bucket_access as
+// a JSON-array string, so no input field is this enum's type; the handlers
+// validate each parsed entry's permissions against this generated value set.
+message ObjectStorageKeyPermission {
+  enum Value {
+    unspecified = 0;
+    read_only = 1;
+    read_write = 2;
+  }
+}
+
+// PresignedURLMethod is the HTTP method the presigned-URL create tool signs for:
+// GET produces a download URL, PUT an upload URL. This is a tool-level S3
+// presign choice (not a Linode API field), so the value set is authored here.
+// See the enum-wrapper convention in nodebalancer_config.proto.
+message PresignedURLMethod {
+  enum Value {
+    unspecified = 0;
+    GET = 1;
+    PUT = 2;
+  }
+}
+
 // ObjectStorageKeyBucketAccess is a per-bucket grant nested in an Object Storage
-// key.
+// key. permissions stays a string on this response message (the read side never
+// rejects an unknown API value); the write-side validation is enum-backed.
 message ObjectStorageKeyBucketAccess {
   string bucket_name = 1;
   string region = 2;
@@ -48,12 +75,89 @@ message ObjectStorageKeyWriteResponse {
   string warning = 3;
 }
 
+// ObjectStorageKeyDeleteResponse is the id-echo envelope
+// linode_object_storage_key_delete returns: a confirmation message plus the
+// revoked key's ID. The delete endpoint returns an empty body, so the id echo
+// confirms the target.
+message ObjectStorageKeyDeleteResponse {
+  string message = 1;
+  int32 key_id = 2;
+}
+
 // ObjectStorageKeyGetInput is the input contract for linode_object_storage_key_get.
 message ObjectStorageKeyGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
   // The ID of the Object Storage key to retrieve (required).
   int32 key_id = 2;
+}
+
+// ObjectStorageKeyListInput is the input contract for
+// linode_object_storage_key_list.
+message ObjectStorageKeyListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// ObjectStorageKeyCreateInput is the input contract for
+// linode_object_storage_key_create. label and confirm are required.
+// bucket_access is a JSON array passed as a string; the handler parses and
+// validates it, so the schema type stays string.
+message ObjectStorageKeyCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Label for the access key (max 50 characters).
+  string label = 2;
+  // JSON array of bucket permissions: [{"bucket_name": "name", "region":
+  // "region", "permissions": "read_only|read_write"}]. Omit for unrestricted
+  // access.
+  optional string bucket_access = 3;
+  // Must be set to true. The secret_key is only shown ONCE in the response.
+  // Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// ObjectStorageKeyUpdateInput is the input contract for
+// linode_object_storage_key_update. key_id and confirm are required.
+message ObjectStorageKeyUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // ID of the access key to update.
+  int32 key_id = 2;
+  // New label for the access key (max 50 characters).
+  optional string label = 3;
+  // JSON array of bucket permissions: [{"bucket_name": "name", "region":
+  // "region", "permissions": "read_only|read_write"}].
+  optional string bucket_access = 4;
+  // Must be set to true to confirm key update. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// ObjectStorageKeyDeleteInput is the input contract for
+// linode_object_storage_key_delete. key_id and confirm are required.
+message ObjectStorageKeyDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // ID of the access key to revoke.
+  int32 key_id = 2;
+  // Must be set to true to confirm key revocation. This action is permanent.
+  // Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
 }
 
 // ObjectStorageBucket mirrors a Linode Object Storage bucket.
@@ -83,6 +187,16 @@ message ObjectStorageBucketWriteResponse {
   ObjectStorageBucket bucket = 2;
 }
 
+// ObjectStorageBucketDeleteResponse is the id-echo envelope
+// linode_object_storage_bucket_delete returns: a confirmation message plus the
+// region and label identifying the deleted bucket. The delete endpoint returns
+// an empty body, so the echo confirms the target.
+message ObjectStorageBucketDeleteResponse {
+  string message = 1;
+  string region = 2;
+  string label = 3;
+}
+
 // ObjectStorageBucketGetInput is the input contract for
 // linode_object_storage_bucket_get.
 message ObjectStorageBucketGetInput {
@@ -92,6 +206,103 @@ message ObjectStorageBucketGetInput {
   string region = 2;
   // The bucket label (required).
   string label = 3;
+}
+
+// ObjectStorageBucketListInput is the input contract for
+// linode_object_storage_bucket_list.
+message ObjectStorageBucketListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// ObjectStorageBucketByRegionListInput is the input contract for
+// linode_object_storage_bucket_by_region_list. region is required.
+message ObjectStorageBucketByRegionListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where buckets are located (e.g., 'us-east-1', 'us-southeast-1').
+  string region = 2;
+}
+
+// ObjectStorageBucketObjectListInput is the input contract for
+// linode_object_storage_bucket_object_list. region and label are required.
+// page_size is a string on purpose: the hand-built schema advertised it as a
+// string and the handler forwards it verbatim as an S3 query param.
+message ObjectStorageBucketObjectListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
+  string region = 2;
+  // The bucket label (name).
+  string label = 3;
+  // Filter objects by key prefix (e.g., 'images/' to list only objects in the
+  // images folder).
+  optional string prefix = 4;
+  // Delimiter for grouping keys (typically '/' for folder-like listing).
+  optional string delimiter = 5;
+  // Pagination marker from a previous truncated response.
+  optional string marker = 6;
+  // Number of objects to return per page (default 100, max 500).
+  optional string page_size = 7;
+}
+
+// ObjectStorageBucketCreateInput is the input contract for
+// linode_object_storage_bucket_create. label, region, and confirm are required.
+message ObjectStorageBucketCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Bucket label (3-63 chars, lowercase alphanumeric and hyphens, must
+  // start/end with alphanumeric).
+  string label = 2;
+  // Object Storage region for the bucket (e.g. us-east-1).
+  string region = 3;
+  // Access control: private, public-read, authenticated-read, or
+  // public-read-write (default: private).
+  optional string acl = 4;
+  // Whether to enable CORS on the bucket (default: true).
+  optional bool cors_enabled = 5;
+  // Must be set to true to confirm bucket creation. This operation incurs
+  // billing charges. Ignored when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+}
+
+// ObjectStorageBucketDeleteInput is the input contract for
+// linode_object_storage_bucket_delete. region, label, and confirm are required.
+message ObjectStorageBucketDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region of the bucket to delete.
+  string region = 2;
+  // Label of the bucket to delete.
+  string label = 3;
+  // Must be set to true to confirm deletion. This action is irreversible.
+  // Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 6;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 7;
+}
+
+// ObjectStorageCancelInput is the input contract for
+// linode_object_storage_cancel. confirm is required.
+message ObjectStorageCancelInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Must be set to true to confirm Object Storage cancellation. Ignored when
+  // dry_run=true.
+  bool confirm = 2;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 3;
 }
 
 // ObjectStorageEndpoint mirrors a Linode Object Storage endpoint. s3_endpoint is
@@ -110,6 +321,13 @@ message ObjectStorageEndpointListResponse {
   int32 count = 1;
   optional string filter = 2;
   repeated ObjectStorageEndpoint endpoints = 3;
+}
+
+// ObjectStorageEndpointListInput is the input contract for
+// linode_object_storage_endpoint_list.
+message ObjectStorageEndpointListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
 }
 
 // ObjectStorageQuota mirrors a Linode Object Storage quota. quota_limit is the
@@ -133,11 +351,87 @@ message ObjectStorageQuotaListResponse {
   repeated ObjectStorageQuota quotas = 3;
 }
 
+// ObjectStorageQuotaListInput is the input contract for
+// linode_object_storage_quota_list.
+message ObjectStorageQuotaListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// ObjectStorageQuotaGetInput is the input contract for
+// linode_object_storage_quota_get. obj_quota_id is a slug-style string id, not
+// an integer.
+message ObjectStorageQuotaGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Object Storage quota ID to retrieve.
+  string obj_quota_id = 2;
+}
+
+// ObjectStorageQuotaUsage is the linode_object_storage_quota_usage_get response.
+// quota_limit and usage are byte counts for storage-metric quotas, so both are
+// int64; the canonical serializer emits them as JSON numbers on both languages.
+// usage is optional because the API returns null before any usage is recorded
+// (the field is then omitted rather than serialized as 0).
+message ObjectStorageQuotaUsage {
+  int64 quota_limit = 1;
+  optional int64 usage = 2;
+}
+
+// ObjectStorageQuotaUsageGetInput is the input contract for
+// linode_object_storage_quota_usage_get. obj_quota_id is a slug-style string
+// id, not an integer.
+message ObjectStorageQuotaUsageGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The Object Storage quota ID to retrieve usage for.
+  string obj_quota_id = 2;
+}
+
+// ObjectStorageTransfer is the linode_object_storage_transfer_get response: the
+// current month's outbound bytes. used is int64 (a month of egress easily exceeds
+// int32) and emits as a JSON number on both languages.
+message ObjectStorageTransfer {
+  int64 used = 1;
+}
+
+// ObjectStorageTransferGetInput is the input contract for
+// linode_object_storage_transfer_get.
+message ObjectStorageTransferGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// PresignedURLResponse is the linode_object_storage_presigned_url_create response:
+// just the generated URL. The tool is capability Read despite the create verb.
+message PresignedURLResponse {
+  string url = 1;
+}
+
+// PresignedURLCreateInput is the input contract for
+// linode_object_storage_presigned_url_create, pairing with
+// PresignedURLResponse. region, label, name, and method are required. The tool
+// is capability Read despite the create verb, so it has no confirm/dry_run.
+message PresignedURLCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
+  string region = 2;
+  // The bucket label (name).
+  string label = 3;
+  // The object key (path/filename within the bucket).
+  string name = 4;
+  // HTTP method: 'GET' for download URL, 'PUT' for upload URL.
+  PresignedURLMethod.Value method = 5;
+  // URL expiration in seconds (1-604800, default 3600 = 1 hour).
+  optional int32 expires_in = 6;
+}
+
 // ObjectStorageObject is one object (or common prefix) inside a bucket, as
 // returned by the S3-style object-list endpoint. size is int64 so objects larger
-// than 2GB survive without truncation; protojson serializes it as a JSON string
-// on both languages. is_prefix marks a delimiter-grouped common prefix rather
-// than a real object.
+// than 2GB survive without truncation; it emits as a JSON number on both
+// languages. is_prefix marks a delimiter-grouped common prefix rather than a
+// real object.
 message ObjectStorageObject {
   string name = 1;
   string etag = 2;

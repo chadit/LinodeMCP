@@ -1,0 +1,26 @@
+{
+  "tool": "linode_vpc_update",
+  "description": "VPC update requires vpc_id (an integer id here), then PUTs only the set fields.",
+  "cases": [
+    {
+      "name": "requires vpc_id",
+      "args": { "confirm": true },
+      "expect_error": "vpc_id is required"
+    },
+    {
+      "name": "updates the VPC label",
+      "args": { "confirm": true, "vpc_id": 5, "label": "new-label" },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/vpcs/5",
+        "body": { "label": "new-label" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"vpc_id": 5, "label": "new-label"},
+      "expect_error": "This modifies the VPC configuration. Set confirm=true to proceed."
+    }
+  ]
+}

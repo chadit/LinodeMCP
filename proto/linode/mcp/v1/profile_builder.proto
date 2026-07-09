@@ -1,0 +1,269 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// Input contracts for the profile builder / meta tools (draft_*, list_tools,
+// list_categories, can_run). These tools have no proto resource messages of
+// their own: their responses are raw JSON maps, not proto envelopes. They are
+// Meta tools built with bare mcp.NewTool, so none of them carry an environment
+// param.
+
+// ProfileDraftNewInput is the input contract for linode_profile_draft_new.
+message ProfileDraftNewInput {
+  // Name for the new draft. Must be unique within the registry.
+  string name = 1;
+  // Optional profile name to seed the draft from. Resolves against built-ins
+  // and user-defined profiles; user-defined shadow built-ins by name.
+  optional string clone_from = 2;
+}
+
+// ProfileDraftShowInput is the input contract for linode_profile_draft_show.
+message ProfileDraftShowInput {
+  // Draft name to show.
+  string name = 1;
+}
+
+// ProfileDraftDiscardInput is the input contract for
+// linode_profile_draft_discard.
+message ProfileDraftDiscardInput {
+  // Draft name to discard.
+  string name = 1;
+}
+
+// ProfileDraftSetInput is the input contract for linode_profile_draft_set.
+// Each settable field is optional; missing fields are left unchanged.
+message ProfileDraftSetInput {
+  // Draft name to mutate.
+  string name = 1;
+  // Replace allowed_environments with this list.
+  repeated string allowed_environments = 2;
+  // Replace required_token_scopes with this list.
+  repeated string required_token_scopes = 3;
+  // Set the allow_yolo flag.
+  optional bool allow_yolo = 4;
+}
+
+// ProfileDraftSaveInput is the input contract for linode_profile_draft_save.
+message ProfileDraftSaveInput {
+  // Draft name to save.
+  string name = 1;
+  // Must be true. The save is a write operation that mutates the config file.
+  bool confirm = 2;
+}
+
+// ProfileDraftAddToolsInput is the input contract for
+// linode_profile_draft_add_tools. tools is required at runtime, but a repeated
+// field cannot be marked required in the generated schema, so the required flag
+// is dropped (the handler still enforces presence).
+message ProfileDraftAddToolsInput {
+  // Draft name to mutate.
+  string name = 1;
+  // Tool names to add to the draft. Required at runtime, though the generated
+  // schema cannot mark a repeated field required.
+  repeated string tools = 2;
+}
+
+// ProfileDraftRemoveToolsInput is the input contract for
+// linode_profile_draft_remove_tools. tools is required at runtime, but a
+// repeated field cannot be marked required in the generated schema, so the
+// required flag is dropped (the handler still enforces presence).
+message ProfileDraftRemoveToolsInput {
+  // Draft name to mutate.
+  string name = 1;
+  // Tool names to remove from the draft. Required at runtime, though the
+  // generated schema cannot mark a repeated field required.
+  repeated string tools = 2;
+}
+
+// ProfileListToolsInput is the input contract for linode_profile_list_tools.
+message ProfileListToolsInput {
+  // Filter to tools whose Categories include this exact name (e.g. "compute",
+  // "dns").
+  optional string category = 1;
+  // Filter to tools with this capability. Accepts the short form (read, write,
+  // destroy, admin, meta) or the long form (CapRead, CapWrite, ...).
+  optional string capability = 2;
+}
+
+// ProfileListCategoriesInput is the input contract for
+// linode_profile_list_categories. The tool takes no parameters; the empty
+// message generates an empty-properties object schema.
+message ProfileListCategoriesInput {}
+
+// ProfileCanRunCall is one entry in a linode_profile_can_run request: a tool
+// name plus the arguments that would be passed to it.
+message ProfileCanRunCall {
+  // The tool name to check (required).
+  string tool = 1;
+  // The arguments that would be passed to the tool (optional, free-form).
+  google.protobuf.Struct args = 2;
+}
+
+// ProfileCanRunInput is the input contract for linode_profile_can_run. calls is
+// required at runtime, but a repeated field cannot be marked required in the
+// generated schema, so the required flag is dropped (the handler still enforces
+// presence).
+message ProfileCanRunInput {
+  // The tool calls to check against the active profile. Required at runtime,
+  // though the generated schema cannot mark a repeated field required.
+  repeated ProfileCanRunCall calls = 1;
+}
+
+// ProfileDraftResponse is the draft body the linode_profile_draft_* tools
+// emit after creating or mutating a draft. Repeated fields emit as [] when
+// empty, preserving the draft JSON contract of arrays over null.
+message ProfileDraftResponse {
+  // Draft profile name.
+  string name = 1;
+  // Draft profile description.
+  string description = 2;
+  // Tool names the draft allows.
+  repeated string allowed_tools = 3;
+  // Environments the draft allows.
+  repeated string allowed_environments = 4;
+  // Token scopes the draft requires.
+  repeated string required_token_scopes = 5;
+  // Whether the draft permits yolo mode.
+  bool allow_yolo = 6;
+}
+
+// ProfileDraftDiscardResponse is the linode_profile_draft_discard body: the
+// draft name plus whether a draft was actually removed.
+message ProfileDraftDiscardResponse {
+  // Draft profile name.
+  string name = 1;
+  // Whether a draft with that name existed and was removed.
+  bool discarded = 2;
+}
+
+// ProfileDraftAddToolsResponse is the linode_profile_draft_add_tools body:
+// the draft name plus the tool names the call actually added (already-present
+// names are not repeated back).
+message ProfileDraftAddToolsResponse {
+  // Draft profile name.
+  string name = 1;
+  // Tool names added by this call.
+  repeated string added = 2;
+}
+
+// ProfileDraftRemoveToolsResponse is the linode_profile_draft_remove_tools
+// body: the draft name plus the tool names the call removed.
+message ProfileDraftRemoveToolsResponse {
+  // Draft profile name.
+  string name = 1;
+  // Tool names removed by this call.
+  repeated string removed = 2;
+}
+
+// ProfileDraftSetResponse is the linode_profile_draft_set body: the draft
+// name plus the fields the call actually changed, keyed by field name. Values
+// are the new settings (string arrays or a boolean), so the map is free-form.
+message ProfileDraftSetResponse {
+  // Draft profile name.
+  string name = 1;
+  // Fields changed by this call, keyed by field name.
+  map<string, google.protobuf.Value> changes = 2;
+}
+
+// ProfileFieldDiff is an old/new value pair for one field in a draft save
+// diff. Values are free-form (string, bool, or string array per field).
+message ProfileFieldDiff {
+  // Value before the save; null for a new profile.
+  google.protobuf.Value old = 1;
+  // Value after the save.
+  google.protobuf.Value new = 2;
+}
+
+// ProfileDraftSaveResponse is the linode_profile_draft_save body: the change
+// set the save produced, so the model can summarize what landed in config.
+message ProfileDraftSaveResponse {
+  // Saved profile name.
+  string name = 1;
+  // Whether the profile did not exist before this save.
+  bool is_new = 2;
+  // Tools present in the draft but not the prior profile, sorted.
+  repeated string added_tools = 3;
+  // Tools present in the prior profile but not the draft, sorted.
+  repeated string removed_tools = 4;
+  // Non-tool fields that differ, keyed by field name.
+  map<string, ProfileFieldDiff> changed_fields = 5;
+}
+
+// ProfileToolCatalogItem is one tool entry in the linode_profile_list_tools
+// catalog.
+message ProfileToolCatalogItem {
+  // Tool name.
+  string name = 1;
+  // Capability tier: Read, Write, Destroy, Admin, or Meta.
+  string capability = 2;
+  // Categories the tool belongs to.
+  repeated string categories = 3;
+}
+
+// ProfileToolListResponse is the linode_profile_list_tools body: the filtered
+// tool catalog wrapped in the {count, items} envelope every list tool uses.
+message ProfileToolListResponse {
+  // Tools returned after filtering.
+  int32 count = 1;
+  // Matching catalog entries.
+  repeated ProfileToolCatalogItem tools = 2;
+}
+
+// ProfileCategoryItem is one category entry in the
+// linode_profile_list_categories body.
+message ProfileCategoryItem {
+  // Category name.
+  string name = 1;
+  // Tools in the category.
+  int32 tool_count = 2;
+}
+
+// ProfileCategoryListResponse is the linode_profile_list_categories body,
+// wrapped in the {count, items} envelope every list tool uses.
+message ProfileCategoryListResponse {
+  // Categories returned.
+  int32 count = 1;
+  // Category entries sorted by name.
+  repeated ProfileCategoryItem categories = 2;
+}
+
+// ProfileCanRunResult is the per-call verdict row in the
+// linode_profile_can_run body.
+message ProfileCanRunResult {
+  // Tool name the verdict applies to.
+  string tool = 1;
+  // Whether the active profile permits the call.
+  bool allowed = 2;
+  // Why the call is blocked, omitted when allowed.
+  optional string reason = 3;
+  // How to unblock the call, omitted when allowed.
+  optional string remedy = 4;
+}
+
+// ProfileCanRunSummary collapses the per-call verdicts into counts.
+// blocked_by_reason holds the reason bucket keys; its sum is at most blocked
+// (an uncategorized reason increments blocked without a bucket).
+message ProfileCanRunSummary {
+  // Calls checked.
+  int32 total = 1;
+  // Calls the profile permits.
+  int32 allowed = 2;
+  // Calls the profile blocks.
+  int32 blocked = 3;
+  // Blocked-call counts keyed by reason bucket.
+  map<string, int32> blocked_by_reason = 4;
+}
+
+// ProfileCanRunResponse is the full linode_profile_can_run body.
+message ProfileCanRunResponse {
+  // Profile the verdicts were evaluated against.
+  string active_profile = 1;
+  // Per-call verdicts in request order.
+  repeated ProfileCanRunResult results = 2;
+  // Verdict counts.
+  ProfileCanRunSummary summary = 3;
+}

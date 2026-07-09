@@ -2,9 +2,12 @@ package linode
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"google.golang.org/protobuf/encoding/protojson"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
@@ -663,6 +666,72 @@ func (c *Client) httpUpdateLKEControlPlaneACL(ctx context.Context, clusterID int
 	}
 
 	return &acl, nil
+}
+
+// httpUpdateLKEControlPlaneACLProto updates the control plane ACL and decodes the
+// response into the LKEControlPlaneACL proto element. The Linode API wraps the
+// ACL under a top-level "acl" key, so the acl sub-object is protojson-decoded
+// (DiscardUnknown) into the proto element to keep the full {enabled, addresses}
+// shape the API returns.
+func (c *Client) httpUpdateLKEControlPlaneACLProto(ctx context.Context, clusterID int, req UpdateLKEControlPlaneACLRequest) (*linodev1.LKEControlPlaneACL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control_plane_acl", clusterID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateLKEControlPlaneACL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var envelope struct {
+		ACL json.RawMessage `json:"acl"`
+	}
+	if err := c.handleResponse(resp, &envelope); err != nil {
+		return nil, err
+	}
+
+	acl := &linodev1.LKEControlPlaneACL{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(envelope.ACL, acl); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal control plane ACL element: %w", err)
+	}
+
+	return acl, nil
+}
+
+// httpGetLKEControlPlaneACLProto retrieves the control plane ACL and decodes it
+// into the LKEControlPlaneACL proto element. The Linode API wraps the ACL under
+// a top-level "acl" key, so the acl sub-object is protojson-decoded
+// (DiscardUnknown) into the proto element to keep the full {enabled, addresses}
+// shape the API returns.
+func (c *Client) httpGetLKEControlPlaneACLProto(ctx context.Context, clusterID int) (*linodev1.LKEControlPlaneACL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control_plane_acl", clusterID)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetLKEControlPlaneACL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var envelope struct {
+		ACL json.RawMessage `json:"acl"`
+	}
+	if err := c.handleResponse(resp, &envelope); err != nil {
+		return nil, err
+	}
+
+	acl := &linodev1.LKEControlPlaneACL{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(envelope.ACL, acl); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal control plane ACL element: %w", err)
+	}
+
+	return acl, nil
 }
 
 // DeleteLKEControlPlaneACL deletes the control plane ACL for an LKE cluster.

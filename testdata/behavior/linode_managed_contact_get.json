@@ -1,0 +1,17 @@
+{
+  "tool": "linode_managed_contact_get",
+  "description": "Contact get: shared positive-id rejection and the contact GET.",
+  "cases": [
+    {
+      "name": "rejects non-positive contact_id",
+      "args": { "contact_id": 0 },
+      "expect_error": "contact_id must be a positive integer"
+    },
+    {
+      "name": "gets a managed contact",
+      "args": { "contact_id": 456 },
+      "api_response": { "id": 456, "name": "Ops", "email": "ops@example.com" },
+      "expect_request": { "method": "GET", "path": "/managed/contacts/456" }
+    }
+  ]
+}

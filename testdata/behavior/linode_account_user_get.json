@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_user_get",
+  "description": "Account user get: missing username agrees across languages; success pins the GET path.",
+  "cases": [
+    {
+      "name": "requires username",
+      "args": {},
+      "expect_error": "username is required"
+    },
+    {
+      "name": "gets an account user by username",
+      "args": { "username": "alice" },
+      "api_response": { "username": "alice", "email": "alice@example.com" },
+      "expect_request": { "method": "GET", "path": "/account/users/alice" }
+    }
+  ]
+}

@@ -2,13 +2,13 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"slices"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // ActiveProfileProvider returns the profile the server is currently running
@@ -91,22 +91,14 @@ func NewLinodeProfileCanRunTool(
 	catalog CatalogProvider,
 	activeProfile ActiveProfileProvider,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_can_run",
-		mcp.WithDescription(
-			"Pre-check whether the active profile would permit a sequence of tool "+
-				"calls before executing any of them. Returns a per-call allowed/blocked "+
-				"verdict with a reason and remedy, plus a summary. Inspects only the tool "+
-				"name and optional environment arg, not resource IDs. Advice only; it does "+
-				"not execute anything.",
-		),
-		mcp.WithArray(
-			canRunParamCalls,
-			mcp.Description("Tool calls to pre-check. Each entry is an object with a required "+
-				"\"tool\" name and optional \"args\" (only \"environment\" is inspected)."),
-			mcp.Required(),
-			mcp.Items(canRunCallItemSchema()),
-		),
+		"Pre-check whether the active profile would permit a sequence of tool "+
+			"calls before executing any of them. Returns a per-call allowed/blocked "+
+			"verdict with a reason and remedy, plus a summary. Inspects only the tool "+
+			"name and optional environment arg, not resource IDs. Advice only; it does "+
+			"not execute anything.",
+		toolschemas.Schema("linode.mcp.v1.ProfileCanRunInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -159,28 +151,49 @@ func NewLinodeProfileCanRunTool(
 			resp.Summary.BlockedByReason[bucket]++
 		}
 
-		body, err := json.Marshal(resp)
-		if err != nil {
-			return nil, fmt.Errorf("marshal can_run response: %w", err)
-		}
-
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(canRunProto(&resp))
 	}
 
 	return tool, profiles.CapMeta, handler
 }
 
-// canRunCallItemSchema is the mcp.Items schema for one `calls` entry: an
-// object with a required string `tool` and an optional `args` object.
-// Returns a fresh map per call so the global-state linter has nothing to flag.
-func canRunCallItemSchema() map[string]any {
-	return map[string]any{
-		jsonSchemaTypeKey: "object",
-		"properties": map[string]any{
-			canRunEntryTool: map[string]any{jsonSchemaTypeKey: jsonSchemaStringType},
-			canRunEntryArgs: map[string]any{jsonSchemaTypeKey: "object"},
+// canRunProto converts the internal verdict shape into the response message.
+// Reason and remedy stay optional so allowed rows omit them, matching the
+// omitempty behavior of the internal struct.
+func canRunProto(resp *canRunResponse) *linodev1.ProfileCanRunResponse {
+	results := make([]*linodev1.ProfileCanRunResult, 0, len(resp.Results))
+
+	for idx := range resp.Results {
+		row := &linodev1.ProfileCanRunResult{
+			Tool:    resp.Results[idx].Tool,
+			Allowed: resp.Results[idx].Allowed,
+		}
+
+		if resp.Results[idx].Reason != "" {
+			row.Reason = &resp.Results[idx].Reason
+		}
+
+		if resp.Results[idx].Remedy != "" {
+			row.Remedy = &resp.Results[idx].Remedy
+		}
+
+		results = append(results, row)
+	}
+
+	blockedByReason := make(map[string]int32, len(resp.Summary.BlockedByReason))
+	for bucket, count := range resp.Summary.BlockedByReason {
+		blockedByReason[bucket] = linodeIDToInt32(count)
+	}
+
+	return &linodev1.ProfileCanRunResponse{
+		ActiveProfile: resp.ActiveProfile,
+		Results:       results,
+		Summary: &linodev1.ProfileCanRunSummary{
+			Total:           linodeIDToInt32(resp.Summary.Total),
+			Allowed:         linodeIDToInt32(resp.Summary.Allowed),
+			Blocked:         linodeIDToInt32(resp.Summary.Blocked),
+			BlockedByReason: blockedByReason,
 		},
-		"required": []any{canRunEntryTool},
 	}
 }
 

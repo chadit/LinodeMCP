@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.ImageDeleteResponse",
+  "description": "Image delete confirmation: the endpoint returns an empty body, so the response carries only a human-readable message. The image ID is a string (for example private/123).",
+  "input": {
+    "message": "Image private/12345 deleted successfully"
+  },
+  "canonical": {
+    "message": "Image private/12345 deleted successfully"
+  }
+}

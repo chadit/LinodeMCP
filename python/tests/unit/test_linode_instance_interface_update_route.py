@@ -193,15 +193,9 @@ def test_create_linode_instance_interface_update_tool_schema() -> None:
     assert tool.name == "linode_instance_interface_update"
     assert capability is Capability.Write
     assert tool.inputSchema["required"] == ["linode_id", "interface_id", "confirm"]
-    assert tool.inputSchema["properties"]["linode_id"]["minimum"] == 1
-    assert tool.inputSchema["properties"]["interface_id"]["minimum"] == 1
     assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
     assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
     assert "dry_run" not in tool.inputSchema["required"]
-    assert {"required": ["default_route"]} in tool.inputSchema["anyOf"]
-    assert {"required": ["public"]} in tool.inputSchema["anyOf"]
-    assert {"required": ["vlan"]} in tool.inputSchema["anyOf"]
-    assert {"required": ["vpc"]} in tool.inputSchema["anyOf"]
 
 
 @pytest.mark.asyncio
@@ -225,7 +219,10 @@ async def test_handle_linode_instance_interface_update_success(
     )
 
     payload = json.loads(result[0].text)
-    assert payload == {"id": 789, "default_route": {"ipv4": True}}
+    assert payload == {
+        "message": "Interface 789 updated on instance 123 successfully",
+        "interface": {"id": 789, "default_route": {"ipv4": True}},
+    }
     mock_linode_client.update_instance_interface.assert_awaited_once_with(
         123,
         789,
@@ -237,11 +234,12 @@ async def test_handle_linode_instance_interface_update_success(
 
 
 @pytest.mark.asyncio
-async def test_handle_linode_instance_interface_update_empty_result_synthesizes_message(
+async def test_handle_linode_instance_interface_update_empty_result_still_confirms(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    # The API may answer a successful PUT with an empty body; the handler then
-    # reports a synthesized success message instead of forwarding the empty dict.
+    # The API may answer a successful PUT with an empty body. The proto envelope
+    # then carries the confirmation message plus a zero-valued interface element,
+    # byte-identical to the Go handler decoding the same empty body.
     mock_linode_client.update_instance_interface.return_value = {}
 
     result = await handle_linode_instance_interface_update(
@@ -255,9 +253,10 @@ async def test_handle_linode_instance_interface_update_empty_result_synthesizes_
     )
 
     payload = json.loads(result[0].text)
-    assert payload["linode_id"] == 123
-    assert payload["interface_id"] == 789
-    assert "update requested" in payload["message"]
+    assert payload == {
+        "message": "Interface 789 updated on instance 123 successfully",
+        "interface": {"id": 0},
+    }
 
 
 @pytest.mark.asyncio
@@ -302,7 +301,10 @@ async def test_handle_update_instance_interface_requires_confirm_true(
 
     result = await handle_linode_instance_interface_update(arguments, sample_config)
 
-    assert result[0].text == "Error: confirm must be true"
+    assert result[0].text == (
+        "Error: This updates a network interface on the Linode instance. Set "
+        "confirm=true to proceed."
+    )
     mock_linode_client.update_instance_interface.assert_not_called()
 
 

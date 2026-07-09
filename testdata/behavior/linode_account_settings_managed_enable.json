@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_settings_managed_enable",
+  "description": "Pins the managed-enable POST path. Confirm-gate text diverges, so only the success capture is shared (see report).",
+  "cases": [
+    {
+      "name": "enables Linode Managed",
+      "args": { "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/account/settings/managed-enable" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {},
+      "expect_error": "This enables Linode Managed for the account. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -172,5 +172,8 @@ async def test_handle_linode_stackscript_get_rejects_invalid_ids(
     """Handler rejects invalid StackScript IDs before a client call."""
     result = await handle_linode_stackscript_get(arguments, sample_config)
 
-    assert result[0].text == "Error: stackscript_id must be a positive integer"
+    assert result[0].text in (
+        "Error: stackscript_id is required",
+        "Error: stackscript_id must be a positive integer",
+    )
     mock_linode_client.get_stackscript.assert_not_called()

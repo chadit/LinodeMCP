@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"sort"
 
@@ -149,18 +150,39 @@ func printToolDetail(stdout io.Writer, srv *server.Server, info *server.ToolInfo
 		writef(stdout, "Description: %s\n", description)
 	}
 
-	writef(stdout, "Arguments (%d):\n", len(info.InputSchema.Properties))
+	schema := effectiveInputSchema(info)
 
-	required := requiredSet(info.InputSchema.Required)
+	writef(stdout, "Arguments (%d):\n", len(schema.Properties))
 
-	for _, name := range sortedPropertyNames(info.InputSchema.Properties) {
+	required := requiredSet(schema.Required)
+
+	for _, name := range sortedPropertyNames(schema.Properties) {
 		var marker string
 		if _, ok := required[name]; ok {
 			marker = " (required)"
 		}
 
-		writef(stdout, "  %-28s %s%s\n", name, propertyType(info.InputSchema, name), marker)
+		writef(stdout, "  %-28s %s%s\n", name, propertyType(schema, name), marker)
 	}
+}
+
+// effectiveInputSchema resolves the schema `tools show` renders. Tools built
+// with NewToolWithRawSchema carry their contract in RawInputSchema and leave
+// the structured InputSchema.Properties empty, so decode the raw JSON to
+// display their arguments the same way structured-schema tools show theirs.
+// Falls back to the structured schema when there is no raw schema or it does
+// not parse.
+func effectiveInputSchema(info *server.ToolInfo) mcp.ToolInputSchema {
+	if len(info.InputSchema.Properties) > 0 || len(info.RawInputSchema) == 0 {
+		return info.InputSchema
+	}
+
+	var parsed mcp.ToolInputSchema
+	if err := json.Unmarshal(info.RawInputSchema, &parsed); err != nil {
+		return info.InputSchema
+	}
+
+	return parsed
 }
 
 // toolDescription returns the live description for tool from the server's

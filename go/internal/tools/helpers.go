@@ -46,10 +46,6 @@ const (
 	paramPlanID     = "plan_id"
 	paramPlanIDDesc = "The plan_id returned by a mode:\"plan\" call, supplied with mode:\"apply\" to execute it."
 
-	// confirmDeleteDesc is the confirm-param description shared by the
-	// irreversible delete-by-ID tools (instance, volume, LKE cluster, ...).
-	confirmDeleteDesc = "Must be set to true to confirm deletion. This action is irreversible. Ignored when dry_run=true."
-
 	// twoStageNote is appended to every opted-in delete tool's description so
 	// the plan/apply flow shows up at the tool level, not only on the mode and
 	// plan_id params. See docs/two-stage-writes.md.
@@ -60,33 +56,6 @@ const (
 	// does not opt in by capability default). See docs/two-stage-writes.md.
 	twoStageOptInNote = " Supports two-stage writes when enabled in the two_stage config: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes."
 )
-
-// newDeleteByIDTool builds the schema common to every irreversible
-// delete-by-numeric-ID tool: environment, the ID param, confirm, dry_run, and
-// the two-stage mode/plan_id controls. The delete tools share this exact
-// shape, so building it in one place keeps their schemas in lockstep (and
-// keeps each constructor below the dupl linter's threshold). Uses the shared
-// confirmDeleteDesc; tools needing a resource-specific confirm message call
-// newDeleteByIDToolConfirm directly.
-func newDeleteByIDTool(name, description, idParam, idDesc string) mcp.Tool {
-	return newDeleteByIDToolConfirm(name, description, idParam, idDesc, confirmDeleteDesc)
-}
-
-// newDeleteByIDToolConfirm is newDeleteByIDTool with a caller-supplied confirm
-// description, for delete tools whose confirm text names a resource-specific
-// consequence (e.g. "this deletes all DNS records").
-func newDeleteByIDToolConfirm(name, description, idParam, idDesc, confirmDesc string) mcp.Tool {
-	return mcp.NewTool(
-		name,
-		mcp.WithDescription(description+twoStageNote),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber(idParam, mcp.Required(), mcp.Description(idDesc)),
-		mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description(confirmDesc)),
-		mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-		mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-	)
-}
 
 // liveConfigSource is the optional hot-reload provider. When set (by
 // main.go via SetLiveConfigSource), prepareClient reads through it on each
@@ -123,16 +92,6 @@ func resolveConfig(snapshot *config.Config) *config.Config {
 	return snapshot
 }
 
-// MarshalToolResponse serializes v as indented JSON and wraps it in an MCP text result.
-func MarshalToolResponse(v any) (*mcp.CallToolResult, error) {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return mcp.NewToolResultText(string(data)), nil
-}
-
 // prepareClient extracts the environment parameter, validates the config, and returns a ready-to-use API client.
 // When a live config source is registered (see SetLiveConfigSource), the
 // latest values flow through here so reloaded resilience and environment
@@ -163,38 +122,9 @@ func RequireConfirm(request *mcp.CallToolRequest, message string) *mcp.CallToolR
 	return nil
 }
 
-// newSimpleGetTool creates a tool that retrieves a single API resource with no parameters beyond environment.
-func newSimpleGetTool(
-	cfg *config.Config,
-	toolName, description string,
-	apiCall func(context.Context, *linode.Client) (any, error),
-) (mcp.Tool, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
-		toolName,
-		mcp.WithDescription(description),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-	)
-
-	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		client, err := prepareClient(&request, cfg)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-
-		result, err := apiCall(ctx, client)
-		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve %s: %v", toolName, err)), nil
-		}
-
-		return MarshalToolResponse(result)
-	}
-
-	return tool, handler
-}
-
-// newSimpleProtoGetTool is the proto-canonical sibling of newSimpleGetTool: it
-// builds a no-id get tool whose input schema comes from the proto contract and
-// whose response is serialized through MarshalProtoToolResponse.
+// newSimpleProtoGetTool builds a no-id get tool whose input schema comes from
+// the proto contract and whose response is serialized through
+// MarshalProtoToolResponse.
 func newSimpleProtoGetTool(
 	cfg *config.Config,
 	toolName, description, schemaName string,
@@ -245,20 +175,6 @@ func FilterByContains[T any](items []T, substr string, getField func(T) string) 
 	}
 
 	return filtered
-}
-
-// FormatListResponse builds a standard list response with count, optional filter, and items under the given JSON key.
-func FormatListResponse[T any](items []T, appliedFilters []string, key string) (*mcp.CallToolResult, error) {
-	response := map[string]any{
-		"count": len(items),
-		key:     items,
-	}
-
-	if len(appliedFilters) > 0 {
-		response["filter"] = strings.Join(appliedFilters, ", ")
-	}
-
-	return MarshalToolResponse(response)
 }
 
 // listFilterParam combines a tool parameter definition with its filter logic for list tools.
@@ -400,6 +316,25 @@ func newProtoListTool[T, R proto.Message](
 	return tool, handler
 }
 
+// newProtoListToolRawSchema pairs the filtered list handler newProtoListTool
+// builds with a raw-schema tool loaded from the generated input contract,
+// discarding the schema newProtoListTool would otherwise synthesize. The
+// filtered VPC and firewall list factories are structurally identical once both
+// advertise a generated schema, so routing them through one builder keeps them
+// below the dupl linter's threshold.
+func newProtoListToolRawSchema[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, schemaName string,
+	apiCall func(ctx context.Context, client *linode.Client) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	_, handler := newProtoListTool(cfg, toolName, description, apiCall, filterParams, assemble)
+	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
+
+	return tool, handler
+}
+
 // protoListPageReader validates and returns the page/page_size pair from the
 // request. Each paginated family passes the same reader its non-proto handler
 // already used, so the page/page_size validation behavior (and error messages)
@@ -453,6 +388,24 @@ func newProtoListToolPaginated[T, R proto.Message](
 	return tool, handler
 }
 
+// newProtoListToolPaginatedRawSchema is newProtoListToolPaginated's raw-schema
+// counterpart: it keeps the paginated fetch+filter handler but advertises the
+// generated input contract instead of the synthesized schema, mirroring how
+// newProtoListToolRawSchema relates to newProtoListTool.
+func newProtoListToolPaginatedRawSchema[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, schemaName, pageDesc, pageSizeDesc string,
+	apiCall func(ctx context.Context, client *linode.Client, page, pageSize int) ([]T, error),
+	readPage protoListPageReader,
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	_, handler := newProtoListToolPaginated(cfg, toolName, description, pageDesc, pageSizeDesc, apiCall, readPage, filterParams, assemble)
+	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
+
+	return tool, handler
+}
+
 // protoListPathID describes the Required path-id param of a sub-resource list
 // (e.g. vpc_id for vpc_subnet_list). option carries the exact schema option the
 // family's existing factory used (so the input schema is byte-identical), and
@@ -481,6 +434,24 @@ func newProtoListToolSubresource[T, R proto.Message](
 	return buildProtoSubresourceList(cfg, toolName, description, pathID.option, pathID.parse, apiCall, filterParams, assemble)
 }
 
+// newProtoListToolSubresourceRawSchema is newProtoListToolSubresource's
+// raw-schema counterpart: it keeps the sub-resource fetch+filter handler but
+// advertises the generated input contract instead of the synthesized schema,
+// mirroring how newProtoListToolRawSchema relates to newProtoListTool.
+func newProtoListToolSubresourceRawSchema[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, schemaName string,
+	pathID protoListPathID,
+	apiCall func(ctx context.Context, client *linode.Client, pathID int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	_, handler := newProtoListToolSubresource(cfg, toolName, description, pathID, apiCall, filterParams, assemble)
+	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
+
+	return tool, handler
+}
+
 // newProtoListToolSubresourcePaginated is the combination of
 // newProtoListToolSubresource and newProtoListToolPaginated: a sub-resource list
 // keyed by a Required path id (e.g. /linode/instances/{linode_id}/configs) whose
@@ -504,6 +475,26 @@ func newProtoListToolSubresourcePaginated[T, R proto.Message](
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return buildProtoSubresourceListPaginated(cfg, toolName, description, pageDesc, pageSizeDesc,
 		pathID.option, pathID.parse, readPage, apiCall, filterParams, assemble)
+}
+
+// newProtoListToolSubresourcePaginatedRawSchema is
+// newProtoListToolSubresourcePaginated's raw-schema counterpart: it keeps the
+// sub-resource paginated fetch+filter handler but advertises the generated input
+// contract instead of the synthesized schema, mirroring how
+// newProtoListToolRawSchema relates to newProtoListTool.
+func newProtoListToolSubresourcePaginatedRawSchema[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, schemaName, pageDesc, pageSizeDesc string,
+	pathID protoListPathID,
+	readPage protoListPageReader,
+	apiCall func(ctx context.Context, client *linode.Client, pathID, page, pageSize int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	_, handler := newProtoListToolSubresourcePaginated(cfg, toolName, description, pageDesc, pageSizeDesc, pathID, readPage, apiCall, filterParams, assemble)
+	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
+
+	return tool, handler
 }
 
 // buildProtoSubresourceListPaginated is the shared core of the sub-resource
@@ -587,6 +578,25 @@ func newProtoListToolSubresourceString[T, R proto.Message](
 	return buildProtoSubresourceList(cfg, toolName, description, pathID.option, pathID.parse, apiCall, filterParams, assemble)
 }
 
+// newProtoListToolSubresourceStringRawSchema is
+// newProtoListToolSubresourceString's raw-schema counterpart: it keeps the
+// string-keyed sub-resource fetch+filter handler but advertises the generated
+// input contract instead of the synthesized schema, mirroring how
+// newProtoListToolSubresourceRawSchema relates to newProtoListToolSubresource.
+func newProtoListToolSubresourceStringRawSchema[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, schemaName string,
+	pathID protoListPathIDString,
+	apiCall func(ctx context.Context, client *linode.Client, pathID string) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	_, handler := newProtoListToolSubresourceString(cfg, toolName, description, pathID, apiCall, filterParams, assemble)
+	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
+
+	return tool, handler
+}
+
 // newProtoListToolSubresourceStringPaginated is
 // newProtoListToolSubresourcePaginated for sub-resource lists keyed by a Required
 // string path-id that is not numeric (e.g. /images/{image_id}/sharegroups, where
@@ -606,6 +616,26 @@ func newProtoListToolSubresourceStringPaginated[T, R proto.Message](
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	return buildProtoSubresourceListPaginated(cfg, toolName, description, pageDesc, pageSizeDesc,
 		pathID.option, pathID.parse, readPage, apiCall, filterParams, assemble)
+}
+
+// newProtoListToolSubresourceStringPaginatedRawSchema is
+// newProtoListToolSubresourceStringPaginated's raw-schema counterpart: it keeps
+// the string-keyed paginated fetch+filter handler but advertises the generated
+// input contract instead of the synthesized schema, mirroring how
+// newProtoListToolRawSchema relates to newProtoListTool.
+func newProtoListToolSubresourceStringPaginatedRawSchema[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, schemaName, pageDesc, pageSizeDesc string,
+	pathID protoListPathIDString,
+	readPage protoListPageReader,
+	apiCall func(ctx context.Context, client *linode.Client, pathID string, page, pageSize int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	_, handler := newProtoListToolSubresourceStringPaginated(cfg, toolName, description, pageDesc, pageSizeDesc, pathID, readPage, apiCall, filterParams, assemble)
+	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
+
+	return tool, handler
 }
 
 // buildProtoSubresourceList is the shared core of the sub-resource (non-paginated)
@@ -757,6 +787,26 @@ func newProtoListToolSubresource2Paginated[T, R proto.Message](
 	return tool, handler
 }
 
+// newProtoListToolSubresource2PaginatedRawSchema is
+// newProtoListToolSubresource2Paginated's raw-schema counterpart: it keeps the
+// two-path-id paginated fetch+filter handler but advertises the generated input
+// contract instead of the synthesized schema, mirroring how
+// newProtoListToolRawSchema relates to newProtoListTool.
+func newProtoListToolSubresource2PaginatedRawSchema[T, R proto.Message](
+	cfg *config.Config,
+	toolName, description, schemaName, pageDesc, pageSizeDesc string,
+	parent, child protoListPathID,
+	readPage protoListPageReader,
+	apiCall func(ctx context.Context, client *linode.Client, parentID, childID, page, pageSize int) ([]T, error),
+	filterParams []listFilterParam[T],
+	assemble func(items []T, count int32, filter *string) R,
+) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	_, handler := newProtoListToolSubresource2Paginated(cfg, toolName, description, pageDesc, pageSizeDesc, parent, child, readPage, apiCall, filterParams, assemble)
+	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
+
+	return tool, handler
+}
+
 // parseProtoListPathIDs2 validates the parent then the child path-id, returning
 // both validated ids or the first non-empty validation message. Both two-path-id
 // factories share it so the parent-before-child validation order (and each
@@ -774,34 +824,6 @@ func parseProtoListPathIDs2(request *mcp.CallToolRequest, parent, child protoLis
 	}
 
 	return parentID, childID, ""
-}
-
-// toolHandlerFunc is the signature for tool handler functions that receive a pointer to the request.
-type toolHandlerFunc func(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error)
-
-// newToolWithHandler creates an MCP tool definition paired with a handler, factoring out the
-// common boilerplate of adding the environment parameter and wrapping the handler closure.
-func newToolWithHandler(
-	cfg *config.Config,
-	name, description string,
-	options []mcp.ToolOption,
-	handler toolHandlerFunc,
-) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	allOptions := make([]mcp.ToolOption, 0, len(options)+2)
-	allOptions = append(
-		allOptions,
-		mcp.WithDescription(description),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-	)
-	allOptions = append(allOptions, options...)
-
-	tool := mcp.NewTool(name, allOptions...)
-
-	wrappedHandler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return handler(ctx, &request, cfg)
-	}
-
-	return tool, wrappedHandler
 }
 
 // objectSliceFromToolArg normalizes an array-of-objects tool argument that may

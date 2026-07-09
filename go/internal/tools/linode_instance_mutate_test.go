@@ -43,17 +43,17 @@ func TestLinodeInstanceMutateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["linode_id"]; !ok {
-		t.Errorf("props missing key %v", "linode_id")
+	rawSchema := string(tool.RawInputSchema)
+	if !strings.Contains(rawSchema, "linode_id") {
+		t.Errorf("tool.RawInputSchema missing key %v", "linode_id")
 	}
 
-	if _, ok := props["allow_auto_disk_resize"]; !ok {
-		t.Errorf("props missing key %v", "allow_auto_disk_resize")
+	if !strings.Contains(rawSchema, "allow_auto_disk_resize") {
+		t.Errorf("tool.RawInputSchema missing key %v", "allow_auto_disk_resize")
 	}
 
-	if _, ok := props["confirm"]; !ok {
-		t.Errorf("props missing key %v", "confirm")
+	if !strings.Contains(rawSchema, "confirm") {
+		t.Errorf("tool.RawInputSchema missing key %v", "confirm")
 	}
 }
 

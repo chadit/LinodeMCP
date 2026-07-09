@@ -1,0 +1,32 @@
+{
+  "tool": "linode_instance_ip_delete",
+  "description": "Destroy tool: rejects missing linode_id/address, enforces the destroy-bypass gate on confirm-alone, and DELETEs the IP when confirm+confirm_bypass_dry_run are set.",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects missing address",
+      "args": { "linode_id": 123 },
+      "expect_error": "address is required"
+    },
+    {
+      "name": "rejects a malformed address",
+      "args": { "linode_id": 123, "address": "not-an-ip" },
+      "expect_error": "address must be a valid IP address"
+    },
+    {
+      "name": "confirm alone hits the destroy-bypass gate",
+      "args": { "linode_id": 123, "address": "203.0.113.5", "confirm": true },
+      "expect_error": "linode_instance_ip_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the IP when authorized to bypass the preview",
+      "args": { "linode_id": 123, "address": "203.0.113.5", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/linode/instances/123/ips/203.0.113.5" }
+    }
+  ]
+}

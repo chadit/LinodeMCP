@@ -1,0 +1,36 @@
+{
+  "tool": "linode_instance_ip_allocate",
+  "description": "Allocate needs confirm; public is required by the API (no default) so both languages reject a missing public rather than injecting one; then POSTs the type/public body. No-confirm and missing-type message text diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects missing linode_id once confirmed",
+      "args": { "confirm": true, "type": "ipv4" },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "requires public once confirmed",
+      "args": { "confirm": true, "linode_id": 123, "type": "ipv4" },
+      "expect_error": "public is required"
+    },
+    {
+      "name": "allocates an IP with the type/public body",
+      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "api_response": { "address": "203.0.113.5" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/ips",
+        "body": { "type": "ipv4", "public": true }
+      }
+    },
+    {
+      "name": "rejects an invalid type",
+      "args": { "linode_id": 123, "type": "ipv6-range", "public": true, "confirm": true },
+      "expect_error": "type must be one of: ipv4"
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "type": "ipv4", "public": true},
+      "expect_error": "This allocates a new IP address which may incur charges. Set confirm=true to proceed."
+    }
+  ]
+}

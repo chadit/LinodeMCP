@@ -48,10 +48,187 @@ message VolumeWriteResponse {
   Volume volume = 2;
 }
 
+// VolumeDeleteResponse is the id-echo envelope linode_volume_delete returns: a
+// confirmation message plus the deleted volume's ID. The delete endpoint
+// returns an empty body, so the id echo confirms the target.
+message VolumeDeleteResponse {
+  string message = 1;
+  int32 volume_id = 2;
+}
+
+// VolumeDetachResponse is the id-echo envelope linode_volume_detach returns: a
+// confirmation message plus the detached volume's ID. The detach endpoint
+// returns an empty body, so the id echo confirms the target.
+message VolumeDetachResponse {
+  string message = 1;
+  int32 volume_id = 2;
+}
+
 // VolumeGetInput is the input contract for linode_volume_get.
 message VolumeGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
   // The ID of the volume to retrieve (required).
   int32 volume_id = 2;
+}
+
+// VolumeListInput is the input contract for linode_volume_list. region and
+// label_contains are client-side filters.
+message VolumeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Filter volumes by region (e.g., 'us-east', 'eu-west').
+  optional string region = 2;
+  // Filter volumes where label contains this string (case-insensitive).
+  optional string label_contains = 3;
+}
+
+// VolumeTypeListInput is the input contract for linode_volume_type_list.
+message VolumeTypeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// VolumeCreateInput is the input contract for linode_volume_create. A plain
+// (non-optional) field is required in the generated schema; an optional field
+// is not. label and confirm are required; the rest are optional.
+message VolumeCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // A label for the volume (must be unique within your account).
+  string label = 2;
+  // Region where the volume will be created. Required unless attaching to a Linode.
+  optional string region = 3;
+  // Size in GB (10-10240). Default is 20GB.
+  optional int32 size = 4;
+  // Linode ID to attach the volume to (optional). If provided, region is inferred.
+  optional int32 linode_id = 5;
+  // Must be set to true to confirm volume creation. This operation incurs
+  // billing charges. Ignored when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+}
+
+// VolumeCloneInput is the input contract for linode_volume_clone. volume_id,
+// label, and confirm are required.
+message VolumeCloneInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the source volume to clone.
+  int32 volume_id = 2;
+  // A label for the cloned volume.
+  string label = 3;
+  // Must be set to true to confirm volume cloning. This operation incurs
+  // billing charges. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// VolumeAttachInput is the input contract for linode_volume_attach. volume_id,
+// linode_id, and confirm are required.
+message VolumeAttachInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the volume to attach.
+  int32 volume_id = 2;
+  // The ID of the Linode instance to attach the volume to.
+  int32 linode_id = 3;
+  // The Linode config ID to attach to (optional).
+  optional int32 config_id = 4;
+  // Whether the volume should remain attached across instance reboots (optional).
+  optional bool persist_across_boots = 5;
+  // Must be set to true to confirm attaching the volume. Ignored when dry_run=true.
+  bool confirm = 6;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 7;
+}
+
+// VolumeDetachInput is the input contract for linode_volume_detach. volume_id
+// and confirm are required.
+message VolumeDetachInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the volume to detach.
+  int32 volume_id = 2;
+  // Must be set to true to confirm detaching the volume. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// VolumeResizeInput is the input contract for linode_volume_resize. volume_id,
+// size, and confirm are required.
+message VolumeResizeInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the volume to resize.
+  int32 volume_id = 2;
+  // New size in GB (must be larger than current size).
+  int32 size = 3;
+  // Must be set to true to confirm resize. Volumes cannot be downsized. Ignored
+  // when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// VolumeUpdateInput is the input contract for linode_volume_update. volume_id
+// and confirm are required; label and tags are optional (repeated fields are
+// never required in the generated schema).
+message VolumeUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the volume to update.
+  int32 volume_id = 2;
+  // New label for the volume (1-32 chars, alphanumeric, hyphens, underscores).
+  optional string label = 3;
+  // Replacement tags for the volume (optional).
+  repeated string tags = 4;
+  // Must be set to true to confirm the update. Ignored when dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// VolumeDeleteInput is the input contract for linode_volume_delete, an opted-in
+// two-stage destroy: volume_id and confirm are required, and mode/plan_id drive
+// the plan/apply flow.
+message VolumeDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the volume to delete.
+  int32 volume_id = 2;
+  // Must be set to true to confirm deletion. This action is irreversible.
+  // Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// InstanceVolumeListInput is the input contract for
+// linode_instance_volume_list.
+message InstanceVolumeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
 }

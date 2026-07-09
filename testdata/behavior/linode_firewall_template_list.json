@@ -1,0 +1,12 @@
+{
+  "tool": "linode_firewall_template_list",
+  "description": "Firewall template list issues a single GET to the templates collection. Pagination-bound rejection messages diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "lists firewall templates",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/networking/firewalls/templates" }
+    }
+  ]
+}

@@ -6,13 +6,6 @@ package linode
 // constant is the single source of truth for the wire value.
 const CurrentInterfaceGeneration = "linode"
 
-// InstanceTransfer represents monthly network transfer statistics for a Linode instance.
-type InstanceTransfer struct {
-	Billable int   `json:"billable"`
-	Quota    int   `json:"quota"`
-	Used     int64 `json:"used"`
-}
-
 // Instance represents a Linode instance.
 type Instance struct {
 	ID                  int                 `json:"id"`

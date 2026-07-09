@@ -1,0 +1,17 @@
+{
+  "tool": "linode_database_mysql_instance_resume",
+  "description": "Confirm-gated resume POST. Missing/invalid instance_id error text diverges between languages (see report).",
+  "cases": [
+    {
+      "name": "resumes a mysql instance",
+      "args": { "instance_id": 123, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/databases/mysql/instances/123/resume" }
+    },
+    {
+      "name": "requires confirm",
+      "args": { "instance_id": 123 },
+      "expect_error": "This resumes a Managed Database instance. Set confirm=true to proceed."
+    }
+  ]
+}

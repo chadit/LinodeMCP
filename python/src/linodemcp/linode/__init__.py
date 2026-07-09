@@ -317,7 +317,7 @@ def validate_dns_record_target(record_type: str, target: str) -> None:
             raise ValueError(msg)
 
         if ip.is_private or ip.is_loopback:
-            msg = "A record target cannot be a private IP address"
+            msg = "a record target cannot be a private IP address"
             raise ValueError(msg)
 
 
@@ -1752,16 +1752,25 @@ def _build_monitor_service_alert_definition_body(
     if (
         not isinstance(channel_ids, list)
         or not channel_ids
-        or any(type(item) is not int for item in cast("list[object]", channel_ids))
+        or any(
+            type(item) is not int or item <= 0
+            for item in cast("list[object]", channel_ids)
+        )
     ):
-        msg = "channel_ids must be a non-empty list of integers"
+        msg = "channel_ids must be a non-empty array of positive integers"
         raise ValueError(msg)
+    # Alert-definition entity IDs are strings in the Linode Metrics API (and
+    # in the shared proto contract), unlike the integer entity IDs the token
+    # endpoint takes.
     if entity_ids is not None and (
         not isinstance(entity_ids, list)
         or not entity_ids
-        or any(type(item) is not int for item in cast("list[object]", entity_ids))
+        or any(
+            not isinstance(item, str) or not item.strip()
+            for item in cast("list[object]", entity_ids)
+        )
     ):
-        msg = "entity_ids must be a non-empty list of integers"
+        msg = "entity_ids must be an array of non-empty strings"
         raise ValueError(msg)
     if description is not None and not isinstance(description, str):
         msg = "description must be a string"
@@ -1770,7 +1779,7 @@ def _build_monitor_service_alert_definition_body(
     checked_rule_criteria = cast("dict[str, Any]", rule_criteria)
     checked_trigger_conditions = cast("dict[str, Any]", trigger_conditions)
     checked_channel_ids = cast("list[int]", channel_ids)
-    checked_entity_ids = cast("list[int] | None", entity_ids)
+    checked_entity_ids = cast("list[str] | None", entity_ids)
 
     body: dict[str, Any] = {
         "label": label,
@@ -2535,6 +2544,24 @@ class Client:
             response = await self.make_request("PUT", endpoint, body)
             data = response.json()
             return self._parse_instance(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateInstance", e) from e
+
+    async def update_instance_raw(
+        self, instance_id: int, **fields: Any
+    ) -> dict[str, Any]:
+        """Update an instance and return the full raw API body.
+
+        Same request shape as update_instance, but the proto-backed write
+        handler decodes the full JSON into the write proto so Python output
+        matches Go, which decodes the same full API JSON.
+        """
+        endpoint = f"/linode/instances/{instance_id}"
+        body = {key: value for key, value in fields.items() if value is not None}
+        try:
+            response = await self.make_request("PUT", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
         except httpx.HTTPError as e:
             raise NetworkError("UpdateInstance", e) from e
 
@@ -3574,7 +3601,13 @@ class Client:
     async def get_account_oauth_client_thumbnail(
         self, client_id: str
     ) -> dict[str, str]:
-        """Get an OAuth client's PNG thumbnail by client ID."""
+        """Get an OAuth client's PNG thumbnail by client ID.
+
+        The endpoint returns raw image/png bytes; they are base64-encoded under
+        thumbnail_png_base64. The tool handler adds client_id and serializes the
+        pair through the OAuthClientThumbnail proto so Go and Python emit the same
+        {client_id, thumbnail_png_base64} shape.
+        """
         encoded_client_id = quote(client_id, safe="")
         endpoint = f"/account/oauth-clients/{encoded_client_id}/thumbnail"
         url = self.base_url + endpoint
@@ -3587,11 +3620,10 @@ class Client:
             response = await self.client.request("GET", url, headers=headers)
             if response.status_code >= HTTP_BAD_REQUEST:
                 self._handle_error_response(response)
-            content_type = response.headers.get("Content-Type", "image/png")
             return {
-                "content_type": content_type.split(";", 1)[0],
-                "encoding": "base64",
-                "data": base64.b64encode(response.content).decode("ascii"),
+                "thumbnail_png_base64": base64.b64encode(response.content).decode(
+                    "ascii"
+                ),
             }
         except httpx.HTTPError as e:
             raise NetworkError("GetAccountOAuthClientThumbnail", e) from e
@@ -4361,6 +4393,43 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateImage", e) from e
 
+    async def update_image_raw(
+        self,
+        image_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Update a private image and return the full raw API body.
+
+        Same validation and request shape as update_image, but the proto-backed
+        write handler decodes the full JSON into the write proto so Python
+        output matches Go, which decodes the same full API JSON.
+        """
+        if not image_id.strip():
+            raise ValueError("image_id must be a non-empty string")
+        if label is None and description is None and tags is None:
+            raise ValueError(
+                "at least one of label, description, or tags must be provided"
+            )
+
+        image_id_path = quote(image_id, safe="")
+        body: dict[str, Any] = {}
+        if label is not None:
+            body["label"] = label
+        if description is not None:
+            body["description"] = description
+        if tags is not None:
+            body["tags"] = tags
+
+        try:
+            response = await self.make_request("PUT", f"/images/{image_id_path}", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateImage", e) from e
+
     async def delete_image_sharegroup_token(self, token_uuid: str) -> None:
         """Delete an image share group token."""
         token_uuid_path = quote(token_uuid, safe="")
@@ -4418,6 +4487,37 @@ class Client:
             response = await self.make_request("POST", "/images", body)
             data = response.json()
             return self._parse_image(data)
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateImage", e) from e
+
+    async def create_image_raw(
+        self,
+        disk_id: int,
+        label: str | None = None,
+        description: str | None = None,
+        cloud_init: bool | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a private image and return the full raw API body.
+
+        Same request shape as create_image, but the proto-backed write handler
+        decodes the full JSON into the write proto so Python output matches Go,
+        which decodes the same full API JSON.
+        """
+        body: dict[str, Any] = {"disk_id": disk_id}
+        if label is not None:
+            body["label"] = label
+        if description is not None:
+            body["description"] = description
+        if cloud_init is not None:
+            body["cloud_init"] = cloud_init
+        if tags is not None:
+            body["tags"] = tags
+
+        try:
+            response = await self.make_request("POST", "/images", body)
+            data: dict[str, Any] = response.json()
+            return data
         except httpx.HTTPError as e:
             raise NetworkError("CreateImage", e) from e
 
@@ -7900,7 +8000,7 @@ class Client:
         trigger_conditions: dict[str, Any],
         channel_ids: list[int],
         description: str | None = None,
-        entity_ids: list[int] | None = None,
+        entity_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create an alert definition for a Linode Metrics service type."""
         if not service_type:
@@ -8185,6 +8285,68 @@ class Client:
             logger.exception("HTTP error creating instance: %s", e)
             raise NetworkError("CreateInstance", e) from e
 
+    async def create_instance_raw(
+        self,
+        region: str,
+        instance_type: str,
+        firewall_id: int,
+        image: str | None = None,
+        label: str | None = None,
+        root_pass: str | None = None,
+        authorized_keys: list[str] | None = None,
+        authorized_users: list[str] | None = None,
+        booted: bool | None = None,
+        backups_enabled: bool = False,
+        route_ipv4: bool = True,
+        route_ipv6: bool = True,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create an instance and return the full raw API body.
+
+        Same validation and request shape as create_instance, but the
+        proto-backed write handler decodes the full JSON into the write proto so
+        Python output matches Go, which decodes the same full API JSON.
+        """
+        validate_label(label)
+        validate_root_password(root_pass)
+
+        try:
+            body: dict[str, Any] = {
+                "region": region,
+                "type": instance_type,
+                "interface_generation": CURRENT_INTERFACE_GENERATION,
+                "interfaces": [
+                    _build_public_interface_entry(firewall_id, route_ipv4, route_ipv6),
+                ],
+            }
+            # Send booted only when the caller set it explicitly; an omitted value
+            # defers to the API's documented default (true). Mirrors Go, which
+            # only sets Booted when the argument is present.
+            if booted is not None:
+                body["booted"] = booted
+            # Send backups_enabled only when the caller enabled it; false defers to
+            # the API default, matching Go's omitempty on the bool.
+            if backups_enabled:
+                body["backups_enabled"] = True
+            if image:
+                body["image"] = image
+            if label:
+                body["label"] = label
+            if root_pass:
+                body["root_pass"] = root_pass
+            if authorized_keys:
+                body["authorized_keys"] = authorized_keys
+            if authorized_users:
+                body["authorized_users"] = authorized_users
+            if tags:
+                body["tags"] = tags
+
+            response = await self.make_request("POST", "/linode/instances", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateInstance", e) from e
+
     async def delete_instance(self, instance_id: int) -> None:
         """Delete an instance."""
         endpoint = f"/linode/instances/{instance_id}"
@@ -8210,8 +8372,8 @@ class Client:
         self,
         instance_id: int,
         instance_type: str,
-        allow_auto_disk_resize: bool = True,
-        migration_type: str = "warm",
+        allow_auto_disk_resize: bool = False,
+        migration_type: str = "",
     ) -> None:
         """Resize an instance."""
         endpoint = f"/linode/instances/{instance_id}/resize"
@@ -8221,11 +8383,14 @@ class Client:
         )
 
         try:
-            body = {
-                "type": instance_type,
-                "allow_auto_disk_resize": allow_auto_disk_resize,
-                "migration_type": migration_type,
-            }
+            body: dict[str, Any] = {"type": instance_type}
+            # Send these only when the caller set them; omitted values defer to the
+            # API defaults (allow_auto_disk_resize=true, migration_type=cold),
+            # matching Go's omitempty on both fields.
+            if allow_auto_disk_resize:
+                body["allow_auto_disk_resize"] = True
+            if migration_type:
+                body["migration_type"] = migration_type
             await self.make_request("POST", endpoint, body)
             logger.info("Instance resized", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
@@ -8242,7 +8407,7 @@ class Client:
             raise NetworkError("ResizeInstance", e) from e
 
     async def mutate_instance(
-        self, linode_id: int, allow_auto_disk_resize: bool = True
+        self, linode_id: int, allow_auto_disk_resize: bool | None = None
     ) -> dict[str, Any]:
         """Upgrade a Linode with the mutate endpoint."""
         linode_id_value = _validate_positive_path_int(linode_id, "linode_id")
@@ -8250,12 +8415,15 @@ class Client:
         endpoint = f"/linode/instances/{encoded_linode_id}/mutate"
         logger.info("Mutating instance", extra={"linode_id": linode_id_value})
 
+        # Send allow_auto_disk_resize only when the caller set it; an omitted value
+        # defers to the API's documented default (true), matching Go, which only
+        # sets the field when the argument is present.
+        body: dict[str, Any] = {}
+        if allow_auto_disk_resize is not None:
+            body["allow_auto_disk_resize"] = allow_auto_disk_resize
+
         try:
-            response = await self.make_request(
-                "POST",
-                endpoint,
-                {"allow_auto_disk_resize": allow_auto_disk_resize},
-            )
+            response = await self.make_request("POST", endpoint, body)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -8904,17 +9072,22 @@ class Client:
         label: str,
         region: str | None = None,
         linode_id: int | None = None,
-        size: int = 20,
+        size: int = 0,
         tags: list[str] | None = None,
     ) -> Volume:
         """Create a new volume."""
         validate_label(label)
-        validate_volume_size(size)
+        # Validate/send size only when provided; an omitted size defers to the
+        # API's documented 20 GB default rather than hard-coding one here.
+        if size:
+            validate_volume_size(size)
 
         logger.info("Creating volume", extra={"label": label, "size": size})
 
         try:
-            body: dict[str, Any] = {"label": label, "size": size}
+            body: dict[str, Any] = {"label": label}
+            if size:
+                body["size"] = size
             if region:
                 body["region"] = region
             if linode_id is not None:
@@ -8984,10 +9157,11 @@ class Client:
         )
 
         try:
-            body: dict[str, Any] = {
-                "linode_id": linode_id,
-                "persist_across_boots": persist_across_boots,
-            }
+            body: dict[str, Any] = {"linode_id": linode_id}
+            # Send persist_across_boots only when true; false/unset defers to the
+            # API default, matching Go's omitempty on the bool.
+            if persist_across_boots:
+                body["persist_across_boots"] = True
             if config_id is not None:
                 body["config_id"] = config_id
 
@@ -9161,6 +9335,37 @@ class Client:
             logger.exception("HTTP error creating NodeBalancer: %s", e)
             raise NetworkError("CreateNodeBalancer", e) from e
 
+    async def create_nodebalancer_raw(
+        self,
+        region: str,
+        label: str | None = None,
+        client_conn_throttle: int = 0,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a NodeBalancer and return the full raw API body.
+
+        Same validation and request shape as create_nodebalancer, but the
+        proto-backed write handler decodes the full JSON into the write proto so
+        Python output matches Go, which decodes the same full API JSON.
+        """
+        validate_label(label)
+
+        try:
+            body: dict[str, Any] = {
+                "region": region,
+                "client_conn_throttle": client_conn_throttle,
+            }
+            if label:
+                body["label"] = label
+            if tags:
+                body["tags"] = tags
+
+            response = await self.make_request("POST", "/nodebalancers", body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateNodeBalancer", e) from e
+
     async def update_nodebalancer(
         self,
         nodebalancer_id: int,
@@ -9199,6 +9404,35 @@ class Client:
             raise NetworkError("UpdateNodeBalancer", e) from e
         except httpx.HTTPError as e:
             logger.exception("HTTP error updating NodeBalancer: %s", e)
+            raise NetworkError("UpdateNodeBalancer", e) from e
+
+    async def update_nodebalancer_raw(
+        self,
+        nodebalancer_id: int,
+        label: str | None = None,
+        client_conn_throttle: int | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Update a NodeBalancer and return the full raw API body.
+
+        Same request shape as update_nodebalancer, but the proto-backed write
+        handler decodes the full JSON into the write proto so Python output
+        matches Go, which decodes the same full API JSON.
+        """
+        endpoint = f"/nodebalancers/{nodebalancer_id}"
+        try:
+            body: dict[str, Any] = {}
+            if label:
+                body["label"] = label
+            if client_conn_throttle is not None:
+                body["client_conn_throttle"] = client_conn_throttle
+            if tags is not None:
+                body["tags"] = tags
+
+            response = await self.make_request("PUT", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
+        except httpx.HTTPError as e:
             raise NetworkError("UpdateNodeBalancer", e) from e
 
     async def delete_nodebalancer(self, nodebalancer_id: int) -> None:
@@ -9935,7 +10169,9 @@ class Client:
 
     async def get_ipv6_range(self, ipv6_range: str) -> dict[str, Any]:
         """Get an IPv6 range."""
-        encoded_range = quote(ipv6_range, safe="")
+        # safe=":" matches Go's url.PathEscape, which keeps the colon literal
+        # (RFC 3986 allows it in path segments) while escaping the CIDR slash.
+        encoded_range = quote(ipv6_range, safe=":")
         endpoint = f"/networking/ipv6/ranges/{encoded_range}"
         try:
             response = await self.make_request("GET", endpoint)
@@ -9946,7 +10182,8 @@ class Client:
 
     async def delete_ipv6_range(self, ipv6_range: str) -> None:
         """Delete an IPv6 range."""
-        encoded_range = quote(ipv6_range, safe="")
+        # safe=":" matches Go's url.PathEscape (see get_ipv6_range).
+        encoded_range = quote(ipv6_range, safe=":")
         endpoint = f"/networking/ipv6/ranges/{encoded_range}"
         try:
             await self.make_request("DELETE", endpoint)
@@ -10277,7 +10514,7 @@ class Client:
 
     async def get_instance_ip(self, instance_id: int, address: str) -> dict[str, Any]:
         """Get a specific IP address for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe='')}"
+        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe=':')}"
         try:
             response = await self.make_request("GET", endpoint)
             result: dict[str, Any] = response.json()
@@ -10287,7 +10524,7 @@ class Client:
 
     async def get_networking_ip(self, address: str) -> dict[str, Any]:
         """Get a networking-level IP address."""
-        endpoint = f"/networking/ips/{quote(address, safe='')}"
+        endpoint = f"/networking/ips/{quote(address, safe=':')}"
         try:
             response = await self.make_request("GET", endpoint)
             result: dict[str, Any] = response.json()
@@ -10321,7 +10558,7 @@ class Client:
         rdns: str | None,
     ) -> dict[str, Any]:
         """Update reverse DNS for a specific IP address on an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe='')}"
+        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe=':')}"
         try:
             body: dict[str, Any] = {"rdns": rdns}
             response = await self.make_request("PUT", endpoint, body)
@@ -10365,7 +10602,7 @@ class Client:
         rdns: str | None,
     ) -> dict[str, Any]:
         """Update reverse DNS for a networking-level IP address."""
-        endpoint = f"/networking/ips/{quote(address, safe='')}"
+        endpoint = f"/networking/ips/{quote(address, safe=':')}"
         try:
             body: dict[str, Any] = {"rdns": rdns}
             response = await self.make_request("PUT", endpoint, body)
@@ -10396,7 +10633,7 @@ class Client:
 
     async def delete_instance_ip(self, instance_id: int, address: str) -> None:
         """Delete an IP address from an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe='')}"
+        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe=':')}"
         try:
             await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
@@ -10432,6 +10669,43 @@ class Client:
                 body["configs"] = configs
             response = await self.make_request("POST", endpoint, body)
             return self._parse_instance(response.json())
+        except httpx.HTTPError as e:
+            raise NetworkError("CloneInstance", e) from e
+
+    async def clone_instance_raw(
+        self,
+        instance_id: int,
+        region: str | None = None,
+        instance_type: str | None = None,
+        label: str | None = None,
+        backups_enabled: bool = False,
+        disks: list[int] | None = None,
+        configs: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Clone an instance and return the full raw API body.
+
+        Same request shape as clone_instance, but the proto-backed write handler
+        decodes the full JSON into the write proto so Python output matches Go,
+        which decodes the same full API JSON.
+        """
+        endpoint = f"/linode/instances/{instance_id}/clone"
+        try:
+            body: dict[str, Any] = {}
+            if region is not None:
+                body["region"] = region
+            if instance_type is not None:
+                body["type"] = instance_type
+            if label is not None:
+                body["label"] = label
+            if backups_enabled:
+                body["backups_enabled"] = True
+            if disks is not None:
+                body["disks"] = disks
+            if configs is not None:
+                body["configs"] = configs
+            response = await self.make_request("POST", endpoint, body)
+            data: dict[str, Any] = response.json()
+            return data
         except httpx.HTTPError as e:
             raise NetworkError("CloneInstance", e) from e
 
@@ -10551,6 +10825,27 @@ class Client:
         same full API JSON. Bypasses the typed dataclass parsing.
         """
         response = await self.make_request("GET", endpoint)
+        data: Any = response.json()
+        return data
+
+    async def post_raw(self, endpoint: str, body: dict[str, Any] | None = None) -> Any:
+        """POST to an endpoint and return its decoded JSON body.
+
+        Proto-backed write handlers decode this raw response into the write
+        proto so output matches Go, which decodes the same full API JSON.
+        Bypasses the typed dataclass parsing that would drop unmodeled fields.
+        """
+        response = await self.make_request("POST", endpoint, body or {})
+        data: Any = response.json()
+        return data
+
+    async def put_raw(self, endpoint: str, body: dict[str, Any] | None = None) -> Any:
+        """PUT to an endpoint and return its decoded JSON body.
+
+        Same rationale as post_raw: the full API JSON goes straight into the
+        write proto so Python output matches Go's protojson output.
+        """
+        response = await self.make_request("PUT", endpoint, body or {})
         data: Any = response.json()
         return data
 
@@ -11183,6 +11478,26 @@ class RetryableClient:
         result: Any = await self._execute_with_retry(self.client.get_raw, endpoint)
         return result
 
+    async def post_raw(self, endpoint: str, body: dict[str, Any] | None = None) -> Any:
+        """POST to an endpoint as raw decoded JSON with retry.
+
+        Used by proto-backed write handlers to serialize via the proto contract.
+        """
+        result: Any = await self._execute_with_retry(
+            self.client.post_raw, endpoint, body
+        )
+        return result
+
+    async def put_raw(self, endpoint: str, body: dict[str, Any] | None = None) -> Any:
+        """PUT to an endpoint as raw decoded JSON with retry.
+
+        Used by proto-backed write handlers to serialize via the proto contract.
+        """
+        result: Any = await self._execute_with_retry(
+            self.client.put_raw, endpoint, body
+        )
+        return result
+
     async def get_profile(self) -> Profile:
         """Get Linode user profile with retry."""
         result: Profile = await self._execute_with_retry(self.client.get_profile)
@@ -11456,6 +11771,15 @@ class RetryableClient:
         """Update a Linode instance with retry."""
         result: Instance = await self._execute_with_retry(
             lambda: self.client.update_instance(instance_id, **fields)
+        )
+        return result
+
+    async def update_instance_raw(
+        self, instance_id: int, **fields: Any
+    ) -> dict[str, Any]:
+        """Update an instance with retry, returning the full raw API body."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.update_instance_raw(instance_id, **fields)
         )
         return result
 
@@ -12393,6 +12717,22 @@ class RetryableClient:
             tags=tags,
         )
 
+    async def update_image_raw(
+        self,
+        image_id: str,
+        *,
+        label: str | None = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Update a private image once, returning the full raw API body."""
+        return await self.client.update_image_raw(
+            image_id=image_id,
+            label=label,
+            description=description,
+            tags=tags,
+        )
+
     async def get_image(self, image_id: str) -> Image:
         """Get a single Linode image with retry."""
         result: Image = await self._execute_with_retry(
@@ -12418,6 +12758,26 @@ class RetryableClient:
         """Create a private image from a Linode disk with retry."""
         result: Image = await self._execute_with_retry(
             lambda: self.client.create_image(
+                disk_id=disk_id,
+                label=label,
+                description=description,
+                cloud_init=cloud_init,
+                tags=tags,
+            )
+        )
+        return result
+
+    async def create_image_raw(
+        self,
+        disk_id: int,
+        label: str | None = None,
+        description: str | None = None,
+        cloud_init: bool | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a private image with retry, returning the full raw API body."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.create_image_raw(
                 disk_id=disk_id,
                 label=label,
                 description=description,
@@ -13935,7 +14295,7 @@ class RetryableClient:
         trigger_conditions: dict[str, Any],
         channel_ids: list[int],
         description: str | None = None,
-        entity_ids: list[int] | None = None,
+        entity_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a monitor service alert definition without retry replay."""
         result: dict[
@@ -14026,6 +14386,41 @@ class RetryableClient:
         )
         return result
 
+    async def create_instance_raw(
+        self,
+        region: str,
+        instance_type: str,
+        firewall_id: int,
+        image: str | None = None,
+        label: str | None = None,
+        root_pass: str | None = None,
+        authorized_keys: list[str] | None = None,
+        authorized_users: list[str] | None = None,
+        booted: bool | None = None,
+        backups_enabled: bool = False,
+        route_ipv4: bool = True,
+        route_ipv6: bool = True,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create instance with retry, returning the full raw API body."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_instance_raw,
+            region,
+            instance_type,
+            firewall_id,
+            image,
+            label,
+            root_pass,
+            authorized_keys,
+            authorized_users,
+            booted,
+            backups_enabled,
+            route_ipv4,
+            route_ipv6,
+            tags,
+        )
+        return result
+
     async def delete_instance(self, instance_id: int) -> None:
         """Delete instance with retry."""
         await self._execute_with_retry(self.client.delete_instance, instance_id)
@@ -14034,8 +14429,8 @@ class RetryableClient:
         self,
         instance_id: int,
         instance_type: str,
-        allow_auto_disk_resize: bool = True,
-        migration_type: str = "warm",
+        allow_auto_disk_resize: bool = False,
+        migration_type: str = "",
     ) -> None:
         """Resize instance with retry."""
         await self._execute_with_retry(
@@ -14047,7 +14442,7 @@ class RetryableClient:
         )
 
     async def mutate_instance(
-        self, linode_id: int, allow_auto_disk_resize: bool = True
+        self, linode_id: int, allow_auto_disk_resize: bool | None = None
     ) -> dict[str, Any]:
         """Delegate mutate without retry because POST mutations must not replay."""
         result: dict[str, Any] = await self.client.mutate_instance(
@@ -14313,7 +14708,7 @@ class RetryableClient:
         label: str,
         region: str | None = None,
         linode_id: int | None = None,
-        size: int = 20,
+        size: int = 0,
         tags: list[str] | None = None,
     ) -> Volume:
         """Create volume with retry."""
@@ -14386,6 +14781,23 @@ class RetryableClient:
         )
         return result
 
+    async def create_nodebalancer_raw(
+        self,
+        region: str,
+        label: str | None = None,
+        client_conn_throttle: int = 0,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create NodeBalancer with retry, returning the full raw API body."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.create_nodebalancer_raw,
+            region,
+            label,
+            client_conn_throttle,
+            tags,
+        )
+        return result
+
     async def update_nodebalancer(
         self,
         nodebalancer_id: int,
@@ -14396,6 +14808,23 @@ class RetryableClient:
         """Update NodeBalancer with retry."""
         result: NodeBalancer = await self._execute_with_retry(
             self.client.update_nodebalancer,
+            nodebalancer_id,
+            label,
+            client_conn_throttle,
+            tags,
+        )
+        return result
+
+    async def update_nodebalancer_raw(
+        self,
+        nodebalancer_id: int,
+        label: str | None = None,
+        client_conn_throttle: int | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Update NodeBalancer with retry, returning the full raw API body."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.update_nodebalancer_raw,
             nodebalancer_id,
             label,
             client_conn_throttle,
@@ -15196,6 +15625,29 @@ class RetryableClient:
         """Clone instance with retry."""
         result: Instance = await self._execute_with_retry(
             self.client.clone_instance,
+            instance_id,
+            region,
+            instance_type,
+            label,
+            backups_enabled,
+            disks,
+            configs,
+        )
+        return result
+
+    async def clone_instance_raw(
+        self,
+        instance_id: int,
+        region: str | None = None,
+        instance_type: str | None = None,
+        label: str | None = None,
+        backups_enabled: bool = False,
+        disks: list[int] | None = None,
+        configs: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Clone instance with retry, returning the full raw API body."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.clone_instance_raw,
             instance_id,
             region,
             instance_type,

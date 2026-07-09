@@ -1,0 +1,38 @@
+{
+  "tool": "linode_profile_token_update",
+  "description": "Shared token_id-required rejection and the PUT body once confirmed. Confirm text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing token_id",
+      "args": {},
+      "expect_error": "token_id is required"
+    },
+    {
+      "name": "updates a personal access token label",
+      "args": {
+        "token_id": 123,
+        "label": "renamed-token",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "renamed-token"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/profile/tokens/123",
+        "body": {
+          "label": "renamed-token"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "token_id": 123,
+        "label": "renamed-token"
+      },
+      "expect_error": "This updates a personal access token. Set confirm=true to proceed."
+    }
+  ]
+}

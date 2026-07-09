@@ -1,0 +1,31 @@
+{
+  "tool": "linode_longview_client_update",
+  "description": "Pins the client_id-positive rejection, the 3-32/charset label rejection now enforced in both languages (Python gained Go's check + message), and the update PUT. The label case sets confirm:true so both reach the label check.",
+  "cases": [
+    {
+      "name": "rejects non-positive client_id",
+      "args": { "client_id": 0, "label": "newlabel", "confirm": true },
+      "expect_error": "client_id must be a positive integer"
+    },
+    {
+      "name": "rejects an invalid label",
+      "args": { "client_id": 5, "label": "ab", "confirm": true },
+      "expect_error": "label must be 3-32 characters and contain only letters, digits, hyphen, or underscore"
+    },
+    {
+      "name": "updates the longview client label",
+      "args": { "client_id": 5, "label": "newlabel", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/longview/clients/5",
+        "body": { "label": "newlabel" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"client_id": 5, "label": "newlabel"},
+      "expect_error": "This updates a Longview client. Set confirm=true to proceed."
+    }
+  ]
+}

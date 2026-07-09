@@ -1,0 +1,31 @@
+{
+  "tool": "linode_instance_config_interface_update",
+  "description": "Pins the shared config_id/interface_id positive-int rejections and the config-interface update PUT body. linode_id and no-fields rejection text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive config_id",
+      "args": { "linode_id": 123, "config_id": 0 },
+      "expect_error": "config_id must be a positive integer"
+    },
+    {
+      "name": "rejects non-positive interface_id",
+      "args": { "linode_id": 123, "config_id": 7, "interface_id": 0 },
+      "expect_error": "interface_id must be a positive integer"
+    },
+    {
+      "name": "updates a config interface primary flag",
+      "args": { "linode_id": 123, "config_id": 7, "interface_id": 9, "confirm": true, "primary": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/linode/instances/123/configs/7/interfaces/9",
+        "body": { "primary": true }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "config_id": 7, "interface_id": 9, "primary": true},
+      "expect_error": "This updates a network interface on the configuration profile. Set confirm=true to proceed."
+    }
+  ]
+}

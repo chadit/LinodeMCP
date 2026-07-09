@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -22,10 +21,15 @@ func writeToolNodeBalancerStatsFixture(t *testing.T, w http.ResponseWriter) {
 
 	w.Header().Set("Content-Type", "application/json")
 
+	// not_in_proto is a field the NodeBalancerStats proto does not model; the
+	// DiscardUnknown decode must drop it so it never reaches the output.
 	_, err := w.Write([]byte(`{
 		"title":"nodebalancer.example.com (nodebalancer123) - day (5 min avg)",
-		"connections":[[1521483600000,12.5]],
-		"traffic":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]]}
+		"not_in_proto":"dropped",
+		"data":{
+			"connections":[[1521483600000,12.5]],
+			"traffic":{"in":[[1521484800000,2004.36]],"out":[[1521484800000,3928.91]]}
+		}
 	}`))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -58,12 +62,8 @@ func TestLinodeNodeBalancerStatsGetToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	if _, ok := tool.InputSchema.Properties[keyNodeBalancerID]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", keyNodeBalancerID)
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyNodeBalancerID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyNodeBalancerID)
+	if !strings.Contains(string(tool.RawInputSchema), keyNodeBalancerID) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyNodeBalancerID)
 	}
 }
 
@@ -159,6 +159,10 @@ func TestLinodeNodeBalancerStatsGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "2004.36") {
 		t.Errorf("textContent.Text does not contain %v", "2004.36")
+	}
+
+	if strings.Contains(textContent.Text, keyNotInProto) {
+		t.Error("unknown field not_in_proto leaked into proto-canonical output")
 	}
 }
 

@@ -1,0 +1,21 @@
+{
+  "tool": "linode_networking_ipv4_assign",
+  "description": "Networking IPv4 assign POSTs the region/assignments to the ipv4 assign endpoint once confirmed. The no-confirm text and post-confirm arg validation diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "assigns IPv4s to linodes",
+      "args": { "confirm": true, "region": "us-east", "assignments": [ { "address": "192.0.2.1", "linode_id": 123 } ] },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/ipv4/assign",
+        "body": { "region": "us-east", "assignments": [ { "address": "192.0.2.1", "linode_id": 123 } ] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"region": "us-east", "assignments": [{"address": "192.0.2.1", "linode_id": 123}]},
+      "expect_error": "This assigns IPv4 addresses to Linodes. Set confirm=true to proceed."
+    }
+  ]
+}

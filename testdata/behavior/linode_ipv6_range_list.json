@@ -1,0 +1,12 @@
+{
+  "tool": "linode_ipv6_range_list",
+  "description": "IPv6 range list issues a single GET to the ranges collection. Pagination-bound rejection messages diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "lists ipv6 ranges",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/networking/ipv6/ranges" }
+    }
+  ]
+}

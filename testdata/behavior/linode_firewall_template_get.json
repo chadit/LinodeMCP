@@ -1,0 +1,17 @@
+{
+  "tool": "linode_firewall_template_get",
+  "description": "Firewall template get fetches one template by slug via GET. Missing-slug text and the invalid-slug enum check diverge between languages (see report).",
+  "cases": [
+    {
+      "name": "gets a firewall template by slug",
+      "args": { "slug": "public" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/networking/firewalls/templates/public" }
+    },
+    {
+      "name": "rejects an invalid slug (proto FirewallTemplateSlug enum)",
+      "args": { "slug": "internal" },
+      "expect_error": "slug must be one of: public, vpc"
+    }
+  ]
+}

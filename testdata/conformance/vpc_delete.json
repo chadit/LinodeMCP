@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.VpcDeleteResponse",
+  "description": "VPC delete id-echo: a confirmation message plus the deleted VPC's ID. The delete endpoint returns an empty body, so the response echoes the ID.",
+  "input": {
+    "message": "VPC 321 removed successfully",
+    "vpc_id": 321
+  },
+  "canonical": {
+    "message": "VPC 321 removed successfully",
+    "vpc_id": 321
+  }
+}

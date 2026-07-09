@@ -1,0 +1,77 @@
+{
+  "message": "linode.mcp.v1.AccountUserGrants",
+  "description": "Account user grants element: global grants plus two populated sections; the other ten sections are absent from the input and normalize to [].",
+  "input": {
+    "global": {
+      "account_access": "read_write",
+      "add_databases": true,
+      "add_domains": true,
+      "add_firewalls": true,
+      "add_images": true,
+      "add_linodes": true,
+      "add_longview": false,
+      "add_nodebalancers": true,
+      "add_stackscripts": true,
+      "add_volumes": true,
+      "add_vpcs": true,
+      "cancel_account": false,
+      "child_account_access": false,
+      "longview_subscription": false
+    },
+    "linode": [
+      {
+        "id": 123,
+        "label": "web-1",
+        "permissions": "read_write"
+      }
+    ],
+    "domain": [
+      {
+        "id": 987,
+        "label": "example.com",
+        "permissions": "read_only"
+      }
+    ]
+  },
+  "canonical": {
+    "global": {
+      "account_access": "read_write",
+      "add_databases": true,
+      "add_domains": true,
+      "add_firewalls": true,
+      "add_images": true,
+      "add_linodes": true,
+      "add_nodebalancers": true,
+      "add_stackscripts": true,
+      "add_volumes": true,
+      "add_vpcs": true,
+      "add_longview": false,
+      "cancel_account": false,
+      "child_account_access": false,
+      "longview_subscription": false
+    },
+    "linode": [
+      {
+        "id": 123,
+        "label": "web-1",
+        "permissions": "read_write"
+      }
+    ],
+    "domain": [
+      {
+        "id": 987,
+        "label": "example.com",
+        "permissions": "read_only"
+      }
+    ],
+    "nodebalancer": [],
+    "image": [],
+    "longview": [],
+    "stackscript": [],
+    "volume": [],
+    "database": [],
+    "firewall": [],
+    "vpc": [],
+    "lkecluster": []
+  }
+}

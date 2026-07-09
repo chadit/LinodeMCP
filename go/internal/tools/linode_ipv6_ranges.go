@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
@@ -23,10 +26,11 @@ const (
 
 // NewLinodeIPv6RangesListTool creates a tool for listing IPv6 ranges.
 func NewLinodeIPv6RangesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_ipv6_range_list",
 		"Lists IPv6 ranges on the account with optional pagination.",
+		"linode.mcp.v1.IPv6RangeListInput",
 		"Page of results to return (optional, minimum 1).",
 		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.IPv6Range, error) {
@@ -46,11 +50,10 @@ func ipv6RangeListResponse(items []*linodev1.IPv6Range, count int32, filter *str
 
 // NewLinodeIPv6RangeGetTool creates a tool for retrieving one IPv6 range.
 func NewLinodeIPv6RangeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_ipv6_range_get",
-		mcp.WithDescription("Gets one IPv6 range by CIDR prefix."),
-		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithString(paramIPv6Range, mcp.Required(), mcp.Description("IPv6 range prefix, for example 2001:0db8::/64.")),
+		"Gets one IPv6 range by CIDR prefix.",
+		toolschemas.Schema("linode.mcp.v1.IPv6RangeGetInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -71,12 +74,12 @@ func handleIPv6RangeGetRequest(ctx context.Context, request *mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	rangeResult, err := client.GetIPv6Range(ctx, ipv6Range)
+	rangeResult, err := client.GetIPv6RangeProto(ctx, ipv6Range)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve IPv6 range: %v", err)), nil
 	}
 
-	return MarshalToolResponse(rangeResult)
+	return MarshalProtoToolResponse(rangeResult)
 }
 
 func ipv6RangeFromTool(request *mcp.CallToolRequest) (string, string) {
@@ -84,6 +87,10 @@ func ipv6RangeFromTool(request *mcp.CallToolRequest) (string, string) {
 	if validationMessage != "" {
 		return "", validationMessage
 	}
+
+	// Trim so a whitespace-padded range parses and is sent trimmed, matching
+	// Python's range_value.strip() (align the trim-vs-raw asymmetry).
+	ipv6Range = strings.TrimSpace(ipv6Range)
 
 	prefix, err := netip.ParsePrefix(ipv6Range)
 	if err != nil || !prefix.Addr().Is6() || prefix != prefix.Masked() {
@@ -95,23 +102,15 @@ func ipv6RangeFromTool(request *mcp.CallToolRequest) (string, string) {
 
 // NewLinodeIPv6RangeCreateTool creates a tool for creating an IPv6 range.
 func NewLinodeIPv6RangeCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_ipv6_range_create",
 		"Creates an IPv6 range. WARNING: This changes networking configuration and may affect routing.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(keyIPv6RangePrefixLength, mcp.Required(),
-				mcp.Description("The IPv6 prefix length for the created range.")),
-			mcp.WithNumber(keyIPv6RangeLinodeID,
-				mcp.Description("Optional Linode ID to assign the new range to.")),
-			mcp.WithString(keyIPv6RangeRouteTarget,
-				mcp.Description("Optional route target for the new IPv6 range.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IPv6 range creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeIPv6RangeCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.IPv6RangeCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeIPv6RangeCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -150,19 +149,16 @@ func handleLinodeIPv6RangeCreateRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(failureMessage), nil
 	}
 
-	response := struct {
-		Message string            `json:"message"`
-		Range   *linode.IPv6Range `json:"range"`
-	}{
+	response := &linodev1.IPv6RangeWriteResponse{
 		Message: "IPv6 range created",
 		Range:   ipv6Range,
 	}
 
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(response)
 }
 
-func createIPv6Range(ctx context.Context, client *linode.Client, req linode.CreateIPv6RangeRequest) (*linode.IPv6Range, string) {
-	ipv6Range, err := client.CreateIPv6Range(ctx, req)
+func createIPv6Range(ctx context.Context, client *linode.Client, req linode.CreateIPv6RangeRequest) (*linodev1.IPv6Range, string) {
+	ipv6Range, err := client.CreateIPv6RangeProto(ctx, req)
 	if err != nil {
 		return nil, "Failed to create IPv6 range: " + err.Error()
 	}
@@ -201,26 +197,31 @@ func ipv6RangeCreateRequestFromTool(args map[string]any) (linode.CreateIPv6Range
 		req.RouteTarget = routeTarget
 	}
 
+	// Require exactly one assignment target, mirroring Python's
+	// _parse_ipv6_range_target (Go previously accepted neither or both).
+	if req.LinodeID == nil && req.RouteTarget == "" {
+		return linode.CreateIPv6RangeRequest{}, "linode_id or route_target is required"
+	}
+
+	if req.LinodeID != nil && req.RouteTarget != "" {
+		return linode.CreateIPv6RangeRequest{}, "linode_id and route_target are mutually exclusive"
+	}
+
 	return req, ""
 }
 
 // NewLinodeIPv6RangeDeleteTool creates a tool for deleting an IPv6 range.
 func NewLinodeIPv6RangeDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_ipv6_range_delete",
 		"Deletes an IPv6 range. WARNING: This changes networking configuration and may affect routing."+
 			" Pass dry_run=true to preview without deleting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithString(paramIPv6Range, mcp.Required(), mcp.Description("IPv6 range prefix, for example 2001:0db8::/64.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm IPv6 range deletion. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleIPv6RangeDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.IPv6RangeDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleIPv6RangeDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -242,10 +243,10 @@ func handleIPv6RangeDeleteRequest(ctx context.Context, request *mcp.CallToolRequ
 		Execute: func(ctx context.Context, c *linode.Client) error {
 			return c.DeleteIPv6Range(ctx, ipv6Range)
 		},
-		Success: func() any {
-			return map[string]any{
-				responseKeyMessage: "IPv6 range deleted",
-				"range":            ipv6Range,
+		Success: func() proto.Message {
+			return &linodev1.IPv6RangeDeleteResponse{
+				Message: "IPv6 range deleted",
+				Range:   ipv6Range,
 			}
 		},
 		// An IPv6 range carries no cosmetic timestamp, so the whole state is

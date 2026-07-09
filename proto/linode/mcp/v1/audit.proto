@@ -1,0 +1,210 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+
+// AuditExportFormat is the output format the linode_audit_export tool writes.
+// This is a tool-level choice (the audit tools read local stores, not the
+// Linode API), so the value set is authored here rather than from the OpenAPI
+// spec. See the enum-wrapper convention in nodebalancer_config.proto. The
+// AuditExportResponse.format read field stays a plain string.
+message AuditExportFormat {
+  enum Value {
+    unspecified = 0;
+    json = 1;
+    csv = 2;
+    ndjson = 3;
+  }
+}
+
+// AuditHealthInput is the input contract for linode_audit_health. The tool
+// reads local audit stores (no Linode API), so it advertises no environment
+// param and takes no parameters at all.
+message AuditHealthInput {}
+
+// AuditReportInput is the input contract for linode_audit_report. The audit
+// tools read local stores, so there is no environment param; name is required.
+message AuditReportInput {
+  // Name of the report from audit.reports.
+  string name = 1;
+}
+
+// AuditRecentInput is the input contract for linode_audit_recent. All filters
+// are optional; the tool reads local audit stores, so there is no environment
+// param.
+message AuditRecentInput {
+  // Max events to return. Default 20, capped at 200.
+  optional int32 limit = 1;
+  // Only events at or after this RFC 3339 timestamp (e.g.
+  // 2026-05-19T00:00:00Z).
+  optional string since = 2;
+  // Only events at or before this RFC 3339 timestamp.
+  optional string until = 3;
+  // Only events whose tool name matches this glob (e.g. "linode_instance_*").
+  optional string tool = 4;
+  // Only events with this capability: read, write, destroy, admin, or meta.
+  optional string capability = 5;
+  // Only events with this status: success, error, or refused.
+  optional string status = 6;
+  // Include audit/profile meta-tool events. Default false (they are noise for
+  // activity review).
+  optional bool include_meta = 7;
+}
+
+// AuditExportInput is the input contract for linode_audit_export. format is
+// required; the filters are optional. The tool reads local audit stores, so
+// there is no environment param.
+message AuditExportInput {
+  // Output format: json, csv, or ndjson.
+  AuditExportFormat.Value format = 1;
+  // Only events at or after this RFC 3339 timestamp.
+  optional string since = 2;
+  // Only events at or before this RFC 3339 timestamp.
+  optional string until = 3;
+  // Only events whose tool name matches this glob (e.g. "linode_instance_*").
+  optional string tool = 4;
+  // Max events to export. Default 10000, capped at 100000.
+  optional int32 max_records = 5;
+  // Include audit/profile meta-tool events. Default false.
+  optional bool include_meta = 6;
+}
+
+// AuditSummaryInput is the input contract for linode_audit_summary. The tool
+// reads local audit stores, so there is no environment param.
+message AuditSummaryInput {
+  // Only count events at or after this RFC 3339 timestamp.
+  optional string since = 1;
+  // Columns to group by. Allowed: tool, status, capability, profile,
+  // environment. Defaults to [tool, status].
+  repeated string group_by = 2;
+  // Include audit/profile meta-tool events. Default false.
+  optional bool include_meta = 3;
+}
+
+// AuditEvent mirrors one audit log event as the audit query tools emit it.
+// args is the already-redacted argument map. 64-bit counters emit as JSON
+// numbers; the canonical serializer widens the proto3 JSON string form.
+message AuditEvent {
+  // Event timestamp, RFC 3339.
+  string ts = 1;
+  // Event timestamp in Unix nanoseconds.
+  int64 ts_unix_ns = 2;
+  // ULID identifying the event.
+  string event_id = 3;
+  // Tool name that produced the event.
+  string tool = 4;
+  // Capability tier of the tool: read, write, destroy, admin, or meta.
+  string tool_capability = 5;
+  // Linode environment the call targeted.
+  string environment = 6;
+  // Active profile at call time.
+  string profile = 7;
+  // Call mode: normal, dry_run, plan, apply, or yolo.
+  string mode = 8;
+  // Two-stage plan ID when the call ran under plan/apply.
+  optional string plan_id = 9;
+  // Redacted tool arguments.
+  map<string, google.protobuf.Value> args = 10;
+  // Names of args whose values were redacted.
+  repeated string args_redacted = 11;
+  // Call outcome: success, error, or refused.
+  string status = 12;
+  // Handler latency in milliseconds.
+  int64 latency_ms = 13;
+  // One-line result description.
+  string result_summary = 14;
+  // Error text when status is error.
+  optional string error = 15;
+  // Server version that wrote the event.
+  string linodemcp_version = 16;
+  // Session identifier.
+  string session_id = 17;
+  // Credential generation counter at call time.
+  uint64 credential_generation = 18;
+}
+
+// AuditSummaryRow is one group-by bucket in a summary or report.
+message AuditSummaryRow {
+  // Group-by column values keyed by column name.
+  map<string, string> groups = 1;
+  // Events in the bucket.
+  int32 count = 2;
+}
+
+// AuditHealthSQLite is the SQLite-sink portion of the health report,
+// present only when the SQLite sink is enabled.
+message AuditHealthSQLite {
+  // SQLite database path.
+  string path = 1;
+  // Events stored in the database.
+  int64 event_count = 2;
+  // Oldest stored event timestamp in Unix nanoseconds.
+  int64 oldest_event_unix_ns = 3;
+  // Database size in bytes.
+  int64 db_bytes = 4;
+}
+
+// AuditHealthResponse is the linode_audit_health body: JSONL sink status
+// plus the optional SQLite section.
+message AuditHealthResponse {
+  // Directory holding the JSONL audit log.
+  string jsonl_path = 1;
+  // Whether the active log file exists.
+  bool active_log_exists = 2;
+  // Rotated log files present.
+  int32 rotated_file_count = 3;
+  // Date of the oldest rotated file, empty when none.
+  string oldest_rotated_date = 4;
+  // Total bytes on disk across active and rotated logs.
+  int64 disk_bytes = 5;
+  // Events dropped due to sink backpressure.
+  int64 dropped_events = 6;
+  // SQLite sink status, omitted when the sink is disabled.
+  optional AuditHealthSQLite sqlite = 7;
+}
+
+// AuditExportResponse is the linode_audit_export body: where the export
+// landed and how many records it holds.
+message AuditExportResponse {
+  // Path of the written export file.
+  string path = 1;
+  // Export format: json, csv, or ndjson.
+  string format = 2;
+  // Records written.
+  int32 record_count = 3;
+}
+
+// AuditRecentResponse is the linode_audit_recent body.
+message AuditRecentResponse {
+  // Events returned.
+  int32 count = 1;
+  // Matching events, newest first.
+  repeated AuditEvent events = 2;
+}
+
+// AuditReportResponse is the linode_audit_report body. Exactly one of rows
+// (summary output) or events (events output) is populated; the other emits
+// as an empty array.
+message AuditReportResponse {
+  // Report name from audit.reports.
+  string name = 1;
+  // Report output type: summary or events.
+  string output = 2;
+  // Events matched by the report filter.
+  int32 total_events = 3;
+  // Group-by buckets when output is summary.
+  repeated AuditSummaryRow rows = 4;
+  // Matching events when output is events.
+  repeated AuditEvent events = 5;
+}
+
+// AuditSummaryResponse is the linode_audit_summary body.
+message AuditSummaryResponse {
+  // Events counted across all buckets.
+  int32 total_events = 1;
+  // Group-by buckets.
+  repeated AuditSummaryRow rows = 2;
+}

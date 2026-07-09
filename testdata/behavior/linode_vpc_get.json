@@ -1,0 +1,17 @@
+{
+  "tool": "linode_vpc_get",
+  "description": "VPC get requires vpc_id (a string id) then GETs the VPC. The invalid-integer text diverges (Go appends the raw value) so only the missing-id rejection is pinned; see report.",
+  "cases": [
+    {
+      "name": "requires vpc_id",
+      "args": {},
+      "expect_error": "vpc_id is required"
+    },
+    {
+      "name": "gets the VPC",
+      "args": { "vpc_id": "5" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/vpcs/5" }
+    }
+  ]
+}

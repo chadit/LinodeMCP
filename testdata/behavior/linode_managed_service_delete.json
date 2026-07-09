@@ -1,0 +1,22 @@
+{
+  "tool": "linode_managed_service_delete",
+  "description": "Service delete: shared confirm gate and the DELETE (Admin, not Destroy). Id missing/invalid text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires confirm before deleting",
+      "args": { "service_id": 4 },
+      "expect_error": "This deletes a Managed service monitor. Set confirm=true to proceed."
+    },
+    {
+      "name": "deletes a managed service",
+      "args": { "service_id": 4, "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/managed/services/4" }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"service_id": 4},
+      "expect_error": "This deletes a Managed service monitor. Set confirm=true to proceed."
+    }
+  ]
+}

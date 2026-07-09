@@ -1,0 +1,31 @@
+{
+  "tool": "linode_instance_interface_add",
+  "description": "Pins the instance-interface add POST body and the interface-shape rejections now enforced in both languages (Python gained Go's exactly-one-of check). Cases set confirm:true so both reach the shape check.",
+  "cases": [
+    {
+      "name": "adds a public interface",
+      "args": { "linode_id": 123, "confirm": true, "interface": { "public": {} } },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/interfaces",
+        "body": { "public": {} }
+      }
+    },
+    {
+      "name": "rejects an interface with no type",
+      "args": { "linode_id": 123, "confirm": true, "interface": {} },
+      "expect_error": "interface must define exactly one of public, vpc, or vlan"
+    },
+    {
+      "name": "rejects a vpc interface without a positive subnet_id",
+      "args": { "linode_id": 123, "confirm": true, "interface": { "vpc": { "subnet_id": 0 } } },
+      "expect_error": "interface.vpc.subnet_id must be a positive integer"
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "interface": {"public": {}}},
+      "expect_error": "This adds a network interface to the Linode instance. Set confirm=true to proceed."
+    }
+  ]
+}

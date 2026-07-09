@@ -1,0 +1,27 @@
+{
+  "tool": "linode_lke_node_delete",
+  "description": "Destroy tool. Pins cluster_id/node_id-required (through the bypass so both reach the checks), the confirm-alone destroy gate, and the bypassed DELETE.",
+  "cases": [
+    {
+      "name": "requires cluster_id",
+      "args": { "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "cluster_id is required"
+    },
+    {
+      "name": "requires node_id",
+      "args": { "cluster_id": 12345, "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "node_id is required"
+    },
+    {
+      "name": "confirm alone hits the destroy gate",
+      "args": { "cluster_id": 12345, "node_id": "node-1", "confirm": true },
+      "expect_error": "linode_lke_node_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the node",
+      "args": { "cluster_id": 12345, "node_id": "node-1", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/lke/clusters/12345/nodes/node-1" }
+    }
+  ]
+}

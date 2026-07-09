@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
@@ -9,23 +10,19 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import ip_pb2, vlan_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
 )
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
 )
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -33,49 +30,13 @@ if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
 
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-
-
-def _optional_int_argument(
-    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
-) -> int | None:
-    value = arguments.get(name)
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError(f"{name} must be an integer")
-    if value < minimum:
-        raise ValueError(f"{name} must be at least {minimum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{name} must be at most {maximum}")
-    return value
-
 
 def create_linode_vlan_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_vlan_list tool."""
     return Tool(
         name="linode_vlan_list",
         description="Lists all VLANs on the account",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.VLANListInput"),
     ), Capability.Read
 
 
@@ -84,8 +45,8 @@ async def handle_linode_vlan_list(
 ) -> list[TextContent]:
     """Handle linode_vlan_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -100,36 +61,18 @@ async def handle_linode_vlan_list(
     return await execute_tool(cfg, arguments, "list VLANs", _call)
 
 
+# Lowercase region slug (mirrors Go's validRegionSlugRegex) used to reject a
+# malformed region_id locally on vlan_delete instead of forwarding it.
+_REGION_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
+
+
 def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
     """Create the linode_vlan_delete tool."""
     return Tool(
         name="linode_vlan_delete",
         description="Deletes a VLAN. Pass dry_run=true to preview without deleting."
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "region_id": {
-                    "type": "string",
-                    "description": "Region ID where the VLAN exists (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "VLAN label to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["region_id", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.VLANDeleteInput"),
     ), Capability.Destroy
 
 
@@ -169,11 +112,16 @@ async def _vlan_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vlan(region_id, label)
-        return {
-            "message": f"VLAN {label} deleted successfully from region {region_id}",
-            "region_id": region_id,
-            "label": label,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"VLAN {label} deleted successfully from region {region_id}"
+                ),
+                "region_id": region_id,
+                "label": label,
+            },
+            vlan_pb2.VLANDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -187,19 +135,33 @@ async def _vlan_delete_two_stage(
     )
 
 
+def _vlan_delete_ids(
+    arguments: dict[str, Any],
+) -> tuple[str, str] | list[TextContent]:
+    """Validate region_id (lowercase slug, mirrors Go) + label, or return an error.
+
+    Both branches need region+label, and the spec says dry-run errors on missing
+    required args the same way the real call would.
+    """
+    region_id = arguments.get("region_id", "")
+    label = arguments.get("label", "")
+    if not isinstance(region_id, str) or not region_id:
+        return error_response("region_id is required")
+    if not _REGION_SLUG_RE.fullmatch(region_id):
+        return error_response("region_id must be a lowercase region slug")
+    if not isinstance(label, str) or not label:
+        return error_response("label is required")
+    return region_id, label
+
+
 async def handle_linode_vlan_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vlan_delete tool request."""
-    region_id = arguments.get("region_id", "")
-    label = arguments.get("label", "")
-
-    # Both branches need region+label, and the spec says dry-run errors
-    # on missing required args the same way the real call would.
-    if not region_id:
-        return error_response("region_id is required")
-    if not label:
-        return error_response("label is required")
+    ids = _vlan_delete_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    region_id, label = ids
 
     two_stage = await _vlan_delete_two_stage(arguments, cfg, region_id, label)
     if two_stage is not None:
@@ -227,15 +189,20 @@ async def handle_linode_vlan_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
+        return error_response("This deletes a VLAN. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_vlan(region_id, label)
-        return {
-            "message": f"VLAN {label} deleted successfully from region {region_id}",
-            "region_id": region_id,
-            "label": label,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"VLAN {label} deleted successfully from region {region_id}"
+                ),
+                "region_id": region_id,
+                "label": label,
+            },
+            vlan_pb2.VLANDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete VLAN", _call)
 
@@ -245,27 +212,7 @@ def create_linode_networking_ipv4_share_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ipv4_share",
         description="Shares IPv4 addresses with a Linode",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "ips": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of IPv4 addresses to share (required)",
-                },
-                "linode_id": {
-                    "type": "integer",
-                    "description": "Linode ID to share the IPs with (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm sharing IPs.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["ips", "linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NetworkingIPv4ShareInput"),
     ), Capability.Write
 
 
@@ -307,7 +254,7 @@ async def handle_linode_networking_ipv4_share(
     confirm = arguments.get("confirm", False)
     if confirm is not True:
         return error_response(
-            "This modifies network state. Set confirm=true to proceed."
+            "This changes shared IP assignments. Set confirm=true to proceed."
         )
 
     parsed = _parse_ipv4_share(arguments)
@@ -334,27 +281,7 @@ def create_linode_networking_ip_share_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_share",
         description="Shares IP addresses with a Linode",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "ips": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of IP addresses to share (required)",
-                },
-                "linode_id": {
-                    "type": "integer",
-                    "description": "Linode ID to share the IPs with (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm sharing IPs.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["ips", "linode_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NetworkingIPShareInput"),
     ), Capability.Write
 
 
@@ -399,7 +326,7 @@ async def handle_linode_networking_ip_share(
     confirm = arguments.get("confirm", False)
     if confirm is not True:
         return error_response(
-            "This modifies network state. Set confirm=true to proceed."
+            "This changes shared IP assignments. Set confirm=true to proceed."
         )
 
     parsed = _parse_ips_share(arguments)
@@ -426,40 +353,7 @@ def create_linode_networking_ipv4_assign_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ipv4_assign",
         description="Assigns IPv4 addresses to Linodes in a region",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "region": {
-                    "type": "string",
-                    "description": "Region ID for the assignments (required)",
-                },
-                "assignments": {
-                    "type": "array",
-                    "description": "IPv4 assignment objects with address and linode_id",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "address": {
-                                "type": "string",
-                                "description": "IPv4 address to assign",
-                            },
-                            "linode_id": {
-                                "type": "integer",
-                                "description": "Linode ID receiving the address",
-                            },
-                        },
-                        "required": ["address", "linode_id"],
-                    },
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm assigning IPv4 addresses.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["region", "assignments", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NetworkingIPv4AssignInput"),
     ), Capability.Write
 
 
@@ -528,7 +422,7 @@ async def handle_linode_networking_ipv4_assign(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This modifies network assignments. Set confirm=true to proceed."
+            "This assigns IPv4 addresses to Linodes. Set confirm=true to proceed."
         )
 
     parsed = _parse_ipv4_assign(arguments)
@@ -562,40 +456,7 @@ def create_linode_networking_ip_assign_tool() -> tuple[Tool, Capability]:
             "Assigns IP addresses to Linodes in a region. WARNING: This "
             "changes IP ownership assignments."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "region": {
-                    "type": "string",
-                    "description": "Region ID for the assignments (required)",
-                },
-                "assignments": {
-                    "type": "array",
-                    "description": "IP assignment objects with address and linode_id",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "address": {
-                                "type": "string",
-                                "description": "IP address to assign",
-                            },
-                            "linode_id": {
-                                "type": "integer",
-                                "description": "Linode ID receiving the address",
-                            },
-                        },
-                        "required": ["address", "linode_id"],
-                    },
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm assigning IP addresses.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["region", "assignments", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.NetworkingIPAssignInput"),
     ), Capability.Write
 
 

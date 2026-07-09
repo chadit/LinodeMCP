@@ -1,0 +1,51 @@
+{
+  "tool": "linode_profile_security_question_answer",
+  "description": "Shared answer-count and response-length rejections and the answer POST body. Duplicate-id text, missing-array text, and confirm text diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects wrong answer count",
+      "args": { "security_questions": [], "confirm": true },
+      "expect_error": "security_questions must contain exactly 3 answers"
+    },
+    {
+      "name": "rejects a too-short response",
+      "args": {
+        "security_questions": [
+          { "question_id": 1, "response": "ab" },
+          { "question_id": 2, "response": "abcdef" },
+          { "question_id": 3, "response": "ghijkl" }
+        ],
+        "confirm": true
+      },
+      "expect_error": "response length must be between 3 and 17 characters"
+    },
+    {
+      "name": "answers profile security questions",
+      "args": {
+        "security_questions": [
+          { "question_id": 1, "response": "abcdef" },
+          { "question_id": 2, "response": "ghijkl" },
+          { "question_id": 3, "response": "mnopqr" }
+        ],
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/security-questions",
+        "body": {
+          "security_questions": [
+            { "question_id": 1, "response": "abcdef" },
+            { "question_id": 2, "response": "ghijkl" },
+            { "question_id": 3, "response": "mnopqr" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"security_questions": [{"question_id": 1, "response": "abcdef"}, {"question_id": 2, "response": "ghijkl"}, {"question_id": 3, "response": "mnopqr"}]},
+      "expect_error": "This submits profile security question answers. Set confirm=true to proceed."
+    }
+  ]
+}

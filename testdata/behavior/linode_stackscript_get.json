@@ -1,0 +1,32 @@
+{
+  "tool": "linode_stackscript_get",
+  "description": "StackScript get by id. Missing and non-positive stackscript_id agree; a decimal string id diverges (Go rejects, Python coerces) so it is left out (see report).",
+  "cases": [
+    {
+      "name": "requires stackscript_id",
+      "args": {},
+      "expect_error": "stackscript_id is required"
+    },
+    {
+      "name": "rejects non-positive stackscript_id",
+      "args": {
+        "stackscript_id": 0
+      },
+      "expect_error": "stackscript_id must be a positive integer"
+    },
+    {
+      "name": "gets one StackScript by id",
+      "args": {
+        "stackscript_id": 123
+      },
+      "api_response": {
+        "id": 123,
+        "label": "deploy"
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/linode/stackscripts/123"
+      }
+    }
+  ]
+}

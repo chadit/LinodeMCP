@@ -1,0 +1,17 @@
+{
+  "tool": "linode_object_storage_key_get",
+  "description": "Pins the key_id-required rejection both languages share and the single key GET by ID. Secret material is returned by design; only request behavior is pinned.",
+  "cases": [
+    {
+      "name": "requires key_id",
+      "args": {},
+      "expect_error": "key_id is required"
+    },
+    {
+      "name": "gets a key",
+      "args": { "key_id": 123 },
+      "api_response": { "id": 123, "label": "my-key" },
+      "expect_request": { "method": "GET", "path": "/object-storage/keys/123" }
+    }
+  ]
+}

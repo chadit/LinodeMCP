@@ -1,0 +1,26 @@
+{
+  "tool": "linode_tag_create",
+  "description": "Tag create. With confirm both languages reach label validation and agree; the no-confirm gate messages diverge (see report). Success POSTs the label-only body.",
+  "cases": [
+    {
+      "name": "requires label",
+      "args": { "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "creates a tag",
+      "args": { "label": "prod", "confirm": true },
+      "api_response": { "label": "prod" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/tags",
+        "body": { "label": "prod" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "prod"},
+      "expect_error": "This creates a Linode tag. Set confirm=true to proceed."
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_monitor_service_list",
+  "description": "No local validation; pins the service-list GET.",
+  "cases": [
+    {
+      "name": "lists monitor services",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/monitor/services" }
+    }
+  ]
+}

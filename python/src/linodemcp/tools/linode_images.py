@@ -17,19 +17,16 @@ from linodemcp.genpb.linode.mcp.v1 import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
+    required_int_id,
 )
 from linodemcp.tools.proto_response import (
+    raw_str,
     serialize_api_response,
     serialize_list_response,
 )
@@ -45,49 +42,6 @@ _IMAGE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+/[A-Za-z0-9._-]+$")
 _SHARED_IMAGE_ID_PATTERN = re.compile(r"^shared/[1-9]\d*$")
 
 
-def image_to_response_dict(image: Any) -> dict[str, Any]:
-    """Shape an Image dataclass to proto-canonical linode.mcp.v1.Image form.
-
-    expiry and eol are omitted when None; capabilities and tags are always lists.
-    """
-    body: dict[str, Any] = {
-        "id": image.id,
-        "label": image.label,
-        "description": image.description,
-        "type": image.type,
-        "vendor": image.vendor,
-        "status": image.status,
-        "created": image.created,
-        "created_by": image.created_by,
-    }
-    if image.expiry is not None:
-        body["expiry"] = image.expiry
-    if image.eol is not None:
-        body["eol"] = image.eol
-    body["capabilities"] = image.capabilities or []
-    body["tags"] = image.tags or []
-    body["size"] = image.size
-    body["is_public"] = image.is_public
-    body["deprecated"] = image.deprecated
-    return body
-
-
-def _optional_int_argument(
-    arguments: dict[str, Any], name: str, minimum: int, maximum: int | None = None
-) -> int | None:
-    """Parse an optional integer argument with range checks."""
-    if name not in arguments or arguments[name] is None:
-        return None
-    value = arguments[name]
-    if type(value) is not int or value < minimum:
-        if maximum is None:
-            raise ValueError(f"{name} must be an integer at least {minimum}")
-        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
-    if maximum is not None and value > maximum:
-        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
-    return value
-
-
 def create_linode_image_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_image_list tool."""
     return Tool(
@@ -96,29 +50,7 @@ def create_linode_image_list_tool() -> tuple[Tool, Capability]:
             "Lists all available Linode images (OS images and custom images) "
             "with optional filtering by type, public status, or deprecated status"
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "type": {
-                    "type": "string",
-                    "description": "Filter images by type (manual, automatic)",
-                },
-                "is_public": {
-                    "type": "string",
-                    "description": "Filter by public status (true, false)",
-                },
-                "deprecated": {
-                    "type": "string",
-                    "description": "Filter by deprecated status (true, false)",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ImageListInput"),
     ), Capability.Read
 
 
@@ -136,29 +68,7 @@ def create_linode_image_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_delete",
         description="Deletes a private Linode image by ID." + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "image_id": {
-                    "type": "string",
-                    "description": "Private image ID to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["image_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageDeleteInput"),
     ), Capability.Destroy
 
 
@@ -167,37 +77,7 @@ def create_linode_image_sharegroup_by_image_list_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_image_sharegroup_by_image_list",
         description="Lists share groups for a Linode image.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "image_id": {
-                    "type": "string",
-                    "pattern": r"^(?!.*\.\.)(linode|private)/[A-Za-z0-9._-]+$",
-                    "description": (
-                        "Image ID such as linode/ubuntu24.04 or private/12345 "
-                        "(required)"
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["image_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupByImageListInput"),
     ), Capability.Read
 
 
@@ -206,28 +86,7 @@ def create_linode_image_sharegroup_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_list",
         description="Lists image share groups available to the account.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupListInput"),
     ), Capability.Read
 
 
@@ -236,30 +95,7 @@ def create_linode_image_sharegroup_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_delete",
         description="Deletes a single image share group by UUID." + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["sharegroup_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupDeleteInput"),
     ), Capability.Destroy
 
 
@@ -268,44 +104,7 @@ def create_linode_image_sharegroup_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_create",
         description="Creates a share group for sharing images with other users.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Label for the image share group (required)",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Detailed description for the image share group",
-                },
-                "images": {
-                    "type": "array",
-                    "description": "Images to add to the share group",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "string"},
-                            "label": {"type": "string"},
-                            "description": {"type": "string"},
-                        },
-                        "required": ["id"],
-                    },
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupCreateInput"),
     ), Capability.Write
 
 
@@ -323,34 +122,7 @@ def create_linode_image_sharegroup_image_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_image_list",
         description="Lists images available in an image share group by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["sharegroup_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupImageListInput"),
     ), Capability.Read
 
 
@@ -359,34 +131,7 @@ def create_linode_image_sharegroup_member_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_image_sharegroup_member_list",
         description="Lists members of an image share group by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["sharegroup_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberListInput"),
     ), Capability.Read
 
 
@@ -403,41 +148,10 @@ def create_linode_image_sharegroup_member_token_delete_tool() -> tuple[
     Tool, Capability
 ]:
     """Create the linode_image_sharegroup_member_token_delete tool."""
-    uuid_pattern = (
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
-        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
-        "[0-9a-fA-F]{12}$"
-    )
     return Tool(
         name="linode_image_sharegroup_member_token_delete",
         description="Revokes a membership token from an image share group by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "token_uuid": {
-                    "type": "string",
-                    "pattern": uuid_pattern,
-                    "description": "Membership token UUID (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["sharegroup_id", "token_uuid", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberTokenDeleteInput"),
     ), Capability.Destroy
 
 
@@ -445,46 +159,10 @@ def create_linode_image_sharegroup_member_token_update_tool() -> tuple[
     Tool, Capability
 ]:
     """Create the linode_image_sharegroup_member_token_update tool."""
-    uuid_pattern = (
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
-        "[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-"
-        "[0-9a-fA-F]{12}$"
-    )
     return Tool(
         name="linode_image_sharegroup_member_token_update",
         description="Updates a membership token label in an image share group by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "token_uuid": {
-                    "type": "string",
-                    "pattern": uuid_pattern,
-                    "description": "Membership token UUID (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "New non-empty label for the membership token",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["sharegroup_id", "token_uuid", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberTokenUpdateInput"),
     ), Capability.Write
 
 
@@ -493,38 +171,7 @@ def create_linode_image_sharegroup_member_add_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_member_add",
         description="Adds members to an image share group by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Label for the member being added (required)",
-                },
-                "token": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Share group token for the member (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["sharegroup_id", "label", "token", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberAddInput"),
     ), Capability.Write
 
 
@@ -535,35 +182,7 @@ def create_linode_image_sharegroup_image_delete_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_image_delete",
         description="Revokes access to one shared image from an image share group.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group numeric ID (required)",
-                },
-                "image_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "Shared image numeric ID, for example 1234 (required)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["sharegroup_id", "image_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupImageDeleteInput"),
     ), Capability.Destroy
 
 
@@ -576,43 +195,7 @@ def create_linode_image_sharegroup_image_update_tool() -> tuple[Tool, Capability
         description=(
             "Updates a shared image label or description by share group and image ID."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group numeric ID (required)",
-                },
-                "image_id": {
-                    "type": "string",
-                    "description": ("Shared image ID, for example shared/1 (required)"),
-                },
-                "label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "New non-empty label for the shared image",
-                },
-                "description": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "New non-empty description for the shared image",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["sharegroup_id", "image_id", "confirm"],
-            "anyOf": [{"required": ["label"]}, {"required": ["description"]}],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupImageUpdateInput"),
     ), Capability.Write
 
 
@@ -621,42 +204,7 @@ def create_linode_image_sharegroup_image_add_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_image_add",
         description="Adds images to an image share group by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "images": {
-                    "type": "array",
-                    "minItems": 1,
-                    "description": "Images to add to the share group",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "string"},
-                            "label": {"type": "string"},
-                            "description": {"type": "string"},
-                        },
-                        "required": ["id"],
-                    },
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["sharegroup_id", "images", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupImageAddInput"),
     ), Capability.Write
 
 
@@ -665,39 +213,7 @@ def create_linode_image_sharegroup_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_update",
         description="Updates an image share group label or description by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "sharegroup_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Image share group ID (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "New non-empty label for the share group",
-                },
-                "description": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "New non-empty description for the share group",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["sharegroup_id", "confirm"],
-            "anyOf": [{"required": ["label"]}, {"required": ["description"]}],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupUpdateInput"),
     ), Capability.Write
 
 
@@ -706,29 +222,7 @@ def create_linode_image_sharegroup_token_delete_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_token_delete",
         description="Deletes an image share group token by UUID." + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "token_uuid": {
-                    "type": "string",
-                    "description": "Image share group token UUID (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this destructive operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["token_uuid", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenDeleteInput"),
     ), Capability.Destroy
 
 
@@ -737,28 +231,7 @@ def create_linode_image_sharegroup_token_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_token_list",
         description="Lists image share group tokens for the user.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenListInput"),
     ), Capability.Read
 
 
@@ -785,33 +258,7 @@ def create_linode_image_sharegroup_token_image_list_tool() -> tuple[Tool, Capabi
     return Tool(
         name="linode_image_sharegroup_token_image_list",
         description="Lists images available through an image share group token UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "token_uuid": {
-                    "type": "string",
-                    "description": "Image share group token UUID (required)",
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["token_uuid"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenImageListInput"),
     ), Capability.Read
 
 
@@ -820,31 +267,7 @@ def create_linode_image_sharegroup_token_update_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_token_update",
         description="Updates an image share group token label by UUID.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "token_uuid": {
-                    "type": "string",
-                    "description": "Image share group token UUID (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "New non-empty label for the token (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["token_uuid", "label", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenUpdateInput"),
     ), Capability.Write
 
 
@@ -853,31 +276,7 @@ def create_linode_image_sharegroup_token_create_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_token_create",
         description="Creates a token for sharing images with another share group.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "valid_for_sharegroup_uuid": {
-                    "type": "string",
-                    "description": "Share group UUID the token is valid for (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Optional label for the share group token",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Set true to confirm this mutating operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["valid_for_sharegroup_uuid", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenCreateInput"),
     ), Capability.Write
 
 
@@ -886,49 +285,7 @@ def create_linode_image_upload_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_upload",
         description="Creates a pending private image upload for a region.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Short title for the uploaded image (required)",
-                },
-                "region": {
-                    "type": "string",
-                    "description": (
-                        "Region where the image upload is created (required)"
-                    ),
-                },
-                "cloud_init": {
-                    "type": "boolean",
-                    "description": "Whether the image supports cloud-init",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Detailed description for the image",
-                },
-                "tags": {
-                    "type": "array",
-                    "description": "Tags to apply to the image",
-                    "items": {"type": "string"},
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["label", "region", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageUploadInput"),
     ), Capability.Write
 
 
@@ -937,35 +294,7 @@ def create_linode_image_replicate_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_replicate",
         description="Replicates a private or public image to one or more regions.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "image_id": {
-                    "type": "string",
-                    "description": "Image ID to replicate, for example private/123.",
-                },
-                "regions": {
-                    "type": "array",
-                    "description": "Region slugs to replicate the image to.",
-                    "items": {"type": "string"},
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["image_id", "regions", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageReplicateInput"),
     ), Capability.Write
 
 
@@ -974,47 +303,7 @@ def create_linode_image_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_create",
         description="Creates a private image from a Linode disk.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "disk_id": {
-                    "type": "integer",
-                    "description": "ID of the Linode disk to image (required)",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Short title for the image",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Detailed description for the image",
-                },
-                "cloud_init": {
-                    "type": "boolean",
-                    "description": "Whether the image supports cloud-init",
-                },
-                "tags": {
-                    "type": "array",
-                    "description": "Tags to apply to the image",
-                    "items": {"type": "string"},
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["disk_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageCreateInput"),
     ), Capability.Write
 
 
@@ -1023,45 +312,7 @@ def create_linode_image_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_update",
         description="Updates a private image label, description, or tags.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "image_id": {
-                    "type": "string",
-                    "description": (
-                        "Private image ID to update, for example private/12345"
-                    ),
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Short title for the image",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Detailed description for the image",
-                },
-                "tags": {
-                    "type": "array",
-                    "description": "Tags to apply to the image",
-                    "items": {"type": "string"},
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Set true to confirm this mutating operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["image_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.ImageUpdateInput"),
     ), Capability.Write
 
 
@@ -1375,7 +626,7 @@ async def handle_linode_image_upload(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates a pending image upload. Set confirm=true to proceed."
+            "This creates an image upload. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1432,7 +683,8 @@ async def handle_linode_image_replicate(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This replicates an image to regions. Set confirm=true to proceed."
+            "This replicates an image to the requested regions. Set confirm=true to "
+            "proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1473,7 +725,10 @@ async def handle_linode_image_create(
         )
 
     if not arguments.get("confirm"):
-        return error_response("This creates an image. Set confirm=true to proceed.")
+        return error_response(
+            "This creates a private image from a Linode disk. Set confirm=true to "
+            "proceed."
+        )
 
     disk_err = _image_create_disk_id_error(disk_id)
     if disk_err is not None:
@@ -1486,17 +741,23 @@ async def handle_linode_image_create(
     disk_id_int = cast("int", disk_id)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        image = await client.create_image(
+        raw = await client.create_image_raw(
             disk_id=disk_id_int,
             label=arguments.get("label"),
             description=arguments.get("description"),
             cloud_init=arguments.get("cloud_init"),
             tags=tags,
         )
-        return {
-            "message": f"Image '{image.label}' ({image.id}) created successfully",
-            "image": image_to_response_dict(image),
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Image '{raw_str(raw, 'label')}' "
+                    f"({raw_str(raw, 'id')}) created successfully"
+                ),
+                "image": raw,
+            },
+            image_pb2.ImageWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "create Linode image", _call)
 
@@ -1513,8 +774,8 @@ async def handle_linode_image_sharegroup_by_image_list(
     image_id_str = cast("str", image_id).strip()
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1536,8 +797,8 @@ async def handle_linode_image_sharegroup_list(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1566,7 +827,10 @@ async def _images_sharegroups_token_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup_token(token_uuid=token_uuid_str)
-        return {"message": "Image share group token deleted"}
+        return serialize_api_response(
+            {"message": "Image share group token removed successfully"},
+            image_sharegroup_token_pb2.ImageShareGroupTokenDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -1585,7 +849,7 @@ async def handle_linode_image_sharegroup_token_delete(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_token_delete tool request."""
     token_uuid = arguments.get("token_uuid")
-    uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    uuid_error = _image_sharegroup_token_uuid_strict_error(token_uuid, "token_uuid")
     if uuid_error is not None:
         return error_response(uuid_error)
 
@@ -1609,12 +873,15 @@ async def handle_linode_image_sharegroup_token_delete(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This deletes an image share group token. Set confirm=true to proceed."
+            "confirm=true is required to remove the share group token"
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup_token(token_uuid=token_uuid_str)
-        return {"message": "Image share group token removed successfully"}
+        return serialize_api_response(
+            {"message": "Image share group token removed successfully"},
+            image_sharegroup_token_pb2.ImageShareGroupTokenDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete image share group token", _call)
 
@@ -1624,8 +891,8 @@ async def handle_linode_image_sharegroup_token_list(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_token_list tool request."""
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1654,7 +921,11 @@ def _private_image_id_error(value: Any) -> str | None:
 
 
 def _image_sharegroup_token_uuid_error(value: Any, name: str) -> str | None:
-    """Validate an image share group UUID argument."""
+    """Validate an image share group UUID argument (lenient, stdlib UUID form).
+
+    Used for valid_for_sharegroup_uuid, which Go validates leniently too
+    (isUUIDFormat mirrors stdlib UUID()), so this stays as-is.
+    """
     if not isinstance(value, str) or not value.strip():
         return f"{name} must be a non-empty string"
     try:
@@ -1664,14 +935,28 @@ def _image_sharegroup_token_uuid_error(value: Any, name: str) -> str | None:
     return None
 
 
-def _image_sharegroup_numeric_id_error(value: Any) -> str | None:
-    """Validate the numeric sharegroup_id arg for shared image routes.
+_TOKEN_UUID_PATTERN = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
-    OpenAPI sharegroup-id-path.yaml documents this path parameter as the
-    share group's numeric ID, not the UUID used by token-management routes.
+
+def _image_sharegroup_token_uuid_strict_error(value: Any, name: str) -> str | None:
+    """Validate a token_uuid path arg against Go's strict canonical-UUID check.
+
+    Go's imageShareGroupTokenUUIDFromTool rejects path-unsafe values and any
+    non-canonical UUID form (braces/urn/no-dash), unlike stdlib UUID(). Ported so
+    token_uuid rejects the same set in both languages (strictest-wins).
     """
-    if type(value) is not int or value <= 0:
-        return "sharegroup_id must be a positive integer"
+    if not isinstance(value, str) or not value.strip():
+        return f"{name} must be a non-empty string"
+    token = value.strip()
+    if "/" in token or "?" in token or "#" in token or ".." in token:
+        return (
+            f"{name} must not contain path separators, query separators, "
+            "fragments, or traversal segments"
+        )
+    if not _TOKEN_UUID_PATTERN.fullmatch(token):
+        return f"{name} must be a UUID"
     return None
 
 
@@ -1740,7 +1025,10 @@ async def _images_sharegroup_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup(sharegroup_id_str)
-        return {"message": "Image share group deleted"}
+        return serialize_api_response(
+            {"message": f"Image share group {sharegroup_id_str} removed successfully"},
+            image_sharegroup_pb2.ImageShareGroupDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -1758,12 +1046,11 @@ async def handle_linode_image_sharegroup_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_delete tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if id_error is not None:
+    sharegroup_id, id_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(id_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
 
     two_stage = await _images_sharegroup_delete_two_stage(
         arguments, cfg, sharegroup_id_str
@@ -1783,13 +1070,15 @@ async def handle_linode_image_sharegroup_delete(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This deletes an image share group. Set confirm=true to proceed."
+            "confirm=true is required to delete the image share group"
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup(sharegroup_id_str)
-        message = f"Image share group {sharegroup_id_str} removed successfully"
-        return {"message": message}
+        return serialize_api_response(
+            {"message": f"Image share group {sharegroup_id_str} removed successfully"},
+            image_sharegroup_pb2.ImageShareGroupDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete image share group", _call)
 
@@ -1798,12 +1087,11 @@ async def handle_linode_image_sharegroup_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_get tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if id_error is not None:
+    sharegroup_id, id_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(id_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
@@ -1818,16 +1106,15 @@ async def handle_linode_image_sharegroup_image_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_image_list request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if id_error is not None:
+    sharegroup_id, id_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(id_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1848,16 +1135,15 @@ async def handle_linode_image_sharegroup_member_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_list request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if id_error is not None:
+    sharegroup_id, id_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(id_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1878,17 +1164,16 @@ async def handle_linode_image_sharegroup_member_token_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_token_get request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if sharegroup_error is not None:
+    sharegroup_id, sharegroup_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(sharegroup_error)
 
     token_uuid = arguments.get("token_uuid")
-    token_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    token_error = _image_sharegroup_token_uuid_strict_error(token_uuid, "token_uuid")
     if token_error is not None:
         return error_response(token_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
     token_uuid_str = cast("str", token_uuid).strip()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -1908,17 +1193,16 @@ async def handle_linode_image_sharegroup_member_token_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_token_delete tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if sharegroup_error is not None:
+    sharegroup_id, sharegroup_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(sharegroup_error)
 
     token_uuid = arguments.get("token_uuid")
-    token_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    token_error = _image_sharegroup_token_uuid_strict_error(token_uuid, "token_uuid")
     if token_error is not None:
         return error_response(token_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
     token_uuid_str = cast("str", token_uuid).strip()
 
     if is_dry_run(arguments):
@@ -1935,20 +1219,21 @@ async def handle_linode_image_sharegroup_member_token_delete(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response(
-            "This revokes an image share group membership token. "
-            "Set confirm=true to proceed."
-        )
+        return error_response("confirm=true is required to revoke the member token")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup_member_token(
             sharegroup_id_str, token_uuid_str
         )
-        message = (
-            f"Image share group member token {token_uuid_str} "
-            f"revoked from share group {sharegroup_id_str} successfully"
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Image share group member token {token_uuid_str} "
+                    f"revoked from share group {sharegroup_id_str} successfully"
+                )
+            },
+            image_sharegroup_member_pb2.ImageShareGroupMemberTokenDeleteResponse(),
         )
-        return {"message": message}
 
     return await execute_tool(
         cfg, arguments, "revoke image share group member token", _call
@@ -1959,13 +1244,12 @@ async def handle_linode_image_sharegroup_member_token_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_token_update tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if sharegroup_error is not None:
+    sharegroup_id, sharegroup_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(sharegroup_error)
 
     token_uuid = arguments.get("token_uuid")
-    token_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    token_error = _image_sharegroup_token_uuid_strict_error(token_uuid, "token_uuid")
     if token_error is not None:
         return error_response(token_error)
 
@@ -1973,7 +1257,7 @@ async def handle_linode_image_sharegroup_member_token_update(
     if label_error is not None:
         return error_response(label_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
     token_uuid_str = cast("str", token_uuid).strip()
     label = cast("str", arguments["label"]).strip()
 
@@ -2021,9 +1305,8 @@ async def handle_linode_image_sharegroup_image_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_image_delete tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    sharegroup_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if sharegroup_error is not None:
+    sharegroup_id, sharegroup_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(sharegroup_error)
 
     image_id = arguments.get("image_id")
@@ -2031,7 +1314,7 @@ async def handle_linode_image_sharegroup_image_delete(
     if image_error is not None:
         return error_response(image_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
     image_id_str = str(cast("int", image_id))
 
     if is_dry_run(arguments):
@@ -2050,17 +1333,19 @@ async def handle_linode_image_sharegroup_image_delete(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response(
-            "This revokes shared image access. Set confirm=true to proceed."
-        )
+        return error_response("confirm=true is required to remove the shared image")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image_sharegroup_image(sharegroup_id_str, image_id_str)
-        message = (
-            f"Shared image {image_id_str} removed from "
-            f"image share group {sharegroup_id_str} successfully"
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Shared image {image_id_str} removed from "
+                    f"image share group {sharegroup_id_str} successfully"
+                )
+            },
+            image_sharegroup_pb2.ImageShareGroupImageDeleteResponse(),
         )
-        return {"message": message}
 
     return await execute_tool(
         cfg, arguments, "revoke image share group image access", _call
@@ -2071,9 +1356,8 @@ async def handle_linode_image_sharegroup_image_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_image_update tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if id_error is not None:
+    sharegroup_id, id_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(id_error)
 
     image_id = arguments.get("image_id")
@@ -2087,7 +1371,7 @@ async def handle_linode_image_sharegroup_image_update(
     if body_error is not None:
         return error_response(body_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
     image_id_str = cast("str", image_id).strip()
 
     if is_dry_run(arguments):
@@ -2134,16 +1418,15 @@ async def handle_linode_image_sharegroup_member_add(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_member_add tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if id_error is not None:
+    sharegroup_id, id_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(id_error)
 
     body, body_error = _image_sharegroup_member_add_payload(arguments)
     if body_error is not None:
         return error_response(body_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
     body = cast("dict[str, str]", body)
 
     if is_dry_run(arguments):
@@ -2181,16 +1464,15 @@ async def handle_linode_image_sharegroup_image_add(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_image_add tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if id_error is not None:
+    sharegroup_id, id_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(id_error)
 
     images, images_error = _image_sharegroup_images_add_payload(arguments.get("images"))
     if images_error is not None:
         return error_response(images_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
     images = cast("list[dict[str, str]]", images)
 
     if is_dry_run(arguments):
@@ -2229,9 +1511,8 @@ async def handle_linode_image_sharegroup_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_update tool request."""
-    sharegroup_id = arguments.get("sharegroup_id")
-    id_error = _image_sharegroup_numeric_id_error(sharegroup_id)
-    if id_error is not None:
+    sharegroup_id, id_error = required_int_id(arguments, "sharegroup_id")
+    if sharegroup_id is None:
         return error_response(id_error)
 
     body, body_error = _image_sharegroup_update_body(
@@ -2240,7 +1521,7 @@ async def handle_linode_image_sharegroup_update(
     if body_error is not None:
         return error_response(body_error)
 
-    sharegroup_id_str = str(cast("int", sharegroup_id))
+    sharegroup_id_str = str(sharegroup_id)
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -2283,7 +1564,7 @@ async def handle_linode_image_sharegroup_token_get(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_token_get tool request."""
     token_uuid = arguments.get("token_uuid")
-    uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    uuid_error = _image_sharegroup_token_uuid_strict_error(token_uuid, "token_uuid")
     if uuid_error is not None:
         return error_response(uuid_error)
 
@@ -2303,7 +1584,7 @@ async def handle_linode_image_sharegroup_by_token_get(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_by_token_get tool request."""
     token_uuid = arguments.get("token_uuid")
-    uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    uuid_error = _image_sharegroup_token_uuid_strict_error(token_uuid, "token_uuid")
     if uuid_error is not None:
         return error_response(uuid_error)
 
@@ -2323,15 +1604,15 @@ async def handle_linode_image_sharegroup_token_image_list(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_token_image_list request."""
     token_uuid = arguments.get("token_uuid")
-    uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    uuid_error = _image_sharegroup_token_uuid_strict_error(token_uuid, "token_uuid")
     if uuid_error is not None:
         return error_response(uuid_error)
 
     token_uuid_str = cast("str", token_uuid).strip()
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -2355,7 +1636,7 @@ async def handle_linode_image_sharegroup_token_update(
 ) -> list[TextContent]:
     """Handle linode_image_sharegroup_token_update tool request."""
     token_uuid = arguments.get("token_uuid")
-    uuid_error = _image_sharegroup_token_uuid_error(token_uuid, "token_uuid")
+    uuid_error = _image_sharegroup_token_uuid_strict_error(token_uuid, "token_uuid")
     if uuid_error is not None:
         return error_response(uuid_error)
 
@@ -2439,7 +1720,8 @@ async def handle_linode_image_sharegroup_token_create(
 
     if arguments.get("confirm") is not True:
         return error_response(
-            "This creates an image share group token. Set confirm=true to proceed."
+            "This creates single-use image share group token material. Set "
+            "confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -2488,19 +1770,24 @@ async def handle_linode_image_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("This updates an image. Set confirm=true to proceed.")
+        return error_response(
+            "This updates image metadata. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        image = await client.update_image(
+        raw = await client.update_image_raw(
             image_id=image_id,
             label=cast("str | None", payload.get("label")),
             description=cast("str | None", payload.get("description")),
             tags=cast("list[str] | None", payload.get("tags")),
         )
-        return {
-            "message": f"Image '{image.id}' updated successfully",
-            "image": image_to_response_dict(image),
-        }
+        return serialize_api_response(
+            {
+                "message": f"Image '{raw_str(raw, 'id')}' updated successfully",
+                "image": raw,
+            },
+            image_pb2.ImageWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode image", _call)
 
@@ -2563,7 +1850,10 @@ async def _image_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image(image_id_str)
-        return {"message": "Private image deleted"}
+        return serialize_api_response(
+            {"message": f"Image {image_id_str} deleted successfully"},
+            image_pb2.ImageDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -2603,13 +1893,14 @@ async def handle_linode_image_delete(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response(
-            "This deletes a private image. Set confirm=true to proceed."
-        )
+        return error_response("confirm=true is required to delete the image")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_image(image_id_str)
-        return {"message": f"Image {image_id_str} deleted successfully"}
+        return serialize_api_response(
+            {"message": f"Image {image_id_str} deleted successfully"},
+            image_pb2.ImageDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete private image", _call)
 

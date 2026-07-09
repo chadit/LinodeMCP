@@ -1,0 +1,56 @@
+{
+  "message": "linode.mcp.v1.AuditRecentResponse",
+  "description": "Audit recent-events envelope: count plus the newest-first event list. Event 64-bit counters emit as JSON strings.",
+  "input": {
+    "count": 1,
+    "events": [
+      {
+        "ts": "2026-07-01T12:00:00.5Z",
+        "ts_unix_ns": 1782734400500000000,
+        "event_id": "01J1QZX0000000000000000000",
+        "tool": "linode_instance_delete",
+        "tool_capability": "destroy",
+        "environment": "default",
+        "profile": "full-access",
+        "mode": "normal",
+        "args": {
+          "instance_id": 123,
+          "confirm": true
+        },
+        "args_redacted": [],
+        "status": "success",
+        "latency_ms": 250,
+        "result_summary": "Instance 123 deleted successfully",
+        "linodemcp_version": "0.2.0",
+        "session_id": "sess-01",
+        "credential_generation": 2
+      }
+    ]
+  },
+  "canonical": {
+    "count": 1,
+    "events": [
+      {
+        "ts": "2026-07-01T12:00:00.5Z",
+        "ts_unix_ns": 1782734400500000000,
+        "event_id": "01J1QZX0000000000000000000",
+        "tool": "linode_instance_delete",
+        "tool_capability": "destroy",
+        "environment": "default",
+        "profile": "full-access",
+        "mode": "normal",
+        "args": {
+          "confirm": true,
+          "instance_id": 123
+        },
+        "args_redacted": [],
+        "status": "success",
+        "latency_ms": 250,
+        "result_summary": "Instance 123 deleted successfully",
+        "linodemcp_version": "0.2.0",
+        "session_id": "sess-01",
+        "credential_generation": 2
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.LKEServiceTokenDeleteResponse",
+  "description": "LKE service token delete id-echo: a confirmation message plus the LKE cluster ID whose service token was deleted and regenerated.",
+  "input": {
+    "message": "Service token for LKE cluster 135 deleted and regenerated successfully",
+    "cluster_id": 135
+  },
+  "canonical": {
+    "message": "Service token for LKE cluster 135 deleted and regenerated successfully",
+    "cluster_id": 135
+  }
+}

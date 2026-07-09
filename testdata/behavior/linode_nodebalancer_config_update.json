@@ -1,0 +1,41 @@
+{
+  "tool": "linode_nodebalancer_config_update",
+  "description": "Pins the config-update PUT body plus Go's at-least-one-field/port/check/ssl body validation now ported to Python (strictest-wins). Rejection cases set confirm:true so both languages reach the body check despite the confirm-vs-body ordering difference.",
+  "cases": [
+    {
+      "name": "puts the config update body",
+      "args": { "nodebalancer_id": 100, "config_id": 7, "port": 9090, "confirm": true },
+      "api_response": { "id": 7, "nodebalancer_id": 100, "port": 9090, "protocol": "http" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/nodebalancers/100/configs/7",
+        "body": { "port": 9090 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"nodebalancer_id": 100, "config_id": 7, "port": 9090},
+      "expect_error": "This updates a NodeBalancer config. Set confirm=true to proceed."
+    },
+    {
+      "name": "requires at least one update field",
+      "args": {"nodebalancer_id": 100, "config_id": 7, "confirm": true},
+      "expect_error": "at least one update field is required"
+    },
+    {
+      "name": "rejects an out-of-range port",
+      "args": {"nodebalancer_id": 100, "config_id": 7, "port": 99999, "confirm": true},
+      "expect_error": "port must be an integer from 1 through 65535"
+    },
+    {
+      "name": "rejects an invalid check",
+      "args": {"nodebalancer_id": 100, "config_id": 7, "check": "bogus", "confirm": true},
+      "expect_error": "check must be one of: none, connection, http, http_body"
+    },
+    {
+      "name": "requires ssl_cert and ssl_key for https",
+      "args": {"nodebalancer_id": 100, "config_id": 7, "protocol": "https", "confirm": true},
+      "expect_error": "ssl_cert and ssl_key are required when protocol is https"
+    }
+  ]
+}

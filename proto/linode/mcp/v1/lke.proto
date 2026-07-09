@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 // LKEControlPlane is the control-plane configuration nested in an LKE cluster.
@@ -37,10 +39,256 @@ message LKEClusterWriteResponse {
   LKECluster cluster = 2;
 }
 
+// LKEClusterDeleteResponse is the id-echo envelope linode_lke_cluster_delete
+// returns: a confirmation message plus the deleted cluster's ID. The delete
+// endpoint returns an empty body, so the id echo confirms the target.
+message LKEClusterDeleteResponse {
+  string message = 1;
+  int32 cluster_id = 2;
+}
+
+// LKEClusterActionResponse is the id-echo envelope the cluster-scoped POST
+// actions linode_lke_cluster_recycle and linode_lke_cluster_regenerate return: a
+// confirmation message plus the cluster ID the action ran against. The action
+// endpoints return an empty body.
+message LKEClusterActionResponse {
+  string message = 1;
+  int32 cluster_id = 2;
+}
+
 // LKEClusterGetInput is the input contract for linode_lke_cluster_get.
 message LKEClusterGetInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
   // The ID of the LKE cluster to retrieve (required).
   string cluster_id = 2;
+}
+
+// LKEClusterListInput is the input contract for linode_lke_cluster_list.
+message LKEClusterListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Filter clusters by label containing this string (case-insensitive).
+  optional string label = 2;
+}
+
+// LKENodePoolCreateItem is one node-pool definition in the node_pools array of
+// linode_lke_cluster_create. It mirrors the fields the create handler reads from
+// each pool object (linode.CreateLKEClusterNodePool): type and count are the
+// required pair, autoscaler is a small open object, and tags is an optional
+// string list. autoscaler stays a map so the generator emits a plain object
+// without pinning its inner shape.
+message LKENodePoolCreateItem {
+  // Linode type for the pool's nodes (e.g. g6-standard-2).
+  string type = 1;
+  // Number of nodes in the pool (minimum 1).
+  int32 count = 2;
+  // Autoscaler settings, e.g. {"enabled": true, "min": 1, "max": 5} (optional).
+  map<string, google.protobuf.Value> autoscaler = 3;
+  // Tags to apply to the node pool (optional).
+  repeated string tags = 4;
+}
+
+// LKEClusterCreateInput is the input contract for linode_lke_cluster_create.
+// node_pools is a required array in the hand-built schema, but a repeated
+// message field never lands in the generated required set, so node_pools drops
+// out of required (recorded in the required-flag-loss log); the handler still
+// rejects an empty node_pools at runtime.
+message LKEClusterCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Label for the cluster (3-32 characters).
+  string label = 2;
+  // Region for the cluster (e.g. us-east).
+  string region = 3;
+  // Kubernetes version (e.g. 1.29). Use linode_lke_version_list to find valid
+  // values.
+  string k8s_version = 4;
+  // Array of node pool objects: [{"type": "g6-standard-2", "count": 3}]. Each
+  // pool may also carry an autoscaler object and tags.
+  repeated LKENodePoolCreateItem node_pools = 5;
+  // Tags to apply to the cluster (optional).
+  repeated string tags = 6;
+  // Control plane settings, e.g. {"high_availability": true} (optional, HA
+  // incurs additional cost).
+  map<string, google.protobuf.Value> control_plane = 7;
+  // Must be true to confirm cluster creation. This creates billable resources.
+  // Ignored when dry_run=true.
+  bool confirm = 8;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 9;
+}
+
+// LKEClusterUpdateInput is the input contract for linode_lke_cluster_update.
+message LKEClusterUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster to update.
+  int32 cluster_id = 2;
+  // New label for the cluster (optional).
+  optional string label = 3;
+  // New Kubernetes version (optional). Use linode_lke_version_list to find
+  // valid values.
+  optional string k8s_version = 4;
+  // Tags to apply to the cluster (optional, replaces existing tags).
+  repeated string tags = 5;
+  // Control plane settings, e.g. {"high_availability": true} (optional).
+  map<string, google.protobuf.Value> control_plane = 6;
+  // Must be true to confirm cluster update. Ignored when dry_run=true.
+  bool confirm = 7;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 8;
+}
+
+// LKEClusterDeleteInput is the input contract for linode_lke_cluster_delete.
+message LKEClusterDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster to delete.
+  int32 cluster_id = 2;
+  // Must be true to confirm deletion. This action is irreversible. Ignored
+  // when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// LKEClusterRecycleInput is the input contract for linode_lke_cluster_recycle.
+message LKEClusterRecycleInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster to recycle.
+  int32 cluster_id = 2;
+  // Must be true to confirm recycling. This causes temporary disruption.
+  // Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// LKEClusterRegenerateInput is the input contract for
+// linode_lke_cluster_regenerate.
+message LKEClusterRegenerateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster.
+  int32 cluster_id = 2;
+  // Must be true to confirm token regeneration. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// LKEServiceTokenDeleteInput is the input contract for
+// linode_lke_service_token_delete.
+message LKEServiceTokenDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster.
+  int32 cluster_id = 2;
+  // Must be true to confirm service token deletion. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}
+
+// LKEControlPlaneACLAddresses holds the IPv4 and IPv6 CIDRs allowed to reach an
+// LKE cluster's Kubernetes API server. Both lists are emitted (as []).
+message LKEControlPlaneACLAddresses {
+  repeated string ipv4 = 1;
+  repeated string ipv6 = 2;
+}
+
+// LKEControlPlaneACL mirrors the control-plane ACL for an LKE cluster: whether
+// the ACL is enforced and the allowed address lists.
+message LKEControlPlaneACL {
+  bool enabled = 1;
+  LKEControlPlaneACLAddresses addresses = 2;
+}
+
+// LKEACLWriteResponse is the {message, acl} envelope the linode_lke_acl_update
+// tool returns: a confirmation string plus the full control-plane ACL element.
+// The Linode API wraps the ACL under a top-level "acl" key; the handler keeps
+// that acl object whole so the output round-trips through this message.
+message LKEACLWriteResponse {
+  string message = 1;
+  LKEControlPlaneACL acl = 2;
+}
+
+// LKEServiceTokenDeleteResponse is the id-echo envelope
+// linode_lke_service_token_delete returns: a confirmation message plus the LKE
+// cluster ID whose service token was deleted and regenerated.
+message LKEServiceTokenDeleteResponse {
+  string message = 1;
+  int32 cluster_id = 2;
+}
+
+// LKEACLDeleteResponse is the id-echo envelope linode_lke_acl_delete returns: a
+// confirmation message plus the cluster ID whose control-plane ACL was removed.
+// The delete endpoint returns an empty body, so the id echo confirms the target.
+message LKEACLDeleteResponse {
+  string message = 1;
+  int32 cluster_id = 2;
+}
+
+// LKEACLGetInput is the input contract for linode_lke_acl_get. cluster_id is a
+// string here, matching the hand-built schema and the LKEClusterGetInput
+// read-side convention.
+message LKEACLGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster (required).
+  string cluster_id = 2;
+}
+
+// LKEACLUpdateInput is the input contract for linode_lke_acl_update. acl is a
+// required nested object in the hand-built schema ({"enabled": bool,
+// "addresses": {"ipv4": [...], "ipv6": [...]}}), but a map field never lands in
+// the generated required set, so acl drops out of required (recorded in the
+// required-flag-loss log); the handler still requires it at runtime.
+message LKEACLUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster.
+  int32 cluster_id = 2;
+  // Control plane ACL object: {"enabled": true, "addresses": {"ipv4":
+  // ["10.0.0.1/32"], "ipv6": ["..."]}}.
+  map<string, google.protobuf.Value> acl = 3;
+  // Must be true to confirm ACL update. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// LKEACLDeleteInput is the input contract for linode_lke_acl_delete. Note: no
+// mode/plan_id; this destroy is not on the two-stage flow per the dump.
+message LKEACLDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster.
+  int32 cluster_id = 2;
+  // Must be true to confirm ACL deletion. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
 }

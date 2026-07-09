@@ -22,6 +22,14 @@ message ImageShareGroupMemberWriteResponse {
   ImageShareGroupMember member = 2;
 }
 
+// ImageShareGroupMemberTokenDeleteResponse is the confirmation envelope
+// linode_image_sharegroup_member_token_delete returns when a membership token is
+// revoked. The endpoint returns an empty body; only a message is emitted so the
+// token secret is never echoed.
+message ImageShareGroupMemberTokenDeleteResponse {
+  string message = 1;
+}
+
 // ImageShareGroupMemberListResponse is the linode_image_sharegroup_member_list
 // envelope: count, an optional filter echo, and the membership token elements.
 message ImageShareGroupMemberListResponse {
@@ -39,4 +47,75 @@ message ImageShareGroupMemberTokenGetInput {
   int32 sharegroup_id = 2;
   // The image share group member token UUID (required).
   string token_uuid = 3;
+}
+
+// ImageShareGroupMemberListInput is the input contract for
+// linode_image_sharegroup_member_list.
+message ImageShareGroupMemberListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Image share group ID.
+  int32 sharegroup_id = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
+}
+
+// ImageShareGroupMemberAddInput is the input contract for
+// linode_image_sharegroup_member_add. sharegroup_id, label, token, and confirm
+// are required.
+message ImageShareGroupMemberAddInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The numeric image share group ID to add members to.
+  int32 sharegroup_id = 2;
+  // Label for the member being added.
+  string label = 3;
+  // Membership token used to add the member.
+  string token = 4;
+  // Must be set to true to confirm adding the member. Ignored when
+  // dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// ImageShareGroupMemberTokenUpdateInput is the input contract for
+// linode_image_sharegroup_member_token_update. sharegroup_id, token_uuid,
+// label, and confirm are required.
+message ImageShareGroupMemberTokenUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The numeric ID of the image share group.
+  int32 sharegroup_id = 2;
+  // The UUID of the member token to update.
+  string token_uuid = 3;
+  // The new descriptive label for the member token.
+  string label = 4;
+  // Must be set to true to confirm the member token update. Ignored when
+  // dry_run=true.
+  bool confirm = 5;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 6;
+}
+
+// ImageShareGroupMemberTokenDeleteInput is the input contract for
+// linode_image_sharegroup_member_token_delete. Plain confirm destroy (no
+// mode/plan_id in the ground truth).
+message ImageShareGroupMemberTokenDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The numeric image share group ID.
+  int32 sharegroup_id = 2;
+  // Image share group member token UUID.
+  string token_uuid = 3;
+  // Must be set to true to confirm revoking the member token. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
 }

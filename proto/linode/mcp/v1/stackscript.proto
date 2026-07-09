@@ -48,3 +48,112 @@ message StackScriptGetInput {
   // The ID of the StackScript to retrieve (required).
   int32 stackscript_id = 2;
 }
+
+// StackScriptWriteResponse is the {message, stackscript} envelope the
+// linode_stackscript_create / linode_stackscript_update tools return: a
+// confirmation string plus the full StackScript element the API returned.
+message StackScriptWriteResponse {
+  string message = 1;
+  StackScript stackscript = 2;
+}
+
+// StackScriptDeleteResponse is the id-echo envelope linode_stackscript_delete
+// returns: a confirmation message plus the deleted StackScript's ID. The delete
+// endpoint returns an empty body, so the id echo confirms the target.
+message StackScriptDeleteResponse {
+  string message = 1;
+  int32 stackscript_id = 2;
+}
+
+// StackScriptListInput is the input contract for linode_stackscript_list.
+// The filters are client-side string filters ("true"/"false" for the
+// booleans), matching the hand-built schema.
+message StackScriptListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Filter by public status (true, false).
+  optional string is_public = 2;
+  // Filter by ownership - only your own StackScripts (true, false).
+  optional string mine = 3;
+  // Filter StackScripts by label containing this string (case-insensitive).
+  optional string label_contains = 4;
+}
+
+// StackScriptCreateInput is the input contract for linode_stackscript_create.
+// label, script, and confirm are required. images is a required array of image
+// ID strings in the hand-built schema, but repeated fields are never emitted
+// into the generated required list, so it becomes optional here (the handler
+// still rejects an empty images list at runtime).
+message StackScriptCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // A label for the StackScript (max 64 characters, must be unique).
+  string label = 2;
+  // The script content (bash, compatible with the selected images).
+  string script = 3;
+  // Image IDs that the StackScript supports (e.g., ["linode/debian12",
+  // "linode/ubuntu24.04"]).
+  repeated string images = 4;
+  // A description of the StackScript.
+  optional string description = 5;
+  // Whether the StackScript should be public (default: false).
+  optional bool is_public = 6;
+  // A revision note for this version of the StackScript.
+  optional string rev_note = 7;
+  // Must be set to true to confirm StackScript creation. Ignored when
+  // dry_run=true.
+  bool confirm = 8;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 9;
+}
+
+// StackScriptUpdateInput is the input contract for linode_stackscript_update.
+// stackscript_id and confirm are required; at least one mutable field must be
+// supplied (handler-enforced). images stays optional here (repeated fields
+// are never required in the generated schema, and the ground truth agrees).
+message StackScriptUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the StackScript to update.
+  int32 stackscript_id = 2;
+  // New label for the StackScript (max 64 characters, must be unique).
+  optional string label = 3;
+  // New script content (bash, compatible with the selected images).
+  optional string script = 4;
+  // Image IDs that the StackScript supports (e.g., ["linode/debian12",
+  // "linode/ubuntu24.04"]).
+  repeated string images = 5;
+  // New description of the StackScript.
+  optional string description = 6;
+  // Whether the StackScript should be public.
+  optional bool is_public = 7;
+  // A revision note for this version of the StackScript.
+  optional string rev_note = 8;
+  // Must be set to true to confirm the StackScript update. Ignored when
+  // dry_run=true.
+  bool confirm = 9;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 10;
+}
+
+// StackScriptDeleteInput is the input contract for linode_stackscript_delete,
+// a two-stage destroy.
+message StackScriptDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the StackScript to delete.
+  int32 stackscript_id = 2;
+  // Must be set to true to confirm deletion. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
+  // execute it.
+  optional string plan_id = 6;
+}

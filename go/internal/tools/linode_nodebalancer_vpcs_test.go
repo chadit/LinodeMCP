@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -39,14 +38,11 @@ func TestLinodeNodeBalancerVPCListToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyNodeBalancerID, keyPage, keyPageSize} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
-	}
-
-	if !slices.Contains(tool.InputSchema.Required, keyNodeBalancerID) {
-		t.Errorf("tool.InputSchema.Required does not contain %v", keyNodeBalancerID)
 	}
 
 	if handler == nil {

@@ -1,0 +1,12 @@
+{
+  "tool": "linode_domain_record_get",
+  "description": "Domain record get GETs one record under a domain. The missing-id rejection text diverges (Go 'domain_id must be a positive integer', Python 'domain_id is required') so only the success path is pinned; see report.",
+  "cases": [
+    {
+      "name": "gets the domain record",
+      "args": { "domain_id": 5, "record_id": 7 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/domains/5/records/7" }
+    }
+  ]
+}

@@ -2,15 +2,17 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 // ConfigPathProvider returns the path of the active config file.
@@ -60,27 +62,16 @@ func NewLinodeProfileDraftSaveTool(
 	registry *builder.Registry,
 	configPath ConfigPathProvider,
 ) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool := mcp.NewTool(
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_draft_save",
-		mcp.WithDescription(
-			"Save a profile draft to the config file. Requires confirm=true. "+
-				"Computes the diff against the prior user-defined profile "+
-				"with the same name (or against empty for a new profile) "+
-				"and returns it in the response so the model can summarize. "+
-				"Does NOT change the active profile; the user runs "+
-				"`linodemcp profile use <name>` separately. Saving over a "+
-				"built-in profile name is refused.",
-		),
-		mcp.WithString(
-			"name",
-			mcp.Description("Draft name to save."),
-			mcp.Required(),
-		),
-		mcp.WithBoolean(
-			"confirm",
-			mcp.Description("Must be true. The save is a write operation that mutates the config file."),
-			mcp.Required(),
-		),
+		"Save a profile draft to the config file. Requires confirm=true. "+
+			"Computes the diff against the prior user-defined profile "+
+			"with the same name (or against empty for a new profile) "+
+			"and returns it in the response so the model can summarize. "+
+			"Does NOT change the active profile; the user runs "+
+			"`linodemcp profile use <name>` separately. Saving over a "+
+			"built-in profile name is refused.",
+		toolschemas.Schema("linode.mcp.v1.ProfileDraftSaveInput"),
 	)
 
 	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -138,13 +129,53 @@ func NewLinodeProfileDraftSaveTool(
 			return nil, fmt.Errorf("write config to %q: %w", path, err)
 		}
 
-		body, err := json.Marshal(diff)
+		saveProto, err := draftSaveProto(diff)
 		if err != nil {
-			return nil, fmt.Errorf("marshal save result: %w", err)
+			return nil, err
 		}
 
-		return mcp.NewToolResultText(string(body)), nil
+		return MarshalProtoToolResponse(saveProto)
 	}
 
 	return tool, profiles.CapMeta, handler
+}
+
+// draftSaveProto converts a save diff into its response message. The old/new
+// field values are free-form (string, bool, or string array per field), so
+// they round-trip through structpb values.
+func draftSaveProto(diff *builder.Diff) (*linodev1.ProfileDraftSaveResponse, error) {
+	out := &linodev1.ProfileDraftSaveResponse{
+		Name:          diff.Name,
+		IsNew:         diff.IsNew,
+		AddedTools:    diff.AddedTools,
+		RemovedTools:  diff.RemovedTools,
+		ChangedFields: make(map[string]*linodev1.ProfileFieldDiff, len(diff.ChangedFields)),
+	}
+
+	for field, change := range diff.ChangedFields {
+		oldValue, err := structpb.NewValue(widenForStructValue(change.Old))
+		if err != nil {
+			return nil, fmt.Errorf("convert old value for %s: %w", field, err)
+		}
+
+		newValue, err := structpb.NewValue(widenForStructValue(change.New))
+		if err != nil {
+			return nil, fmt.Errorf("convert new value for %s: %w", field, err)
+		}
+
+		out.ChangedFields[field] = &linodev1.ProfileFieldDiff{Old: oldValue, New: newValue}
+	}
+
+	return out, nil
+}
+
+// widenForStructValue converts the []string diff values (environment and
+// scope lists) to []any, the only slice type structpb.NewValue accepts.
+// Scalars pass through unchanged.
+func widenForStructValue(value any) any {
+	if strings, ok := value.([]string); ok {
+		return stringsToAnySlice(strings)
+	}
+
+	return value
 }

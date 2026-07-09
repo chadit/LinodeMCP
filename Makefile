@@ -1,4 +1,4 @@
-.PHONY: help build test check lint clean install-hooks check-hooks tool-parity \
+.PHONY: help build test check lint clean install-hooks check-hooks tool-parity write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-test go-lint go-fmt go-clean go-run go-check \
@@ -36,6 +36,10 @@ $(PROTO_STAMP): $(PROTO_SRCS)
 	@# generated tree imports as one module tree under linodemcp.genpb (no top-level `linode`
 	@# on sys.path, no duplicate descriptor registration).
 	perl -pi -e 's{^from linode\.mcp\.v1 import }{from linodemcp.genpb.linode.mcp.v1 import }' python/src/linodemcp/genpb/linode/mcp/v1/*_pb2.py python/src/linodemcp/genpb/linode/mcp/v1/*_pb2.pyi
+	@# proto enums carry an `unspecified = 0` zero-value sentinel (proto3 requires one);
+	@# strip it from the generated JSON Schema enum arrays so clients see only real API
+	@# values. Runs over both schema dirs to keep Go and Python schemas byte-identical.
+	python3 scripts/strip_enum_sentinel.py
 	@mkdir -p $(dir $@)
 	@touch $@
 
@@ -44,8 +48,8 @@ $(PROTO_STAMP): $(PROTO_SRCS)
 ## build: Build all language binaries (Go + Python) into each language's bin/
 build: proto go-build python-build
 
-## check: Run all linters and tests (go-check + python-check + tool-parity)
-check: proto go-check python-check tool-parity
+## check: Run all linters and tests (go-check + python-check + tool-parity + write-proto + read-proto + input-proto + meta-proto + behavior)
+check: proto go-check python-check tool-parity write-proto read-proto input-proto meta-proto behavior messages
 
 ## tool-parity: Verify Go/Python tool-surface parity (capability, params, required)
 # Runs the Go dumper (go run) and imports the Python registry (needs the venv),
@@ -53,6 +57,76 @@ check: proto go-check python-check tool-parity
 # divergence or any baseline entry that is now fixed (the baseline only shrinks).
 tool-parity:
 	@python/.venv/bin/python scripts/verify_tool_parity.py
+
+## write-proto: Verify mutating handlers route success output through proto
+# Statically classifies every Write/Destroy/Admin tool on both sides as
+# proto-routed or legacy (Go: go run ./cmd/write-proto-dump; Python: the
+# _write_proto_classifier module, needs the venv), then ratchets the straggler
+# set and the missing-conformance-fixture set down against their baselines in
+# docs/. Fails on any new straggler or any baseline entry that is now fixed.
+write-proto:
+	@python/.venv/bin/python scripts/verify_write_proto.py
+
+## read-proto: Verify read handlers route output through proto
+# The read-surface sibling of write-proto: statically classifies every Read
+# tool on both sides (Go: go run ./cmd/write-proto-dump -surface read; Python:
+# the _write_proto_classifier module in read mode, needs the venv), then
+# ratchets the straggler set down against docs/read-proto-baseline.txt. That
+# baseline doubles as the remaining-work list for the read-surface conversion.
+read-proto:
+	@python/.venv/bin/python scripts/verify_read_proto.py
+
+## input-proto: Verify tool input schemas are proto-generated
+# The input-schema sibling of write-proto/read-proto: statically classifies
+# every tool's factory on both sides (Go: go run ./cmd/write-proto-dump
+# -surface input; Python: the _write_proto_classifier module in input mode,
+# needs the venv) as proto-generated or hand-built, then ratchets the straggler
+# set down against docs/input-proto-baseline.txt. That baseline doubles as the
+# remaining-work list for the input-surface conversion.
+input-proto:
+	@python/.venv/bin/python scripts/verify_input_proto.py
+
+## meta-proto: Verify meta tool handlers route output through proto
+# The Meta-capability sibling of write-proto/read-proto: statically classifies
+# every Meta tool on both sides (Go: go run ./cmd/write-proto-dump -surface
+# meta; Python: the _write_proto_classifier module in meta mode, needs the
+# venv), then ratchets the straggler set down against
+# docs/meta-proto-baseline.txt.
+meta-proto:
+	@python/.venv/bin/python scripts/verify_meta_proto.py
+
+## behavior: Verify behavior-fixture coverage of the tool surface
+# The handler-semantics gate: the shared fixtures in testdata/behavior/ replay
+# identical cases through both languages' real dispatch paths (the two test
+# runners enforce correctness); this target ratchets fixture COVERAGE against
+# docs/behavior-baseline.txt so new tools need fixtures and covered tools
+# cannot lose them.
+behavior:
+	@python/.venv/bin/python scripts/verify_behavior.py
+
+## messages: Verify cross-language confirm-message parity
+# Diffs every extractable confirm-gate message across both languages
+# (heuristic extractors promoted from the P1 sweep) and ratchets against
+# docs/message-parity-baseline.txt, so text drift on branches no fixture
+# exercises still fails.
+messages:
+	@python/.venv/bin/python scripts/verify_messages.py
+
+## sync-enums: LIVE-check proto enums against the Linode API spec (scheduled agent; needs network)
+# Deliberately NOT part of `check`: it fetches the live OpenAPI spec + changelog,
+# so it is non-deterministic and offline-hostile. The inner gates prove Go and
+# Python emit identical proto-generated enums; this proves those enums still match
+# the current API. Run on a cron / by the sync agent. --update-baseline records a
+# reviewed drift set after a human reconciles a real API change.
+sync-enums:
+	@python/.venv/bin/python scripts/verify_sync_enums.py
+
+## sync-defaults: LIVE-check wire-body defaults against the Linode API spec (scheduled agent; needs network)
+sync-defaults:
+	@python/.venv/bin/python scripts/verify_sync_defaults.py
+
+## sync: Run all live API-drift checks (scheduled agent; needs network)
+sync: sync-enums sync-defaults
 
 ## lint: Run all linters (go-lint, python-lint, betterleaks, trivy, actionlint)
 lint: proto go-lint python-lint betterleaks trivy actionlint

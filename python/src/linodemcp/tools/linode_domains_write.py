@@ -6,16 +6,10 @@ from urllib.parse import quote
 import httpx
 from mcp.types import TextContent, Tool
 
+from linodemcp.genpb.linode.mcp.v1 import domain_pb2
 from linodemcp.linode import APIError, NetworkError, validate_label
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    ENV_PARAM_SCHEMA,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -24,7 +18,8 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
-from linodemcp.tools.linode_domains import domain_to_response_dict
+from linodemcp.tools.proto_response import raw_int, raw_str, serialize_api_response
+from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
 from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
@@ -48,26 +43,7 @@ def create_linode_domain_import_tool() -> tuple[Tool, Capability]:
             "Imports a DNS domain from a remote nameserver. Pass dry_run=true "
             "with confirm=true to preview without importing."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain": {
-                    "type": "string",
-                    "description": "The domain name to import (required)",
-                },
-                "remote_nameserver": {
-                    "type": "string",
-                    "description": "The remote nameserver to import from (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm this operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["domain", "remote_nameserver", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainImportInput"),
     ), Capability.Write
 
 
@@ -106,19 +82,23 @@ async def handle_linode_domain_import(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("This imports a DNS domain. Set confirm=true to proceed.")
+        return error_response(
+            "This imports a DNS domain zone. Set confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        domain = await client.import_domain(
-            domain=domain_name,
-            remote_nameserver=remote_nameserver,
+        raw = await client.post_raw("/domains/import", request_body)
+        domain_id = raw_int(raw, "id")
+        domain_label = raw_str(raw, "domain")
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Domain '{domain_label}' (ID: {domain_id}) imported successfully"
+                ),
+                "domain": raw,
+            },
+            domain_pb2.DomainWriteResponse(),
         )
-        return {
-            "message": (
-                f"Domain '{domain.domain}' (ID: {domain.id}) imported successfully"
-            ),
-            "domain": domain_to_response_dict(domain),
-        }
 
     return await execute_tool(cfg, arguments, "import domain", _call)
 
@@ -138,28 +118,7 @@ def create_linode_domain_clone_tool() -> tuple[Tool, Capability]:
             "Clones an existing DNS domain. Pass dry_run=true with confirm=true "
             "to preview without cloning."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": "The ID of the source domain to clone (required)",
-                },
-                "domain": {
-                    "type": "string",
-                    "description": (
-                        "The new domain name for the cloned domain (required)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to confirm this operation.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["domain_id", "domain", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainCloneInput"),
     ), Capability.Write
 
 
@@ -198,13 +157,16 @@ async def handle_linode_domain_clone(
         return error_response("This clones a DNS domain. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        domain = await client.clone_domain(domain_id=domain_id, domain=domain_name)
-        return {
-            "message": (
-                f"Domain {domain_id} cloned as '{domain.domain}' (ID: {domain.id})"
-            ),
-            "domain": domain_to_response_dict(domain),
-        }
+        raw = await client.post_raw(f"/domains/{encoded_domain_id}/clone", request_body)
+        new_id = raw_int(raw, "id")
+        new_label = raw_str(raw, "domain")
+        return serialize_api_response(
+            {
+                "message": f"Domain {domain_id} cloned as '{new_label}' (ID: {new_id})",
+                "domain": raw,
+            },
+            domain_pb2.DomainWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "clone domain", _call)
 
@@ -216,44 +178,19 @@ def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
         description=(
             "Creates a new DNS domain. Pass dry_run=true to preview without creating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain": {
-                    "type": "string",
-                    "description": "The domain name (required)",
-                },
-                "type": {
-                    "type": "string",
-                    "description": (
-                        "Domain type: 'master' or 'slave' (default: 'master')"
-                    ),
-                },
-                "soa_email": {
-                    "type": "string",
-                    "description": "SOA email address (required for master domains)",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Description for the domain (optional)",
-                },
-                "ttl_sec": {
-                    "type": "integer",
-                    "description": "Default TTL in seconds for records (optional)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm this operation."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["domain", "type", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainCreateInput"),
     ), Capability.Write
+
+
+def _domain_create_field_error(arguments: dict[str, Any]) -> list[TextContent] | None:
+    """Validate domain create fields; return an error response or None."""
+    if not arguments.get("domain"):
+        return error_response("domain is required")
+    # type has no safe default; Go requires it, so require it here too rather
+    # than silently defaulting to "master".
+    if not arguments.get("type"):
+        return error_response("type is required")
+    return None
 
 
 async def handle_linode_domain_create(
@@ -263,9 +200,10 @@ async def handle_linode_domain_create(
     domain_name = arguments.get("domain", "")
 
     if is_dry_run(arguments):
-        if not domain_name:
-            return error_response("domain is required")
-        domain_type = arguments.get("type", "master")
+        fields_error = _domain_create_field_error(arguments)
+        if fields_error is not None:
+            return fields_error
+        domain_type = arguments.get("type", "")
         return build_dry_run_response(
             "linode_domain_create",
             arguments.get("environment", ""),
@@ -280,23 +218,35 @@ async def handle_linode_domain_create(
     if not arguments.get("confirm"):
         return error_response("This creates a DNS domain. Set confirm=true to proceed.")
 
-    if not domain_name:
-        return error_response("domain is required")
+    fields_error = _domain_create_field_error(arguments)
+    if fields_error is not None:
+        return fields_error
+
+    body: dict[str, Any] = {
+        "domain": domain_name,
+        "type": arguments.get("type", ""),
+    }
+    soa_email = arguments.get("soa_email")
+    if soa_email:
+        body["soa_email"] = soa_email
+    description = arguments.get("description")
+    if description:
+        body["description"] = description
+    ttl_sec = arguments.get("ttl_sec")
+    if ttl_sec is not None:
+        body["ttl_sec"] = ttl_sec
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        domain = await client.create_domain(
-            domain=domain_name,
-            domain_type=arguments.get("type", "master"),
-            soa_email=arguments.get("soa_email"),
-            description=arguments.get("description"),
-            ttl_sec=arguments.get("ttl_sec"),
+        raw = await client.post_raw("/domains", body)
+        new_id = raw_int(raw, "id")
+        new_label = raw_str(raw, "domain")
+        return serialize_api_response(
+            {
+                "message": f"Domain '{new_label}' (ID: {new_id}) created successfully",
+                "domain": raw,
+            },
+            domain_pb2.DomainWriteResponse(),
         )
-        return {
-            "message": (
-                f"Domain '{domain.domain}' (ID: {domain.id}) created successfully"
-            ),
-            "domain": domain_to_response_dict(domain),
-        }
 
     return await execute_tool(cfg, arguments, "create domain", _call)
 
@@ -309,48 +259,7 @@ def create_linode_domain_update_tool() -> tuple[Tool, Capability]:
             "Updates an existing DNS domain. Pass dry_run=true to preview "
             "without updating."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": "The ID of the domain to update (required)",
-                },
-                "domain": {
-                    "type": "string",
-                    "description": "New domain name (optional)",
-                },
-                "soa_email": {
-                    "type": "string",
-                    "description": "New SOA email address (optional)",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "New description (optional)",
-                },
-                "status": {
-                    "type": "string",
-                    "description": (
-                        "New status: 'active', 'disabled', or 'edit_mode' (optional)"
-                    ),
-                    "enum": ["active", "disabled", "edit_mode"],
-                },
-                "ttl_sec": {
-                    "type": "integer",
-                    "description": "New default TTL in seconds (optional)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm this operation. Ignored when "
-                        "dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["domain_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainUpdateInput"),
     ), Capability.Write
 
 
@@ -376,6 +285,22 @@ def _domain_update_side_effects(
     if new_description:
         side_effects.append("The domain description is updated.")
     return {"side_effects": side_effects} if side_effects else {}
+
+
+def _domain_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Build the domain update PUT body, mirroring the client's omit rules."""
+    body: dict[str, Any] = {}
+    if arguments.get("domain"):
+        body["domain"] = arguments.get("domain")
+    if arguments.get("soa_email"):
+        body["soa_email"] = arguments.get("soa_email")
+    if arguments.get("description") is not None:
+        body["description"] = arguments.get("description")
+    if arguments.get("status"):
+        body["status"] = arguments.get("status")
+    if arguments.get("ttl_sec") is not None:
+        body["ttl_sec"] = arguments.get("ttl_sec")
+    return body
 
 
 async def handle_linode_domain_update(
@@ -415,19 +340,17 @@ async def handle_linode_domain_update(
     if not domain_id:
         return error_response("domain_id is required")
 
+    body = _domain_update_body(arguments)
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        domain = await client.update_domain(
-            domain_id=int(domain_id),
-            domain=arguments.get("domain"),
-            soa_email=arguments.get("soa_email"),
-            description=arguments.get("description"),
-            status=arguments.get("status"),
-            ttl_sec=arguments.get("ttl_sec"),
+        raw = await client.put_raw(f"/domains/{int(domain_id)}", body)
+        return serialize_api_response(
+            {
+                "message": f"Domain {domain_id} modified successfully",
+                "domain": raw,
+            },
+            domain_pb2.DomainWriteResponse(),
         )
-        return {
-            "message": f"Domain {domain_id} modified successfully",
-            "domain": domain_to_response_dict(domain),
-        }
 
     return await execute_tool(cfg, arguments, "update domain", _call)
 
@@ -441,26 +364,7 @@ def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
             "records. Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "domain_id": {
-                    "type": "integer",
-                    "description": "The ID of the domain to delete (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": ["domain_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.DomainDeleteInput"),
     ), Capability.Destroy
 
 
@@ -521,10 +425,15 @@ async def _domain_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain(int(domain_id))
-        return {
-            "message": f"Domain {domain_id} and all its records removed successfully",
-            "domain_id": domain_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Domain {domain_id} and all its records removed successfully"
+                ),
+                "domain_id": domain_id,
+            },
+            domain_pb2.DomainDeleteResponse(),
+        )
 
     async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
         return await _domain_delete_dependency_walk(client, int(domain_id))
@@ -573,16 +482,24 @@ async def handle_linode_domain_delete(
         )
 
     if not arguments.get("confirm"):
-        return error_response("This is destructive. Set confirm=true to proceed.")
+        return error_response(
+            "This operation is destructive and deletes all DNS records. Set "
+            "confirm=true to proceed."
+        )
 
     if not domain_id:
         return error_response("domain_id is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_domain(int(domain_id))
-        return {
-            "message": f"Domain {domain_id} and all its records removed successfully",
-            "domain_id": domain_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Domain {domain_id} and all its records removed successfully"
+                ),
+                "domain_id": domain_id,
+            },
+            domain_pb2.DomainDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete domain", _call)

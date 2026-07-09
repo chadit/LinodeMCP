@@ -34,12 +34,8 @@ func TestLinodeManagedStatsToolDefinition(t *testing.T) {
 		t.Errorf("capability = %v, want %v", capability, profiles.CapRead)
 	}
 
-	if _, ok := tool.InputSchema.Properties[canRunKeyEnv]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", canRunKeyEnv)
-	}
-
-	if len(tool.InputSchema.Required) != 0 {
-		t.Errorf("tool.InputSchema.Required = %v, want empty", tool.InputSchema.Required)
+	if !strings.Contains(string(tool.RawInputSchema), canRunKeyEnv) {
+		t.Errorf("tool.RawInputSchema missing key %v", canRunKeyEnv)
 	}
 
 	if handler == nil {

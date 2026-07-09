@@ -1,0 +1,26 @@
+{
+  "tool": "linode_profile_phone_number_verify",
+  "description": "Shared otp_code rejection and the verify POST body. Confirm text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing otp_code",
+      "args": {},
+      "expect_error": "otp_code must be a non-empty string"
+    },
+    {
+      "name": "verifies a phone number",
+      "args": { "otp_code": "123456", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/profile/phone-number/verify",
+        "body": { "otp_code": "123456" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"otp_code": "123456"},
+      "expect_error": "This verifies a profile phone number. Set confirm=true to proceed."
+    }
+  ]
+}

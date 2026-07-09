@@ -41,6 +41,15 @@ message InstanceTypeGetInput {
   string type_id = 2;
 }
 
+// InstanceTypeListInput is the input contract for linode_type_list. class is a
+// client-side filter.
+message InstanceTypeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Filter types by class (standard, dedicated, gpu, highmem, premium).
+  optional string class = 2;
+}
+
 // InstanceTypeListResponse is the linode_type_list envelope: count, the optional
 // filter echo (class=...), and the full proto InstanceType elements.
 message InstanceTypeListResponse {
@@ -79,6 +88,12 @@ message LKETypeListResponse {
   repeated LinodeType lke_types = 3;
 }
 
+// LKETypeListInput is the input contract for linode_lke_type_list.
+message LKETypeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
 // NodeBalancerTypeListResponse is the linode_nodebalancer_type_list envelope:
 // count and the full proto LinodeType elements. No filter params, so filter is
 // omitted.
@@ -86,6 +101,13 @@ message NodeBalancerTypeListResponse {
   int32 count = 1;
   optional string filter = 2;
   repeated LinodeType nodebalancer_types = 3;
+}
+
+// NodeBalancerTypeListInput is the input contract for
+// linode_nodebalancer_type_list.
+message NodeBalancerTypeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
 }
 
 // VolumeTypeListResponse is the linode_volume_type_list envelope: count and the
@@ -107,6 +129,13 @@ message ObjectStorageTypeListResponse {
   repeated LinodeType types = 3;
 }
 
+// ObjectStorageTypeListInput is the input contract for
+// linode_object_storage_type_list.
+message ObjectStorageTypeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
 // NetworkTransferPriceListResponse is the linode_network_transfer_price_list
 // envelope: count and the full proto LinodeType elements. The /network-transfer/
 // prices element shares the LinodeType shape (id, label, price, region_prices[],
@@ -116,4 +145,12 @@ message NetworkTransferPriceListResponse {
   int32 count = 1;
   optional string filter = 2;
   repeated LinodeType network_transfer_prices = 3;
+}
+
+// NetworkTransferPriceListInput is the input contract for
+// linode_network_transfer_price_list. Pairs with
+// NetworkTransferPriceListResponse.
+message NetworkTransferPriceListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
 }

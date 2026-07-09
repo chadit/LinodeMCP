@@ -1,0 +1,42 @@
+{
+  "message": "linode.mcp.v1.AuditSummaryResponse",
+  "description": "Audit summary body: total event count plus the group-by buckets.",
+  "input": {
+    "total_events": 7,
+    "rows": [
+      {
+        "groups": {
+          "status": "success",
+          "tool": "linode_instance_list"
+        },
+        "count": 6
+      },
+      {
+        "groups": {
+          "status": "error",
+          "tool": "linode_volume_get"
+        },
+        "count": 1
+      }
+    ]
+  },
+  "canonical": {
+    "total_events": 7,
+    "rows": [
+      {
+        "groups": {
+          "status": "success",
+          "tool": "linode_instance_list"
+        },
+        "count": 6
+      },
+      {
+        "groups": {
+          "status": "error",
+          "tool": "linode_volume_get"
+        },
+        "count": 1
+      }
+    ]
+  }
+}

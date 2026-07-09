@@ -17,10 +17,9 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
-// boolTrue and boolFalse are used for boolean string comparison in filter functions.
+// boolTrue is used for boolean string comparison in filter functions.
 const (
 	boolTrue             = "true"
-	boolFalse            = "false"
 	paramStatsYear       = "year"
 	paramStatsMonth      = "month"
 	statsYearMin         = 2000
@@ -53,16 +52,15 @@ func NewLinodeInstanceGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 
 // NewLinodeInstanceTransferGetTool creates a tool for getting monthly transfer statistics for a Linode instance.
 func NewLinodeInstanceTransferGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_transfer_get",
 		"Retrieves this month's network transfer statistics for a Linode instance.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-		},
-		handleLinodeInstanceTransferGetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceTransferGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeInstanceTransferGetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
@@ -78,12 +76,12 @@ func handleLinodeInstanceTransferGetRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	transfer, err := client.GetInstanceTransfer(ctx, linodeID)
+	transfer, err := client.GetInstanceTransferProto(ctx, linodeID)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instance transfer statistics: %v", err)), nil
 	}
 
-	return MarshalToolResponse(transfer)
+	return MarshalProtoToolResponse(transfer)
 }
 
 func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -157,26 +155,21 @@ func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeInstanceStatsByYearMonthTool creates a tool for retrieving monthly Linode statistics.
 func NewLinodeInstanceStatsByYearMonthTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_stats_month_get",
 		"Retrieves CPU, IO, IPv4, and IPv6 statistics for a Linode instance for a specific month.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber(paramStatsYear, mcp.Required(),
-				mcp.Description("The statistics year, from 2000 through 2037")),
-			mcp.WithNumber(paramStatsMonth, mcp.Required(),
-				mcp.Description("The statistics month, from 1 through 12")),
-		},
-		handleInstanceStatsByYearMonthRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceStatsMonthGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceStatsByYearMonthRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 func handleInstanceStatsByYearMonthRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	linodeID, validationMessage := requiredPositiveIntArgument(request, "linode_id", ErrLinodeIDRequired.Error(), "linode_id must be a positive integer")
+	linodeID, validationMessage := requiredIDArgument(request, "linode_id")
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -196,23 +189,37 @@ func handleInstanceStatsByYearMonthRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	stats, err := client.GetInstanceStatsByYearMonth(ctx, linodeID, year, month)
+	stats, err := client.GetInstanceStatsByYearMonthProto(ctx, linodeID, year, month)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve statistics for instance %d in %d-%02d: %v", linodeID, year, month, err)), nil
 	}
 
-	return MarshalToolResponse(stats)
+	return MarshalProtoToolResponse(stats)
 }
 
-func requiredPositiveIntArgument(request *mcp.CallToolRequest, key, missingMessage, invalidMessage string) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args[key]; !exists {
-		return 0, missingMessage
+// requiredIDArgument parses a required positive-integer id path argument,
+// returning the Option-B pair used repo-wide: "<name> is required" when the
+// argument is absent, "<name> must be a positive integer" when present but not
+// a positive integer (wrong type, bool, zero, or negative). Mirrors the Python
+// required_int_id helper so both languages reject identical inputs with
+// identical text.
+func requiredIDArgument(request *mcp.CallToolRequest, name string) (int, string) {
+	return requiredBoundedIDArgument(request, name, 0)
+}
+
+// requiredBoundedIDArgument is requiredIDArgument plus an upper bound: ids above
+// maxValue are rejected with the same "must be a positive integer" text. Used by
+// the parsers that guard against oversized ids (float64 precision loss on very
+// large JSON numbers). A maxValue of 0 disables the upper bound.
+func requiredBoundedIDArgument(request *mcp.CallToolRequest, name string, maxValue int) (int, string) {
+	raw, exists := request.GetArguments()[name]
+	if !exists {
+		return 0, name + " is required"
 	}
 
-	value, validationMessage := boundedIntArgument(request, key, 1, 0, invalidMessage)
-	if validationMessage != "" {
-		return 0, validationMessage
+	value, ok := numberArgToInt(raw)
+	if !ok || value < 1 || (maxValue > 0 && value > maxValue) {
+		return 0, name + " must be a positive integer"
 	}
 
 	return value, ""
@@ -234,21 +241,15 @@ func boundedIntArgument(request *mcp.CallToolRequest, key string, minValue, maxV
 
 // NewLinodeInstanceInterfaceAddTool creates a tool for adding an interface to a Linode instance.
 func NewLinodeInstanceInterfaceAddTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_interface_add",
 		"Adds a network interface to a Linode instance. WARNING: This changes instance network configuration.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithObject("interface", mcp.Required(),
-				mcp.Description("Object defining exactly one interface type: public, vpc, or vlan.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm interface creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceInterfaceAddRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceAddInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceInterfaceAddRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -283,22 +284,15 @@ func handleInstanceInterfaceAddRequest(ctx context.Context, request *mcp.CallToo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	createdInterface, err := client.AddInstanceInterface(ctx, linodeID, interfaceReq)
+	createdInterface, err := client.AddInstanceInterfaceProto(ctx, linodeID, interfaceReq)
 	if err != nil {
 		return mcp.NewToolResultError(formatAddInstanceInterfaceError(linodeID, err)), nil
 	}
 
-	response := struct {
-		Message   string                    `json:"message"`
-		Interface *linode.InstanceInterface `json:"interface"`
-		LinodeID  int                       `json:"linode_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceInterfaceWriteResponse{
 		Message:   fmt.Sprintf("Interface added to instance %d successfully", linodeID),
 		Interface: createdInterface,
-		LinodeID:  linodeID,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }
 
 func instanceInterfaceAddRequestFromTool(request *mcp.CallToolRequest) (*linode.AddInstanceInterfaceRequest, string) {
@@ -412,17 +406,7 @@ func handleInstanceInterfaceGetRequest(ctx context.Context, request *mcp.CallToo
 }
 
 func instanceInterfaceIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	args := request.GetArguments()
-	if _, exists := args[paramConfigInterfaceID]; !exists {
-		return 0, ErrInterfaceIDRequired.Error()
-	}
-
-	interfaceID, validationMessage := optionalPaginationInt(args, paramConfigInterfaceID, 1, 0)
-	if validationMessage != "" {
-		return 0, validationMessage
-	}
-
-	return interfaceID, ""
+	return requiredIDArgument(request, paramConfigInterfaceID)
 }
 
 func formatGetInstanceInterfaceError(linodeID, interfaceID int, err error) string {
@@ -431,21 +415,15 @@ func formatGetInstanceInterfaceError(linodeID, interfaceID int, err error) strin
 
 // NewLinodeInstanceInterfaceDeleteTool creates a tool for deleting an interface from a Linode instance.
 func NewLinodeInstanceInterfaceDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_interface_delete",
 		"Deletes an interface from a Linode instance. WARNING: This changes instance network configuration and is irreversible.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber(paramConfigInterfaceID, mcp.Required(),
-				mcp.Description("The ID of the Linode interface to delete")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm interface deletion. This action is irreversible. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceInterfaceDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceInterfaceDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -469,7 +447,7 @@ func handleInstanceInterfaceDeleteRequest(ctx context.Context, request *mcp.Call
 			})
 	}
 
-	if result := RequireConfirm(request, "This deletes a Linode interface and changes instance networking. Set confirm=true to proceed."); result != nil {
+	if result := requireDestroyConfirmation(ctx, request, "linode_instance_interface_delete", "This deletes a Linode interface and changes instance networking. Set confirm=true to proceed."); result != nil {
 		return result, nil
 	}
 
@@ -482,17 +460,11 @@ func handleInstanceInterfaceDeleteRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(formatDeleteInstanceInterfaceError(linodeID, interfaceID, err)), nil
 	}
 
-	response := struct {
-		Message     string `json:"message"`
-		LinodeID    int    `json:"linode_id"`
-		InterfaceID int    `json:"interface_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceInterfaceDeleteResponse{
 		Message:     fmt.Sprintf("Interface %d deleted from instance %d successfully", interfaceID, linodeID),
-		LinodeID:    linodeID,
-		InterfaceID: interfaceID,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId:    linodeIDToInt32(linodeID),
+		InterfaceId: linodeIDToInt32(interfaceID),
+	})
 }
 
 func formatDeleteInstanceInterfaceError(linodeID, interfaceID int, err error) string {
@@ -535,23 +507,15 @@ func handleInstanceInterfaceSettingsGetRequest(ctx context.Context, request *mcp
 
 // NewLinodeInstanceInterfaceSettingsUpdateTool creates a tool for updating Linode interface settings.
 func NewLinodeInstanceInterfaceSettingsUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_interface_settings_update",
 		"Updates interface settings for a specific Linode instance. WARNING: This changes instance network configuration.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithBoolean("network_helper",
-				mcp.Description("Enable or disable Network Helper.")),
-			mcp.WithObject("default_route",
-				mcp.Description("Default route interface IDs (ipv4_interface_id and/or ipv6_interface_id).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm interface settings update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceInterfaceSettingsUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceSettingsUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceInterfaceSettingsUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -588,22 +552,15 @@ func handleInstanceInterfaceSettingsUpdateRequest(ctx context.Context, request *
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	settings, err := client.UpdateInstanceInterfaceSettings(ctx, linodeID, settingsReq)
+	settings, err := client.UpdateInstanceInterfaceSettingsProto(ctx, linodeID, settingsReq)
 	if err != nil {
 		return mcp.NewToolResultError(formatInstanceInterfaceSettingsError("update", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string                            `json:"message"`
-		Settings *linode.InstanceInterfaceSettings `json:"settings"`
-		LinodeID int                               `json:"linode_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceInterfaceSettingsWriteResponse{
 		Message:  fmt.Sprintf("Interface settings for instance %d updated successfully", linodeID),
 		Settings: settings,
-		LinodeID: linodeID,
-	}
-
-	return MarshalToolResponse(response)
+	})
 }
 
 func instanceInterfaceSettingsUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateInstanceInterfaceSettingsRequest, string) {
@@ -645,29 +602,15 @@ func formatInstanceInterfaceSettingsError(action string, linodeID int, err error
 
 // NewLinodeInstanceInterfaceUpdateTool creates a tool for updating an interface on a Linode instance.
 func NewLinodeInstanceInterfaceUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_interface_update",
 		"Updates a network interface on a Linode instance. WARNING: This changes instance network configuration.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("interface_id", mcp.Required(),
-				mcp.Description("The ID of the Linode interface")),
-			mcp.WithObject("default_route",
-				mcp.Description("Default route settings for the interface.")),
-			mcp.WithObject("public",
-				mcp.Description("Public interface settings. Set exactly one of public, vpc, or vlan.")),
-			mcp.WithObject("vlan",
-				mcp.Description("VLAN interface settings. Set exactly one of public, vpc, or vlan.")),
-			mcp.WithObject("vpc",
-				mcp.Description("VPC interface settings. Set exactly one of public, vpc, or vlan.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm interface update. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceInterfaceUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceInterfaceUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -678,9 +621,9 @@ func handleInstanceInterfaceUpdateRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	interfaceID, interfaceIDOK := getPositiveIntArgument(request, "interface_id")
-	if !interfaceIDOK {
-		return mcp.NewToolResultError(linode.ErrInterfaceIDPositive.Error()), nil
+	interfaceID, validationMessage := requiredIDArgument(request, "interface_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if IsDryRun(request) {
@@ -709,24 +652,15 @@ func handleInstanceInterfaceUpdateRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	updatedInterface, err := client.UpdateInstanceInterface(ctx, linodeID, interfaceID, interfaceReq)
+	updatedInterface, err := client.UpdateInstanceInterfaceProto(ctx, linodeID, interfaceID, interfaceReq)
 	if err != nil {
 		return mcp.NewToolResultError(formatUpdateInstanceInterfaceError(linodeID, interfaceID, err)), nil
 	}
 
-	response := struct {
-		Message     string                    `json:"message"`
-		Interface   *linode.InstanceInterface `json:"interface"`
-		LinodeID    int                       `json:"linode_id"`
-		InterfaceID int                       `json:"interface_id"`
-	}{
-		Message:     fmt.Sprintf("Interface %d updated on instance %d successfully", interfaceID, linodeID),
-		Interface:   updatedInterface,
-		LinodeID:    linodeID,
-		InterfaceID: interfaceID,
-	}
-
-	return MarshalToolResponse(response)
+	return MarshalProtoToolResponse(&linodev1.InstanceInterfaceWriteResponse{
+		Message:   fmt.Sprintf("Interface %d updated on instance %d successfully", interfaceID, linodeID),
+		Interface: updatedInterface,
+	})
 }
 
 func instanceInterfaceUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateInstanceInterfaceRequest, string) {
@@ -808,7 +742,7 @@ func formatUpdateInstanceInterfaceError(linodeID, interfaceID int, err error) st
 
 // NewLinodeInstanceInterfaceHistoryListTool creates a tool for listing historical interface versions for a Linode instance.
 func NewLinodeInstanceInterfaceHistoryListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresourcePaginated(
+	_, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_instance_interface_history_list",
 		"Lists historical network interface versions for a specific Linode instance with optional pagination.",
@@ -827,6 +761,12 @@ func NewLinodeInstanceInterfaceHistoryListTool(cfg *config.Config) (mcp.Tool, pr
 		instanceInterfaceHistoryListResponse,
 	)
 
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_interface_history_list",
+		"Lists historical network interface versions for a specific Linode instance with optional pagination.",
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceHistoryListInput"),
+	)
+
 	return tool, profiles.CapRead, handler
 }
 
@@ -836,23 +776,15 @@ func instanceInterfaceHistoryListResponse(items []*linodev1.InstanceInterfaceHis
 
 // NewLinodeInterfacesUpgradeTool creates a tool for upgrading legacy config interfaces to Linode interfaces.
 func NewLinodeInterfacesUpgradeTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_interface_upgrade",
 		"Upgrades a Linode's legacy config interfaces to Linode interfaces. WARNING: This irreversibly changes instance network configuration.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithNumber("config_id",
-				mcp.Description("Optional configuration profile ID to upgrade")),
-			mcp.WithBoolean("api_dry_run",
-				mcp.Description("Pass dry_run to the Linode API to validate the upgrade without applying it.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm the interface upgrade request. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeInterfacesUpgradeRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceUpgradeInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeInterfacesUpgradeRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -883,12 +815,14 @@ func handleLinodeInterfacesUpgradeRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	result, err := client.UpgradeLinodeInterfaces(ctx, linodeID, upgradeReq)
+	result, err := client.UpgradeLinodeInterfacesProto(ctx, linodeID, upgradeReq)
 	if err != nil {
 		return mcp.NewToolResultError(formatUpgradeLinodeInterfacesError(linodeID, err)), nil
 	}
 
-	return MarshalToolResponse(result)
+	result.Message = fmt.Sprintf("Linode %d interface upgrade initiated", linodeID)
+
+	return MarshalProtoToolResponse(result)
 }
 
 func buildUpgradeLinodeInterfacesRequest(request *mcp.CallToolRequest) (*linode.UpgradeLinodeInterfacesRequest, string) {
@@ -896,7 +830,7 @@ func buildUpgradeLinodeInterfacesRequest(request *mcp.CallToolRequest) (*linode.
 	req := &linode.UpgradeLinodeInterfacesRequest{}
 
 	if _, exists := args["config_id"]; exists {
-		configID, validationMessage := boundedIntArgument(request, "config_id", 1, 0, "config_id must be an integer greater than or equal to 1")
+		configID, validationMessage := requiredIDArgument(request, "config_id")
 		if validationMessage != "" {
 			return nil, validationMessage
 		}
@@ -920,7 +854,7 @@ func formatUpgradeLinodeInterfacesError(linodeID int, err error) string {
 
 // NewLinodeInstanceInterfacesListTool creates a tool for listing interfaces assigned to a Linode instance.
 func NewLinodeInstanceInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolSubresource(
+	_, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_instance_interface_list",
 		"Lists interfaces assigned to a specific Linode instance.",
@@ -934,6 +868,12 @@ func NewLinodeInstanceInterfacesListTool(cfg *config.Config) (mcp.Tool, profiles
 		},
 		nil,
 		instanceInterfaceListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_instance_interface_list",
+		"Lists interfaces assigned to a specific Linode instance.",
+		toolschemas.Schema("linode.mcp.v1.InstanceInterfaceListInput"),
 	)
 
 	return tool, profiles.CapRead, handler

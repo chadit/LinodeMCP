@@ -1,0 +1,12 @@
+{
+  "tool": "linode_sshkey_list",
+  "description": "Pins the bare SSH key list GET path both languages issue.",
+  "cases": [
+    {
+      "name": "lists SSH keys",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/profile/sshkeys" }
+    }
+  ]
+}

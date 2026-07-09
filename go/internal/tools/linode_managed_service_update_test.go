@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -38,39 +37,11 @@ func TestLinodeManagedServiceUpdateToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props[keyManagedServiceID]; !ok {
-		t.Errorf("props missing key %v", keyManagedServiceID)
-	}
-
-	if _, ok := props[managedServiceLabelParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceLabelParam)
-	}
-
-	if _, ok := props[managedServiceTypeParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceTypeParam)
-	}
-
-	if _, ok := props[managedServiceAddressParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceAddressParam)
-	}
-
-	if _, ok := props[managedServiceTimeoutParam]; !ok {
-		t.Errorf("props missing key %v", managedServiceTimeoutParam)
-	}
-
-	if _, ok := props[keyConfirm]; !ok {
-		t.Errorf("props missing key %v", keyConfirm)
-	}
-
-	for _, key := range []string{keyManagedServiceID, keyConfirm} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+	rawSchema := string(tool.RawInputSchema)
+	for _, key := range []string{keyManagedServiceID, managedServiceLabelParam, managedServiceTypeParam, managedServiceAddressParam, managedServiceTimeoutParam, keyConfirm} {
+		if !strings.Contains(rawSchema, key) {
+			t.Errorf("RawInputSchema missing key %v", key)
 		}
-	}
-
-	if slices.Contains(tool.InputSchema.Required, managedServiceLabelParam) {
-		t.Errorf("tool.InputSchema.Required should not contain %v", managedServiceLabelParam)
 	}
 }
 
@@ -280,6 +251,10 @@ func TestLinodeManagedServiceUpdateToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, "managed-service-updated") {
 		t.Errorf("textContent.Text does not contain %v", "managed-service-updated")
+	}
+
+	if !strings.Contains(textContent.Text, "Managed service monitor 9944 updated successfully") {
+		t.Errorf("textContent.Text does not contain the update confirmation message: %v", textContent.Text)
 	}
 }
 

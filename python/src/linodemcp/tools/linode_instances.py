@@ -9,6 +9,7 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import (
     firewall_pb2,
     instance_pb2,
+    instance_stats_pb2,
     nodebalancer_pb2,
 )
 from linodemcp.linode import (
@@ -18,15 +19,16 @@ from linodemcp.linode import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    ENV_PARAM_SCHEMA,
-    PARAM_DRY_RUN,
     build_dry_run_response,
     error_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
+    required_int_id,
 )
+from linodemcp.tools.linode_instance_disks import validate_device_slots
+from linodemcp.tools.proto_enum import enum_value_names, optional_enum_error
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -35,13 +37,6 @@ from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
-
-
-def _positive_int_argument(arguments: dict[str, Any], name: str) -> int | None:
-    value = arguments.get(name)
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
-        return None
-    return value
 
 
 def _is_positive_int_list(value: object) -> TypeGuard[list[int]]:
@@ -111,7 +106,9 @@ def _add_optional_object_field(
 
 def _validate_config_interface_purpose(arguments: dict[str, Any]) -> str | None:
     purpose = arguments.get("purpose")
-    if isinstance(purpose, str) and purpose in {"public", "vlan", "vpc"}:
+    if isinstance(purpose, str) and purpose in enum_value_names(
+        instance_pb2.ConfigInterfacePurpose.Value
+    ):
         return purpose
     return None
 
@@ -166,7 +163,9 @@ def _add_interface_misc_fields(
 def _config_interface_add_body(arguments: dict[str, Any]) -> dict[str, Any] | str:
     purpose = _validate_config_interface_purpose(arguments)
     if purpose is None:
-        return "purpose must be one of: public, vlan, vpc"
+        return "purpose must be one of: " + ", ".join(
+            enum_value_names(instance_pb2.ConfigInterfacePurpose.Value)
+        )
 
     body: dict[str, Any] = {"purpose": purpose}
     for add_fields in (_add_interface_purpose_fields, _add_interface_misc_fields):
@@ -181,23 +180,7 @@ def create_linode_instance_config_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_config_get",
         description="Gets a configuration profile for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-            },
-            "required": ["linode_id", "config_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigGetInput"),
     ), Capability.Read
 
 
@@ -206,30 +189,7 @@ def create_linode_instance_config_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_config_delete",
         description="Deletes a configuration profile from a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "config_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigDeleteInput"),
     ), Capability.Destroy
 
 
@@ -241,37 +201,7 @@ def create_linode_instance_config_interface_delete_tool() -> tuple[Tool, Capabil
             "Deletes an interface from a Linode instance configuration profile. "
             "Requires confirm because the interface is removed from the profile."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-                "interface_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "The ID of the configuration profile interface (required)"
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to delete the configuration interface."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "config_id", "interface_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -292,28 +222,7 @@ def create_linode_instance_interface_delete_tool() -> tuple[Tool, Capability]:
             "Deletes an interface from a Linode instance. "
             "Requires confirm because the interface is removed from the Linode."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "interface_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the instance interface (required)",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to delete the instance interface.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "interface_id", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -322,18 +231,7 @@ def create_linode_instance_interface_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_interface_list",
         description="Lists interfaces for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceListInput"),
     ), Capability.Read
 
 
@@ -351,34 +249,7 @@ def create_linode_instance_transfer_month_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_transfer_month_get",
         description="Gets monthly network transfer stats for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "year": {
-                    "type": "integer",
-                    "minimum": LINODE_STATS_MIN_YEAR,
-                    "maximum": LINODE_STATS_MAX_YEAR,
-                    "description": (
-                        "The four-digit year for the transfer stats (required)"
-                    ),
-                },
-                "month": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": LINODE_STATS_MAX_MONTH,
-                    "description": (
-                        "The month for the transfer stats, 1 through 12 (required)"
-                    ),
-                },
-            },
-            "required": ["linode_id", "year", "month"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceTransferMonthGetInput"),
     ), Capability.Read
 
 
@@ -396,23 +267,7 @@ def create_linode_instance_interface_firewall_list_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_instance_interface_firewall_list",
         description="Lists firewalls assigned to a Linode instance interface.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "interface_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance interface (required)",
-                },
-            },
-            "required": ["linode_id", "interface_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceFirewallListInput"),
     ), Capability.Read
 
 
@@ -420,12 +275,12 @@ async def handle_linode_instance_interface_firewall_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_firewall_list tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    interface_id = _positive_int_argument(arguments, "interface_id")
+        return error_response(error)
+    interface_id, error = required_int_id(arguments, "interface_id")
     if interface_id is None:
-        return error_response("interface_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         raw = await client.list_instance_interface_firewalls(linode_id, interface_id)
@@ -445,23 +300,7 @@ def create_linode_instance_config_interface_list_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_instance_config_interface_list",
         description="Lists interfaces for a Linode instance configuration profile.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-            },
-            "required": ["linode_id", "config_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceListInput"),
     ), Capability.Read
 
 
@@ -470,29 +309,7 @@ def create_linode_instance_interface_history_list_tool() -> tuple[Tool, Capabili
     return Tool(
         name="linode_instance_interface_history_list",
         description="Lists network interface history for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceHistoryListInput"),
     ), Capability.Read
 
 
@@ -504,53 +321,7 @@ def create_linode_instance_config_interface_update_tool() -> tuple[Tool, Capabil
             "Updates an interface for a Linode instance configuration profile. "
             "Requires confirm because interface networking can change."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-                "interface_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": (
-                        "The ID of the configuration profile interface (required)"
-                    ),
-                },
-                "ip_ranges": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "IPv4 ranges routed to this interface.",
-                },
-                "ipv4": {
-                    "type": "object",
-                    "description": "IPv4 configuration for this interface.",
-                },
-                "primary": {
-                    "type": "boolean",
-                    "description": "Whether this is the primary interface.",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to update the configuration interface."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "config_id", "interface_id", "confirm"],
-            "anyOf": [
-                {"required": [field]} for field in ("ip_ranges", "ipv4", "primary")
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceUpdateInput"),
     ), Capability.Write
 
 
@@ -568,18 +339,7 @@ def create_linode_instance_stats_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_stats_get",
         description="Gets daily statistics for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceStatsGetInput"),
     ), Capability.Read
 
 
@@ -588,18 +348,7 @@ def create_linode_instance_nodebalancer_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_nodebalancer_list",
         description="Lists NodeBalancers assigned to a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceNodeBalancerListInput"),
     ), Capability.Read
 
 
@@ -610,30 +359,7 @@ def create_linode_instance_stats_month_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets a month of statistics for a Linode instance by year and month."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "year": {
-                    "type": "integer",
-                    "minimum": 1970,
-                    "maximum": 9999,
-                    "description": "The four-digit year to retrieve statistics for.",
-                },
-                "month": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 12,
-                    "description": "The month number to retrieve statistics for.",
-                },
-            },
-            "required": ["linode_id", "year", "month"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceStatsMonthGetInput"),
     ), Capability.Read
 
 
@@ -642,18 +368,7 @@ def create_linode_instance_transfer_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_transfer_get",
         description="Gets this month's network transfer stats for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceTransferGetInput"),
     ), Capability.Read
 
 
@@ -662,29 +377,7 @@ def create_linode_instance_config_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_config_list",
         description="Lists configuration profiles for a Linode instance.",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigListInput"),
     ), Capability.Read
 
 
@@ -696,34 +389,7 @@ def create_linode_instance_config_interface_reorder_tool() -> tuple[Tool, Capabi
             "Reorders interfaces on a Linode instance configuration profile. "
             "Requires confirm because the active interface order can change."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-                "ids": {
-                    "type": "array",
-                    "items": {"type": "integer", "minimum": 1},
-                    "minItems": 1,
-                    "description": "Interface IDs in the desired order.",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to reorder configuration interfaces.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "config_id", "ids", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceReorderInput"),
     ), Capability.Write
 
 
@@ -735,67 +401,7 @@ def create_linode_instance_config_interface_add_tool() -> tuple[Tool, Capability
             "Adds an interface to a Linode instance configuration profile. "
             "Requires confirm because the instance network configuration changes."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-                "purpose": {
-                    "type": "string",
-                    "enum": ["public", "vlan", "vpc"],
-                    "description": "The interface purpose (required).",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Interface label. Required for vlan interfaces.",
-                },
-                "ipam_address": {
-                    "type": "string",
-                    "description": "Private CIDR address for vlan interfaces.",
-                },
-                "primary": {
-                    "type": "boolean",
-                    "description": "Whether this is the primary non-vlan interface.",
-                },
-                "subnet_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The VPC subnet ID. Required for vpc interfaces.",
-                },
-                "ip_ranges": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": (
-                        "IPv4 CIDR VPC subnet ranges routed to this interface."
-                    ),
-                },
-                "ipv4": {
-                    "type": "object",
-                    "description": "VPC IPv4 configuration for this interface.",
-                },
-                "ipv6": {
-                    "type": "object",
-                    "description": "VPC IPv6 configuration for this interface.",
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to add the configuration profile interface."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "config_id", "purpose", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceAddInput"),
     ), Capability.Write
 
 
@@ -807,77 +413,19 @@ def create_linode_instance_interface_add_tool() -> tuple[Tool, Capability]:
             "Adds an interface to a Linode instance using the current Linode "
             "Interfaces API. Requires confirm because instance networking changes."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "interface": {
-                    "type": "object",
-                    "description": (
-                        "Interface payload matching the Linode API public, VPC, "
-                        "or VLAN interface request body."
-                    ),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to add the instance interface.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "interface", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceAddInput"),
     ), Capability.Write
 
 
 def create_linode_instance_interface_update_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_interface_update tool."""
-    section_schema = {
-        "type": "object",
-        "description": "Documented Linode interface update section.",
-    }
     return Tool(
         name="linode_instance_interface_update",
         description=(
             "Updates a Linode interface using explicit documented body sections. "
             "Requires confirm because instance networking changes."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "interface_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode interface (required)",
-                },
-                "default_route": section_schema,
-                "public": section_schema,
-                "vlan": section_schema,
-                "vpc": section_schema,
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to update the instance interface.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "interface_id", "confirm"],
-            "anyOf": [
-                {"required": ["default_route"]},
-                {"required": ["public"]},
-                {"required": ["vlan"]},
-                {"required": ["vpc"]},
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceInterfaceUpdateInput"),
     ), Capability.Write
 
 
@@ -889,71 +437,61 @@ def create_linode_instance_config_update_tool() -> tuple[Tool, Capability]:
             "Updates a configuration profile for a Linode instance. "
             "Requires confirm because the instance boot profile can change."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                **ENV_PARAM_SCHEMA,
-                "linode_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the Linode instance (required)",
-                },
-                "config_id": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "The ID of the configuration profile (required)",
-                },
-                "comments": {"type": "string", "description": "Config comments."},
-                "devices": {"type": "object", "description": "Block device mapping."},
-                "helpers": {"type": "object", "description": "Helper settings."},
-                "interfaces": {"type": "array", "description": "Network interfaces."},
-                "kernel": {"type": "string", "description": "Kernel ID."},
-                "label": {"type": "string", "description": "Config label."},
-                "memory_limit": {
-                    "type": "integer",
-                    "description": "Memory limit in MB.",
-                },
-                "root_device": {"type": "string", "description": "Root device path."},
-                "run_level": {"type": "string", "description": "Boot run level."},
-                "virt_mode": {"type": "string", "description": "Virtualization mode."},
-                "confirm": {
-                    "type": "boolean",
-                    "description": "Must be true to update the configuration profile.",
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "config_id", "confirm"],
-            "anyOf": [
-                {"required": [field]}
-                for field in (
-                    "comments",
-                    "devices",
-                    "helpers",
-                    "interfaces",
-                    "kernel",
-                    "label",
-                    "memory_limit",
-                    "root_device",
-                    "run_level",
-                    "virt_mode",
-                )
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigUpdateInput"),
     ), Capability.Write
+
+
+def _instance_interface_add_shape_error(interface: dict[str, Any]) -> str | None:
+    """Validate the add-interface shape (mirrors Go's add-interface validator).
+
+    Exactly one of public/vpc/vlan must be defined; a vpc needs a positive
+    subnet_id and a vlan needs a non-empty vlan_label. Ported so Python rejects a
+    malformed interface locally instead of forwarding it (strictest-wins).
+    """
+    type_count = 0
+    if interface.get("public") is not None:
+        type_count += 1
+    vpc = interface.get("vpc")
+    if vpc is not None:
+        type_count += 1
+        subnet_id: object = None
+        if isinstance(vpc, dict):
+            subnet_id = cast("dict[str, Any]", vpc).get("subnet_id")
+        if (
+            not isinstance(subnet_id, int)
+            or isinstance(subnet_id, bool)
+            or subnet_id <= 0
+        ):
+            return "interface.vpc.subnet_id must be a positive integer"
+    vlan = interface.get("vlan")
+    if vlan is not None:
+        type_count += 1
+        label: object = None
+        if isinstance(vlan, dict):
+            label = cast("dict[str, Any]", vlan).get("vlan_label")
+        if not isinstance(label, str) or not label.strip():
+            return "interface.vlan.vlan_label is required"
+    if type_count != 1:
+        return "interface must define exactly one of public, vpc, or vlan"
+    return None
 
 
 async def handle_linode_instance_interface_add(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_add tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     interface = arguments.get("interface")
     if not isinstance(interface, dict):
         return error_response("interface must be an object")
     interface_body = cast("dict[str, Any]", interface)
+
+    shape_error = _instance_interface_add_shape_error(interface_body)
+    if shape_error is not None:
+        return error_response(shape_error)
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -967,13 +505,22 @@ async def handle_linode_instance_interface_add(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This adds a network interface to the Linode instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         interface_result = await client.add_instance_interface(
             linode_id, interface_body
         )
-        return {"interface": interface_result}
+        return serialize_api_response(
+            {
+                "message": f"Interface added to instance {linode_id} successfully",
+                "interface": interface_result,
+            },
+            instance_pb2.InstanceInterfaceWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "add Linode instance interface", _call)
 
@@ -999,12 +546,12 @@ async def handle_linode_instance_interface_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_update tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    interface_id = _positive_int_argument(arguments, "interface_id")
+        return error_response(error)
+    interface_id, error = required_int_id(arguments, "interface_id")
     if interface_id is None:
-        return error_response("interface_id must be a positive integer")
+        return error_response(error)
 
     fields, fields_error = _instance_interface_update_fields(arguments)
     if fields is None:
@@ -1024,20 +571,23 @@ async def handle_linode_instance_interface_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This updates a network interface on the Linode instance. Set confirm=true "
+            "to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_instance_interface(linode_id, interface_id, fields)
-        if result:
-            return result
-        return {
-            "message": (
-                f"Linode instance interface {interface_id} update requested "
-                f"for Linode {linode_id}"
-            ),
-            "linode_id": linode_id,
-            "interface_id": interface_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Interface {interface_id} updated on instance "
+                    f"{linode_id} successfully"
+                ),
+                "interface": result,
+            },
+            instance_pb2.InstanceInterfaceWriteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "update Linode instance interface", _call)
 
@@ -1048,14 +598,17 @@ async def handle_linode_instance_config_delete(
     """Handle linode_instance_config_delete tool request."""
     confirm = arguments.get("confirm")
     if not isinstance(confirm, bool) or not confirm:
-        return error_response("This is destructive. Set confirm=true to proceed.")
+        return error_response(
+            "This is irreversible. The configuration profile will be permanently "
+            "deleted. Set confirm=true to proceed."
+        )
 
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    config_id = _positive_int_argument(arguments, "config_id")
+        return error_response(error)
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
 
     if is_dry_run(arguments):
 
@@ -1073,14 +626,17 @@ async def handle_linode_instance_config_delete(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance_config(linode_id, config_id)
-        return {
-            "message": (
-                f"Configuration profile {config_id} deleted from instance "
-                f"{linode_id} successfully"
-            ),
-            "linode_id": linode_id,
-            "config_id": config_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Configuration profile {config_id} deleted from instance "
+                    f"{linode_id} successfully"
+                ),
+                "linode_id": linode_id,
+                "config_id": config_id,
+            },
+            instance_pb2.InstanceConfigDeleteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "delete Linode instance configuration profile", _call
@@ -1091,15 +647,18 @@ async def handle_linode_instance_config_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_get tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    config_id = _positive_int_argument(arguments, "config_id")
+        return error_response(error)
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_instance_config(linode_id, config_id)
+        return serialize_api_response(
+            await client.get_instance_config(linode_id, config_id),
+            instance_pb2.InstanceConfig(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance configuration profile", _call
@@ -1110,15 +669,15 @@ async def handle_linode_instance_config_interface_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_interface_delete tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    config_id = _positive_int_argument(arguments, "config_id")
+        return error_response(error)
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
-    interface_id = _positive_int_argument(arguments, "interface_id")
+        return error_response(error)
+    interface_id, error = required_int_id(arguments, "interface_id")
     if interface_id is None:
-        return error_response("interface_id must be a positive integer")
+        return error_response(error)
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -1137,21 +696,27 @@ async def handle_linode_instance_config_interface_delete(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This removes a network interface from the configuration profile. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance_config_interface(
             linode_id, config_id, interface_id
         )
-        return {
-            "message": (
-                f"Configuration profile interface {interface_id} removed from "
-                f"config {config_id} on instance {linode_id}"
-            ),
-            "linode_id": linode_id,
-            "config_id": config_id,
-            "interface_id": interface_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Configuration profile interface {interface_id} removed from "
+                    f"config {config_id} on instance {linode_id}"
+                ),
+                "linode_id": linode_id,
+                "config_id": config_id,
+                "interface_id": interface_id,
+            },
+            instance_pb2.InstanceConfigInterfaceDeleteResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "delete Linode instance config interface", _call
@@ -1162,15 +727,15 @@ async def handle_linode_instance_config_interface_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_interface_get tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    config_id = _positive_int_argument(arguments, "config_id")
+        return error_response(error)
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
-    interface_id = _positive_int_argument(arguments, "interface_id")
+        return error_response(error)
+    interface_id, error = required_int_id(arguments, "interface_id")
     if interface_id is None:
-        return error_response("interface_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
@@ -1192,12 +757,12 @@ async def handle_linode_instance_interface_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_delete tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    interface_id = _positive_int_argument(arguments, "interface_id")
+        return error_response(error)
+    interface_id, error = required_int_id(arguments, "interface_id")
     if interface_id is None:
-        return error_response("interface_id must be a positive integer")
+        return error_response(error)
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -1212,18 +777,24 @@ async def handle_linode_instance_interface_delete(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This deletes a Linode interface and changes instance networking. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance_interface(linode_id, interface_id)
-        return {
-            "message": (
-                f"Linode instance interface {interface_id} deleted from "
-                f"Linode {linode_id}"
-            ),
-            "linode_id": linode_id,
-            "interface_id": interface_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Interface {interface_id} deleted from instance "
+                    f"{linode_id} successfully"
+                ),
+                "linode_id": linode_id,
+                "interface_id": interface_id,
+            },
+            instance_pb2.InstanceInterfaceDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete Linode instance interface", _call)
 
@@ -1232,9 +803,9 @@ async def handle_linode_instance_interface_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_list tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         # The current-generation interfaces endpoint wraps the list under
@@ -1256,9 +827,9 @@ async def handle_linode_instance_interface_settings_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_settings_get tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
@@ -1275,9 +846,9 @@ async def handle_linode_instance_transfer_month_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_transfer_month_get tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
     try:
         year = _optional_int_argument(
             arguments, "year", LINODE_STATS_MIN_YEAR, LINODE_STATS_MAX_YEAR
@@ -1291,7 +862,10 @@ async def handle_linode_instance_transfer_month_get(
         return error_response("month must be an integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_instance_transfer_by_year_month(linode_id, year, month)
+        return serialize_api_response(
+            await client.get_instance_transfer_by_year_month(linode_id, year, month),
+            instance_pb2.InstanceTransferMonth(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance monthly transfer stats", _call
@@ -1302,12 +876,12 @@ async def handle_linode_instance_interface_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_get tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    interface_id = _positive_int_argument(arguments, "interface_id")
+        return error_response(error)
+    interface_id, error = required_int_id(arguments, "interface_id")
     if interface_id is None:
-        return error_response("interface_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
@@ -1324,12 +898,12 @@ async def handle_linode_instance_config_interface_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_interface_list tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
-    config_id = _positive_int_argument(arguments, "config_id")
+        return error_response(error)
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         # The config-interface endpoint returns either a bare array or a {data}
@@ -1354,13 +928,13 @@ async def handle_linode_instance_interface_history_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_interface_history_list tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1415,9 +989,9 @@ async def handle_linode_instance_config_interface_update(
     """Handle linode_instance_config_interface_update tool request."""
     ids: dict[str, int] = {}
     for key in ("linode_id", "config_id", "interface_id"):
-        value = _positive_int_argument(arguments, key)
+        value, error = required_int_id(arguments, key)
         if value is None:
-            return error_response(f"{key} must be a positive integer")
+            return error_response(error)
         ids[key] = value
     linode_id = ids["linode_id"]
     config_id = ids["config_id"]
@@ -1445,7 +1019,10 @@ async def handle_linode_instance_config_interface_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This updates a network interface on the configuration profile. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_instance_config_interface(
@@ -1501,12 +1078,15 @@ async def handle_linode_instance_stats_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_stats_get tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_instance_stats(linode_id)
+        return serialize_api_response(
+            await client.get_instance_stats(linode_id),
+            instance_stats_pb2.InstanceStats(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance statistics", _call
@@ -1517,9 +1097,9 @@ async def handle_linode_instance_nodebalancer_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_nodebalancer_list tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         raw = await client.list_instance_nodebalancers(linode_id)
@@ -1538,9 +1118,9 @@ async def handle_linode_instance_stats_month_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_stats_month_get tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     try:
         year = _optional_int_argument(arguments, "year", 1970, 9999)
@@ -1554,7 +1134,10 @@ async def handle_linode_instance_stats_month_get(
         return error_response("month must be an integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_instance_stats_by_year_month(linode_id, year, month)
+        return serialize_api_response(
+            await client.get_instance_stats_by_year_month(linode_id, year, month),
+            instance_stats_pb2.InstanceStats(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance monthly statistics", _call
@@ -1565,12 +1148,15 @@ async def handle_linode_instance_transfer_get(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_transfer_get tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        return await client.get_instance_transfer(linode_id)
+        return serialize_api_response(
+            await client.get_instance_transfer(linode_id),
+            instance_pb2.InstanceTransfer(),
+        )
 
     return await execute_tool(
         cfg, arguments, "retrieve Linode instance network transfer stats", _call
@@ -1581,13 +1167,13 @@ async def handle_linode_instance_config_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_list tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
     try:
-        page = _optional_int_argument(arguments, "page", 1)
-        page_size = _optional_int_argument(arguments, "page_size", 25, 500)
+        page = pagination_int_argument(arguments, "page", 1)
+        page_size = pagination_int_argument(arguments, "page_size", 25, 500)
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 
@@ -1606,21 +1192,36 @@ async def handle_linode_instance_config_list(
     )
 
 
+def _reorder_ids_error(ids: object) -> str | None:
+    """Validate the reorder ids: a non-empty positive-int list with no duplicates.
+
+    Mirrors Go's buildReorderConfigInterfacesRequest so both reject a duplicate
+    interface id locally instead of forwarding it (strictest-wins).
+    """
+    if not _is_positive_int_list(ids):
+        return "ids must be a non-empty list of positive integers"
+    if len(set(ids)) != len(ids):
+        return "ids must not contain duplicate interface IDs"
+    return None
+
+
 async def handle_linode_instance_config_interface_reorder(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_interface_reorder tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
-    config_id = _positive_int_argument(arguments, "config_id")
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
 
     ids = arguments.get("ids")
-    if not _is_positive_int_list(ids):
-        return error_response("ids must be a non-empty list of positive integers")
+    ids_error = _reorder_ids_error(ids)
+    if ids_error is not None:
+        return error_response(ids_error)
+    ids = cast("list[int]", ids)
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -1637,19 +1238,25 @@ async def handle_linode_instance_config_interface_reorder(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This reorders network interfaces on the configuration profile. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.reorder_instance_config_interfaces(linode_id, config_id, ids)
-        return {
-            "message": (
-                f"Configuration profile {config_id} interfaces reordered on "
-                f"instance {linode_id}"
-            ),
-            "linode_id": linode_id,
-            "config_id": config_id,
-            "ids": ids,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Configuration profile {config_id} interfaces reordered on "
+                    f"instance {linode_id}"
+                ),
+                "linode_id": linode_id,
+                "config_id": config_id,
+                "ids": ids,
+            },
+            instance_pb2.InstanceConfigInterfaceReorderResponse(),
+        )
 
     return await execute_tool(
         cfg, arguments, "reorder Linode instance config interfaces", _call
@@ -1660,13 +1267,13 @@ async def handle_linode_instance_config_interface_add(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_interface_add tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
-    config_id = _positive_int_argument(arguments, "config_id")
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
 
     body = _config_interface_add_body(arguments)
     if isinstance(body, str):
@@ -1687,7 +1294,10 @@ async def handle_linode_instance_config_interface_add(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This adds a network interface to the configuration profile. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.add_instance_config_interface(linode_id, config_id, body)
@@ -1707,17 +1317,45 @@ async def handle_linode_instance_config_interface_add(
     )
 
 
+def _config_update_field_error(
+    arguments: dict[str, Any], fields: dict[str, Any]
+) -> str | None:
+    """Return the first config-update field error, or None when valid.
+
+    Follows the Go update handler's order (the run_level/virt_mode enums, then
+    the device slot names, then the at-least-one-field requirement) so both
+    languages surface the same error first for a given payload.
+    """
+    for enum_key, enum in (
+        ("run_level", instance_pb2.ConfigRunLevel.Value),
+        ("virt_mode", instance_pb2.ConfigVirtMode.Value),
+    ):
+        enum_error = optional_enum_error(arguments, enum_key, enum)
+        if enum_error is not None:
+            return enum_error
+
+    devices = arguments.get("devices")
+    if isinstance(devices, dict):
+        slot_error = validate_device_slots(cast("dict[str, Any]", devices))
+        if slot_error is not None:
+            return slot_error
+
+    if not fields:
+        return "at least one update field is required"
+    return None
+
+
 async def handle_linode_instance_config_update(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_update tool request."""
-    linode_id = _positive_int_argument(arguments, "linode_id")
+    linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
-        return error_response("linode_id must be a positive integer")
+        return error_response(error)
 
-    config_id = _positive_int_argument(arguments, "config_id")
+    config_id, error = required_int_id(arguments, "config_id")
     if config_id is None:
-        return error_response("config_id must be a positive integer")
+        return error_response(error)
 
     fields: dict[str, Any] = {}
     for key in (
@@ -1736,8 +1374,9 @@ async def handle_linode_instance_config_update(
         if value is not None:
             fields[key] = value
 
-    if not fields:
-        return error_response("at least one update field is required")
+    field_error = _config_update_field_error(arguments, fields)
+    if field_error is not None:
+        return error_response(field_error)
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -1754,7 +1393,10 @@ async def handle_linode_instance_config_update(
         )
 
     if arguments.get("confirm") is not True:
-        return error_response("confirm must be true")
+        return error_response(
+            "This updates a configuration profile on the instance. Set confirm=true to "
+            "proceed."
+        )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_instance_config(linode_id, config_id, fields)

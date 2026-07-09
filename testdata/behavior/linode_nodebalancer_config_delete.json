@@ -1,0 +1,17 @@
+{
+  "tool": "linode_nodebalancer_config_delete",
+  "description": "Pins the config-delete DELETE and the destroy bypass gate (both languages block confirm:true alone on Destroy tools). Rejection paths diverge (see report).",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true },
+      "expect_error": "linode_nodebalancer_config_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "deletes the config",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": { "method": "DELETE", "path": "/nodebalancers/5/configs/7" }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.LKEClusterActionResponse",
+  "description": "LKE cluster action id-echo: a confirmation message plus the cluster ID the recycle/regenerate action ran against. The endpoint returns an empty body.",
+  "input": {
+    "message": "LKE cluster 6789 recycle initiated successfully",
+    "cluster_id": 6789
+  },
+  "canonical": {
+    "message": "LKE cluster 6789 recycle initiated successfully",
+    "cluster_id": 6789
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "message": "linode.mcp.v1.ProfileCategoryListResponse",
+  "description": "Profile category envelope: count plus the sorted category entries with tool counts.",
+  "input": {
+    "count": 2,
+    "categories": [
+      {
+        "name": "compute",
+        "tool_count": 120
+      },
+      {
+        "name": "meta",
+        "tool_count": 17
+      }
+    ]
+  },
+  "canonical": {
+    "count": 2,
+    "categories": [
+      {
+        "name": "compute",
+        "tool_count": 120
+      },
+      {
+        "name": "meta",
+        "tool_count": 17
+      }
+    ]
+  }
+}

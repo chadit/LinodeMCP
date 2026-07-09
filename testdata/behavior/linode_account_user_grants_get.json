@@ -1,0 +1,17 @@
+{
+  "tool": "linode_account_user_grants_get",
+  "description": "Account user grants get: missing username agrees; success pins the grants GET path.",
+  "cases": [
+    {
+      "name": "requires username",
+      "args": {},
+      "expect_error": "username is required"
+    },
+    {
+      "name": "gets an account user's grants",
+      "args": { "username": "alice" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/account/users/alice/grants" }
+    }
+  ]
+}

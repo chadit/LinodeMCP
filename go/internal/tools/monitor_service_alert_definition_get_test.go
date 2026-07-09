@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -41,9 +40,10 @@ func TestLinodeMonitorServiceAlertDefinitionGetToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{monitorServiceTypeParam, monitorAlertIDParam} {
-		if !slices.Contains(tool.InputSchema.Required, key) {
-			t.Errorf("tool.InputSchema.Required does not contain %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -78,6 +78,7 @@ func TestLinodeMonitorServiceAlertDefinitionGetToolSuccess(t *testing.T) {
 			keyID:          20000,
 			keyLabel:       "High CPU Usage",
 			keyServiceType: monitorServiceToolTypeDatabase,
+			keyNotInProto:  valNotInProto,
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -113,6 +114,10 @@ func TestLinodeMonitorServiceAlertDefinitionGetToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, monitorServiceToolTypeDatabase) {
 		t.Errorf("textContent.Text does not contain %v", monitorServiceToolTypeDatabase)
+	}
+
+	if strings.Contains(textContent.Text, "not_in_proto") {
+		t.Errorf("textContent.Text unexpectedly contains dropped unknown field: %v", textContent.Text)
 	}
 }
 

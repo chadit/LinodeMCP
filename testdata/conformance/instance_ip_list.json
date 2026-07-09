@@ -81,14 +81,14 @@
       "private": [
         {
           "address": "192.168.133.234",
-          "gateway": "",
           "subnet_mask": "255.255.128.0",
           "prefix": 17,
           "type": "ipv4",
-          "public": false,
-          "rdns": "",
           "linode_id": 123,
-          "region": "us-east"
+          "region": "us-east",
+          "gateway": "",
+          "public": false,
+          "rdns": ""
         }
       ],
       "shared": [],
@@ -101,8 +101,8 @@
         "subnet_mask": "ffff:ffff:ffff:ffff::",
         "prefix": 64,
         "type": "ipv6",
-        "rdns": "",
-        "region": "us-east"
+        "region": "us-east",
+        "rdns": ""
       },
       "link_local": {
         "address": "fe80::f03c:91ff:fe24:3a2f",
@@ -110,15 +110,16 @@
         "subnet_mask": "ffff:ffff:ffff:ffff::",
         "prefix": 64,
         "type": "ipv6",
-        "rdns": "",
-        "region": "us-east"
+        "region": "us-east",
+        "rdns": ""
       },
       "global": [
         {
           "range": "2600:3c03:e000:00ca::",
           "region": "us-east",
           "prefix": 64,
-          "route_target": "2600:3c03::f03c:91ff:fe24:3a2f"
+          "route_target": "2600:3c03::f03c:91ff:fe24:3a2f",
+          "linodes": []
         }
       ],
       "ranges": [],

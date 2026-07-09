@@ -132,7 +132,9 @@ def test_create_linode_image_replicate_tool_schema() -> None:
     assert tool.name == "linode_image_replicate"
     assert capability is Capability.Write
     schema = tool.inputSchema
-    assert schema["required"] == ["image_id", "regions", "confirm"]
+    # regions is required at runtime but a repeated proto field cannot be marked
+    # required in the generated schema, so it drops from the required list.
+    assert schema["required"] == ["image_id", "confirm"]
     assert schema["properties"]["image_id"]["type"] == "string"
     assert schema["properties"]["regions"]["type"] == "array"
     assert schema["properties"]["regions"]["items"] == {"type": "string"}
@@ -192,7 +194,8 @@ async def test_handle_linode_image_replicate_requires_literal_confirm(
     result = await handle_linode_image_replicate(arguments, sample_config)
 
     assert result[0].text == (
-        "Error: This replicates an image to regions. Set confirm=true to proceed."
+        "Error: This replicates an image to the requested regions. Set confirm=true to "
+        "proceed."
     )
     mock_linode_client.replicate_image.assert_not_called()
 

@@ -1,0 +1,21 @@
+{
+  "tool": "linode_placement_group_unassign",
+  "description": "Placement group unassign: the unassign POST once confirmed. Confirm-gate text, group_id validation text, and the linodes-array messages all diverge, so only the success path is pinned (see report).",
+  "cases": [
+    {
+      "name": "unassigns Linodes from a placement group",
+      "args": { "confirm": true, "group_id": 123, "linodes": [456] },
+      "api_response": { "id": 123, "label": "my-group" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/placement/groups/123/unassign",
+        "body": { "linodes": [456] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"group_id": 123, "linodes": [456]},
+      "expect_error": "This unassigns Linodes from a placement group. Set confirm=true to proceed."
+    }
+  ]
+}

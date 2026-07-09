@@ -1,0 +1,31 @@
+{
+  "tool": "linode_firewall_device_create",
+  "description": "Firewall device create POSTs the device id/type to the firewall's devices collection. All local validation messages diverge between languages (see report), so only the confirmed success path is captured.",
+  "cases": [
+    {
+      "name": "rejects a non-positive firewall_id once confirmed",
+      "args": { "confirm": true, "firewall_id": -1, "id": 10, "type": "linode" },
+      "expect_error": "firewall_id must be a positive integer"
+    },
+    {
+      "name": "assigns a device to a firewall",
+      "args": { "confirm": true, "firewall_id": 5, "id": 10, "type": "linode" },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/firewalls/5/devices",
+        "body": { "id": 10, "type": "linode" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"firewall_id": 5, "id": 10, "type": "linode"},
+      "expect_error": "This assigns a device to a Cloud Firewall. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects an invalid device type (proto FirewallDeviceType enum)",
+      "args": { "confirm": true, "firewall_id": 5, "id": 10, "type": "router" },
+      "expect_error": "type must be one of: linode, nodebalancer, linode_interface"
+    }
+  ]
+}

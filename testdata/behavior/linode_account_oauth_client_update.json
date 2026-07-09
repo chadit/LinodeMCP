@@ -1,0 +1,26 @@
+{
+  "tool": "linode_account_oauth_client_update",
+  "description": "OAuth client update: confirm gate and the PUT body once confirmed. Missing client_id and empty-field texts diverge (see report).",
+  "cases": [
+    {
+      "name": "requires confirm before updating",
+      "args": { "client_id": "abc123", "label": "new-label" },
+      "expect_error": "This updates an OAuth client. Set confirm=true to proceed."
+    },
+    {
+      "name": "updates an OAuth client",
+      "args": { "client_id": "abc123", "label": "new-label", "confirm": true },
+      "api_response": { "id": "abc123", "label": "new-label" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/account/oauth-clients/abc123",
+        "body": { "label": "new-label" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"client_id": "abc123", "label": "new-label"},
+      "expect_error": "This updates an OAuth client. Set confirm=true to proceed."
+    }
+  ]
+}

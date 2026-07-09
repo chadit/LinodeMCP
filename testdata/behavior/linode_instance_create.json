@@ -1,0 +1,47 @@
+{
+  "tool": "linode_instance_create",
+  "description": "Pins the three shared field-required rejections and the create POST body. Both languages omit booted (API defaults true) and backups_enabled (API default) unless the caller sets them, so a minimal call sends the same body: region, type, interface_generation, and one public interface.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": { "confirm": true },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "requires type",
+      "args": { "confirm": true, "region": "us-east" },
+      "expect_error": "type is required"
+    },
+    {
+      "name": "requires firewall_id",
+      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1" },
+      "expect_error": "firewall_id is required for instance creation. Get a firewall ID from linode_firewall_list, or create one with linode_firewall_create."
+    },
+    {
+      "name": "creates an instance with a public interface",
+      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1", "firewall_id": 123 },
+      "api_response": { "id": 100, "label": "web", "region": "us-east", "type": "g6-nanode-1", "status": "provisioning" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances",
+        "body": {
+          "region": "us-east",
+          "type": "g6-nanode-1",
+          "interface_generation": "linode",
+          "interfaces": [
+            {
+              "public": {},
+              "firewall_id": 123,
+              "default_route": { "ipv4": true, "ipv6": true }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {},
+      "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
+    }
+  ]
+}

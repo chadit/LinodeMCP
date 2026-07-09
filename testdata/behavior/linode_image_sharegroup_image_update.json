@@ -1,0 +1,39 @@
+{
+  "tool": "linode_image_sharegroup_image_update",
+  "description": "With confirm set both languages reach the sharegroup_id check. Success PUTs the shared image (shared/N id, slash encoded).",
+  "cases": [
+    {
+      "name": "rejects missing sharegroup_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "sharegroup_id is required"
+    },
+    {
+      "name": "updates a shared image label",
+      "args": {
+        "sharegroup_id": 5,
+        "image_id": "shared/1",
+        "label": "new-label",
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/images/sharegroups/5/images/shared%2F1",
+        "body": {
+          "label": "new-label"
+        }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "sharegroup_id": 5,
+        "image_id": "shared/1",
+        "label": "new-label"
+      },
+      "expect_error": "This updates a shared image. Set confirm=true to proceed."
+    }
+  ]
+}

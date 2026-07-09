@@ -1,0 +1,32 @@
+{
+  "tool": "linode_instance_shutdown",
+  "description": "Pins the shared instance_id-required rejection, the confirm gate (both languages as of 2026-07-07), and the power-action POST.",
+  "cases": [
+    {
+      "name": "requires instance_id",
+      "args": {
+        "confirm": true
+      },
+      "expect_error": "instance_id is required"
+    },
+    {
+      "name": "requires confirm",
+      "args": {
+        "instance_id": 5
+      },
+      "expect_error": "This shuts down a Linode instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "shuts down the instance",
+      "args": {
+        "instance_id": 5,
+        "confirm": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/shutdown"
+      }
+    }
+  ]
+}

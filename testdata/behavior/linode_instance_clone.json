@@ -1,0 +1,26 @@
+{
+  "tool": "linode_instance_clone",
+  "description": "Pins the linode_id-required rejection and the clone POST with an empty body. Confirm passed so Go clears its confirm gate; the confirm-message text diverges (see report).",
+  "cases": [
+    {
+      "name": "requires linode_id",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "clones the instance",
+      "args": { "linode_id": 5, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/5/clone",
+        "body": {}
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 5},
+      "expect_error": "This clones a Linode instance and creates a billable resource. Set confirm=true to proceed."
+    }
+  ]
+}

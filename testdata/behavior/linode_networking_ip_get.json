@@ -1,0 +1,17 @@
+{
+  "tool": "linode_networking_ip_get",
+  "description": "Networking IP get rejects a malformed address the same way in both languages, then GETs one IP by address. The missing-address message diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects a malformed address",
+      "args": { "address": "not-an-ip" },
+      "expect_error": "address must be a valid IP address"
+    },
+    {
+      "name": "gets an IP by address",
+      "args": { "address": "203.0.113.5" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/networking/ips/203.0.113.5" }
+    }
+  ]
+}

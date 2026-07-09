@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.ImageShareGroupMemberTokenDeleteResponse",
+  "description": "Membership token revoke confirmation: only a message is emitted so the token secret is never echoed.",
+  "input": {
+    "message": "Image share group member token a1b2c3 revoked from share group 42 successfully"
+  },
+  "canonical": {
+    "message": "Image share group member token a1b2c3 revoked from share group 42 successfully"
+  }
+}

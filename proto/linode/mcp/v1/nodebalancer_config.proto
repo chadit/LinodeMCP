@@ -4,6 +4,87 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+// NodeBalancer config choice enums.
+//
+// Each enum is wrapped in its own message so its value names, which are the
+// exact lowercase Linode API wire strings, are scoped to that message and do
+// not collide at file scope (none/http repeat across several of these enums).
+// The value set is authored from the live OpenAPI spec
+// (raw.githubusercontent.com/linode/linode-api-openapi/main/openapi.json), so
+// the generated JSON Schema enum, the Go/Python typed enums, and the handler
+// validation all come from one definition instead of hand-maintained
+// allowlists that drift from the API. The zero-value `unspecified` sentinel is
+// stripped from the generated JSON Schema enum by scripts/strip_enum_sentinel.py
+// so clients never see it as a selectable value.
+
+// NodeBalancerProtocol is the config listener protocol.
+message NodeBalancerProtocol {
+  enum Value {
+    unspecified = 0;
+    http = 1;
+    https = 2;
+    tcp = 3;
+    udp = 4;
+  }
+}
+
+// NodeBalancerAlgorithm is the config load-balancing algorithm.
+message NodeBalancerAlgorithm {
+  enum Value {
+    unspecified = 0;
+    roundrobin = 1;
+    leastconn = 2;
+    source = 3;
+    ring_hash = 4;
+  }
+}
+
+// NodeBalancerStickiness is the config session stickiness mode. The value set
+// is protocol-dependent in the API (udp allows session/source_ip; tcp/http
+// allow table/http_cookie); this enum is the union across protocols, and the
+// API rejects a value that is invalid for the chosen protocol.
+message NodeBalancerStickiness {
+  enum Value {
+    unspecified = 0;
+    none = 1;
+    table = 2;
+    http_cookie = 3;
+    session = 4;
+    source_ip = 5;
+  }
+}
+
+// NodeBalancerCheck is the config active health-check mode.
+message NodeBalancerCheck {
+  enum Value {
+    unspecified = 0;
+    none = 1;
+    connection = 2;
+    http = 3;
+    http_body = 4;
+  }
+}
+
+// NodeBalancerCipherSuite is the config HTTPS cipher suite.
+message NodeBalancerCipherSuite {
+  enum Value {
+    unspecified = 0;
+    recommended = 1;
+    legacy = 2;
+  }
+}
+
+// NodeBalancerProxyProtocol is the config PROXY-protocol version for TCP
+// configs.
+message NodeBalancerProxyProtocol {
+  enum Value {
+    unspecified = 0;
+    none = 1;
+    v1 = 2;
+    v2 = 3;
+  }
+}
+
 // NodeBalancerNodesStatus is the up/down node count nested in a NodeBalancer
 // config.
 message NodeBalancerNodesStatus {
@@ -58,4 +139,179 @@ message NodeBalancerConfigGetInput {
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config to retrieve (required).
   int32 config_id = 3;
+}
+
+// NodeBalancerConfigDeleteResponse is the id-echo envelope
+// linode_nodebalancer_config_delete returns: a confirmation message plus the
+// parent NodeBalancer and deleted config IDs. The delete endpoint returns an
+// empty body, so the echo confirms the target.
+message NodeBalancerConfigDeleteResponse {
+  string message = 1;
+  int32 nodebalancer_id = 2;
+  int32 config_id = 3;
+}
+
+// NodeBalancerConfigListInput is the input contract for
+// linode_nodebalancer_config_list.
+message NodeBalancerConfigListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer whose configs should be listed.
+  int32 nodebalancer_id = 2;
+  // Page number to retrieve.
+  optional int32 page = 3;
+  // Number of results per page, from 25 through 500.
+  optional int32 page_size = 4;
+}
+
+// NodeBalancerConfigNodeItem is one backend node in the optional nodes array of
+// linode_nodebalancer_config_create. It mirrors the create-node request body
+// (label, address, and the optional weight/mode/subnet_id), so the array item
+// schema advertises the exact node fields instead of a generic object.
+message NodeBalancerConfigNodeItem {
+  // Label for the backend node.
+  string label = 1;
+  // Backend node address, including port, for example 192.0.2.10:80.
+  string address = 2;
+  // Optional traffic weight for this node.
+  optional int32 weight = 3;
+  // Optional node mode: accept, reject, drain, or backup.
+  optional string mode = 4;
+  // Optional VPC subnet ID for VPC backend nodes.
+  optional int32 subnet_id = 5;
+}
+
+// NodeBalancerConfigCreateInput is the input contract for
+// linode_nodebalancer_config_create.
+message NodeBalancerConfigCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer that should receive a new config.
+  int32 nodebalancer_id = 2;
+  // The TCP port this config listens on, from 1 through 65535.
+  int32 port = 3;
+  // Optional protocol: http, https, tcp, or udp.
+  optional NodeBalancerProtocol.Value protocol = 4;
+  // Optional balancing algorithm: roundrobin, leastconn, source, or ring_hash.
+  optional NodeBalancerAlgorithm.Value algorithm = 5;
+  // Optional session stickiness: none, table, http_cookie, session, or
+  // source_ip (valid set depends on protocol).
+  optional NodeBalancerStickiness.Value stickiness = 6;
+  // Optional health check mode: none, connection, http, or http_body.
+  optional NodeBalancerCheck.Value check = 7;
+  // Optional health check interval in seconds.
+  optional int32 check_interval = 8;
+  // Optional health check timeout in seconds.
+  optional int32 check_timeout = 9;
+  // Optional health check attempt count.
+  optional int32 check_attempts = 10;
+  // Optional HTTP health check path.
+  optional string check_path = 11;
+  // Optional expected HTTP health check body.
+  optional string check_body = 12;
+  // Optionally enable passive health checks.
+  optional bool check_passive = 13;
+  // Optional HTTPS cipher suite: recommended or legacy.
+  optional NodeBalancerCipherSuite.Value cipher_suite = 14;
+  // Optional HTTPS certificate PEM.
+  optional string ssl_cert = 15;
+  // Optional HTTPS private key PEM.
+  optional string ssl_key = 16;
+  // Optional proxy protocol version for TCP configs: none, v1, or v2.
+  optional NodeBalancerProxyProtocol.Value proxy_protocol = 17;
+  // Optional health check port for UDP configs, from 1 through 65535.
+  optional int32 udp_check_port = 18;
+  // Optional backend nodes to attach to this config, each an object with label,
+  // address, and optional weight, mode, and subnet_id.
+  repeated NodeBalancerConfigNodeItem nodes = 19;
+  // Must be set to true to confirm NodeBalancer config creation. Ignored when
+  // dry_run=true.
+  bool confirm = 20;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 21;
+}
+
+// NodeBalancerConfigUpdateInput is the input contract for
+// linode_nodebalancer_config_update.
+message NodeBalancerConfigUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer whose config should be updated.
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config to update.
+  int32 config_id = 3;
+  // Optional TCP port this config listens on, from 1 through 65535.
+  optional int32 port = 4;
+  // Optional protocol: http, https, tcp, or udp.
+  optional NodeBalancerProtocol.Value protocol = 5;
+  // Optional balancing algorithm: roundrobin, leastconn, source, or ring_hash.
+  optional NodeBalancerAlgorithm.Value algorithm = 6;
+  // Optional session stickiness: none, table, http_cookie, session, or
+  // source_ip (valid set depends on protocol).
+  optional NodeBalancerStickiness.Value stickiness = 7;
+  // Optional health check mode: none, connection, http, or http_body.
+  optional NodeBalancerCheck.Value check = 8;
+  // Optional health check interval in seconds.
+  optional int32 check_interval = 9;
+  // Optional health check timeout in seconds.
+  optional int32 check_timeout = 10;
+  // Optional health check attempt count.
+  optional int32 check_attempts = 11;
+  // Optional HTTP health check path.
+  optional string check_path = 12;
+  // Optional expected HTTP health check body.
+  optional string check_body = 13;
+  // Optionally enable passive health checks.
+  optional bool check_passive = 14;
+  // Optional HTTPS cipher suite: recommended or legacy.
+  optional NodeBalancerCipherSuite.Value cipher_suite = 15;
+  // Optional HTTPS certificate PEM.
+  optional string ssl_cert = 16;
+  // Optional HTTPS private key PEM.
+  optional string ssl_key = 17;
+  // Optional proxy protocol version for TCP configs: none, v1, or v2.
+  optional NodeBalancerProxyProtocol.Value proxy_protocol = 18;
+  // Optional health check port for UDP configs, from 1 through 65535.
+  optional int32 udp_check_port = 19;
+  // Must be set to true to confirm NodeBalancer config update. Ignored when
+  // dry_run=true.
+  bool confirm = 20;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 21;
+}
+
+// NodeBalancerConfigDeleteInput is the input contract for
+// linode_nodebalancer_config_delete. This destroy does not use the two-stage
+// flow, so there is no mode/plan_id (matches the registered schema).
+message NodeBalancerConfigDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer whose config should be deleted.
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config to delete.
+  int32 config_id = 3;
+  // Must be set to true to confirm config deletion. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// NodeBalancerConfigRebuildInput is the input contract for
+// linode_nodebalancer_config_rebuild.
+message NodeBalancerConfigRebuildInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the NodeBalancer whose config should be rebuilt.
+  int32 nodebalancer_id = 2;
+  // The ID of the NodeBalancer config to rebuild.
+  int32 config_id = 3;
+  // Must be set to true to confirm NodeBalancer config rebuild. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
 }

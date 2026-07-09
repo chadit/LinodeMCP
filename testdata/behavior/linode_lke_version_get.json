@@ -1,0 +1,22 @@
+{
+  "tool": "linode_lke_version_get",
+  "description": "Pins the version-required rejection, the path-separator rejection (Python now mirrors Go's validateLKEVersionID), and the single GET.",
+  "cases": [
+    {
+      "name": "rejects missing version",
+      "args": {},
+      "expect_error": "version is required"
+    },
+    {
+      "name": "rejects a path-separator version",
+      "args": { "version": "1.31/../secrets" },
+      "expect_error": "version must be a Kubernetes version ID"
+    },
+    {
+      "name": "gets a version",
+      "args": { "version": "1.31" },
+      "api_response": { "id": "1.31" },
+      "expect_request": { "method": "GET", "path": "/lke/versions/1.31" }
+    }
+  ]
+}

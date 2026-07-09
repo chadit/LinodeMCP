@@ -1,0 +1,34 @@
+{
+  "tool": "linode_database_mysql_instance_delete",
+  "description": "Pre-validated instance-id rejection (both languages agree) and the DELETE the handler issues once bypass-confirmed.",
+  "cases": [
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": {
+        "instance_id": 123,
+        "confirm": true
+      },
+      "expect_error": "linode_database_mysql_instance_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "rejects non-positive instance_id",
+      "args": {
+        "instance_id": 0
+      },
+      "expect_error": "instance_id must be a positive integer"
+    },
+    {
+      "name": "deletes a mysql instance",
+      "args": {
+        "instance_id": 123,
+        "confirm": true,
+        "confirm_bypass_dry_run": true
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/databases/mysql/instances/123"
+      }
+    }
+  ]
+}

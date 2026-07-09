@@ -49,27 +49,15 @@ func (c *Client) httpListObjectStorageBucketsProto(ctx context.Context) ([]*lino
 		func() *linodev1.ObjectStorageBucket { return &linodev1.ObjectStorageBucket{} })
 }
 
-// ListObjectStorageBucketsByRegion retrieves Object Storage buckets in a region.
-func (c *Client) httpListObjectStorageBucketsByRegion(ctx context.Context, region string) ([]ObjectStorageBucket, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
+// httpListObjectStorageBucketsByRegionProto retrieves Object Storage buckets in
+// a region as proto messages for the proto-backed read path. The region is
+// path-escaped into the endpoint before the call, matching the non-region list;
+// the endpoint returns the {data,page,...} page envelope listProtoElements reads.
+func (c *Client) httpListObjectStorageBucketsByRegionProto(ctx context.Context, region string) ([]*linodev1.ObjectStorageBucket, error) {
 	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s", url.PathEscape(region))
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListObjectStorageBucketsByRegion", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[ObjectStorageBucket]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
+	return listProtoElements(ctx, c, "ListObjectStorageBucketsByRegion", endpoint,
+		func() *linodev1.ObjectStorageBucket { return &linodev1.ObjectStorageBucket{} })
 }
 
 // GetObjectStorageBucket retrieves a specific Object Storage bucket.
@@ -338,8 +326,11 @@ func (c *Client) httpGetObjectStorageKeyProto(ctx context.Context, keyID int) (*
 	return key, nil
 }
 
-// GetObjectStorageQuotaUsage retrieves usage data for a specific Object Storage quota.
-func (c *Client) httpGetObjectStorageQuotaUsage(ctx context.Context, quotaID string) (*ObjectStorageQuotaUsage, error) {
+// httpGetObjectStorageQuotaUsageProto retrieves usage data for a specific Object
+// Storage quota and decodes it into the ObjectStorageQuotaUsage proto element. The
+// byte counts are int64, so protojson serializes them as JSON strings; usage is
+// optional and omitted when the API returns null (before any usage is recorded).
+func (c *Client) httpGetObjectStorageQuotaUsageProto(ctx context.Context, quotaID string) (*linodev1.ObjectStorageQuotaUsage, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -352,16 +343,18 @@ func (c *Client) httpGetObjectStorageQuotaUsage(ctx context.Context, quotaID str
 
 	defer drainClose(resp)
 
-	var usage ObjectStorageQuotaUsage
-	if err := c.handleResponse(resp, &usage); err != nil {
+	usage := &linodev1.ObjectStorageQuotaUsage{}
+	if err := c.handleProtoResponse(resp, usage); err != nil {
 		return nil, err
 	}
 
-	return &usage, nil
+	return usage, nil
 }
 
-// GetObjectStorageTransfer retrieves Object Storage outbound data transfer usage.
-func (c *Client) httpGetObjectStorageTransfer(ctx context.Context) (*ObjectStorageTransfer, error) {
+// httpGetObjectStorageTransferProto retrieves Object Storage outbound data
+// transfer usage and decodes it into the ObjectStorageTransfer proto element. The
+// used byte count is int64, so protojson serializes it as a JSON string.
+func (c *Client) httpGetObjectStorageTransferProto(ctx context.Context) (*linodev1.ObjectStorageTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -372,16 +365,19 @@ func (c *Client) httpGetObjectStorageTransfer(ctx context.Context) (*ObjectStora
 
 	defer drainClose(resp)
 
-	var transfer ObjectStorageTransfer
-	if err := c.handleResponse(resp, &transfer); err != nil {
+	transfer := &linodev1.ObjectStorageTransfer{}
+	if err := c.handleProtoResponse(resp, transfer); err != nil {
 		return nil, err
 	}
 
-	return &transfer, nil
+	return transfer, nil
 }
 
-// GetObjectStorageQuota retrieves a single Object Storage quota.
-func (c *Client) httpGetObjectStorageQuota(ctx context.Context, objQuotaID string) (*ObjectStorageQuota, error) {
+// httpGetObjectStorageQuotaProto retrieves a single Object Storage quota and
+// decodes it into the ObjectStorageQuota proto element for the proto-backed read
+// path. The quota GET returns the bare quota object (quota usage is a separate
+// endpoint), so the body decodes straight into the element with DiscardUnknown.
+func (c *Client) httpGetObjectStorageQuotaProto(ctx context.Context, objQuotaID string) (*linodev1.ObjectStorageQuota, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -394,12 +390,12 @@ func (c *Client) httpGetObjectStorageQuota(ctx context.Context, objQuotaID strin
 
 	defer drainClose(resp)
 
-	var quota ObjectStorageQuota
-	if err := c.handleResponse(resp, &quota); err != nil {
+	quota := &linodev1.ObjectStorageQuota{}
+	if err := c.handleProtoResponse(resp, quota); err != nil {
 		return nil, err
 	}
 
-	return &quota, nil
+	return quota, nil
 }
 
 // CancelObjectStorage cancels Object Storage service for the account.
@@ -611,6 +607,30 @@ func (c *Client) httpUpdateObjectStorageKey(ctx context.Context, keyID int, req 
 	return c.handleResponse(resp, nil)
 }
 
+// httpUpdateObjectStorageKeyProto updates a key and decodes the echoed key as a
+// proto message. The update endpoint returns the full key without secret
+// material, so the element's secret_key serializes as its empty default.
+func (c *Client) httpUpdateObjectStorageKeyProto(ctx context.Context, keyID int, req UpdateObjectStorageKeyRequest) (*linodev1.ObjectStorageKey, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateObjectStorageKey", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	key := &linodev1.ObjectStorageKey{}
+	if err := c.handleProtoResponse(resp, key); err != nil {
+		return nil, err
+	}
+
+	return key, nil
+}
+
 // DeleteObjectStorageKey revokes an Object Storage access key.
 func (c *Client) httpDeleteObjectStorageKey(ctx context.Context, keyID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -628,8 +648,9 @@ func (c *Client) httpDeleteObjectStorageKey(ctx context.Context, keyID int) erro
 	return c.handleResponse(resp, nil)
 }
 
-// CreatePresignedURL generates a presigned URL for an object in Object Storage.
-func (c *Client) httpCreatePresignedURL(ctx context.Context, region, label string, req PresignedURLRequest) (*PresignedURLResponse, error) {
+// httpCreatePresignedURLProto generates a presigned URL for an object in Object
+// Storage and decodes the response into the PresignedURLResponse proto element.
+func (c *Client) httpCreatePresignedURLProto(ctx context.Context, region, label string, req PresignedURLRequest) (*linodev1.PresignedURLResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -642,12 +663,12 @@ func (c *Client) httpCreatePresignedURL(ctx context.Context, region, label strin
 
 	defer drainClose(resp)
 
-	var result PresignedURLResponse
-	if err := c.handleResponse(resp, &result); err != nil {
+	result := &linodev1.PresignedURLResponse{}
+	if err := c.handleProtoResponse(resp, result); err != nil {
 		return nil, err
 	}
 
-	return &result, nil
+	return result, nil
 }
 
 // GetObjectACL retrieves the ACL of an object in Object Storage.
@@ -716,6 +737,29 @@ func (c *Client) httpUpdateObjectACL(ctx context.Context, region, label string, 
 	return &result, nil
 }
 
+// httpUpdateObjectACLProto updates an object's ACL and decodes the echoed ACL
+// as a proto message.
+func (c *Client) httpUpdateObjectACLProto(ctx context.Context, region, label string, req ObjectACLUpdateRequest) (*linodev1.ObjectACL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-acl", url.PathEscape(region), url.PathEscape(label))
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateObjectACL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	result := &linodev1.ObjectACL{}
+	if err := c.handleProtoResponse(resp, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 // GetBucketSSL retrieves the SSL/TLS certificate status for an Object Storage bucket.
 func (c *Client) httpGetBucketSSL(ctx context.Context, region, label string) (*BucketSSL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -775,6 +819,29 @@ func (c *Client) httpDeleteBucketSSL(ctx context.Context, region, label string) 
 	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
+}
+
+// httpUploadBucketSSLProto uploads a certificate and decodes the echoed TLS
+// status as a proto message.
+func (c *Client) httpUploadBucketSSLProto(ctx context.Context, region, label string, req UploadBucketSSLRequest) (*linodev1.BucketSSL, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "UploadBucketSSL", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	result := &linodev1.BucketSSL{}
+	if err := c.handleProtoResponse(resp, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // UploadBucketSSL uploads an SSL/TLS certificate to an Object Storage bucket.

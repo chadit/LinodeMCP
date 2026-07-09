@@ -7,11 +7,13 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
 const (
@@ -35,20 +37,34 @@ func NewLinodeProfileTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fu
 
 // NewLinodeProfilePreferencesTool creates a tool for retrieving Linode profile preferences.
 func NewLinodeProfilePreferencesTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newSimpleGetTool(
-		cfg, "linode_profile_preferences_get",
+	// The response is a free-form preferences object, so it serializes through a
+	// bare Struct to match the Python side and the preferences write path.
+	tool := mcp.NewToolWithRawSchema(
+		"linode_profile_preferences_get",
 		"Retrieves Linode user preference settings",
-		func(ctx context.Context, client *linode.Client) (any, error) {
-			return client.GetProfilePreferences(ctx)
-		},
+		toolschemas.Schema("linode.mcp.v1.ProfilePreferencesGetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		client, err := prepareClient(&request, cfg)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		preferences, err := client.GetProfilePreferences(ctx)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_profile_preferences_get: %v", err)), nil
+		}
+
+		return MarshalStructToolResponse(*preferences, "Failed to retrieve linode_profile_preferences_get")
+	}
 
 	return tool, profiles.CapRead, handler
 }
 
 // NewLinodeProfileSecurityQuestionsTool creates a tool for listing available profile security questions.
 func NewLinodeProfileSecurityQuestionsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	_, handler := newProtoListTool(
 		cfg,
 		"linode_profile_security_question_list",
 		"Lists available profile security questions for the authenticated profile",
@@ -57,6 +73,12 @@ func NewLinodeProfileSecurityQuestionsTool(cfg *config.Config) (mcp.Tool, profil
 		},
 		nil,
 		securityQuestionListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_profile_security_question_list",
+		"Lists available profile security questions for the authenticated profile",
+		toolschemas.Schema("linode.mcp.v1.SecurityQuestionListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -68,19 +90,15 @@ func securityQuestionListResponse(items []*linodev1.SecurityQuestion, count int3
 
 // NewLinodeProfilePreferencesUpdateTool creates a tool for updating profile preferences.
 func NewLinodeProfilePreferencesUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_preferences_update",
 		"Updates dashboard preferences for the authenticated profile.",
-		[]mcp.ToolOption{
-			mcp.WithObject("preferences", mcp.Required(),
-				mcp.Description("Preference fields to send as the JSON request body.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm updating profile preferences. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfilePreferencesUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfilePreferencesUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfilePreferencesUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -112,16 +130,28 @@ func handleLinodeProfilePreferencesUpdateRequest(ctx context.Context, request *m
 		return mcp.NewToolResultError(updateFailureMessage), nil
 	}
 
-	return MarshalToolResponse(preferences)
+	return MarshalProtoToolResponse(&linodev1.ProfilePreferencesUpdateResponse{
+		Message:     "Profile preferences updated successfully",
+		Preferences: preferences,
+	})
 }
 
-func updateProfilePreferencesResult(ctx context.Context, client *linode.Client, body linode.ProfilePreferences) (linode.ProfilePreferences, string) {
+// updateProfilePreferencesResult returns the updated preferences as a
+// structpb.Struct so the proto envelope can round-trip the free-form key/value
+// body the API hands back. Either failure surfaces as a string the caller wraps
+// so the handler never returns a non-nil error as a tool result.
+func updateProfilePreferencesResult(ctx context.Context, client *linode.Client, body linode.ProfilePreferences) (*structpb.Struct, string) {
 	preferences, updateFailure := client.UpdateProfilePreferences(ctx, body)
 	if updateFailure != nil {
 		return nil, "Failed to update linode_profile_preferences_update: " + updateFailure.Error()
 	}
 
-	return preferences, ""
+	preferencesStruct, structFailure := structpb.NewStruct(preferences)
+	if structFailure != nil {
+		return nil, "Failed to update linode_profile_preferences_update: " + structFailure.Error()
+	}
+
+	return preferencesStruct, ""
 }
 
 func profilePreferencesFromTool(request *mcp.CallToolRequest) (linode.ProfilePreferences, string) {
@@ -135,7 +165,7 @@ func profilePreferencesFromTool(request *mcp.CallToolRequest) (linode.ProfilePre
 
 // NewLinodeProfileTokensTool creates a tool for listing personal access tokens for the authenticated profile.
 func NewLinodeProfileTokensTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_profile_token_list",
 		"Lists personal access tokens for the authenticated profile.",
@@ -147,6 +177,12 @@ func NewLinodeProfileTokensTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		profileTokensPaginationFromTool,
 		nil,
 		profileTokenListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_profile_token_list",
+		"Lists personal access tokens for the authenticated profile.",
+		toolschemas.Schema("linode.mcp.v1.ProfileTokenListInput"),
 	)
 
 	return tool, profiles.CapRead, handler
@@ -174,20 +210,15 @@ func profileTokensPaginationFromTool(request *mcp.CallToolRequest) (int, int, st
 
 // NewLinodeProfileTokenCreateTool creates a tool for creating a personal access token.
 func NewLinodeProfileTokenCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_token_create",
 		"Creates a personal access token for the authenticated profile. Pass dry_run=true to preview without creating a token.",
-		[]mcp.ToolOption{
-			mcp.WithString("expiry", mcp.Description("Token expiry timestamp (optional).")),
-			mcp.WithString("label", mcp.Description("Token label (optional).")),
-			mcp.WithString("scopes", mcp.Description("Token scopes string (optional).")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm personal access token creation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileTokenCreateRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileTokenCreateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileTokenCreateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -273,24 +304,21 @@ func profileTokenCreateRequestFromTool(request *mcp.CallToolRequest) (linode.Cre
 
 // NewLinodeProfileTokenDeleteTool creates a tool for revoking a personal access token.
 func NewLinodeProfileTokenDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_token_delete",
 		"Revokes a personal access token for the authenticated profile. Pass dry_run=true to preview without revoking the token.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("token_id", mcp.Required(), mcp.Description("The personal access token ID to revoke.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm personal access token revocation. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileTokenDeleteRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileTokenDeleteInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileTokenDeleteRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
 
 func handleLinodeProfileTokenDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	tokenID, validationMessage := requiredPositiveToolInt(request, "token_id", "token_id")
+	tokenID, validationMessage := requiredIDArgument(request, "token_id")
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -330,18 +358,15 @@ func deleteProfileTokenResult(ctx context.Context, client *linode.Client, tokenI
 
 // NewLinodeProfileTokenUpdateTool creates a tool for updating a personal access token.
 func NewLinodeProfileTokenUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_profile_token_update",
 		"Updates a personal access token for the authenticated profile.",
-		[]mcp.ToolOption{
-			mcp.WithNumber(profileTokenIDParam, mcp.Required(), mcp.Description("Personal access token ID.")),
-			mcp.WithString(profileTokenFieldLabel, mcp.Description("Token label. The label is the only field a token update can change.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(), mcp.Description("Must be true to confirm updating a personal access token. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleLinodeProfileTokenUpdateRequest,
+		toolschemas.Schema("linode.mcp.v1.ProfileTokenUpdateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleLinodeProfileTokenUpdateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapAdmin, handler
 }
@@ -420,7 +445,7 @@ func profileTokenUpdateFromTool(request *mcp.CallToolRequest) (int, linode.Updat
 
 // NewLinodeProfileLoginsTool creates a tool for listing login history for the authenticated profile.
 func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolPaginated(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_profile_login_list",
 		"Lists login history for the authenticated profile.",
@@ -432,6 +457,12 @@ func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		profileLoginsPaginationFromTool,
 		nil,
 		profileLoginListResponse,
+	)
+
+	tool := mcp.NewToolWithRawSchema(
+		"linode_profile_login_list",
+		"Lists login history for the authenticated profile.",
+		toolschemas.Schema("linode.mcp.v1.ProfileLoginListInput"),
 	)
 
 	return tool, profiles.CapRead, handler

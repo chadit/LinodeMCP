@@ -1,0 +1,31 @@
+{
+  "tool": "linode_volume_resize",
+  "description": "Volume resize: volume_id-required and size-below-10GB rejections both languages agree on (confirm set so both reach them), plus the resize POST. Confirm-gate text and the missing-size message diverge (see report).",
+  "cases": [
+    {
+      "name": "requires volume_id",
+      "args": { "confirm": true },
+      "expect_error": "volume_id is required"
+    },
+    {
+      "name": "rejects size below 10 GB",
+      "args": { "confirm": true, "volume_id": 123, "size": 5 },
+      "expect_error": "volume size must be at least 10 GB"
+    },
+    {
+      "name": "resizes a volume",
+      "args": { "confirm": true, "volume_id": 123, "size": 40 },
+      "api_response": { "id": 123, "label": "my-vol", "size": 40 },
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes/123/resize",
+        "body": { "size": 40 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"volume_id": 123, "size": 40},
+      "expect_error": "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."
+    }
+  ]
+}

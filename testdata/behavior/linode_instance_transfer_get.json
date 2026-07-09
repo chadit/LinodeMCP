@@ -1,0 +1,12 @@
+{
+  "tool": "linode_instance_transfer_get",
+  "description": "GETs this month's network transfer totals. The missing-linode_id rejection text diverges (Go 'linode_id is required' vs Python 'linode_id must be a positive integer'), so only the success request is fixtured (see report).",
+  "cases": [
+    {
+      "name": "gets transfer totals with a plain GET",
+      "args": { "linode_id": 123 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/linode/instances/123/transfer" }
+    }
+  ]
+}

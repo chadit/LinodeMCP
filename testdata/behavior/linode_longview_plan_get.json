@@ -1,0 +1,12 @@
+{
+  "tool": "linode_longview_plan_get",
+  "description": "No local validation; pins the plan GET.",
+  "cases": [
+    {
+      "name": "gets the longview plan",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/longview/plan" }
+    }
+  ]
+}

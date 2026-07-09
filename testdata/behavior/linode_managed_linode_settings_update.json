@@ -1,0 +1,31 @@
+{
+  "tool": "linode_managed_linode_settings_update",
+  "description": "Managed Linode settings update: shared id + ssh.access rejections and the PUT body once confirmed. Confirm-gate and missing-ssh text diverge (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive linode_id",
+      "args": { "linode_id": 0 },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects non-boolean ssh.access",
+      "args": { "linode_id": 5, "ssh": { "access": "yes" } },
+      "expect_error": "ssh.access must be a boolean"
+    },
+    {
+      "name": "updates managed ssh settings",
+      "args": { "linode_id": 5, "ssh": { "access": true }, "confirm": true },
+      "api_response": { "id": 5, "ssh": { "access": true } },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/managed/linode-settings/5",
+        "body": { "ssh": { "access": true } }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 5, "ssh": {"access": true}},
+      "expect_error": "This updates Managed Linode settings. Set confirm=true to proceed."
+    }
+  ]
+}

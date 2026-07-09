@@ -9,7 +9,10 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import type_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import error_response, execute_tool
-from linodemcp.tools.proto_response import serialize_list_response
+from linodemcp.tools.proto_response import (
+    serialize_api_response,
+    serialize_list_response,
+)
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
@@ -29,23 +32,7 @@ def create_linode_type_list_tool() -> tuple[Tool, Capability]:
             "Lists all available Linode instance types (plans) with pricing. "
             "Can filter by class (standard, dedicated, gpu, highmem, premium)."
         ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "description": (
-                        "Linode environment to use (optional, defaults to 'default')"
-                    ),
-                },
-                "class": {
-                    "type": "string",
-                    "description": (
-                        "Filter types by class (standard, dedicated, gpu, highmem)"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceTypeListInput"),
     ), Capability.Read
 
 
@@ -100,29 +87,7 @@ async def handle_linode_type_get(
         return error_response("type_id must contain only letters, numbers, and hyphens")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        type_ = await client.get_type(type_id)
-        result: dict[str, Any] = {
-            "id": type_.id,
-            "label": type_.label,
-            "class": type_.class_,
-            "disk": type_.disk,
-            "memory": type_.memory,
-            "vcpus": type_.vcpus,
-            "gpus": type_.gpus,
-            "network_out": type_.network_out,
-            "transfer": type_.transfer,
-            "price": {"hourly": type_.price.hourly, "monthly": type_.price.monthly},
-            "addons": {
-                "backups": {
-                    "price": {
-                        "hourly": type_.addons.backups.price.hourly,
-                        "monthly": type_.addons.backups.price.monthly,
-                    }
-                }
-            },
-        }
-        if type_.successor is not None:
-            result["successor"] = type_.successor
-        return result
+        raw = await client.get_raw(f"/linode/types/{type_id}")
+        return serialize_api_response(raw, type_pb2.InstanceType())
 
     return await execute_tool(cfg, arguments, f"retrieve Linode type {type_id}", _call)

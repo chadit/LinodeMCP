@@ -1,0 +1,31 @@
+{
+  "tool": "linode_account_user_update",
+  "description": "Account user update: missing username agrees, confirm gate, and the PUT body once confirmed.",
+  "cases": [
+    {
+      "name": "requires username",
+      "args": {},
+      "expect_error": "username is required"
+    },
+    {
+      "name": "requires confirm before updating",
+      "args": { "username": "alice", "email": "new@example.com" },
+      "expect_error": "This updates an account user. Set confirm=true to proceed."
+    },
+    {
+      "name": "updates an account user",
+      "args": { "username": "alice", "email": "new@example.com", "confirm": true },
+      "api_response": { "username": "alice", "email": "new@example.com" },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/account/users/alice",
+        "body": { "email": "new@example.com" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"username": "alice", "email": "new@example.com"},
+      "expect_error": "This updates an account user. Set confirm=true to proceed."
+    }
+  ]
+}

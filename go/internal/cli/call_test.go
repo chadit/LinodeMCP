@@ -13,6 +13,8 @@ import (
 const (
 	toolVersion = "version"
 	toolHello   = "hello"
+	flagArg     = "--arg"
+	flagOutput  = "--output"
 	exitUsage   = 2
 )
 
@@ -76,7 +78,7 @@ func TestCallHelloPassesArg(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	code := cli.RunCallCommand([]string{toolHello, "--arg", "name=Ada"}, &stdout, &stderr)
+	code := cli.RunCallCommand([]string{toolHello, flagArg, "name=Ada"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("exit code = %d (stderr: %s), want 0", code, stderr.String())
 	}
@@ -153,7 +155,7 @@ func TestCallBadOutputExitsUsage(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	code := cli.RunCallCommand([]string{toolVersion, "--output", "xml"}, &stdout, &stderr)
+	code := cli.RunCallCommand([]string{toolVersion, flagOutput, "xml"}, &stdout, &stderr)
 	if code != exitUsage {
 		t.Fatalf("exit code = %d, want %d", code, exitUsage)
 	}

@@ -1,0 +1,17 @@
+{
+  "tool": "linode_instance_get",
+  "description": "Pins the instance_id-required rejection and the GET. instance_id is a string arg (Go parses it via GetString+Atoi); the non-numeric rejection diverges (see report).",
+  "cases": [
+    {
+      "name": "requires instance_id",
+      "args": {},
+      "expect_error": "instance_id is required"
+    },
+    {
+      "name": "gets the instance",
+      "args": { "instance_id": "5" },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/linode/instances/5" }
+    }
+  ]
+}

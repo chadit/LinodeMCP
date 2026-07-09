@@ -81,4 +81,4 @@ async def test_reports_jsonl(
     assert report["active_log_exists"] is True
     assert report["rotated_file_count"] == 0
     assert report["dropped_events"] == 0
-    assert report["sqlite"] is None
+    assert "sqlite" not in report

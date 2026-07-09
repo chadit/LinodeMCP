@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+// InstanceStatsGetInput is the input contract for linode_instance_stats_get.
+message InstanceStatsGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+}
+
+// InstanceStatsMonthGetInput is the input contract for
+// linode_instance_stats_month_get. All three fields are required.
+message InstanceStatsMonthGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the Linode instance (required).
+  int32 linode_id = 2;
+  // The statistics year, from 2000 through 2037 (required).
+  int32 year = 3;
+  // The statistics month, from 1 through 12 (required).
+  int32 month = 4;
+}
+
+// InstanceStats is the response for linode_instance_stats_get and
+// linode_instance_stats_month_get (GET /linode/instances/{linodeId}/stats and
+// the year/month variant). The Linode API nests every graph under a top-level
+// "data" object beside "title", so the graphs live in InstanceStatsData rather
+// than at the top level. Modeling the wrapper is deliberate: the pre-proto Go
+// struct was flat and decoded cpu/io/netv4/netv6 to empty against the real API,
+// which diverged from the Python raw pass-through that kept the "data" wrapper.
+message InstanceStats {
+  string title = 1;
+  InstanceStatsData data = 2;
+}
+
+// InstanceStatsData holds the four graph groups. Each series is a list of
+// [timestamp_ms, value] pairs; each pair stays a JSON array
+// (google.protobuf.ListValue) because the pair is positional, not named, so
+// there is no message shape to model. The leaf numbers round-trip as
+// Value.number_value.
+message InstanceStatsData {
+  repeated google.protobuf.ListValue cpu = 1;
+  InstanceIOStats io = 2;
+  InstanceNetStats netv4 = 3;
+  InstanceNetStats netv6 = 4;
+}
+
+// InstanceIOStats holds the disk and swap IO graphs, each a list of
+// [timestamp_ms, value] pairs.
+message InstanceIOStats {
+  repeated google.protobuf.ListValue io = 1;
+  repeated google.protobuf.ListValue swap = 2;
+}
+
+// InstanceNetStats holds the network graphs shared by netv4 and netv6, each a
+// list of [timestamp_ms, value] pairs.
+message InstanceNetStats {
+  repeated google.protobuf.ListValue in = 1;
+  repeated google.protobuf.ListValue out = 2;
+  repeated google.protobuf.ListValue private_in = 3;
+  repeated google.protobuf.ListValue private_out = 4;
+}

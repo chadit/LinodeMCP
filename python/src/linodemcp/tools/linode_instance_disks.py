@@ -12,18 +12,13 @@ from linodemcp.genpb.linode.mcp.v1 import (
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     execute_dry_run,
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_enum import enum_value_names, optional_enum_error
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -54,9 +49,6 @@ def _split_comma_separated(raw: object) -> list[str] | None:
     parts = [segment.strip() for segment in raw.split(",")]
     entries = [segment for segment in parts if segment]
     return entries or None
-
-
-_VALID_CONFIG_INTERFACE_PURPOSES = frozenset({"public", "vlan", "vpc"})
 
 
 def _is_dict(value: Any) -> bool:
@@ -91,11 +83,14 @@ def _parse_config_helpers(raw: object) -> tuple[Any, str | None]:
 
 def _validate_config_interfaces(interfaces: Any) -> str | None:
     """Validate each interface object's purpose; return an error or None."""
+    purpose_values = enum_value_names(instance_pb2.ConfigInterfacePurpose.Value)
     for index, iface in enumerate(interfaces):
         if not _is_dict(iface):
             return "interfaces must be an array of objects"
-        if iface.get("purpose") not in _VALID_CONFIG_INTERFACE_PURPOSES:
-            return f"interfaces[{index}].purpose must be public, vlan, or vpc"
+        if iface.get("purpose") not in purpose_values:
+            return f"interfaces[{index}].purpose must be one of: " + ", ".join(
+                purpose_values
+            )
     return None
 
 
@@ -132,29 +127,6 @@ def _parse_config_json_options(
     if interfaces_err is not None:
         return None, None, interfaces_err
     return helpers, interfaces, None
-
-
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-
-_LINODE_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the Linode instance (required)",
-}
-
-_DISK_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the disk (required)",
-}
-
-_CONFIRM_PROP: dict[str, Any] = {
-    "type": "boolean",
-    "description": "Must be true to confirm this operation.",
-}
 
 
 def _parse_instance_id(
@@ -223,19 +195,43 @@ def _is_non_empty_dict(value: Any) -> TypeGuard[dict[str, Any]]:
     return len(candidate) > 0
 
 
+# The Linode API only accepts config device slots sda through sdh; the Go
+# handler (validConfigDeviceSlot) rejects anything else, so Python has to reject
+# the same names to stay in parity. A sync gate reads this set by name, so keep
+# it a plain string-literal set.
+_VALID_DEVICE_SLOTS = {"sda", "sdb", "sdc", "sdd", "sde", "sdf", "sdg", "sdh"}
+
+
+def validate_device_slots(devices: dict[str, Any]) -> str | None:
+    """Return an error for the first bad config device slot, else None.
+
+    Mirrors Go's parseConfigDevices slot check so both languages reject an
+    out-of-range slot with a byte-identical message. Keys are checked in sorted
+    order so the reported slot is stable for a given payload.
+    """
+    for slot in sorted(devices):
+        if slot not in _VALID_DEVICE_SLOTS:
+            return f"device slot {slot} must be one of sda through sdh"
+    return None
+
+
+def _config_devices_error(devices: Any) -> str | None:
+    """Return the first config-devices validation error, or None when valid.
+
+    Folds the non-empty-object and slot-name checks into one message so the
+    create handler stays under its return-count budget.
+    """
+    if not _is_non_empty_dict(devices):
+        return "devices must be a non-empty object"
+    return validate_device_slots(devices)
+
+
 def create_linode_instance_disk_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_list tool."""
     return Tool(
         name="linode_instance_disk_list",
         description="Lists disks for a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDiskListInput"),
     ), Capability.Read
 
 
@@ -265,25 +261,7 @@ def create_linode_instance_volume_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_volume_list",
         description="Lists volumes attached to a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceVolumeListInput"),
     ), Capability.Read
 
 
@@ -317,25 +295,7 @@ def create_linode_instance_firewall_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_firewall_list",
         description="Lists firewalls assigned to a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "page": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Page of results to return",
-                },
-                "page_size": {
-                    "type": "integer",
-                    "minimum": 25,
-                    "maximum": 500,
-                    "description": "Number of results per page",
-                },
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceFirewallListInput"),
     ), Capability.Read
 
 
@@ -398,60 +358,23 @@ def create_linode_instance_config_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_config_create",
         description="Creates a configuration profile on a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "Label for the configuration profile",
-                },
-                "devices": {
-                    "type": "object",
-                    "description": "Config devices mapping, such as sda/sdb entries",
-                },
-                "comments": {
-                    "type": "string",
-                    "description": "Optional comments for the configuration profile",
-                },
-                "kernel": {
-                    "type": "string",
-                    "description": "Kernel ID to boot, e.g. linode/latest-64bit",
-                },
-                "memory_limit": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Optional memory limit in MB",
-                },
-                "root_device": {
-                    "type": "string",
-                    "description": "Root device to boot, e.g. /dev/sda",
-                },
-                "run_level": {
-                    "type": "string",
-                    "enum": ["default", "single", "binbash"],
-                    "description": "Run level: default, single, or binbash",
-                },
-                "virt_mode": {
-                    "type": "string",
-                    "enum": ["paravirt", "fullvirt"],
-                    "description": "Virtualization mode: paravirt or fullvirt",
-                },
-                "helpers": {
-                    "type": "string",
-                    "description": "Optional helpers JSON object",
-                },
-                "interfaces": {
-                    "type": "string",
-                    "description": "Optional interfaces JSON array",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": ["linode_id", "label", "devices", "confirm"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceConfigCreateInput"),
     ), Capability.Write
+
+
+def _config_enum_error(arguments: dict[str, Any]) -> str | None:
+    """Validate the run_level/virt_mode choice enums against the generated proto
+    enums, mirroring Go's ConfigRunLevel/ConfigVirtMode checks so both languages
+    reject the same values. Returns the first error message or None.
+    """
+    for key, enum in (
+        ("run_level", instance_pb2.ConfigRunLevel.Value),
+        ("virt_mode", instance_pb2.ConfigVirtMode.Value),
+    ):
+        enum_error = optional_enum_error(arguments, key, enum)
+        if enum_error is not None:
+            return enum_error
+    return None
 
 
 async def handle_linode_instance_config_create(
@@ -467,15 +390,17 @@ async def handle_linode_instance_config_create(
         return _error_response("label is required")
 
     devices = arguments.get("devices")
-    if not _is_non_empty_dict(devices):
-        return _error_response("devices must be a non-empty object")
-    devices_payload = devices
+    devices_error = _config_devices_error(devices)
+    if devices_error is not None:
+        return _error_response(devices_error)
+    devices_payload = cast("dict[str, Any]", devices)
 
     helpers_payload, interfaces_payload, json_err = _parse_config_json_options(
         arguments
     )
-    if json_err is not None:
-        return _error_response(json_err)
+    pre_error = json_err or _config_enum_error(arguments)
+    if pre_error is not None:
+        return _error_response(pre_error)
 
     if is_dry_run(arguments):
 
@@ -522,7 +447,10 @@ async def _create_instance_config_live(
     """Run the confirmed config-create after dry-run and validation passed."""
     confirm = arguments.get("confirm", False)
     if confirm is not True:
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This creates a configuration profile on the instance. Set confirm=true to "
+            "proceed."
+        )
 
     memory_limit_arg = arguments.get("memory_limit")
     memory_limit = int(memory_limit_arg) if memory_limit_arg is not None else None
@@ -564,52 +492,7 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_create",
         description="Creates a disk on a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "Label for the disk",
-                },
-                "size": {
-                    "type": "integer",
-                    "description": "Disk size in MB",
-                },
-                "filesystem": {
-                    "type": "string",
-                    "description": ("Filesystem type (ext4, swap, raw, etc.)"),
-                },
-                "image": {
-                    "type": "string",
-                    "description": "Image to deploy",
-                },
-                "root_pass": {
-                    "type": "string",
-                    "description": ("Root password (required with image)"),
-                },
-                "authorized_keys": {
-                    "type": "string",
-                    "description": "Comma-separated list of SSH public keys to install",
-                },
-                "authorized_users": {
-                    "type": "string",
-                    "description": (
-                        "Comma-separated list of Linode usernames whose SSH keys"
-                        " to install"
-                    ),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "label",
-                "size",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDiskCreateInput"),
     ), Capability.Write
 
 
@@ -652,7 +535,9 @@ async def handle_linode_instance_disk_create(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This creates a new disk on the instance. Set confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
@@ -687,25 +572,7 @@ def create_linode_instance_disk_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_update",
         description="Updates a disk on a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "disk_id": _DISK_ID_PROP,
-                "label": {
-                    "type": "string",
-                    "description": "New label for the disk",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "disk_id",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDiskUpdateInput"),
     ), Capability.Write
 
 
@@ -733,7 +600,9 @@ async def handle_linode_instance_disk_update(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This modifies the disk configuration. Set confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
@@ -765,29 +634,7 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "disk_id": _DISK_ID_PROP,
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": [
-                "linode_id",
-                "disk_id",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDiskDeleteInput"),
     ), Capability.Destroy
 
 
@@ -803,11 +650,16 @@ async def _instance_disk_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance_disk(linode_id, disk_id)
-        return {
-            "message": f"Disk {disk_id} deleted from instance {linode_id} successfully",
-            "linode_id": linode_id,
-            "disk_id": disk_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Disk {disk_id} deleted from instance {linode_id} successfully"
+                ),
+                "linode_id": linode_id,
+                "disk_id": disk_id,
+            },
+            instance_pb2.InstanceDiskDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -852,19 +704,25 @@ async def handle_linode_instance_disk_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
+        return _error_response(
+            "This is irreversible. All data on the disk will be permanently deleted. "
+            "Set confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.delete_instance_disk(linode_id, disk_id)
-        return {
-            "message": (
-                f"Disk {disk_id} deleted from instance {linode_id} successfully"
-            ),
-            "linode_id": linode_id,
-            "disk_id": disk_id,
-        }
+        return serialize_api_response(
+            {
+                "message": (
+                    f"Disk {disk_id} deleted from instance {linode_id} successfully"
+                ),
+                "linode_id": linode_id,
+                "disk_id": disk_id,
+            },
+            instance_pb2.InstanceDiskDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete instance disk", _call)
 
@@ -874,21 +732,7 @@ def create_linode_instance_disk_clone_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_clone",
         description="Clones a disk on a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "disk_id": _DISK_ID_PROP,
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "disk_id",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDiskCloneInput"),
     ), Capability.Write
 
 
@@ -942,7 +786,10 @@ async def handle_linode_instance_disk_clone(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This clones a disk, consuming additional storage on the instance. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
@@ -968,26 +815,7 @@ def create_linode_instance_disk_resize_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_resize",
         description="Resizes a disk on a Linode instance",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "disk_id": _DISK_ID_PROP,
-                "size": {
-                    "type": "integer",
-                    "description": "New size in MB",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "disk_id",
-                "size",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDiskResizeInput"),
     ), Capability.Write
 
 
@@ -1040,7 +868,10 @@ async def handle_linode_instance_disk_resize(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This resizes the disk. The instance must be powered off. Set confirm=true "
+            "to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
@@ -1067,26 +898,7 @@ def create_linode_instance_disk_password_reset_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_instance_disk_password_reset",
         description="Resets the root password for a Linode instance disk",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "disk_id": _DISK_ID_PROP,
-                "password": {
-                    "type": "string",
-                    "description": "New root password for the disk",
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "disk_id",
-                "password",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceDiskPasswordResetInput"),
     ), Capability.Write
 
 
@@ -1129,16 +941,21 @@ async def handle_linode_instance_disk_password_reset(
 
     confirm = arguments.get("confirm", False)
     if confirm is not True:
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This resets the root password for a disk. Set confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.reset_instance_disk_password(linode_id, disk_id, password)
-        return {
-            "message": (f"Password reset for disk {disk_id} on instance {linode_id}"),
-            "linode_id": linode_id,
-            "disk_id": disk_id,
-        }
+        return serialize_api_response(
+            {
+                "message": f"Password reset for disk {disk_id} on instance {linode_id}",
+                "linode_id": linode_id,
+                "disk_id": disk_id,
+            },
+            instance_pb2.InstanceDiskActionResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "reset instance disk password", _call)

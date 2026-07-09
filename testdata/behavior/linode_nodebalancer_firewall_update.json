@@ -1,0 +1,21 @@
+{
+  "tool": "linode_nodebalancer_firewall_update",
+  "description": "Pins the firewall-update PUT body. Rejection paths diverge (confirm-vs-id order, firewall_ids error text) so success only (see report).",
+  "cases": [
+    {
+      "name": "puts the firewall assignments body",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/nodebalancers/5/firewalls",
+        "body": { "firewall_ids": [10, 20] }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"nodebalancer_id": 5, "firewall_ids": [10, 20]},
+      "expect_error": "This replaces firewall assignments for a NodeBalancer. Set confirm=true to proceed."
+    }
+  ]
+}

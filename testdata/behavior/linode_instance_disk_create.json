@@ -1,0 +1,31 @@
+{
+  "tool": "linode_instance_disk_create",
+  "description": "Pins the shared missing-linode_id and missing-label rejections and the disk-create POST body. size rejection text diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": { "confirm": true },
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects missing label",
+      "args": { "linode_id": 123, "size": 1024, "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "creates a disk",
+      "args": { "linode_id": 123, "label": "boot", "size": 1024, "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/disks",
+        "body": { "label": "boot", "size": 1024 }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"linode_id": 123, "label": "boot", "size": 1024},
+      "expect_error": "This creates a new disk on the instance. Set confirm=true to proceed."
+    }
+  ]
+}

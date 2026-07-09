@@ -37,13 +37,13 @@ func TestLinodeProfileLoginsToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	props := tool.InputSchema.Properties
-	if _, ok := props["page"]; !ok {
-		t.Errorf("props missing key %v", "page")
+	raw := string(tool.RawInputSchema)
+	if !strings.Contains(raw, keyPage) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPage)
 	}
 
-	if _, ok := props["page_size"]; !ok {
-		t.Errorf("props missing key %v", "page_size")
+	if !strings.Contains(raw, keyPageSize) {
+		t.Errorf("tool.RawInputSchema missing key %v", keyPageSize)
 	}
 }
 

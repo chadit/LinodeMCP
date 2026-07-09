@@ -44,10 +44,11 @@ func stackScriptListFilters() []listFilterParam[*linodev1.StackScript] {
 
 // NewLinodeStackScriptListTool creates a tool for listing StackScripts.
 func NewLinodeStackScriptListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_stackscript_list",
 		"Lists StackScripts. By default returns your own StackScripts. Can filter by public status, ownership, or label.",
+		"linode.mcp.v1.StackScriptListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.StackScript, error) {
 			return client.ListStackScriptsProto(ctx)
 		},
@@ -82,15 +83,5 @@ func handleLinodeStackScriptGetRequest(ctx context.Context, request *mcp.CallToo
 }
 
 func stackScriptIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	raw, exists := request.GetArguments()["stackscript_id"]
-	if !exists {
-		return 0, "stackscript_id must be a positive integer"
-	}
-
-	stackScriptID, ok := numberArgToInt(raw)
-	if !ok || stackScriptID <= 0 {
-		return 0, "stackscript_id must be a positive integer"
-	}
-
-	return stackScriptID, ""
+	return requiredIDArgument(request, "stackscript_id")
 }

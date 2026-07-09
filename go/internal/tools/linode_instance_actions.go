@@ -6,41 +6,27 @@ import (
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 // NewLinodeInstanceCloneTool creates a tool for cloning a Linode instance.
 func NewLinodeInstanceCloneTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_clone",
 		"Clones a Linode instance. WARNING: This creates a billable resource.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance to clone")),
-			mcp.WithString("region",
-				mcp.Description("Region for the cloned instance (optional, defaults to same region)")),
-			mcp.WithString("type",
-				mcp.Description("Instance type for the clone (optional, defaults to same type)")),
-			mcp.WithString("label",
-				mcp.Description("Label for the cloned instance (optional)")),
-			mcp.WithBoolean("backups_enabled",
-				mcp.Description("Enable backups on the cloned instance (optional)")),
-			mcp.WithArray("configs",
-				mcp.Description("Config profile IDs to clone (optional). Defaults to all configs when omitted.")),
-			mcp.WithArray("disks",
-				mcp.Description("Disk IDs to clone (optional). Defaults to all disks when omitted.")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm instance cloning. This creates a billable resource. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceCloneRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceCloneInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceCloneRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -122,21 +108,15 @@ func handleInstanceCloneRequest(ctx context.Context, request *mcp.CallToolReques
 
 // NewLinodeInstanceMigrateTool creates a tool for migrating a Linode instance to a new region.
 func NewLinodeInstanceMigrateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_migrate",
 		"Migrates a Linode instance to a new region. If no region is specified, Linode picks the destination.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance to migrate")),
-			mcp.WithString("region",
-				mcp.Description("Target region for migration (optional, Linode picks if omitted)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm migration. The instance will be shut down during migration. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceMigrateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceMigrateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceMigrateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -177,40 +157,34 @@ func handleInstanceMigrateRequest(ctx context.Context, request *mcp.CallToolRequ
 	}
 
 	msg := fmt.Sprintf("Migration initiated for instance %d", linodeID)
-	if region != "" {
-		msg = fmt.Sprintf("Migration initiated for instance %d to region %s", linodeID, region)
-	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-		Region   string `json:"region,omitempty"`
-	}{
+	response := &linodev1.InstanceMigrateWriteResponse{
 		Message:  msg,
-		LinodeID: linodeID,
-		Region:   region,
+		LinodeId: linodeIDToInt32(linodeID),
 	}
 
-	return MarshalToolResponse(response)
+	// Echo the target region only when the caller picked one; an omitted
+	// region (Linode picks the destination) leaves the field unset so it
+	// stays absent from the output, matching the legacy omitempty shape.
+	if region != "" {
+		response.Message = fmt.Sprintf("Migration initiated for instance %d to region %s", linodeID, region)
+		response.Region = &region
+	}
+
+	return MarshalProtoToolResponse(response)
 }
 
 // NewLinodeInstanceMutateTool creates a tool for upgrading a Linode instance to the latest generation type.
 func NewLinodeInstanceMutateTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_mutate",
 		"Upgrades a Linode instance to the latest generation type. WARNING: This changes instance state and may cause downtime.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance to upgrade")),
-			mcp.WithBoolean("allow_auto_disk_resize",
-				mcp.Description("Automatically resize disks during the upgrade when possible (optional, API default: true)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm the instance upgrade. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceMutateRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceMutateInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceMutateRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -267,32 +241,16 @@ func handleInstanceMutateRequest(ctx context.Context, request *mcp.CallToolReque
 
 // NewLinodeInstanceRebuildTool creates a tool for rebuilding a Linode instance with a new image.
 func NewLinodeInstanceRebuildTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_rebuild",
 		"Rebuilds a Linode instance with a new image. WARNING: This destroys all existing data on the instance."+
 			" Pass dry_run=true to preview without rebuilding."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance to rebuild")),
-			mcp.WithString("image", mcp.Required(),
-				mcp.Description("The image to rebuild with (e.g. 'linode/ubuntu24.04'). Use linode_image_list to find valid values.")),
-			mcp.WithString("root_pass", mcp.Required(),
-				mcp.Description("Root password for the rebuilt instance (min 12 chars, must include upper, lower, and digits)")),
-			mcp.WithArray("authorized_keys",
-				mcp.Description("SSH public keys to add to root's authorized_keys (optional)")),
-			mcp.WithArray("authorized_users",
-				mcp.Description("Linode usernames whose SSH keys to add (optional)")),
-			mcp.WithBoolean("booted",
-				mcp.Description("Whether to boot the instance after rebuild (optional, defaults to true)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm rebuild. WARNING: This destroys ALL existing data. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleInstanceRebuildRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceRebuildInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceRebuildRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -373,7 +331,7 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 		},
 		// Success returns a proto.Message so marshalDestroySuccess routes it
 		// through the proto-canonical marshaller, matching the Python side.
-		Success: func() any {
+		Success: func() proto.Message {
 			return &linodev1.InstanceWriteResponse{
 				Message:  fmt.Sprintf("Instance %d rebuilt with image %s", linodeID, image),
 				Instance: rebuilt,
@@ -386,22 +344,15 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeInstanceRescueTool creates a tool for booting a Linode instance into rescue mode.
 func NewLinodeInstanceRescueTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_rescue",
 		"Boots a Linode instance into rescue mode for recovery operations.",
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance to boot into rescue mode")),
-			mcp.WithObject("devices",
-				mcp.Description("Object mapping device slots to disk/volume IDs, e.g. "+
-					"{\"sda\":{\"disk_id\":123},\"sdb\":{\"volume_id\":456}} (optional)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm booting into rescue mode. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-		},
-		handleInstanceRescueRequest,
+		toolschemas.Schema("linode.mcp.v1.InstanceRescueInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstanceRescueRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapWrite, handler
 }
@@ -428,9 +379,7 @@ func handleInstanceRescueRequest(ctx context.Context, request *mcp.CallToolReque
 		return mcp.NewToolResultError("linode_id is required"), nil
 	}
 
-	req := linode.RescueInstanceRequest{
-		Devices: make(map[string]*linode.RescueDeviceAssignment),
-	}
+	var req linode.RescueInstanceRequest
 
 	if rawDevices, present := request.GetArguments()["devices"]; present {
 		devicesJSON, validationMessage := objectJSONFromToolArg(rawDevices, "devices")
@@ -454,37 +403,24 @@ func handleInstanceRescueRequest(ctx context.Context, request *mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to rescue instance %d: %v", linodeID, err)), nil
 	}
 
-	response := struct {
-		Message  string `json:"message"`
-		LinodeID int    `json:"linode_id"`
-	}{
+	return MarshalProtoToolResponse(&linodev1.InstanceActionWriteResponse{
 		Message:  fmt.Sprintf("Instance %d is booting into rescue mode", linodeID),
-		LinodeID: linodeID,
-	}
-
-	return MarshalToolResponse(response)
+		LinodeId: linodeIDToInt32(linodeID),
+	})
 }
 
 // NewLinodeInstancePasswordResetTool creates a tool for resetting the root password on a Linode instance.
 func NewLinodeInstancePasswordResetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newToolWithHandler(
-		cfg,
+	tool := mcp.NewToolWithRawSchema(
 		"linode_instance_password_reset",
 		"Resets the root password on a Linode instance. The instance must be powered off."+
 			" Pass dry_run=true to preview without resetting."+twoStageNote,
-		[]mcp.ToolOption{
-			mcp.WithNumber("linode_id", mcp.Required(),
-				mcp.Description("The ID of the Linode instance")),
-			mcp.WithString("root_pass", mcp.Required(),
-				mcp.Description("New root password (min 12 chars, must include upper, lower, and digits)")),
-			mcp.WithBoolean(paramConfirm, mcp.Required(),
-				mcp.Description("Must be true to confirm password reset. Ignored when dry_run=true.")),
-			mcp.WithBoolean(paramDryRun, mcp.Description(paramDryRunDesc)),
-			mcp.WithString(paramMode, mcp.Description(paramModeDesc)),
-			mcp.WithString(paramPlanID, mcp.Description(paramPlanIDDesc)),
-		},
-		handleInstancePasswordResetRequest,
+		toolschemas.Schema("linode.mcp.v1.InstancePasswordResetInput"),
 	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleInstancePasswordResetRequest(ctx, &request, cfg)
+	}
 
 	return tool, profiles.CapDestroy, handler
 }
@@ -504,20 +440,30 @@ func handleInstancePasswordResetRequest(ctx context.Context, request *mcp.CallTo
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return RunDestructiveActionWithID(ctx, request, cfg, &DestructiveActionByID{
+	// Full DestructiveAction form (rather than the *WithID wrapper) so the
+	// Success closure returns a proto message, routing both the single-step and
+	// two-stage apply paths through the proto-canonical marshaller to match the
+	// Python side.
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
 		ToolName:       "linode_instance_password_reset",
-		IDParam:        paramLinodeID,
 		Method:         httpMethodPost,
-		PathPattern:    "/linode/instances/%d/password",
+		Path:           fmt.Sprintf("/linode/instances/%d/password", linodeID),
 		ConfirmMessage: "This resets the root password on the instance. Set confirm=true to proceed.",
-		SuccessFormat:  "Root password reset for instance %d",
-		FetchState: func(ctx context.Context, c *linode.Client, id int) (any, error) {
-			return c.GetInstance(ctx, id)
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetInstance(ctx, linodeID)
 		},
-		Execute: func(ctx context.Context, c *linode.Client, id int) error {
-			return c.ResetInstancePassword(ctx, id, rootPass)
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.ResetInstancePassword(ctx, linodeID, rootPass)
 		},
-		DependencyWalk: instancePasswordResetSideEffectsWalk,
-		HashIgnore:     twostage.HashIgnoreFields("Instance"),
+		Success: func() proto.Message {
+			return &linodev1.InstanceActionWriteResponse{
+				Message:  fmt.Sprintf("Root password reset for instance %d", linodeID),
+				LinodeId: linodeIDToInt32(linodeID),
+			}
+		},
+		DependencyWalk: func(ctx context.Context, c *linode.Client, state any) (DryRunDetails, error) {
+			return instancePasswordResetSideEffectsWalk(ctx, c, linodeID, state)
+		},
+		HashIgnore: twostage.HashIgnoreFields("Instance"),
 	})
 }

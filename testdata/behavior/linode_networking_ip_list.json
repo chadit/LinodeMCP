@@ -1,0 +1,17 @@
+{
+  "tool": "linode_networking_ip_list",
+  "description": "Networking IP list rejects a non-boolean skip_ipv6_rdns the same way in both languages, then GETs the account IPs collection.",
+  "cases": [
+    {
+      "name": "rejects a non-boolean skip_ipv6_rdns",
+      "args": { "skip_ipv6_rdns": "yes" },
+      "expect_error": "skip_ipv6_rdns must be a boolean"
+    },
+    {
+      "name": "lists account IPs",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/networking/ips" }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "tool": "linode_image_replicate",
+  "description": "With confirm set both languages reach the image_id check first. regions-missing rejection diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects missing image_id",
+      "args": { "confirm": true },
+      "expect_error": "image_id must be a non-empty string"
+    },
+    {
+      "name": "replicates to regions",
+      "args": { "image_id": "private/123", "regions": ["us-east"], "confirm": true },
+      "api_response": {},
+      "expect_request": { "method": "POST", "path": "/images/private%2F123/regions", "body": { "regions": ["us-east"] } }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"image_id": "private/123", "regions": ["us-east"]},
+      "expect_error": "This replicates an image to the requested regions. Set confirm=true to proceed."
+    }
+  ]
+}

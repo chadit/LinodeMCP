@@ -18,3 +18,13 @@ message LKEAPIEndpointListResponse {
   optional string filter = 2;
   repeated LKEAPIEndpoint endpoints = 3;
 }
+
+// LKEAPIEndpointListInput is the input contract for
+// linode_lke_api_endpoint_list. cluster_id is a string, matching the
+// read-side convention.
+message LKEAPIEndpointListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // The ID of the LKE cluster (required).
+  string cluster_id = 2;
+}

@@ -1,0 +1,54 @@
+{
+  "message": "linode.mcp.v1.ImageWriteResponse",
+  "description": "Image write envelope: a confirmation message plus the full image element.",
+  "input": {
+    "message": "Image 'private/12345' updated successfully",
+    "image": {
+      "id": "private/12345",
+      "label": "custom-base",
+      "description": "Hardened base image",
+      "type": "manual",
+      "vendor": "",
+      "status": "available",
+      "created": "2026-01-05T08:00:00",
+      "created_by": "opsuser",
+      "expiry": "2026-12-31T23:59:59",
+      "eol": "2027-06-30T00:00:00",
+      "capabilities": [
+        "cloud-init"
+      ],
+      "tags": [
+        "base",
+        "hardened"
+      ],
+      "size": 2048,
+      "is_public": false,
+      "deprecated": false
+    }
+  },
+  "canonical": {
+    "message": "Image 'private/12345' updated successfully",
+    "image": {
+      "id": "private/12345",
+      "label": "custom-base",
+      "description": "Hardened base image",
+      "type": "manual",
+      "status": "available",
+      "created": "2026-01-05T08:00:00",
+      "created_by": "opsuser",
+      "expiry": "2026-12-31T23:59:59",
+      "eol": "2027-06-30T00:00:00",
+      "capabilities": [
+        "cloud-init"
+      ],
+      "tags": [
+        "base",
+        "hardened"
+      ],
+      "size": 2048,
+      "vendor": "",
+      "is_public": false,
+      "deprecated": false
+    }
+  }
+}

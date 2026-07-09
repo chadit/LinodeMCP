@@ -1,0 +1,22 @@
+{
+  "tool": "linode_image_sharegroup_get",
+  "description": "Pins the shared positive-integer sharegroup_id rejection and the single-group GET.",
+  "cases": [
+    {
+      "name": "rejects missing sharegroup_id",
+      "args": {},
+      "expect_error": "sharegroup_id is required"
+    },
+    {
+      "name": "gets one share group",
+      "args": {
+        "sharegroup_id": 5
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "GET",
+        "path": "/images/sharegroups/5"
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "tool": "linode_longview_client_create",
+  "description": "Pins the label-required rejection and the 3-32 length + charset rejections now enforced in both languages (Go gained Python's checks), plus the create POST.",
+  "cases": [
+    {
+      "name": "rejects missing label",
+      "args": { "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects empty label",
+      "args": { "label": "", "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "rejects a too-short label",
+      "args": { "label": "ab", "confirm": true },
+      "expect_error": "label must be 3 to 32 characters"
+    },
+    {
+      "name": "rejects a label with invalid characters",
+      "args": { "label": "bad!label", "confirm": true },
+      "expect_error": "label may only contain letters, numbers, hyphens, and underscores"
+    },
+    {
+      "name": "creates the longview client",
+      "args": { "label": "myclient", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/longview/clients",
+        "body": { "label": "myclient" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"label": "myclient"},
+      "expect_error": "This creates a Longview client and returns setup credentials. Set confirm=true to proceed."
+    }
+  ]
+}

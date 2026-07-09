@@ -51,10 +51,11 @@ func handleLinodeVolumeGetRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeVolumeListTool creates a tool for listing Linode block storage volumes.
 func NewLinodeVolumeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_volume_list",
 		"Lists all block storage volumes for the authenticated user with optional filtering by region or label",
+		"linode.mcp.v1.VolumeListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.Volume, error) {
 			return client.ListVolumesProto(ctx)
 		},
@@ -76,10 +77,11 @@ func volumeListResponse(items []*linodev1.Volume, count int32, filter *string) *
 
 // NewLinodeVolumeTypeListTool creates a tool for listing Linode block storage volume types.
 func NewLinodeVolumeTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListTool(
+	tool, handler := newProtoListToolRawSchema(
 		cfg,
 		"linode_volume_type_list",
 		"Lists available Linode block storage volume types and pricing",
+		"linode.mcp.v1.VolumeTypeListInput",
 		func(ctx context.Context, client *linode.Client) ([]*linodev1.LinodeType, error) {
 			return client.ListVolumeTypesProto(ctx)
 		},

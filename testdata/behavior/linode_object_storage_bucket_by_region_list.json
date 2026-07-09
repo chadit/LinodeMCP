@@ -1,0 +1,22 @@
+{
+  "tool": "linode_object_storage_bucket_by_region_list",
+  "description": "Pins the region-required rejection, the region slug-format rejection (Go's stricter validator now used in both languages), and the region-scoped list GET.",
+  "cases": [
+    {
+      "name": "requires region",
+      "args": {},
+      "expect_error": "region is required"
+    },
+    {
+      "name": "rejects a malformed region",
+      "args": { "region": "US-EAST" },
+      "expect_error": "region must be a valid region or cluster ID"
+    },
+    {
+      "name": "lists buckets in a region",
+      "args": { "region": "us-east" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/object-storage/buckets/us-east" }
+    }
+  ]
+}

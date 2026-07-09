@@ -82,6 +82,66 @@ message LongviewClientGetInput {
   int32 client_id = 2;
 }
 
+// LongviewClientListInput is the input contract for
+// linode_longview_client_list.
+message LongviewClientListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// LongviewClientCreateInput is the input contract for
+// linode_longview_client_create. label and confirm are required.
+message LongviewClientCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Label for the Longview client.
+  string label = 2;
+  // Must be set to true to confirm Longview client creation. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// LongviewClientUpdateInput is the input contract for
+// linode_longview_client_update. client_id, label, and confirm are required.
+message LongviewClientUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Longview client ID to update.
+  int32 client_id = 2;
+  // New Longview client label. Must be 3-32 letters, digits, hyphens, or
+  // underscores.
+  string label = 3;
+  // Must be set to true to confirm Longview client update. Ignored when
+  // dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 5;
+}
+
+// LongviewClientDeleteInput is the input contract for
+// linode_longview_client_delete. Plain confirm destroy (no mode/plan_id in
+// the ground truth).
+message LongviewClientDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Longview client ID to delete.
+  int32 client_id = 2;
+  // Must be set to true to confirm Longview client deletion. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
 // Price is the hourly/monthly price summary attached to billable resources.
 message Price {
   double hourly = 1;
@@ -131,4 +191,42 @@ message LongviewTypeListResponse {
   int32 count = 1;
   optional string filter = 2;
   repeated LongviewType types = 3;
+}
+
+// LongviewPlanGetInput is the input contract for linode_longview_plan_get.
+message LongviewPlanGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// LongviewPlanUpdateInput is the input contract for
+// linode_longview_plan_update. longview_subscription and confirm are required.
+message LongviewPlanUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Longview subscription plan slug to apply.
+  string longview_subscription = 2;
+  // Must be set to true to confirm the Longview plan update. Ignored when
+  // dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 4;
+}
+
+// LongviewSubscriptionListInput is the input contract for
+// linode_longview_subscription_list.
+message LongviewSubscriptionListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// LongviewTypeListInput is the input contract for linode_longview_type_list.
+message LongviewTypeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
 }

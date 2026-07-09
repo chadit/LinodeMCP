@@ -1,0 +1,27 @@
+{
+  "tool": "linode_tag_object_list",
+  "description": "Objects assigned to a tag. With a valid tag_label the page/page_size integer rejections agree, and a path-unsafe tag_label is now rejected in both languages (Python gained Go's check).",
+  "cases": [
+    {
+      "name": "rejects a path-unsafe tag_label",
+      "args": { "tag_label": "bad#tag" },
+      "expect_error": "tag_label must not contain '?', '#', or '..'"
+    },
+    {
+      "name": "rejects non-integer page",
+      "args": { "tag_label": "prod", "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects non-integer page_size",
+      "args": { "tag_label": "prod", "page_size": "x" },
+      "expect_error": "page_size must be an integer"
+    },
+    {
+      "name": "lists objects for a tag",
+      "args": { "tag_label": "prod" },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/tags/prod" }
+    }
+  ]
+}

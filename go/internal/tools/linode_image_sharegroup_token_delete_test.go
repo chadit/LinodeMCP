@@ -35,9 +35,10 @@ func TestLinodeImageShareGroupTokenDeleteToolDefinition(t *testing.T) {
 		t.Error("tool.Description is empty")
 	}
 
+	raw := string(tool.RawInputSchema)
 	for _, key := range []string{keyTokenUUID, keyConfirm} {
-		if _, ok := tool.InputSchema.Properties[key]; !ok {
-			t.Errorf("tool.InputSchema.Properties missing key %v", key)
+		if !strings.Contains(raw, key) {
+			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
 	}
 
@@ -229,8 +230,8 @@ func TestLinodeImageShareGroupTokenDeleteToolDryRunSchemaAdvertisesDryRun(t *tes
 	t.Parallel()
 
 	tool, _, _ := tools.NewLinodeImageShareGroupTokenDeleteTool(&config.Config{})
-	if _, ok := tool.InputSchema.Properties["dry_run"]; !ok {
-		t.Errorf("tool.InputSchema.Properties missing key %v", "dry_run")
+	if !strings.Contains(string(tool.RawInputSchema), "dry_run") {
+		t.Errorf("tool.RawInputSchema missing key %v", "dry_run")
 	}
 }
 

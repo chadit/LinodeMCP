@@ -277,6 +277,30 @@ def test_render_output_table_list_of_objects() -> None:
     assert "b" in rendered
 
 
+def test_render_output_table_dry_run_envelope() -> None:
+    """The dry-run/plan envelope shape renders as a table without crashing.
+
+    The proto-serialized envelope has nested objects (current_state,
+    would_execute) and arrays (dependencies); the table view is a best-effort
+    human render, so nested values collapse to a compact-JSON cell and the
+    top-level keys still appear as rows.
+    """
+    payload = json.dumps(
+        {
+            "dry_run": True,
+            "tool": "linode_instance_delete",
+            "would_execute": {"method": "DELETE", "path": "/linode/instances/123"},
+            "current_state": {"id": 123, "label": "web-01"},
+            "dependencies": [{"kind": "volume", "id": 456, "action": "detached"}],
+            "side_effects": [],
+            "warnings": [],
+        }
+    )
+    rendered = render_output(payload, "table")
+    for field in ("dry_run", "would_execute", "current_state", "dependencies"):
+        assert field in rendered
+
+
 def test_render_output_table_non_json_falls_back() -> None:
     """Non-JSON text under table output falls back to the verbatim text."""
     assert render_output("just a message", "table") == "just a message"

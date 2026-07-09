@@ -1,0 +1,10 @@
+{
+  "message": "linode.mcp.v1.ImageShareGroupImageDeleteResponse",
+  "description": "Shared-image removal confirmation: the endpoint returns an empty body, so the response carries only a message.",
+  "input": {
+    "message": "Shared image 1234 removed from image share group 42 successfully"
+  },
+  "canonical": {
+    "message": "Shared image 1234 removed from image share group 42 successfully"
+  }
+}

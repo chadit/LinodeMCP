@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from linodemcp.linode import Client, Domain, NetworkError, RetryableClient
+from linodemcp.linode import Client, NetworkError, RetryableClient
 from linodemcp.profiles import Capability
 from linodemcp.server import get_tool_registry
 from linodemcp.tools.linode_domains_write import (
@@ -17,20 +17,6 @@ from linodemcp.tools.linode_domains_write import (
     handle_linode_domain_import,
 )
 from linodemcp.version import FEATURE_TOOLS_LIST
-
-
-def _domain() -> Domain:
-    return Domain(
-        id=123,
-        domain="example.com",
-        type="master",
-        status="active",
-        soa_email="admin@example.com",
-        description="",
-        tags=[],
-        created="2026-01-01T00:00:00",
-        updated="2026-01-01T00:00:00",
-    )
 
 
 @pytest.mark.asyncio
@@ -146,8 +132,14 @@ def test_create_linode_domain_import_tool_schema() -> None:
 async def test_handle_linode_domain_import_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Handler imports the domain and returns the created domain summary."""
-    mock_linode_client.import_domain.return_value = _domain()
+    """Handler imports the domain and returns the full proto domain element."""
+    mock_linode_client.post_raw.return_value = {
+        "id": 123,
+        "domain": "example.com",
+        "type": "master",
+        "status": "active",
+        "soa_email": "admin@example.com",
+    }
 
     result = await handle_linode_domain_import(
         {
@@ -161,8 +153,10 @@ async def test_handle_linode_domain_import_success(
     payload = json.loads(result[0].text)
     assert payload["message"] == "Domain 'example.com' (ID: 123) imported successfully"
     assert payload["domain"]["domain"] == "example.com"
-    mock_linode_client.import_domain.assert_awaited_once_with(
-        domain="example.com", remote_nameserver="ns1.example.net"
+    assert payload["domain"]["soa_email"] == "admin@example.com"
+    mock_linode_client.post_raw.assert_awaited_once_with(
+        "/domains/import",
+        {"domain": "example.com", "remote_nameserver": "ns1.example.net"},
     )
 
 
@@ -265,7 +259,7 @@ async def test_handle_linode_domain_import_reports_client_errors(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Client failures are mapped through the shared tool error path."""
-    mock_linode_client.import_domain.side_effect = NetworkError(
+    mock_linode_client.post_raw.side_effect = NetworkError(
         "ImportDomain", httpx.ConnectTimeout("boom")
     )
 
@@ -279,7 +273,7 @@ async def test_handle_linode_domain_import_reports_client_errors(
     )
 
     assert result[0].text.startswith("Failed to import domain: ")
-    mock_linode_client.import_domain.assert_awaited_once()
+    mock_linode_client.post_raw.assert_awaited_once()
 
 
 def test_linode_domain_import_registered() -> None:

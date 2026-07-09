@@ -1,0 +1,17 @@
+{
+  "tool": "linode_monitor_service_alert_definition_get",
+  "description": "Pins the non-positive alert_id rejection both languages share (service_type valid first) and the get GET. Missing/non-integer alert_id text diverges (Go 'alert_id is required'/'positive integer' vs Python 'alert_id must be a valid integer'); service_type rejection also diverges (see report).",
+  "cases": [
+    {
+      "name": "rejects non-positive alert_id",
+      "args": { "service_type": "dbaas", "alert_id": 0 },
+      "expect_error": "alert_id must be a positive integer"
+    },
+    {
+      "name": "gets the monitor service alert definition",
+      "args": { "service_type": "dbaas", "alert_id": 42 },
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/monitor/services/dbaas/alert-definitions/42" }
+    }
+  ]
+}

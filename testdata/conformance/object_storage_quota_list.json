@@ -24,7 +24,7 @@
         "endpoint_type": "E1",
         "s3_endpoint": "us-sea-1.linodeobjects.com",
         "description": "Maximum number of objects this endpoint can store",
-        "quota_limit": "1000000000",
+        "quota_limit": 1000000000,
         "resource_metric": "object"
       }
     ]

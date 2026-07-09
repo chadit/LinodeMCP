@@ -8,12 +8,6 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import ip_pb2
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
-    DRY_RUN_PROP,
-    MODE_PROP,
-    PARAM_DRY_RUN,
-    PARAM_MODE,
-    PARAM_PLAN_ID,
-    PLAN_ID_PROP,
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
@@ -21,6 +15,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_enum import enum_choice_error
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -37,23 +32,6 @@ if TYPE_CHECKING:
 def _error_response(message: str) -> list[TextContent]:
     """Return a single-element TextContent error list."""
     return [TextContent(type="text", text=f"Error: {message}")]
-
-
-_ENV_PROP: dict[str, Any] = {
-    "type": "string",
-    "description": "Linode environment to use (optional, defaults to 'default')",
-}
-
-_LINODE_ID_PROP: dict[str, Any] = {
-    "type": "integer",
-    "minimum": 1,
-    "description": "The ID of the Linode instance (required)",
-}
-
-_CONFIRM_PROP: dict[str, Any] = {
-    "type": "boolean",
-    "description": "Must be true to confirm this operation.",
-}
 
 
 def _parse_instance_id(
@@ -74,14 +52,7 @@ def create_linode_instance_ip_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_ip_list",
         description=("Lists IP addresses for a Linode instance"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-            },
-            "required": ["linode_id"],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceIPListInput"),
     ), Capability.Read
 
 
@@ -175,34 +146,27 @@ async def handle_linode_networking_ip_get(
     return await execute_tool(cfg, arguments, "get networking IP", _call)
 
 
+def _required_public_argument(arguments: dict[str, Any]) -> tuple[bool, str | None]:
+    """Validate the required public flag for IP allocation.
+
+    The API requires public with no documented default, so a missing or
+    non-boolean value is a local rejection rather than a silent default written
+    into the request body (matches Go's requiredNetworkingBoolArg).
+    """
+    if "public" not in arguments:
+        return False, "public is required"
+    value = arguments["public"]
+    if not isinstance(value, bool):
+        return False, "public must be a boolean"
+    return value, None
+
+
 def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_ip_allocate tool."""
     return Tool(
         name="linode_instance_ip_allocate",
         description=("Allocates a new IP address for a Linode instance"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "type": {
-                    "type": "string",
-                    "description": ("IP type: ipv4 or ipv6 (required)"),
-                },
-                "public": {
-                    "type": "boolean",
-                    "description": ("Whether the IP is public (default true)"),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "type",
-                "public",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceIPAllocateInput"),
     ), Capability.Write
 
 
@@ -215,8 +179,13 @@ async def handle_linode_instance_ip_allocate(
         return iid
 
     ip_type = arguments.get("type", "")
-    if not ip_type:
-        return _error_response("type is required")
+    type_error = (
+        "type is required"
+        if not ip_type
+        else enum_choice_error(ip_type, "type", ip_pb2.InstanceIPType.Value)
+    )
+    if type_error is not None:
+        return _error_response(type_error)
 
     if is_dry_run(arguments):
         return build_dry_run_response(
@@ -228,9 +197,14 @@ async def handle_linode_instance_ip_allocate(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This allocates a new IP address which may incur charges. Set confirm=true "
+            "to proceed."
+        )
 
-    public = arguments.get("public", True)
+    public, public_error = _required_public_argument(arguments)
+    if public_error is not None:
+        return _error_response(public_error)
 
     async def _call(
         client: RetryableClient,
@@ -252,29 +226,7 @@ def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_ip_update",
         description=("Updates reverse DNS for an IP address on a Linode instance"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "address": {
-                    "type": "string",
-                    "description": ("The IP address to update (required)"),
-                },
-                "rdns": {
-                    "type": "string",
-                    "description": ("The reverse DNS value to assign (required)"),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "address",
-                "rdns",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceIPUpdateInput"),
     ), Capability.Write
 
 
@@ -320,7 +272,9 @@ async def handle_linode_instance_ip_update(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This updates reverse DNS for the IP address. Set confirm=true to proceed."
+        )
 
     parsed = _parse_instance_ip_update(arguments)
     if isinstance(parsed, list):
@@ -347,27 +301,7 @@ def create_linode_networking_ip_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_update",
         description=("Updates reverse DNS for a networking-level IP address"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "address": {
-                    "type": "string",
-                    "description": ("The IP address to update (required)"),
-                },
-                "rdns": {
-                    "type": "string",
-                    "description": ("The reverse DNS value to assign (required)"),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "address",
-                "rdns",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.IPAddressUpdateInput"),
     ), Capability.Write
 
 
@@ -423,7 +357,9 @@ async def handle_linode_networking_ip_update(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This updates reverse DNS for an IP address. Set confirm=true to proceed."
+        )
 
     parsed = _parse_networking_ip_update(arguments)
     if isinstance(parsed, list):
@@ -447,18 +383,7 @@ def create_linode_networking_ip_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_list",
         description="Lists public IP addresses on the account",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "skip_ipv6_rdns": {
-                    "type": "boolean",
-                    "description": (
-                        "When true, omit IPv6 reverse DNS data from the response"
-                    ),
-                },
-            },
-        },
+        inputSchema=schema("linode.mcp.v1.NetworkingIPListInput"),
     ), Capability.Read
 
 
@@ -486,32 +411,7 @@ def create_linode_networking_ip_allocate_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_allocate",
         description=("Allocates a new IP address at the networking level for a Linode"),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": {
-                    "type": "integer",
-                    "description": ("The Linode ID to allocate the IP for"),
-                },
-                "type": {
-                    "type": "string",
-                    "description": ("IP type: ipv4 or ipv6 (required)"),
-                },
-                "public": {
-                    "type": "boolean",
-                    "description": ("Whether the IP is public (default true)"),
-                },
-                "confirm": _CONFIRM_PROP,
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-            },
-            "required": [
-                "linode_id",
-                "type",
-                "public",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.IPAddressAllocateInput"),
     ), Capability.Write
 
 
@@ -529,11 +429,16 @@ def _networking_ip_allocate_error(arguments: dict[str, Any]) -> str | None:
     ip_type = arguments.get("type", "")
     if not ip_type or not isinstance(ip_type, str):
         errors.append("type must be a non-empty string")
-    elif ip_type not in ("ipv4", "ipv6"):
-        errors.append("type must be ipv4 or ipv6")
+    else:
+        type_error = enum_choice_error(ip_type, "type", ip_pb2.InstanceIPType.Value)
+        if type_error is not None:
+            errors.append(type_error)
 
-    public = arguments.get("public", True)
-    if not isinstance(public, bool):
+    # public is required by the API with no documented default; require it here
+    # rather than injecting a silent default into the request body.
+    if "public" not in arguments:
+        errors.append("public is required")
+    elif not isinstance(arguments["public"], bool):
         errors.append("public must be a boolean")
 
     if errors:
@@ -558,7 +463,10 @@ async def handle_linode_networking_ip_allocate(
         )
 
     if not arguments.get("confirm"):
-        return _error_response("Set confirm=true to proceed.")
+        return _error_response(
+            "This allocates a new IP address which may incur charges. Set confirm=true "
+            "to proceed."
+        )
 
     validation_error = _networking_ip_allocate_error(arguments)
     if validation_error is not None:
@@ -566,7 +474,7 @@ async def handle_linode_networking_ip_allocate(
 
     linode_id = arguments.get("linode_id")
     ip_type = arguments.get("type", "")
-    public = arguments.get("public", True)
+    public = cast("bool", arguments["public"])
 
     async def _call(
         client: RetryableClient,
@@ -595,32 +503,7 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "environment": _ENV_PROP,
-                "linode_id": _LINODE_ID_PROP,
-                "address": {
-                    "type": "string",
-                    "description": ("The IP address to delete (required)"),
-                },
-                "confirm": {
-                    "type": "boolean",
-                    "description": (
-                        "Must be true to confirm deletion. This is irreversible."
-                        " Ignored when dry_run=true."
-                    ),
-                },
-                PARAM_DRY_RUN: DRY_RUN_PROP,
-                PARAM_MODE: MODE_PROP,
-                PARAM_PLAN_ID: PLAN_ID_PROP,
-            },
-            "required": [
-                "linode_id",
-                "address",
-                "confirm",
-            ],
-        },
+        inputSchema=schema("linode.mcp.v1.InstanceIPDeleteInput"),
     ), Capability.Destroy
 
 
@@ -636,11 +519,14 @@ async def _instance_ip_delete_two_stage(
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance_ip(iid, address)
-        return {
-            "message": f"IP {address} deleted from instance {iid}",
-            "linode_id": iid,
-            "address": address,
-        }
+        return serialize_api_response(
+            {
+                "message": f"IP {address} removed from instance {iid}",
+                "linode_id": iid,
+                "address": address,
+            },
+            ip_pb2.InstanceIPDeleteResponse(),
+        )
 
     return await run_two_stage_destroy(
         cfg,
@@ -686,16 +572,22 @@ async def handle_linode_instance_ip_delete(
 
     confirm = arguments.get("confirm", False)
     if not confirm:
-        return _error_response("This is destructive. Set confirm=true to proceed.")
+        return _error_response(
+            "This permanently removes the IP address and is irreversible. Set "
+            "confirm=true to proceed."
+        )
 
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
         await client.delete_instance_ip(iid, address)
-        return {
-            "message": (f"IP {address} deleted from instance {iid}"),
-            "linode_id": iid,
-            "address": address,
-        }
+        return serialize_api_response(
+            {
+                "message": f"IP {address} removed from instance {iid}",
+                "linode_id": iid,
+                "address": address,
+            },
+            ip_pb2.InstanceIPDeleteResponse(),
+        )
 
     return await execute_tool(cfg, arguments, "delete instance IP", _call)

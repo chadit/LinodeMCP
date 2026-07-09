@@ -1,0 +1,36 @@
+{
+  "tool": "linode_account_beta_enroll",
+  "description": "Missing-id, charset-invalid id rejections, confirm gate, and the enroll POST body. Both languages now share Go's charset validator and texts.",
+  "cases": [
+    {
+      "name": "requires id",
+      "args": {},
+      "expect_error": "id is required"
+    },
+    {
+      "name": "rejects a charset-invalid id",
+      "args": { "id": "bad/id" },
+      "expect_error": "id must contain only letters, numbers, underscores, and hyphens"
+    },
+    {
+      "name": "requires confirm before enrolling",
+      "args": { "id": "my-beta" },
+      "expect_error": "This enrolls the account in a beta program. Set confirm=true to proceed."
+    },
+    {
+      "name": "enrolls the account in a beta program",
+      "args": { "id": "my-beta", "confirm": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/betas",
+        "body": { "id": "my-beta" }
+      }
+    },
+    {
+      "name": "requires confirm",
+      "args": {"id": "my-beta"},
+      "expect_error": "This enrolls the account in a beta program. Set confirm=true to proceed."
+    }
+  ]
+}

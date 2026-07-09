@@ -1,0 +1,12 @@
+{
+  "tool": "linode_image_sharegroup_list",
+  "description": "With no page/page_size args both languages emit a bare GET with no query string.",
+  "cases": [
+    {
+      "name": "lists share groups",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/images/sharegroups" }
+    }
+  ]
+}

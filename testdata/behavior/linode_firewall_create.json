@@ -1,0 +1,47 @@
+{
+  "tool": "linode_firewall_create",
+  "description": "Firewall create gates on confirm then requires a label, then POSTs the label plus default policies. Both languages send only inbound_policy/outbound_policy under rules (Go no longer emits null inbound/outbound arrays).",
+  "cases": [
+    {
+      "name": "requires confirm before creating",
+      "args": { "label": "web-fw" },
+      "expect_error": "This creates a Cloud Firewall. Set confirm=true to proceed."
+    },
+    {
+      "name": "requires a label once confirmed",
+      "args": { "confirm": true },
+      "expect_error": "label is required"
+    },
+    {
+      "name": "creates a firewall with default policies",
+      "args": { "confirm": true, "label": "web-fw" },
+      "api_response": {
+        "id": 100,
+        "label": "web-fw",
+        "status": "enabled",
+        "rules": { "inbound": [], "inbound_policy": "ACCEPT", "outbound": [], "outbound_policy": "ACCEPT" },
+        "tags": [],
+        "created": "2026-01-01T00:00:00",
+        "updated": "2026-01-01T00:00:00"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/firewalls",
+        "body": {
+          "label": "web-fw",
+          "rules": { "inbound_policy": "ACCEPT", "outbound_policy": "ACCEPT" }
+        }
+      }
+    },
+    {
+      "name": "rejects an invalid inbound_policy (proto FirewallPolicy enum)",
+      "args": { "confirm": true, "label": "web-fw", "inbound_policy": "MAYBE" },
+      "expect_error": "inbound_policy must be one of: ACCEPT, DROP"
+    },
+    {
+      "name": "rejects an invalid outbound_policy (proto FirewallPolicy enum)",
+      "args": { "confirm": true, "label": "web-fw", "outbound_policy": "MAYBE" },
+      "expect_error": "outbound_policy must be one of: ACCEPT, DROP"
+    }
+  ]
+}
