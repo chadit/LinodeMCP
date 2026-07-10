@@ -1,4 +1,4 @@
-.PHONY: help build test check lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -53,9 +53,25 @@ build: proto go-build python-build
 # and the pre-push hook runs exactly `make check`, so local green, hook green,
 # and CI green are the same fact. Nothing quality-gating lives outside this
 # target (only the network-dependent sync-* live checks stay scheduled-only).
-# Ordering is cheap-fails-first: format/lint/workflow checks, then the two
-# language suites, then gates, then security scans, then builds.
-check: proto fmt-check scripts-lint actionlint go-check python-check tool-parity write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+# python-install-dev runs first because check provisions its own venv: half the
+# targets below need python/.venv (ruff, mypy, pytest, every gate script), and
+# a fresh checkout (CI, new clone) has none. Self-provisioning also means the
+# venv is refreshed whenever pyproject changes, so a stale local venv can't
+# pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
+# format/lint/workflow checks, the two language suites, gates, security scans,
+# then builds.
+check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check tool-parity write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+
+## check-container: Run the full `make check` gate inside the CI-mirror Linux container
+# The local rehearsal of CI itself: same OS family, same toolchain (the image
+# runs scripts/ci-setup.sh, the identical provisioning script the CI job
+# runs), same single command, against a fresh-checkout copy of the tree (the
+# entrypoint excludes the host venv, generated code, and caches). Run this
+# before pushing when a change touches the gate chain, CI config, or
+# provisioning; it catches what a dirty local workspace structurally cannot.
+check-container:
+	$(CONTAINER_ENGINE) build -t linodemcp:ci -f ci/Dockerfile .
+	$(CONTAINER_ENGINE) run --rm -v "$(CURDIR)":/src:ro linodemcp:ci
 
 ## fmt-check: Verify Go + Python + scripts formatting, read-only (generated code excluded). Shared by check, lint, and CI.
 # Read-only on purpose: it must mirror what CI checks, never auto-fix (an
@@ -298,9 +314,13 @@ trivy:
 # Unconditional `go run @latest`, same pattern as gosec/cairnlint/pyright: a
 # prefer-local-binary fallback is a stale-version channel (local binary ages,
 # CI fetches latest, and the two diverge exactly when a new check lands).
+# Workflow files are passed explicitly: bare `actionlint` discovers the
+# project by looking for .git, which breaks in any git-less checkout
+# (tarball, clean-room verification copy).
+WORKFLOW_FILES := $(wildcard .github/workflows/*.yml .github/workflows/*.yaml)
 actionlint:
 	@echo "Running actionlint..."
-	@go run github.com/rhysd/actionlint/cmd/actionlint@latest
+	@go run github.com/rhysd/actionlint/cmd/actionlint@latest $(WORKFLOW_FILES)
 
 # --- Cleanup targets ---
 

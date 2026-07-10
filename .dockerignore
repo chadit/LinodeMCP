@@ -1,0 +1,16 @@
+# Root build context is used only by ci/Dockerfile, which COPYs nothing but
+# scripts/. Everything heavy or host-specific is excluded so the context
+# stays small and no local state can leak into an image.
+.git
+.make
+python/.venv
+python/bin
+python/htmlcov
+go/bin
+go/internal/genpb
+go/internal/toolschemas/data
+python/src/linodemcp/genpb
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache

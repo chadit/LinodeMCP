@@ -48,62 +48,19 @@ jobs:
           cache: pip
           cache-dependency-path: python/pyproject.toml
 
-      # gofumpt/goimports back `make fmt-check`; golangci-lint backs the Go
-      # lint target. All @latest so local machines (which also track latest)
-      # and CI run the same versions. gosec, cairnlint, actionlint, and
-      # pyright need no install step: the make targets self-provision them
-      # via `go run @latest` / `npx --yes pyright@latest` (node ships on the
-      # runner image).
-      - name: Install Go format/lint tools
-        run: |
-          set -euo pipefail
-          go install mvdan.cc/gofumpt@latest
-          go install golang.org/x/tools/cmd/goimports@latest
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-
-      # buf is pinned (not @latest) on purpose: generated code must be
-      # byte-reproducible against the committed baselines, and local dev
-      # machines pin the same version. Bump both together.
-      - name: Install buf
-        run: go install github.com/bufbuild/buf/cmd/buf@v1.71.0
-
-      # uv backs the lock-check target (hard requirement, no skip).
-      - name: Install uv
-        run: pip install uv
-
-      # betterleaks ships a `replace` directive in its go.mod (forks
-      # wasilibs/go-re2 for a smaller WASM blob), which makes
-      # `go install pkg@latest` refuse the build. Fetch the release
-      # binary instead. The make target passes --regex-engine=stdlib, so
-      # the WASM engine the replace optimizes is never loaded; see
-      # https://github.com/betterleaks/betterleaks/issues/74.
-      - name: Install betterleaks (latest release binary)
+      # Single-sourced provisioning: the identical script the CI-mirror
+      # container image runs (ci/Dockerfile), so this job and a local
+      # `make check-container` cannot drift. It installs the gate toolchain:
+      # gofumpt/goimports/golangci-lint (latest), buf (pinned for codegen
+      # reproducibility), uv, betterleaks (release binary), trivy (latest).
+      # gosec, cairnlint, actionlint, and pyright need no install: the make
+      # targets self-provision them via `go run @latest` / `npx pyright@latest`
+      # (node ships on the runner image). GH_TOKEN raises the GitHub API rate
+      # limit for the betterleaks release download.
+      - name: Install gate toolchain
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag=$(gh release view --repo betterleaks/betterleaks --json tagName -q .tagName)
-          version="${tag#v}"
-          asset="betterleaks_${version}_linux_x64.tar.gz"
-          tmpdir=$(mktemp -d)
-          gh release download "$tag" \
-            --repo betterleaks/betterleaks \
-            --pattern "$asset" \
-            --dir "$tmpdir"
-          tar -xzf "$tmpdir/$asset" -C "$tmpdir" betterleaks
-          sudo install -m 0755 "$tmpdir/betterleaks" /usr/local/bin/betterleaks
-          rm -rf "$tmpdir"
-          betterleaks version
-
-      # Latest trivy via the official install script, so CI runs the same
-      # `trivy fs` CLI command the make target defines (the previous
-      # trivy-action invocation was a second, differently-configured scan).
-      - name: Install trivy (latest)
-        run: |
-          set -euo pipefail
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sudo sh -s -- -b /usr/local/bin
-          trivy --version
+        run: ./scripts/ci-setup.sh
 
       - name: make check
         run: make check
