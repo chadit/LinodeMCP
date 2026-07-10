@@ -128,6 +128,15 @@ ignore_missing_imports = true
 module = "opentelemetry.*"
 ignore_missing_imports = true
 
+# prometheus_client (like the opentelemetry packages above) lives in the
+# optional "observability" extra, not [dev]. The lint venv installs only
+# [dev], so the module is absent when mypy runs in CI. Scope the ignore to it
+# the same way opentelemetry.* is scoped, rather than reaching for a blanket
+# --ignore-missing-imports that would hide a genuinely missing stub elsewhere.
+[[tool.mypy.overrides]]
+module = "prometheus_client.*"
+ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
 module = "yaml"
 ignore_missing_imports = true

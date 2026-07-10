@@ -120,9 +120,13 @@ jobs:
       - name: ruff format check (scripts)
         run: ruff format --check scripts/
 
+      # No --ignore-missing-imports here: the flag is a blanket suppression that
+      # let this fast job pass while `make check` (which relies on the scoped
+      # pyproject overrides) failed on the same code. Run the identical mypy the
+      # Makefile runs so a fast-green can't mask a gate-red.
       - name: mypy
         working-directory: python
-        run: mypy --ignore-missing-imports src/ tests/
+        run: mypy src/ tests/
 
       - name: pytest unit (no coverage)
         working-directory: python
