@@ -66,14 +66,14 @@ Proto enums generate for free: a new language gets the 21 enum value sets from `
 with no extra work. But three validation value-sets **cannot** be proto enums, because
 their values are not valid proto identifiers (`public-read` has a hyphen,
 `anti_affinity:local` a colon) or they are map keys rather than a scalar field (config
-device slots `sda`–`sdh`). Until protovalidate lands (see below), these stay hand-written
+device slots `sda` through `sdh`). Until protovalidate lands (see below), these stay hand-written
 in each language:
 
 | value set | what it validates |
 |---|---|
 | bucket ACL (`private`, `public-read`, `authenticated-read`, `public-read-write`) | object-storage bucket/object ACL input |
 | placement group type (`anti_affinity:local`) | placement-group create |
-| config device slots (`sda`–`sdh`) | instance-config `devices` keys |
+| config device slots (`sda` through `sdh`) | instance-config `devices` keys |
 
 For a new language, these need **two** things, and the second is easy to forget:
 

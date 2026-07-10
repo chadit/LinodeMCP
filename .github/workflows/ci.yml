@@ -15,288 +15,19 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# One job, one command: `make check`. That target is the single definition of
+# done, the same command developers run locally and the pre-push hook runs,
+# so CI cannot drift from the local gate by construction. Every quality check
+# (formatting, both languages' full lint incl. gosec/cairnlint/pyright, all
+# tests, the cross-language gates, betterleaks, trivy, actionlint, and both
+# builds incl. the hardened Go build) lives inside that target. The steps
+# before it only provision the environment; none of them run checks.
+#
+# History: the previous 6-job layout hand-copied commands (mypy flags, gosec
+# flags, ruff scope, betterleaks flags, venv extras) and every CI failure for
+# a month was one of those copies drifting from the make targets. Environment
+# provisioning is the only thing left that can drift; keep it dumb.
 jobs:
-  # Phase 1: fast feedback (<2 min target). Fails surface quickly so devs
-  # don't wait on the full suite to learn about a typo or lint break.
-  go-fast:
-    name: Go (fast)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go/go.mod
-          cache: true
-          cache-dependency-path: go/go.sum
-
-      - name: Install Go format tools
-        run: |
-          set -euo pipefail
-          go install mvdan.cc/gofumpt@latest
-          go install golang.org/x/tools/cmd/goimports@latest
-          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-
-      # Generated code (genpb, toolschemas/data) is gitignored; nothing in
-      # go/ compiles without `make proto` first. Pinned to the repo's buf
-      # version.
-      - name: Install buf and generate proto artifacts
-        run: |
-          set -euo pipefail
-          go install github.com/bufbuild/buf/cmd/buf@v1.71.0
-          make proto
-
-      - name: make fmt-check
-        working-directory: go
-        run: make fmt-check
-
-      - name: make lint-fast
-        working-directory: go
-        run: make lint-fast
-
-      - name: go test (no race)
-        working-directory: go
-        run: go test ./...
-
-  python-fast:
-    name: Python (fast)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: python/pyproject.toml
-
-      # Mirrors the pre-push uv-lock-check hook so a lock/pyproject drift
-      # fails in CI even when a push skips local hooks. The lock is what
-      # trivy scans, so a stale lock is how a CVE slips back in unseen.
-      - name: uv.lock in sync with pyproject
-        working-directory: python
-        run: |
-          pip install uv
-          uv lock --check
-
-      # The Python package imports the gitignored genpb tree (generated
-      # types + input schemas), so proto generation must run before the
-      # package is importable. buf is a Go tool, hence the Go setup here.
-      - name: Set up Go (for buf)
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go/go.mod
-          cache: true
-          cache-dependency-path: go/go.sum
-
-      - name: Install buf and generate proto artifacts
-        run: |
-          set -euo pipefail
-          go install github.com/bufbuild/buf/cmd/buf@v1.71.0
-          make proto
-
-      - name: Install dev deps
-        working-directory: python
-        run: pip install -e ".[dev]"
-
-      - name: ruff check
-        working-directory: python
-        run: ruff check src/ tests/
-
-      - name: ruff format check
-        working-directory: python
-        run: ruff format --check src/ tests/
-
-      # The repo gate/verify scripts live outside python/, so the src/tests
-      # runs above skip them. Lint them from the repo root, where ruff
-      # auto-discovers scripts/ruff.toml (extends python/pyproject.toml,
-      # ignores the CLI-legit rules). Mirrors the Makefile scripts-lint /
-      # scripts-fmt-check targets and the pre-commit ruff-scripts hooks.
-      - name: ruff check (scripts)
-        run: ruff check scripts/
-
-      - name: ruff format check (scripts)
-        run: ruff format --check scripts/
-
-      # No --ignore-missing-imports here: the flag is a blanket suppression that
-      # let this fast job pass while `make check` (which relies on the scoped
-      # pyproject overrides) failed on the same code. Run the identical mypy the
-      # Makefile runs so a fast-green can't mask a gate-red.
-      - name: mypy
-        working-directory: python
-        run: mypy src/ tests/
-
-      - name: pytest unit (no coverage)
-        working-directory: python
-        run: pytest tests/unit/ --no-cov -q
-
-  # Phase 2: full validation. Runs in parallel with fast jobs so devs see
-  # the fast signal first; the merge gate still requires every job green.
-  go-full:
-    name: Go (full + build)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go/go.mod
-          cache: true
-          cache-dependency-path: go/go.sum
-
-      - name: Install buf and generate proto artifacts
-        run: |
-          set -euo pipefail
-          go install github.com/bufbuild/buf/cmd/buf@v1.71.0
-          make proto
-
-      - name: make test-race
-        working-directory: go
-        run: make test-race
-
-      - name: go test with coverage
-        working-directory: go
-        run: go test -coverprofile=coverage.out ./...
-
-      - name: make build (dev)
-        working-directory: go
-        run: make build
-
-      - name: make build-prod (PIE/trimpath/stripped/static)
-        working-directory: go
-        run: make build-prod
-
-      - name: Upload coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: go-coverage
-          path: go/coverage.out
-          retention-days: 7
-
-  python-full:
-    name: Python (full + coverage)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: "3.14"
-          cache: pip
-          cache-dependency-path: python/pyproject.toml
-
-      - name: Set up Go (for buf)
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go/go.mod
-          cache: true
-          cache-dependency-path: go/go.sum
-
-      - name: Install buf and generate proto artifacts
-        run: |
-          set -euo pipefail
-          go install github.com/bufbuild/buf/cmd/buf@v1.71.0
-          make proto
-
-      - name: Install dev deps
-        working-directory: python
-        run: pip install -e ".[dev]"
-
-      # pyproject.toml addopts already include --cov=linodemcp and
-      # --cov-fail-under=80, so this run enforces the threshold.
-      - name: pytest (full suite + coverage gate)
-        working-directory: python
-        run: pytest tests/
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: python-coverage
-          path: python/htmlcov/
-          retention-days: 7
-
-  security:
-    name: Security scans
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go/go.mod
-          cache: true
-          cache-dependency-path: go/go.sum
-
-      # gosec and cairnlint are invoked via `go run @latest` directly
-      # in their run steps below. No separate install step needed; the
-      # module cache picks up after the first invocation.
-
-      # betterleaks ships a `replace` directive in its go.mod (forks
-      # wasilibs/go-re2 for a smaller WASM blob), which makes
-      # `go install pkg@latest` refuse the build. Fetch the release
-      # binary instead. We pass --regex-engine=stdlib at run time, so
-      # the WASM engine the replace optimizes is never loaded; see
-      # https://github.com/betterleaks/betterleaks/issues/74.
-      - name: Install betterleaks (latest release binary)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag=$(gh release view --repo betterleaks/betterleaks --json tagName -q .tagName)
-          version="${tag#v}"
-          asset="betterleaks_${version}_linux_x64.tar.gz"
-          tmpdir=$(mktemp -d)
-          gh release download "$tag" \
-            --repo betterleaks/betterleaks \
-            --pattern "$asset" \
-            --dir "$tmpdir"
-          tar -xzf "$tmpdir/$asset" -C "$tmpdir" betterleaks
-          sudo install -m 0755 "$tmpdir/betterleaks" /usr/local/bin/betterleaks
-          rm -rf "$tmpdir"
-          betterleaks version
-
-      # gosec and cairnlint type-check the packages, which needs the
-      # gitignored generated code present.
-      - name: Install buf and generate proto artifacts
-        run: |
-          set -euo pipefail
-          go install github.com/bufbuild/buf/cmd/buf@v1.71.0
-          make proto
-
-      - name: gosec
-        working-directory: go
-        # -exclude-generated skips the protoc-gen-go tree (genpb), whose inherent
-        # protoimpl unsafe usage trips G103. Mirrors `make -C go lint`'s gosec so
-        # CI and local run the identical scan.
-        run: go run github.com/securego/gosec/v2/cmd/gosec@latest -quiet -exclude-generated ./...
-
-      - name: cairnlint
-        working-directory: go
-        run: go run github.com/chadit/cairnlint@latest ./...
-
-      - name: betterleaks
-        run: betterleaks dir . --regex-engine=stdlib
-
-      - name: trivy fs scan
-        uses: aquasecurity/trivy-action@df678dbccf677bc6937338d569ba0da18964a8cc # master
-        with:
-          scan-type: fs
-          scanners: vuln,misconfig
-          exit-code: "1"
-          ignore-unfixed: false
-          severity: HIGH,CRITICAL
-
-  # The one-shot local gate, run verbatim in CI so a push from a machine
-  # without pre-commit hooks cannot slip past it: proto regen, both
-  # languages' lint + full test suites, and all six cross-language gates
-  # (tool-parity, write/read/input/meta-proto, behavior). Overlaps the
-  # granular jobs above by design; those give fast per-language signal,
-  # this proves the exact command developers run locally.
   make-check:
     name: make check (all gates)
     runs-on: ubuntu-latest
@@ -317,26 +48,74 @@ jobs:
           cache: pip
           cache-dependency-path: python/pyproject.toml
 
-      - name: Install Go lint tools
+      # gofumpt/goimports back `make fmt-check`; golangci-lint backs the Go
+      # lint target. All @latest so local machines (which also track latest)
+      # and CI run the same versions. gosec, cairnlint, actionlint, and
+      # pyright need no install step: the make targets self-provision them
+      # via `go run @latest` / `npx --yes pyright@latest` (node ships on the
+      # runner image).
+      - name: Install Go format/lint tools
         run: |
           set -euo pipefail
           go install mvdan.cc/gofumpt@latest
           go install golang.org/x/tools/cmd/goimports@latest
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
+      # buf is pinned (not @latest) on purpose: generated code must be
+      # byte-reproducible against the committed baselines, and local dev
+      # machines pin the same version. Bump both together.
       - name: Install buf
         run: go install github.com/bufbuild/buf/cmd/buf@v1.71.0
 
-      - name: Install pyright
-        run: npm install -g pyright
+      # uv backs the lock-check target (hard requirement, no skip).
+      - name: Install uv
+        run: pip install uv
 
-      - name: Create venv with dev deps
-        working-directory: python
+      # betterleaks ships a `replace` directive in its go.mod (forks
+      # wasilibs/go-re2 for a smaller WASM blob), which makes
+      # `go install pkg@latest` refuse the build. Fetch the release
+      # binary instead. The make target passes --regex-engine=stdlib, so
+      # the WASM engine the replace optimizes is never loaded; see
+      # https://github.com/betterleaks/betterleaks/issues/74.
+      - name: Install betterleaks (latest release binary)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -e ".[dev]"
+          tag=$(gh release view --repo betterleaks/betterleaks --json tagName -q .tagName)
+          version="${tag#v}"
+          asset="betterleaks_${version}_linux_x64.tar.gz"
+          tmpdir=$(mktemp -d)
+          gh release download "$tag" \
+            --repo betterleaks/betterleaks \
+            --pattern "$asset" \
+            --dir "$tmpdir"
+          tar -xzf "$tmpdir/$asset" -C "$tmpdir" betterleaks
+          sudo install -m 0755 "$tmpdir/betterleaks" /usr/local/bin/betterleaks
+          rm -rf "$tmpdir"
+          betterleaks version
+
+      # Latest trivy via the official install script, so CI runs the same
+      # `trivy fs` CLI command the make target defines (the previous
+      # trivy-action invocation was a second, differently-configured scan).
+      - name: Install trivy (latest)
+        run: |
+          set -euo pipefail
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sudo sh -s -- -b /usr/local/bin
+          trivy --version
 
       - name: make check
         run: make check
+
+      # pytest inside make check writes the HTML coverage report; publish it
+      # for inspection. Not a gate; the coverage threshold already failed
+      # the build inside make check if unmet.
+      - name: Upload Python coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python-coverage
+          path: python/htmlcov/
+          retention-days: 7
+          if-no-files-found: ignore

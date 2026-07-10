@@ -4,7 +4,11 @@ PIP := $(VENV)/bin/pip
 RUFF := $(VENV)/bin/ruff
 MYPY := $(VENV)/bin/mypy
 PYTEST := $(VENV)/bin/pytest
-PYRIGHT := pyright
+# npx @latest, not a globally installed pyright: a global install is whatever
+# version was installed last (stale-tool drift vs CI's npm latest), and a
+# `command -v pyright || skip` guard silently skipped the check on machines
+# without it. Same rationale as gosec via `go run @latest` in go/Makefile.
+PYRIGHT := npx --yes pyright@latest
 
 .PHONY: help venv install install-dev build test test-cov lint fmt-check format typecheck lock-check vulture deptry clean run all check _ensure-hooks update-hooks
 
@@ -60,18 +64,11 @@ lint: _ensure-hooks
 	@echo "Running ruff check..."
 	@$(RUFF) check src/ tests/
 	@echo "Running mypy type check..."
-	@if [ -x "$(MYPY)" ]; then \
-		$(MYPY) src/ tests/; \
-	else \
-		echo "[warn] mypy not installed, skipping type check"; \
-	fi
+	@# Unconditional: a skip-if-missing guard here let machines without the
+	@# tool pass a check CI fails. mypy is guaranteed by `make install-dev`.
+	@$(MYPY) src/ tests/
 	@echo "Running pyright strict mode..."
-	@if command -v $(PYRIGHT) >/dev/null 2>&1; then \
-		cd .. && $(PYRIGHT) python/; \
-	else \
-		echo "[warn] pyright not installed, skipping strict type check"; \
-		echo "       install: npm install -g pyright"; \
-	fi
+	@cd .. && $(PYRIGHT) python/
 
 format: _ensure-hooks
 	$(RUFF) format src/ tests/
@@ -91,11 +88,10 @@ typecheck: _ensure-hooks
 # betterleaks/trivy skip pattern.
 lock-check: _ensure-hooks
 	@echo "Checking uv.lock is in sync with pyproject.toml..."
-	@if command -v uv >/dev/null 2>&1; then \
-		uv lock --check; \
-	else \
-		echo "[warn] uv not installed, skipping lock-sync check"; \
-	fi
+	@# Hard requirement, not skip-if-missing: the old warn-skip meant CI's
+	@# make-check job (no uv installed) silently never ran this check.
+	@command -v uv >/dev/null 2>&1 || { echo "[error] uv required for lock-check (install: pip install uv)" >&2; exit 1; }
+	@uv lock --check
 
 vulture: _ensure-hooks
 	vulture src/linodemcp --min-confidence 80

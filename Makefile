@@ -1,7 +1,7 @@
 .PHONY: help build test check lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
-	go-build go-test go-lint go-fmt go-clean go-run go-check \
+	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
 	python-build python-install-dev python-test python-lint python-fmt python-clean python-run python-check \
 	betterleaks trivy actionlint proto generate
 
@@ -48,8 +48,14 @@ $(PROTO_STAMP): $(PROTO_SRCS)
 ## build: Build all language binaries (Go + Python) into each language's bin/
 build: proto go-build python-build
 
-## check: Run all linters and tests (fmt-check + go-check + python-check + tool-parity + write-proto + read-proto + input-proto + meta-proto + behavior)
-check: proto fmt-check go-check python-check tool-parity write-proto read-proto input-proto meta-proto behavior messages
+## check: THE gate. Everything, one target (fmt, full lint incl. security scans, all tests, all cross-language gates, both builds)
+# check is the single definition of done: CI's one job runs exactly `make check`
+# and the pre-push hook runs exactly `make check`, so local green, hook green,
+# and CI green are the same fact. Nothing quality-gating lives outside this
+# target (only the network-dependent sync-* live checks stay scheduled-only).
+# Ordering is cheap-fails-first: format/lint/workflow checks, then the two
+# language suites, then gates, then security scans, then builds.
+check: proto fmt-check scripts-lint actionlint go-check python-check tool-parity write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## fmt-check: Verify Go + Python + scripts formatting, read-only (generated code excluded). Shared by check, lint, and CI.
 # Read-only on purpose: it must mirror what CI checks, never auto-fix (an
@@ -198,6 +204,12 @@ docker-run-python:
 go-build:
 	$(MAKE) -C go build
 
+## go-build-prod: Build security-hardened Go binary (PIE, trimpath, stripped, static)
+# Part of check: the hardened build has different link constraints than the dev
+# build, so only building dev locally lets a prod-only link failure reach CI.
+go-build-prod:
+	$(MAKE) -C go build-prod
+
 ## go-test: Run Go tests
 go-test:
 	$(MAKE) -C go test
@@ -259,41 +271,36 @@ python-check:
 # --- Shared linters ---
 
 ## betterleaks: Run betterleaks secrets scan
+# Hard requirement, not skip-if-missing: a warn-skip here meant machines
+# without the binary passed a scan CI ran (the gosec false-green trap).
 # --verbose lists each finding (file, line, rule) instead of only the tally, so
 # a failure is actionable without a second manual run. --redact masks the secret
 # value: a real leak's location is what you need, and echoing the raw value into
 # the terminal or CI logs would just copy the secret somewhere new.
+# --regex-engine=stdlib pins one engine everywhere: CI already forced stdlib
+# (the WASM engine trips betterleaks#74 there), and scanning with different
+# engines locally vs CI can produce different findings.
 betterleaks:
-	@if command -v betterleaks >/dev/null 2>&1; then \
-		echo "Running betterleaks secrets scan..."; \
-		betterleaks dir . --verbose --redact; \
-	else \
-		echo "[warn] betterleaks not installed, skipping secrets scan"; \
-	fi
+	@command -v betterleaks >/dev/null 2>&1 || { echo "[error] betterleaks required (release binary: https://github.com/betterleaks/betterleaks/releases)" >&2; exit 1; }
+	@echo "Running betterleaks secrets scan..."
+	@betterleaks dir . --verbose --redact --regex-engine=stdlib
 
 ## trivy: Run trivy security scan
-# Severity is pinned to HIGH,CRITICAL to match the CI security job
-# (.github/workflows/ci.yml), so the local pre-push gate fails on the
-# same findings CI does, no stricter and no looser.
+# Hard requirement, not skip-if-missing (same false-green trap as betterleaks).
+# Severity HIGH,CRITICAL and vuln,misconfig scanners are the canonical scan;
+# CI runs this exact target, so local and CI fail on the same findings.
 trivy:
-	@if command -v trivy >/dev/null 2>&1; then \
-		echo "Running trivy security scan..."; \
-		trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 .; \
-	else \
-		echo "[warn] trivy not installed, skipping security scan"; \
-	fi
+	@command -v trivy >/dev/null 2>&1 || { echo "[error] trivy required (install: https://trivy.dev/latest/getting-started/installation/)" >&2; exit 1; }
+	@echo "Running trivy security scan..."
+	@trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 .
 
 ## actionlint: Lint GitHub Actions workflow files
-# Tracks latest, matching how the CI security job runs its scanners
-# (gosec, cairnlint). A prefer-local-binary fallback keeps offline runs
-# working when actionlint is installed; otherwise go fetches it.
+# Unconditional `go run @latest`, same pattern as gosec/cairnlint/pyright: a
+# prefer-local-binary fallback is a stale-version channel (local binary ages,
+# CI fetches latest, and the two diverge exactly when a new check lands).
 actionlint:
 	@echo "Running actionlint..."
-	@if command -v actionlint >/dev/null 2>&1; then \
-		actionlint; \
-	else \
-		go run github.com/rhysd/actionlint/cmd/actionlint@latest; \
-	fi
+	@go run github.com/rhysd/actionlint/cmd/actionlint@latest
 
 # --- Cleanup targets ---
 
