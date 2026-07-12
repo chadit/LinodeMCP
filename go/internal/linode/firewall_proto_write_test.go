@@ -142,7 +142,7 @@ func TestClientUpdateFirewallRulesProtoSuccess(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	rules, err := client.UpdateFirewallRulesProto(t.Context(), 123, &linode.FirewallRules{InboundPolicy: policyDrop})
+	rules, err := client.UpdateFirewallRulesProto(t.Context(), 123, &linode.FirewallRulesReplaceRequest{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestClientUpdateFirewallRulesProtoRejectsInvalidInput(t *testing.T) {
 
 	client := linode.NewClient("http://example.invalid", "my-token", nil, linode.WithMaxRetries(0))
 
-	if _, err := client.UpdateFirewallRulesProto(t.Context(), 0, &linode.FirewallRules{}); err == nil {
+	if _, err := client.UpdateFirewallRulesProto(t.Context(), 0, &linode.FirewallRulesReplaceRequest{}); err == nil {
 		t.Error("expected an error for zero firewall id, got nil")
 	}
 

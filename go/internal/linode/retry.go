@@ -6360,7 +6360,7 @@ func (c *Client) UpdateFirewallProto(ctx context.Context, firewallID int, req Up
 
 // UpdateFirewallRulesProto replaces a firewall's rules and decodes the response
 // into the FirewallRules proto element without retrying the PUT update call.
-func (c *Client) UpdateFirewallRulesProto(ctx context.Context, firewallID int, req *FirewallRules) (*linodev1.FirewallRules, error) {
+func (c *Client) UpdateFirewallRulesProto(ctx context.Context, firewallID int, req *FirewallRulesReplaceRequest) (*linodev1.FirewallRules, error) {
 	var rules *linodev1.FirewallRules
 
 	err := c.executeWithoutRetry(ctx, "UpdateFirewallRules", func() error {

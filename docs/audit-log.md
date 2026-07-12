@@ -186,9 +186,9 @@ The Python implementation uses stdlib `sqlite3` and has no equivalent gotcha.
 
 The pure-Go driver is required for the `CGO_ENABLED=0` Windows build matrix; the 100ms batching strategy keeps overhead within the documented 5ms p99 budget.
 
-### OTel exporter (placeholder)
+### OTel exporter (planned, not yet implemented)
 
-A config block exists for `audit.otel`, but the exporter is not wired today. The shape will be:
+There is no `audit.otel` config block today; neither implementation reads one. When the exporter lands, the planned shape is:
 
 ```yaml
 audit:

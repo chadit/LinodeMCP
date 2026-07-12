@@ -1,6 +1,6 @@
 {
   "tool": "linode_firewall_rules_update",
-  "description": "Firewall rules update requires both inbound and outbound rule arrays once confirmed, then PUTs them. Both languages send only inbound/outbound (Go no longer emits empty inbound_policy/outbound_policy strings, which the API treats as optional).",
+  "description": "Firewall rules update requires both inbound and outbound rule arrays once confirmed, then PUTs them. Both languages send only inbound/outbound (Go no longer emits empty inbound_policy/outbound_policy strings, which the API treats as optional). Rule objects are forwarded verbatim: Go must not pad a rule with empty label/description or a null ipv6 the caller never sent, so the wire bytes match the Python client.",
   "cases": [
     {
       "name": "requires confirm",
@@ -35,6 +35,16 @@
       "expect_error": "outbound is required"
     },
     {
+      "name": "rejects an inbound value that is not an array of objects",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "inbound": "not-an-array",
+        "outbound": []
+      },
+      "expect_error": "inbound must be an array of objects"
+    },
+    {
       "name": "replaces the rules with empty rulesets",
       "args": {
         "confirm": true,
@@ -54,6 +64,102 @@
         "body": {
           "inbound": [],
           "outbound": []
+        }
+      }
+    },
+    {
+      "name": "sends a rule without label or description verbatim",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "inbound": [
+          {
+            "action": "ACCEPT",
+            "protocol": "TCP",
+            "ports": "22",
+            "addresses": { "ipv4": ["192.0.2.0/24"] }
+          }
+        ],
+        "outbound": []
+      },
+      "api_response": {
+        "inbound": [],
+        "inbound_policy": "ACCEPT",
+        "outbound": [],
+        "outbound_policy": "ACCEPT"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/firewalls/123/rules",
+        "body": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "22",
+              "addresses": { "ipv4": ["192.0.2.0/24"] }
+            }
+          ],
+          "outbound": []
+        }
+      }
+    },
+    {
+      "name": "forwards a fully specified rule with label and description unchanged",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "inbound": [
+          {
+            "action": "DROP",
+            "protocol": "TCP",
+            "ports": "443",
+            "addresses": { "ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"] },
+            "label": "block-https",
+            "description": "drop all https"
+          }
+        ],
+        "outbound": [
+          {
+            "action": "ACCEPT",
+            "protocol": "UDP",
+            "ports": "53",
+            "addresses": { "ipv4": ["192.0.2.0/24"] },
+            "label": "allow-dns",
+            "description": "dns egress"
+          }
+        ]
+      },
+      "api_response": {
+        "inbound": [],
+        "inbound_policy": "ACCEPT",
+        "outbound": [],
+        "outbound_policy": "ACCEPT"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/firewalls/123/rules",
+        "body": {
+          "inbound": [
+            {
+              "action": "DROP",
+              "protocol": "TCP",
+              "ports": "443",
+              "addresses": { "ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"] },
+              "label": "block-https",
+              "description": "drop all https"
+            }
+          ],
+          "outbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "UDP",
+              "ports": "53",
+              "addresses": { "ipv4": ["192.0.2.0/24"] },
+              "label": "allow-dns",
+              "description": "dns egress"
+            }
+          ]
         }
       }
     }

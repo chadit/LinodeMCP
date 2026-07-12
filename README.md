@@ -68,16 +68,25 @@ server:
   host: "127.0.0.1"
   port: 8080
 
-metrics:
-  enabled: true
-  port: 9090
-  path: "/metrics"
-
-tracing:
-  enabled: false
-  exporter: "otlp"
-  endpoint: "localhost:4317"
-  sampleRate: 1.0
+observability:
+  metrics:
+    enabled: true
+    prometheus:
+      enabled: true
+      host: "127.0.0.1"
+      port: 8888
+      path: "/metrics"
+  tracing:
+    enabled: false
+    endpoint: "localhost:4317"
+    protocol: "grpc"      # or "http" for OTLP over HTTP
+    insecure: false       # true skips TLS (local collectors)
+    sampleRate: 1.0
+  health:
+    enabled: true
+    host: "127.0.0.1"
+    port: 8889
+    path: "/healthz"
 
 resilience:
   rateLimitPerMinute: 700

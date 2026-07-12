@@ -356,11 +356,13 @@ def _validate_firewall_rules_update_request(
     ):
         msg = "firewall_id must be a positive integer"
         raise ValueError(msg)
+    # Wording matches the Go handler so the tool-layer and client-layer rejects
+    # produce the same byte-identical message the shared fixtures pin.
     if not _is_firewall_rule_list(inbound):
-        msg = "inbound must be a list of rule objects"
+        msg = "inbound must be an array of objects"
         raise TypeError(msg)
     if not _is_firewall_rule_list(outbound):
-        msg = "outbound must be a list of rule objects"
+        msg = "outbound must be an array of objects"
         raise TypeError(msg)
 
 
@@ -6471,15 +6473,20 @@ class Client:
         label: str,
         name: str,
         method: str,
-        expires_in: int = 3600,
+        expires_in: int | None = None,
     ) -> dict[str, Any]:
-        """Generate a presigned URL for an object."""
+        """Generate a presigned URL for an object.
+
+        expires_in is sent only when provided; the API applies its documented
+        default (3600) otherwise.
+        """
         endpoint = f"/object-storage/buckets/{region}/{label}/object-url"
         body: dict[str, Any] = {
             "method": method,
             "name": name,
-            "expires_in": expires_in,
         }
+        if expires_in is not None:
+            body["expires_in"] = expires_in
         try:
             response = await self.make_request("POST", endpoint, body)
             return dict(response.json())
@@ -8214,77 +8221,6 @@ class Client:
             logger.exception("HTTP error shutting down instance: %s", e)
             raise NetworkError("ShutdownInstance", e) from e
 
-    async def create_instance(
-        self,
-        region: str,
-        instance_type: str,
-        firewall_id: int,
-        image: str | None = None,
-        label: str | None = None,
-        root_pass: str | None = None,
-        authorized_keys: list[str] | None = None,
-        authorized_users: list[str] | None = None,
-        booted: bool = True,
-        backups_enabled: bool = False,
-        route_ipv4: bool = True,
-        route_ipv6: bool = True,
-        tags: list[str] | None = None,
-    ) -> Instance:
-        """Create a new Linode instance under the current Linode Interfaces
-        generation. firewall_id is required: the API rejects payloads without
-        an interface-level firewall with "must have at least 1 interface
-        defined to boot".
-        """
-        validate_label(label)
-        validate_root_password(root_pass)
-
-        logger.info(
-            "Creating instance",
-            extra={"region": region, "type": instance_type, "label": label},
-        )
-
-        try:
-            body: dict[str, Any] = {
-                "region": region,
-                "type": instance_type,
-                "booted": booted,
-                "backups_enabled": backups_enabled,
-                "interface_generation": CURRENT_INTERFACE_GENERATION,
-                "interfaces": [
-                    _build_public_interface_entry(firewall_id, route_ipv4, route_ipv6),
-                ],
-            }
-            if image:
-                body["image"] = image
-            if label:
-                body["label"] = label
-            if root_pass:
-                body["root_pass"] = root_pass
-            if authorized_keys:
-                body["authorized_keys"] = authorized_keys
-            if authorized_users:
-                body["authorized_users"] = authorized_users
-            if tags:
-                body["tags"] = tags
-
-            response = await self.make_request("POST", "/linode/instances", body)
-            data = response.json()
-            result = self._parse_instance(data)
-            logger.info("Instance created", extra={"id": result.id})
-            return result
-        except httpx.ConnectTimeout as e:
-            logger.exception("Connection timeout creating instance: %s", e)
-            raise NetworkError("CreateInstance", e) from e
-        except httpx.ReadTimeout as e:
-            logger.exception("Read timeout creating instance: %s", e)
-            raise NetworkError("CreateInstance", e) from e
-        except httpx.HTTPStatusError as e:
-            logger.exception("HTTP error creating instance")
-            raise NetworkError("CreateInstance", e) from e
-        except httpx.HTTPError as e:
-            logger.exception("HTTP error creating instance: %s", e)
-            raise NetworkError("CreateInstance", e) from e
-
     async def create_instance_raw(
         self,
         region: str,
@@ -8303,9 +8239,10 @@ class Client:
     ) -> dict[str, Any]:
         """Create an instance and return the full raw API body.
 
-        Same validation and request shape as create_instance, but the
-        proto-backed write handler decodes the full JSON into the write proto so
-        Python output matches Go, which decodes the same full API JSON.
+        Validates the label and root password, then posts the interface-bearing
+        create body. The proto-backed write handler decodes the full JSON into
+        the write proto so Python output matches Go, which decodes the same
+        full API JSON.
         """
         validate_label(label)
         validate_root_password(root_pass)
@@ -8462,45 +8399,6 @@ class Client:
         except httpx.HTTPError as e:
             logger.exception("HTTP error upgrading instance interfaces: %s", e)
             raise NetworkError("UpgradeInstanceInterfaces", e) from e
-
-    async def create_firewall(
-        self,
-        label: str,
-        inbound_policy: str = "ACCEPT",
-        outbound_policy: str = "ACCEPT",
-    ) -> Firewall:
-        """Create a new firewall."""
-        validate_label(label)
-        validate_firewall_policy(inbound_policy)
-        validate_firewall_policy(outbound_policy)
-
-        logger.info("Creating firewall", extra={"label": label})
-
-        try:
-            body = {
-                "label": label,
-                "rules": {
-                    "inbound_policy": inbound_policy,
-                    "outbound_policy": outbound_policy,
-                },
-            }
-            response = await self.make_request("POST", "/networking/firewalls", body)
-            data = response.json()
-            result = self._parse_firewall(data)
-            logger.info("Firewall created", extra={"id": result.id})
-            return result
-        except httpx.ConnectTimeout as e:
-            logger.exception("Connection timeout creating firewall: %s", e)
-            raise NetworkError("CreateFirewall", e) from e
-        except httpx.ReadTimeout as e:
-            logger.exception("Read timeout creating firewall: %s", e)
-            raise NetworkError("CreateFirewall", e) from e
-        except httpx.HTTPStatusError as e:
-            logger.exception("HTTP error creating firewall")
-            raise NetworkError("CreateFirewall", e) from e
-        except httpx.HTTPError as e:
-            logger.exception("HTTP error creating firewall: %s", e)
-            raise NetworkError("CreateFirewall", e) from e
 
     async def create_firewall_raw(
         self,
@@ -8748,49 +8646,6 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("UpdateFirewallRules", e) from e
-
-    async def create_domain(
-        self,
-        domain: str,
-        domain_type: str = "master",
-        soa_email: str | None = None,
-        description: str | None = None,
-        tags: list[str] | None = None,
-        ttl_sec: int | None = None,
-    ) -> Domain:
-        """Create a new domain."""
-        validate_label(domain)
-
-        logger.info("Creating domain", extra={"domain": domain})
-
-        try:
-            body: dict[str, Any] = {"domain": domain, "type": domain_type}
-            if soa_email:
-                body["soa_email"] = soa_email
-            if description:
-                body["description"] = description
-            if tags:
-                body["tags"] = tags
-            if ttl_sec is not None:
-                body["ttl_sec"] = ttl_sec
-
-            response = await self.make_request("POST", "/domains", body)
-            data = response.json()
-            result = self._parse_domain(data)
-            logger.info("Domain created", extra={"id": result.id})
-            return result
-        except httpx.ConnectTimeout as e:
-            logger.exception("Connection timeout creating domain: %s", e)
-            raise NetworkError("CreateDomain", e) from e
-        except httpx.ReadTimeout as e:
-            logger.exception("Read timeout creating domain: %s", e)
-            raise NetworkError("CreateDomain", e) from e
-        except httpx.HTTPStatusError as e:
-            logger.exception("HTTP error creating domain")
-            raise NetworkError("CreateDomain", e) from e
-        except httpx.HTTPError as e:
-            logger.exception("HTTP error creating domain: %s", e)
-            raise NetworkError("CreateDomain", e) from e
 
     async def clone_domain(self, domain_id: int | str, domain: str) -> Domain:
         """Clone a domain."""
@@ -13876,7 +13731,7 @@ class RetryableClient:
         label: str,
         name: str,
         method: str,
-        expires_in: int = 3600,
+        expires_in: int | None = None,
     ) -> dict[str, Any]:
         """Generate presigned URL with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -14349,43 +14204,6 @@ class RetryableClient:
         """Shutdown instance with retry."""
         await self._execute_with_retry(self.client.shutdown_instance, instance_id)
 
-    async def create_instance(
-        self,
-        region: str,
-        instance_type: str,
-        firewall_id: int,
-        image: str | None = None,
-        label: str | None = None,
-        root_pass: str | None = None,
-        authorized_keys: list[str] | None = None,
-        authorized_users: list[str] | None = None,
-        booted: bool = True,
-        backups_enabled: bool = False,
-        route_ipv4: bool = True,
-        route_ipv6: bool = True,
-        tags: list[str] | None = None,
-    ) -> Instance:
-        """Create instance with retry. firewall_id is required under the
-        current Linode Interfaces generation.
-        """
-        result: Instance = await self._execute_with_retry(
-            self.client.create_instance,
-            region,
-            instance_type,
-            firewall_id,
-            image,
-            label,
-            root_pass,
-            authorized_keys,
-            authorized_users,
-            booted,
-            backups_enabled,
-            route_ipv4,
-            route_ipv6,
-            tags,
-        )
-        return result
-
     async def create_instance_raw(
         self,
         region: str,
@@ -14462,18 +14280,6 @@ class RetryableClient:
         """
         result: dict[str, Any] = await self.client.upgrade_instance_interfaces(
             linode_id, config_id=config_id, dry_run=dry_run
-        )
-        return result
-
-    async def create_firewall(
-        self,
-        label: str,
-        inbound_policy: str = "ACCEPT",
-        outbound_policy: str = "ACCEPT",
-    ) -> Firewall:
-        """Create firewall with retry."""
-        result: Firewall = await self._execute_with_retry(
-            self.client.create_firewall, label, inbound_policy, outbound_policy
         )
         return result
 
@@ -14584,27 +14390,6 @@ class RetryableClient:
     ) -> dict[str, Any]:
         """Update default firewall settings without replaying the PUT."""
         return await self.client.update_firewall_settings(default_firewall_ids)
-
-    async def create_domain(
-        self,
-        domain: str,
-        domain_type: str = "master",
-        soa_email: str | None = None,
-        description: str | None = None,
-        tags: list[str] | None = None,
-        ttl_sec: int | None = None,
-    ) -> Domain:
-        """Create domain with retry."""
-        result: Domain = await self._execute_with_retry(
-            self.client.create_domain,
-            domain,
-            domain_type,
-            soa_email,
-            description,
-            tags,
-            ttl_sec,
-        )
-        return result
 
     async def clone_domain(self, domain_id: int, domain: str) -> Domain:
         """Clone domain without replaying the POST."""

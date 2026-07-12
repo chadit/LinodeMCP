@@ -7699,7 +7699,7 @@ async def test_create_instance_sends_interfaces_body(
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        await client.create_instance(
+        await client.create_instance_raw(
             region="us-east",
             instance_type="g6-nanode-1",
             firewall_id=12345,
@@ -7738,7 +7738,7 @@ async def test_create_instance_omits_route_keys_when_false(
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        await client.create_instance(
+        await client.create_instance_raw(
             region="us-east",
             instance_type="g6-nanode-1",
             firewall_id=12345,
@@ -10741,10 +10741,10 @@ async def test_update_firewall_rules_rejects_invalid_firewall_id(
 @pytest.mark.parametrize(
     ("inbound", "outbound", "message"),
     [
-        ({}, [], "inbound must be a list of rule objects"),
-        (["bad-rule"], [], "inbound must be a list of rule objects"),
-        ([], {}, "outbound must be a list of rule objects"),
-        ([], ["bad-rule"], "outbound must be a list of rule objects"),
+        ({}, [], "inbound must be an array of objects"),
+        (["bad-rule"], [], "inbound must be an array of objects"),
+        ([], {}, "outbound must be an array of objects"),
+        ([], ["bad-rule"], "outbound must be an array of objects"),
     ],
 )
 async def test_update_firewall_rules_rejects_invalid_rule_lists(

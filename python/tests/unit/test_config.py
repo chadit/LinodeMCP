@@ -76,6 +76,88 @@ def test_bind_host_override(tmp_path: Path) -> None:
     assert cfg.observability.health.host == "192.0.2.10"
 
 
+def test_tracing_defaults_match_go() -> None:
+    """Tracing defaults mirror Go's TracingConfig.
+
+    protocol grpc and insecure False keep both binaries secure by default and
+    byte-identical on the shared config schema; the old Python-only exporter
+    key is gone because nothing ever read it.
+    """
+    cfg = Config()
+    tracing = cfg.observability.tracing
+    assert tracing.protocol == "grpc"
+    assert tracing.insecure is False
+    assert tracing.sample_rate == 1.0
+    assert tracing.headers == {}
+    assert not hasattr(tracing, "exporter")
+
+
+def test_tracing_override(tmp_path: Path) -> None:
+    """protocol, insecure, and headers are wired from the config file.
+
+    These three keys were previously honored by Go and silently dropped by
+    Python; this pins the loader so the shared config file means the same
+    thing to both binaries.
+    """
+    config_file = tmp_path / "config.yml"
+    config_file.write_text(
+        yaml.dump(
+            {
+                "environments": {
+                    "default": {
+                        "label": "d",
+                        "linode": {
+                            "apiUrl": "https://api.linode.com/v4",
+                            "token": "t",
+                        },
+                    }
+                },
+                "observability": {
+                    "tracing": {
+                        "enabled": True,
+                        "endpoint": "collector.internal:4318",
+                        "protocol": "http",
+                        "insecure": True,
+                        "headers": {"x-team": "infra"},
+                    }
+                },
+            }
+        )
+    )
+
+    cfg = load_from_file(config_file)
+    tracing = cfg.observability.tracing
+    assert tracing.protocol == "http"
+    assert tracing.insecure is True
+    assert tracing.headers == {"x-team": "infra"}
+
+
+def test_tracing_serializes_full_key_set(tmp_path: Path) -> None:
+    """write_atomic emits the same six tracing keys Go's template writes, so
+    a config file created by either binary reads identically in the other."""
+    from linodemcp.config import write_atomic
+
+    config_file = tmp_path / "config.yml"
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="d",
+                linode=LinodeConfig(api_url="https://api.linode.com/v4", token="t"),
+            )
+        }
+    )
+    write_atomic(config_file, cfg)
+    data = yaml.safe_load(config_file.read_text())
+    assert set(data["observability"]["tracing"]) == {
+        "enabled",
+        "endpoint",
+        "protocol",
+        "insecure",
+        "sampleRate",
+        "headers",
+    }
+
+
 def test_load_from_file(temp_config_file: Path) -> None:
     """Test loading configuration from file."""
     cfg = load_from_file(temp_config_file)

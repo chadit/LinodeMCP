@@ -80,7 +80,7 @@ type UpdateObjectStorageKeyRequest struct {
 type PresignedURLRequest struct {
 	Method    string `json:"method"`
 	Name      string `json:"name"`
-	ExpiresIn int    `json:"expires_in"`
+	ExpiresIn int    `json:"expires_in,omitempty"`
 }
 
 // ObjectACL represents the ACL of an object in Object Storage.

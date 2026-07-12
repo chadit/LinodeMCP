@@ -56,7 +56,7 @@ const (
 	apiDurationBucket10 = 30
 )
 
-// initMetrics sets up OpenTelemetry metrics with Prometheus and OTLP export.
+// initMetrics sets up OpenTelemetry metrics with Prometheus export.
 func (o *Observability) initMetrics(cfg *config.MetricsConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), metricsInitTimeout)
 	defer cancel()
@@ -84,13 +84,6 @@ func (o *Observability) initMetrics(cfg *config.MetricsConfig) error {
 		}
 
 		readers = append(readers, reader)
-	}
-
-	if cfg.OTLP.Enabled {
-		_, err := newOTLPReader(ctx, cfg.OTLP)
-		if err != nil {
-			o.logger.Debug("OTLP metrics not implemented, using Prometheus only", "error", err)
-		}
 	}
 
 	opts := []sdkmetric.Option{sdkmetric.WithResource(res)}
@@ -210,14 +203,6 @@ func (o *Observability) newPrometheusReader(ctx context.Context, bindHost string
 	})
 
 	return exporter, nil
-}
-
-// newOTLPReader creates an OTLP metrics reader.
-// Parameters are intentionally unused as this is a stub implementation.
-func newOTLPReader(context.Context, config.OTLPMetricsConfig) (*sdkmetric.PeriodicReader, error) {
-	// OTLP metrics exporter to be implemented when needed
-	// For now, rely on Prometheus only
-	return nil, errOTLPNotImplemented
 }
 
 // createCustomMetrics creates LinodeMCP-specific metrics on the instance.

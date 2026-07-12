@@ -77,13 +77,19 @@ class MetricsConfig:
 
 @dataclass
 class TracingConfig:
-    """OpenTelemetry tracing settings."""
+    """OpenTelemetry tracing settings.
+
+    Field set and defaults mirror Go's TracingConfig exactly: protocol picks
+    the OTLP transport (grpc default, http/http-protobuf supported) and
+    insecure defaults to False so both binaries are secure unless the operator
+    opts out.
+    """
 
     enabled: bool = False
-    exporter: str = "otlp"
     endpoint: str = "localhost:4317"
+    protocol: str = "grpc"
+    insecure: bool = False
     sample_rate: float = 1.0
-    insecure: bool = True
     headers: dict[str, str] = field(default_factory=dict[str, str])
 
 
@@ -453,17 +459,6 @@ def _apply_defaults(data: dict[str, Any]) -> None:
     data["server"].setdefault("host", "127.0.0.1")
     data["server"].setdefault("port", 8080)
 
-    data.setdefault("metrics", {})
-    data["metrics"].setdefault("enabled", True)
-    data["metrics"].setdefault("port", 9090)
-    data["metrics"].setdefault("path", "/metrics")
-
-    data.setdefault("tracing", {})
-    data["tracing"].setdefault("enabled", False)
-    data["tracing"].setdefault("exporter", "otlp")
-    data["tracing"].setdefault("endpoint", "localhost:4317")
-    data["tracing"].setdefault("sampleRate", 1.0)
-
     data.setdefault("resilience", {})
     data["resilience"].setdefault("rateLimitPerMinute", 700)
     data["resilience"].setdefault("circuitBreakerThreshold", 5)
@@ -702,7 +697,10 @@ def _data_to_config(data: dict[str, Any]) -> Config:
         tracing=TracingConfig(
             enabled=tracing_data.get("enabled", False),
             endpoint=tracing_data.get("endpoint", "localhost:4317"),
+            protocol=tracing_data.get("protocol", "grpc"),
+            insecure=tracing_data.get("insecure", False),
             sample_rate=tracing_data.get("sampleRate", 1.0),
+            headers=dict(tracing_data.get("headers", {})),
         ),
         metrics=MetricsConfig(
             enabled=metrics_data.get("enabled", True),
@@ -1010,7 +1008,10 @@ def _config_to_data(cfg: Config) -> dict[str, Any]:
             "tracing": {
                 "enabled": cfg.observability.tracing.enabled,
                 "endpoint": cfg.observability.tracing.endpoint,
+                "protocol": cfg.observability.tracing.protocol,
+                "insecure": cfg.observability.tracing.insecure,
                 "sampleRate": cfg.observability.tracing.sample_rate,
+                "headers": cfg.observability.tracing.headers,
             },
             "metrics": {
                 "enabled": cfg.observability.metrics.enabled,

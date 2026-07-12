@@ -345,6 +345,29 @@ type firewallRulesReplaceBody struct {
 	Outbound []FirewallRule `json:"outbound"`
 }
 
+// FirewallRulesReplaceRequest carries caller-supplied inbound and outbound
+// firewall rule objects verbatim for a PUT /networking/firewalls/{id}/rules
+// call. Rules stay as raw maps rather than the typed FirewallRule because
+// FirewallRule is a response-decode type whose json tags carry no omitempty:
+// re-marshaling a caller's rule through it pads every rule with empty
+// action/protocol/ports/label/description and a null ipv6 the caller never
+// sent, which drifts from the Python client and breaks the wire-defaults ruling
+// (send only what the caller sent; the API owns rule field defaults). Handlers
+// build this from validated tool input.
+type FirewallRulesReplaceRequest struct {
+	Inbound  []map[string]any
+	Outbound []map[string]any
+}
+
+// firewallRulesRawReplaceBody is the wire form of a PUT
+// /networking/firewalls/{id}/rules request built from a FirewallRulesReplaceRequest.
+// Both lists are always present (an empty array clears that direction), and each
+// rule is emitted with exactly the keys the caller provided.
+type firewallRulesRawReplaceBody struct {
+	Inbound  []map[string]any `json:"inbound"`
+	Outbound []map[string]any `json:"outbound"`
+}
+
 // Device represents a device attached to a firewall.
 type Device struct {
 	ID   int    `json:"id"`

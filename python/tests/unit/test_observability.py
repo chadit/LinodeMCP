@@ -4,7 +4,7 @@ import socket
 import sys
 import urllib.error
 import urllib.request
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -17,6 +17,8 @@ sys.modules["opentelemetry.exporter.otlp"] = MagicMock()
 sys.modules["opentelemetry.exporter.otlp.proto"] = MagicMock()
 sys.modules["opentelemetry.exporter.otlp.proto.grpc"] = MagicMock()
 sys.modules["opentelemetry.exporter.otlp.proto.grpc.trace_exporter"] = MagicMock()
+sys.modules["opentelemetry.exporter.otlp.proto.http"] = MagicMock()
+sys.modules["opentelemetry.exporter.otlp.proto.http.trace_exporter"] = MagicMock()
 sys.modules["opentelemetry.exporter.prometheus"] = MagicMock()
 sys.modules["prometheus_client"] = MagicMock()
 sys.modules["opentelemetry.sdk"] = MagicMock()
@@ -103,6 +105,70 @@ def test_metrics_recording_drives_instruments() -> None:
         disabled.record_api_request("/regions", "GET", 0, 0.03)
     finally:
         disabled.shutdown()
+
+
+class TestTracingExporterSelection:
+    """protocol selects the OTLP transport, mirroring Go's buildTraceExporter.
+
+    Go treats http and http/protobuf as the HTTP exporter and everything else
+    as gRPC; insecure maps to WithInsecure on gRPC and to the URL scheme on
+    HTTP. These pins keep the shared tracing config meaning the same thing in
+    both binaries.
+    """
+
+    @staticmethod
+    def _init_with(protocol: str, *, insecure: bool) -> None:
+        obs = Observability(
+            ObservabilityConfig(
+                tracing=TracingConfig(
+                    enabled=True,
+                    endpoint="collector.internal:4317",
+                    protocol=protocol,
+                    insecure=insecure,
+                    headers={"x-team": "infra"},
+                ),
+                metrics=MetricsConfig(enabled=False),
+                health=HealthConfig(enabled=False),
+                logging=LoggingConfig(level="error", format="json"),
+            )
+        )
+        obs.shutdown()
+
+    def test_grpc_protocol_uses_grpc_exporter(self) -> None:
+        with (
+            patch("linodemcp.observability.OTLPSpanExporter") as grpc_cls,
+            patch("linodemcp.observability.OTLPHTTPSpanExporter") as http_cls,
+        ):
+            self._init_with("grpc", insecure=True)
+
+        grpc_cls.assert_called_once_with(
+            endpoint="collector.internal:4317",
+            insecure=True,
+            headers={"x-team": "infra"},
+        )
+        http_cls.assert_not_called()
+
+    def test_http_protocol_uses_http_exporter_insecure_scheme(self) -> None:
+        with (
+            patch("linodemcp.observability.OTLPSpanExporter") as grpc_cls,
+            patch("linodemcp.observability.OTLPHTTPSpanExporter") as http_cls,
+        ):
+            self._init_with("http", insecure=True)
+
+        http_cls.assert_called_once_with(
+            endpoint="http://collector.internal:4317/v1/traces",
+            headers={"x-team": "infra"},
+        )
+        grpc_cls.assert_not_called()
+
+    def test_http_protobuf_secure_uses_https_scheme(self) -> None:
+        with patch("linodemcp.observability.OTLPHTTPSpanExporter") as http_cls:
+            self._init_with("http/protobuf", insecure=False)
+
+        http_cls.assert_called_once_with(
+            endpoint="https://collector.internal:4317/v1/traces",
+            headers={"x-team": "infra"},
+        )
 
 
 class TestConstruction:

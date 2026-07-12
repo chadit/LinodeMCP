@@ -825,7 +825,6 @@ async def handle_linode_object_storage_key_delete(
 
 _MIN_EXPIRES_IN = 1
 _MAX_EXPIRES_IN = 604800
-_DEFAULT_EXPIRES_IN = 3600
 
 
 def _validate_expires_in(expires_in: int) -> str | None:
@@ -865,7 +864,11 @@ async def handle_linode_object_storage_presigned_url_create(
     method = arguments.get("method", "")
     if isinstance(method, str):
         method = method.upper()
-    expires_in = int(arguments.get("expires_in", _DEFAULT_EXPIRES_IN))
+    # expires_in defers to the API's documented default (3600) when absent, so
+    # the wire body carries only what the caller sent; validate a value only
+    # when the caller provided one.
+    raw_expires_in = arguments.get("expires_in")
+    expires_in = int(raw_expires_in) if raw_expires_in is not None else None
 
     missing = (
         "region is required"
@@ -882,7 +885,7 @@ async def handle_linode_object_storage_presigned_url_create(
     validation_err = required_enum_error(
         {"method": method}, "method", object_storage_pb2.PresignedURLMethod.Value
     )
-    if validation_err is None:
+    if validation_err is None and expires_in is not None:
         validation_err = _validate_expires_in(expires_in)
     if validation_err is not None:
         return _error_response(validation_err)

@@ -18,12 +18,15 @@ from typing import Any
 import structlog
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+    OTLPSpanExporter as OTLPHTTPSpanExporter,
+)
 from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest
 
 from linodemcp.config import (
@@ -195,11 +198,23 @@ class Observability:
             self._tracer_provider = TracerProvider(resource=resource, sampler=sampler)
 
             if endpoint:
-                exporter = OTLPSpanExporter(
-                    endpoint=endpoint,
-                    insecure=config.insecure,
-                    headers=config.headers,
-                )
+                # Mirrors Go's buildTraceExporter: protocol http/http-protobuf
+                # selects the HTTP exporter, anything else (grpc default) uses
+                # gRPC. The HTTP exporter has no insecure flag; the URL scheme
+                # carries it, matching Go's WithInsecure semantics.
+                exporter: SpanExporter
+                if config.protocol in ("http", "http/protobuf"):
+                    scheme = "http" if config.insecure else "https"
+                    exporter = OTLPHTTPSpanExporter(
+                        endpoint=f"{scheme}://{endpoint}/v1/traces",
+                        headers=config.headers,
+                    )
+                else:
+                    exporter = OTLPSpanExporter(
+                        endpoint=endpoint,
+                        insecure=config.insecure,
+                        headers=config.headers,
+                    )
                 self._tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
 
             trace.set_tracer_provider(self._tracer_provider)

@@ -16,8 +16,6 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
-const defaultPresignedExpiry = 3600
-
 // NewLinodeObjectStorageBucketListTool creates a tool for listing Object Storage buckets.
 func NewLinodeObjectStorageBucketListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	_, handler := newProtoListTool(
@@ -589,7 +587,16 @@ func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.Ca
 	// schema advertises, but a caller passing "get" must still work, so normalize
 	// to uppercase before the enum check and send the canonical form.
 	method := strings.ToUpper(request.GetString("method", ""))
-	expiresIn := request.GetInt("expires_in", defaultPresignedExpiry)
+
+	// expires_in defers to the API's documented default (3600) when absent, so
+	// the wire body carries only what the caller sent; validate a value only
+	// when the caller provided one.
+	var expiresIn int
+
+	_, expiresProvided := request.GetArguments()["expires_in"]
+	if expiresProvided {
+		expiresIn = request.GetInt("expires_in", 0)
+	}
 
 	if region == "" {
 		return mcp.NewToolResultError("region is required"), nil
@@ -607,8 +614,10 @@ func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(msg), nil
 	}
 
-	if err := validateExpiresIn(expiresIn); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	if expiresProvided {
+		if err := validateExpiresIn(expiresIn); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
 	}
 
 	client, err := prepareClient(request, cfg)

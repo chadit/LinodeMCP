@@ -509,8 +509,10 @@ def _firewall_rules_fields_error(arguments: dict[str, Any]) -> str | None:
         rules_raw: Any = arguments.get(field)
         if rules_raw is None:
             return f"{field} is required"
+        # Wording matches the Go handler (objectSliceFromToolArg) so the shared
+        # behavior fixtures assert one byte-identical message in both languages.
         if not _is_firewall_rule_list(rules_raw):
-            return f"{field} must be a list of rule objects"
+            return f"{field} must be an array of objects"
 
     return None
 

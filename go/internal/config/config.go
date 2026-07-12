@@ -250,11 +250,10 @@ type TracingConfig struct {
 
 // MetricsConfig holds metrics settings.
 type MetricsConfig struct {
-	Enabled    bool              `json:"enabled"    yaml:"enabled"`
-	Prometheus PrometheusConfig  `json:"prometheus" yaml:"prometheus"`
-	OTLP       OTLPMetricsConfig `json:"otlp"       yaml:"otlp"`
-	Runtime    bool              `json:"runtime"    yaml:"runtime"`
-	Host       bool              `json:"host"       yaml:"host"`
+	Enabled    bool             `json:"enabled"    yaml:"enabled"`
+	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
+	Runtime    bool             `json:"runtime"    yaml:"runtime"`
+	Host       bool             `json:"host"       yaml:"host"`
 }
 
 // PrometheusConfig holds Prometheus-specific metrics settings.
@@ -263,15 +262,6 @@ type PrometheusConfig struct {
 	Host    string `json:"host"    yaml:"host"`
 	Port    int    `json:"port"    yaml:"port"`
 	Path    string `json:"path"    yaml:"path"`
-}
-
-// OTLPMetricsConfig holds OTLP metrics settings.
-type OTLPMetricsConfig struct {
-	Enabled  bool              `json:"enabled"  yaml:"enabled"`
-	Endpoint string            `json:"endpoint" yaml:"endpoint"`
-	Protocol string            `json:"protocol" yaml:"protocol"`
-	Insecure bool              `json:"insecure" yaml:"insecure"`
-	Headers  map[string]string `json:"headers"  yaml:"headers"`
 }
 
 // LoggingConfig holds logging settings.
@@ -602,10 +592,6 @@ func applyOTELOverrides(cfg *Config) {
 	if envVar := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); envVar != "" {
 		if cfg.Observability.Tracing.Endpoint == "" {
 			cfg.Observability.Tracing.Endpoint = envVar
-		}
-
-		if cfg.Observability.Metrics.OTLP.Endpoint == "" {
-			cfg.Observability.Metrics.OTLP.Endpoint = envVar
 		}
 	}
 

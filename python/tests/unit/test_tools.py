@@ -10820,6 +10820,50 @@ async def test_handle_linode_firewall_rules_update(sample_config: Config) -> Non
         assert '"label": "allow-ssh"' in result[0].text
 
 
+async def test_handle_linode_firewall_rules_update_forwards_rules_verbatim(
+    sample_config: Config,
+) -> None:
+    """Rule objects reach the client untouched: an unknown field survives and no
+    empty label/description or null ipv6 is injected, so Go and Python put the
+    same bytes on the wire."""
+    inbound_rule = {
+        "action": "ACCEPT",
+        "protocol": "TCP",
+        "ports": "22",
+        "addresses": {"ipv4": ["198.51.100.0/24"]},
+        "note": "keep me",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_firewall_rules_raw.return_value = {
+            "inbound": [],
+            "inbound_policy": "ACCEPT",
+            "outbound": [],
+            "outbound_policy": "ACCEPT",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_rules_update(
+            {
+                "firewall_id": 12345,
+                "inbound": [inbound_rule],
+                "outbound": [],
+                "confirm": True,
+            },
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert not result[0].text.startswith("Error:")
+    mock_client.update_firewall_rules_raw.assert_awaited_once()
+    _, call_kwargs = mock_client.update_firewall_rules_raw.call_args
+    assert call_kwargs["inbound"] == [inbound_rule]
+    assert call_kwargs["outbound"] == []
+
+
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
 async def test_handle_linode_firewall_rules_update_requires_boolean_confirm(
     sample_config: Config, confirm: Any
@@ -10926,7 +10970,7 @@ async def test_handle_linode_firewall_rules_update_invalid_rule_lists(
         result = await handle_linode_firewall_rules_update(arguments, sample_config)
 
     assert len(result) == 1
-    assert f"{field} must be a list of rule objects" in result[0].text
+    assert f"{field} must be an array of objects" in result[0].text
     mock_client_class.assert_not_called()
 
 

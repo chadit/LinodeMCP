@@ -306,7 +306,7 @@ func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	req := linode.FirewallRules{Inbound: inbound, Outbound: outbound}
+	req := linode.FirewallRulesReplaceRequest{Inbound: inbound, Outbound: outbound}
 
 	rules, err := client.UpdateFirewallRulesProto(ctx, firewallID, &req)
 	if err != nil {
@@ -352,14 +352,18 @@ func formatFirewallRulesUpdateError(err error) string {
 
 // firewallRuleSetFromTool reads a required native array of firewall-rule objects.
 // An empty array is valid (it clears that direction's rules); an absent, null, or
-// malformed value is rejected.
-func firewallRuleSetFromTool(request *mcp.CallToolRequest, name string) ([]linode.FirewallRule, string) {
+// malformed value is rejected. Rules are returned as raw maps, not typed
+// linode.FirewallRule, so the caller's exact keys survive to the wire: decoding
+// into FirewallRule would pad each rule with empty action/protocol/ports/label/
+// description and a null ipv6 the caller never sent, drifting from the Python
+// client and breaking the wire-defaults ruling.
+func firewallRuleSetFromTool(request *mcp.CallToolRequest, name string) ([]map[string]any, string) {
 	raw, present := request.GetArguments()[name]
 	if !present {
 		return nil, name + " is required"
 	}
 
-	rules, validationMessage := objectSliceFromToolArg[linode.FirewallRule](raw, name)
+	rules, validationMessage := objectSliceFromToolArg[map[string]any](raw, name)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}

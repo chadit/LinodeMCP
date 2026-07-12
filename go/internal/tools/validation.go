@@ -273,7 +273,9 @@ const (
 // validateExpiresIn checks that the presigned URL expiration is between 1 and 604800 seconds (7 days).
 func validateExpiresIn(expiresIn int) error {
 	if expiresIn < minExpiresIn || expiresIn > maxExpiresIn {
-		return fmt.Errorf("got %d: %w", expiresIn, ErrPresignedExpiresInvalid)
+		// Suffix form ", got N" matches Python's message byte-for-byte (the
+		// same reconcile the bucket-ACL message went through).
+		return fmt.Errorf("%w, got %d", ErrPresignedExpiresInvalid, expiresIn)
 	}
 
 	return nil

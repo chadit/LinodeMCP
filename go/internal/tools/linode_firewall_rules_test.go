@@ -2,9 +2,12 @@ package tools_test
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -322,6 +325,90 @@ func TestLinodeFirewallRulesUpdateToolSuccess(t *testing.T) {
 
 	if !strings.Contains(textContent.Text, firewallRuleLabelAllowHTTPS) {
 		t.Errorf("textContent.Text does not contain %v", firewallRuleLabelAllowHTTPS)
+	}
+}
+
+func TestLinodeFirewallRulesUpdateToolForwardsRuleObjectsVerbatim(t *testing.T) {
+	t.Parallel()
+
+	// A rule carrying only the caller's keys plus an unknown field must reach
+	// the wire byte-for-byte: no empty label/description, no null ipv6, and no
+	// dropped unknown key. That parity is what keeps Go and the Python client
+	// sending identical request bodies.
+	inboundRule := map[string]any{
+		"action":    policyAccept,
+		"protocol":  "TCP",
+		"ports":     "22",
+		"addresses": map[string]any{keyIPv4: []any{"198.51.100.0/24"}},
+		"note":      "keep me",
+	}
+
+	var (
+		captureMu sync.Mutex
+		sentBody  []byte
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, readErr := io.ReadAll(r.Body)
+		if readErr != nil {
+			t.Errorf("unexpected error: %v", readErr)
+		}
+
+		captureMu.Lock()
+		sentBody = raw
+		captureMu.Unlock()
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.FirewallRules{InboundPolicy: policyAccept}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeFirewallRulesUpdateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyFirewallID: float64(123),
+		keyInbound:    []any{inboundRule},
+		keyOutbound:   []any{},
+		keyConfirm:    true,
+	}))
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
+	}
+
+	captureMu.Lock()
+	defer captureMu.Unlock()
+
+	var sent map[string]any
+	if err := json.Unmarshal(sentBody, &sent); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	inbound, isList := sent["inbound"].([]any)
+	if !isList || len(inbound) != 1 {
+		t.Fatalf("sent inbound = %v, want one rule", sent["inbound"])
+	}
+
+	got, isObject := inbound[0].(map[string]any)
+	if !isObject {
+		t.Fatalf("sent inbound[0] = %v, want an object", inbound[0])
+	}
+
+	if !reflect.DeepEqual(got, inboundRule) {
+		t.Errorf("sent inbound[0] = %v, want %v", got, inboundRule)
 	}
 }
 

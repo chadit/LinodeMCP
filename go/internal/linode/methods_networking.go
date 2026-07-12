@@ -935,8 +935,10 @@ func (c *Client) httpUpdateFirewallProto(ctx context.Context, firewallID int, re
 
 // httpUpdateFirewallRulesProto replaces a Cloud Firewall's rules and decodes the
 // response into the FirewallRules proto element so the write tool emits the same
-// ruleset shape as the rules GET path.
-func (c *Client) httpUpdateFirewallRulesProto(ctx context.Context, firewallID int, req *FirewallRules) (*linodev1.FirewallRules, error) {
+// ruleset shape as the rules GET path. The request carries the caller's rule
+// objects verbatim (see FirewallRulesReplaceRequest) so Go and the Python client
+// put identical bytes on the wire.
+func (c *Client) httpUpdateFirewallRulesProto(ctx context.Context, firewallID int, req *FirewallRulesReplaceRequest) (*linodev1.FirewallRules, error) {
 	if firewallID <= 0 {
 		return nil, ErrFirewallIDPositive
 	}
@@ -951,7 +953,7 @@ func (c *Client) httpUpdateFirewallRulesProto(ctx context.Context, firewallID in
 	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
 	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/rules"
 
-	body := firewallRulesReplaceBody{Inbound: req.Inbound, Outbound: req.Outbound}
+	body := firewallRulesRawReplaceBody{Inbound: req.Inbound, Outbound: req.Outbound}
 
 	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, body)
 	if err != nil {

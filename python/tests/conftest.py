@@ -32,16 +32,21 @@ def sample_config_data() -> dict[str, Any]:
             "host": "127.0.0.1",
             "port": 8080,
         },
-        "metrics": {
-            "enabled": True,
-            "port": 9090,
-            "path": "/metrics",
-        },
-        "tracing": {
-            "enabled": False,
-            "exporter": "otlp",
-            "endpoint": "localhost:4317",
-            "sampleRate": 1.0,
+        "observability": {
+            "metrics": {
+                "enabled": True,
+                "prometheus": {
+                    "enabled": True,
+                    "host": "127.0.0.1",
+                    "port": 8888,
+                    "path": "/metrics",
+                },
+            },
+            "tracing": {
+                "enabled": False,
+                "endpoint": "localhost:4317",
+                "sampleRate": 1.0,
+            },
         },
         "resilience": {
             "rateLimitPerMinute": 700,
@@ -83,10 +88,10 @@ def sample_config() -> Config:
             ),
             tracing=TracingConfig(
                 enabled=False,
-                exporter="otlp",
                 endpoint="localhost:4317",
+                protocol="grpc",
+                insecure=False,
                 sample_rate=1.0,
-                insecure=True,
             ),
         ),
         resilience=ResilienceConfig(

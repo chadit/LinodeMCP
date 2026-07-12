@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_presigned_url_create",
-  "description": "Read-capability but POSTs an object-url request. Pins region/label/name-required rejections, the invalid-method rejection, and the success POST body. method is validated against the PresignedURLMethod proto enum (GET/PUT) but is case-insensitive: input is uppercased before the check and the canonical uppercase verb is sent.",
+  "description": "Read-capability but POSTs an object-url request. Pins region/label/name-required rejections, the invalid-method rejection, the out-of-range expires_in rejection, and the success POST body. method is validated against the PresignedURLMethod proto enum (GET/PUT) but is case-insensitive: input is uppercased before the check and the canonical uppercase verb is sent. expires_in is deferred to the API's documented default (3600): omitted from the body unless the caller provides it.",
   "cases": [
     {
       "name": "requires region",
@@ -18,13 +18,28 @@
       "expect_error": "method must be one of: GET, PUT"
     },
     {
-      "name": "generates a presigned url",
+      "name": "rejects an out-of-range expires_in",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "GET", "expires_in": 700000 },
+      "expect_error": "expires_in must be between 1 and 604800 seconds (7 days), got 700000"
+    },
+    {
+      "name": "generates a presigned url with the API default expiry",
       "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "GET" },
       "api_response": { "url": "https://example.test/signed" },
       "expect_request": {
         "method": "POST",
         "path": "/object-storage/buckets/us-east/my-bucket/object-url",
-        "body": { "method": "GET", "name": "my-object.txt", "expires_in": 3600 }
+        "body": { "method": "GET", "name": "my-object.txt" }
+      }
+    },
+    {
+      "name": "sends an explicit expires_in",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "GET", "expires_in": 60 },
+      "api_response": { "url": "https://example.test/signed" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": { "method": "GET", "name": "my-object.txt", "expires_in": 60 }
       }
     },
     {
@@ -34,7 +49,7 @@
       "expect_request": {
         "method": "POST",
         "path": "/object-storage/buckets/us-east/my-bucket/object-url",
-        "body": { "method": "GET", "name": "my-object.txt", "expires_in": 3600 }
+        "body": { "method": "GET", "name": "my-object.txt" }
       }
     }
   ]

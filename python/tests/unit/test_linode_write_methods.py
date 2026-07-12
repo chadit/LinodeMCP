@@ -14,7 +14,6 @@ import pytest
 
 from linodemcp.linode import (
     Client,
-    Domain,
     DomainRecord,
     Firewall,
     Instance,
@@ -36,65 +35,6 @@ def _ok_response(body: Any) -> MagicMock:
 
 
 # --- Firewalls -------------------------------------------------------------
-
-
-async def test_create_firewall_decodes_response() -> None:
-    """create_firewall posts to the firewalls route and parses the body."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    body: dict[str, Any] = {
-        "id": 11,
-        "label": "web-fw",
-        "status": "enabled",
-        "rules": {
-            "inbound_policy": "DROP",
-            "outbound_policy": "ACCEPT",
-            "inbound": [],
-            "outbound": [],
-        },
-    }
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = _ok_response(body)
-
-        result = await client.create_firewall("web-fw", inbound_policy="DROP")
-
-    assert isinstance(result, Firewall)
-    assert result.id == 11
-    assert result.label == "web-fw"
-    assert result.rules.inbound_policy == "DROP"
-    method, endpoint, sent = mock_request.await_args_list[0].args
-    assert method == "POST"
-    assert endpoint == "/networking/firewalls"
-    assert sent["rules"]["inbound_policy"] == "DROP"
-    await client.close()
-
-
-async def test_create_firewall_rejects_bad_policy() -> None:
-    """create_firewall validates the policy before any request goes out."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with (
-        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
-        pytest.raises(ValueError, match="firewall policy"),
-    ):
-        await client.create_firewall("web-fw", inbound_policy="MAYBE")
-
-    mock_request.assert_not_awaited()
-    await client.close()
-
-
-async def test_create_firewall_wraps_http_errors() -> None:
-    """create_firewall wraps httpx failures as NetworkError."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.side_effect = httpx.HTTPError("boom")
-
-        with pytest.raises(NetworkError) as excinfo:
-            await client.create_firewall("web-fw")
-
-    assert "CreateFirewall" in str(excinfo.value)
-    await client.close()
 
 
 async def test_update_firewall_builds_partial_body() -> None:
@@ -140,50 +80,6 @@ async def test_update_firewall_wraps_http_errors() -> None:
 
 
 # --- Domains ---------------------------------------------------------------
-
-
-async def test_create_domain_decodes_response() -> None:
-    """create_domain posts to /domains and parses the returned domain."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    body = {
-        "id": 42,
-        "domain": "example.com",
-        "type": "master",
-        "status": "active",
-        "soa_email": "admin@example.com",
-    }
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = _ok_response(body)
-
-        result = await client.create_domain(
-            "example.com", soa_email="admin@example.com", ttl_sec=300
-        )
-
-    assert isinstance(result, Domain)
-    assert result.id == 42
-    assert result.domain == "example.com"
-    assert result.soa_email == "admin@example.com"
-    method, endpoint, sent = mock_request.await_args_list[0].args
-    assert method == "POST"
-    assert endpoint == "/domains"
-    assert sent["domain"] == "example.com"
-    assert sent["ttl_sec"] == 300
-    await client.close()
-
-
-async def test_create_domain_wraps_http_errors() -> None:
-    """create_domain wraps httpx failures as NetworkError."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.side_effect = httpx.HTTPError("boom")
-
-        with pytest.raises(NetworkError) as excinfo:
-            await client.create_domain("example.com")
-
-    assert "CreateDomain" in str(excinfo.value)
-    await client.close()
 
 
 async def test_update_domain_wraps_http_errors() -> None:
@@ -682,23 +578,6 @@ async def test_create_instance_disk_wraps_http_errors() -> None:
 
 
 # --- RetryableClient delegation -------------------------------------------
-
-
-async def test_retryable_create_firewall_delegates() -> None:
-    """RetryableClient.create_firewall delegates to the base client."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    expected = Firewall.__new__(Firewall)
-
-    with patch.object(
-        retryable.client, "create_firewall", new_callable=AsyncMock
-    ) as mock_create:
-        mock_create.return_value = expected
-
-        result = await retryable.create_firewall("web-fw", inbound_policy="DROP")
-
-    assert result is expected
-    mock_create.assert_awaited_once_with("web-fw", "DROP", "ACCEPT")
-    await retryable.close()
 
 
 async def test_retryable_create_volume_delegates() -> None:
