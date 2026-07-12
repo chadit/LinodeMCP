@@ -14,8 +14,9 @@ Two properties the user required:
     it is frozen. There is no checked-in spec copy to rot.
   * STALENESS TRIPWIRE: even the live spec repo lags the changelog, so a passing
     diff does not by itself prove "code matches the current API". The gate also
-    compares the spec's version against the changelog's newest entry and warns
-    when the spec trails, so a green run is never mistaken for fully current.
+    compares the latest commit changing openapi.json against the changelog's
+    newest entry and fails closed when the source predates a release, so a green
+    run is never mistaken for fully current.
 
 It also checks the hand-maintained validation lists that cannot be proto enums
 (hyphen/colon values, or map keys) the same way: it reads each hand-list from
@@ -38,8 +39,11 @@ import re
 import subprocess
 import sys
 import urllib.request
+from datetime import UTC, date, datetime
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROTO_DIR = REPO_ROOT / "proto" / "linode" / "mcp" / "v1"
@@ -50,6 +54,36 @@ SPEC_URL = (
     "https://raw.githubusercontent.com/linode/linode-api-openapi/main/openapi.json"
 )
 CHANGELOG_URL = "https://techdocs.akamai.com/linode-api/changelog"
+SPEC_COMMITS_URL = (
+    "https://api.github.com/repos/linode/linode-api-openapi/commits"
+    "?path=openapi.json&per_page=1"
+)
+
+_CHANGELOG_ENTRY_PATH = re.compile(r"/linode-api/changelog/[^/]+/?$", re.IGNORECASE)
+_CHANGELOG_PATH_DATE = re.compile(
+    r"/linode-api/changelog/([a-z]+)-(\d{1,2})-(\d{4})(?:-[^/]+)?/?$",
+    re.IGNORECASE,
+)
+_CHANGELOG_TEXT_DATE = re.compile(r"\b([a-z]+)\s+(\d{1,2}),\s*(\d{4})\b", re.IGNORECASE)
+_MONTH_NAMES = (
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+)
+_MONTH_NUMBERS = {
+    alias: number
+    for number, name in enumerate(_MONTH_NAMES, start=1)
+    for alias in (name, name[:3])
+}
 
 # proto enum message name -> how to find its value set in the OpenAPI spec.
 # ("<field>", "<path substring>") extracts that field's enum from request bodies
@@ -166,19 +200,157 @@ def load_spec(spec_path: str | None) -> dict[str, Any]:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def staleness_note(doc: dict[str, Any]) -> str:
-    """Compare the spec version against the live changelog's newest dates."""
-    version = doc.get("info", {}).get("version", "unknown")
+class StalenessVerificationError(RuntimeError):
+    """Raised when live changelog or OpenAPI source verification is inconclusive."""
+
+
+class _ChangelogLinkParser(HTMLParser):
+    """Collect changelog links and whether each is explicitly marked scheduled."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[tuple[str, str, bool]] = []
+        self._href: str | None = None
+        self._marker_parts: list[str] = []
+        self._scheduled = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.casefold() != "a" or self._href is not None:
+            return
+        href = next((value for name, value in attrs if name == "href"), None)
+        if href is None:
+            return
+        self._href = href
+        self._marker_parts = [
+            value
+            for name, value in attrs
+            if name.casefold() in {"aria-label", "title"} and value
+        ]
+        self._scheduled = any(
+            name.casefold() in {"data-release-status", "data-status"}
+            and value is not None
+            and value.strip().casefold() == "scheduled"
+            for name, value in attrs
+        )
+
+    def handle_data(self, data: str) -> None:
+        if self._href is not None:
+            self._marker_parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.casefold() != "a" or self._href is None:
+            return
+        marker = " ".join(self._marker_parts).strip().casefold()
+        text_scheduled = marker.startswith(("scheduled:", "scheduled release"))
+        self.links.append((self._href, marker, self._scheduled or text_scheduled))
+        self._href = None
+        self._marker_parts = []
+        self._scheduled = False
+
+
+def changelog_release_dates(
+    html: str,
+    *,
+    today: date | None = None,
+    include_scheduled_future: bool = True,
+) -> list[date]:
+    """Return valid Linode API changelog-entry dates, newest first.
+
+    Dates elsewhere in the TechDocs page are ignored. Future entry links are
+    ignored unless the link is explicitly marked as scheduled.
+    """
+    parser = _ChangelogLinkParser()
+    parser.feed(html)
+    current_date = today or datetime.now(tz=UTC).date()
+    releases: set[date] = set()
+    for href, marker, scheduled in parser.links:
+        path = urlparse(href).path
+        if _CHANGELOG_ENTRY_PATH.fullmatch(path) is None:
+            continue
+        match = _CHANGELOG_PATH_DATE.fullmatch(path) or _CHANGELOG_TEXT_DATE.search(
+            marker
+        )
+        if match is None:
+            continue
+        month_name, day_text, year_text = match.groups()
+        month = _MONTH_NUMBERS.get(month_name.casefold())
+        if month is None:
+            raise ValueError(f"invalid changelog entry month in {href!r}")
+        try:
+            release = date(int(year_text), month, int(day_text))
+        except ValueError as exc:
+            raise ValueError(f"invalid changelog entry date in {href!r}") from exc
+        if release <= current_date or (include_scheduled_future and scheduled):
+            releases.add(release)
+    if not releases:
+        raise ValueError("no valid Linode API changelog entry dates found")
+    return sorted(releases, reverse=True)
+
+
+def _fetch_staleness_source(url: str, label: str) -> str:
+    request = urllib.request.Request(  # noqa: S310 - fixed HTTPS URLs
+        url,
+        headers={
+            "Accept": "application/vnd.github+json, text/html",
+            "User-Agent": "LinodeMCP-sync-enums",
+        },
+    )
     try:
-        with urllib.request.urlopen(CHANGELOG_URL, timeout=60) as resp:  # noqa: S310 - fixed HTTPS URL
-            html = resp.read().decode("utf-8", "replace")
-    except OSError as exc:
-        return f"spec version {version}; changelog unreachable ({exc})"
-    dates = sorted(set(re.findall(r"20\d\d-\d\d-\d\d", html)), reverse=True)
-    newest = dates[0] if dates else "unknown"
+        with urllib.request.urlopen(  # noqa: S310 - fixed HTTPS URLs
+            request, timeout=60
+        ) as response:
+            return response.read().decode("utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise StalenessVerificationError(f"{label} fetch failed: {exc}") from exc
+
+
+def _latest_openapi_commit_date(payload: str) -> date:
+    try:
+        commits = json.loads(payload)
+        timestamp = commits[0]["commit"]["committer"]["date"]
+    except (IndexError, KeyError, TypeError, ValueError) as exc:
+        raise StalenessVerificationError(
+            f"OpenAPI commit verification failed: {exc}"
+        ) from exc
+    if (
+        not isinstance(timestamp, str)
+        or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", timestamp) is None
+    ):
+        raise StalenessVerificationError(
+            "OpenAPI commit verification failed: missing commit timestamp"
+        )
+    try:
+        return date.fromisoformat(timestamp[:10])
+    except ValueError as exc:
+        raise StalenessVerificationError(
+            f"OpenAPI commit verification failed: {exc}"
+        ) from exc
+
+
+def staleness_note(doc: dict[str, Any], *, today: date | None = None) -> str:
+    """Compare the latest changelog release with the OpenAPI source commit."""
+    info = doc.get("info")
+    version = info.get("version") if isinstance(info, dict) else None
+    if not isinstance(version, str) or not version.strip():
+        raise StalenessVerificationError("OpenAPI info.version verification failed")
+    version = version.strip()
+    html = _fetch_staleness_source(CHANGELOG_URL, "changelog")
+    try:
+        newest = changelog_release_dates(
+            html, today=today, include_scheduled_future=False
+        )[0]
+    except ValueError as exc:
+        raise StalenessVerificationError(f"changelog parsing failed: {exc}") from exc
+    commits = _fetch_staleness_source(SPEC_COMMITS_URL, "OpenAPI commits")
+    commit_date = _latest_openapi_commit_date(commits)
+    if newest >= commit_date:
+        raise StalenessVerificationError(
+            "OpenAPI release coverage cannot be verified: newest changelog entry "
+            f"{newest} is newer than latest openapi.json commit {commit_date}"
+        )
     return (
-        f"spec version {version}; newest changelog entry {newest} "
-        "(spec may trail the API)"
+        f"spec version {version}; latest openapi.json commit {commit_date}; "
+        f"newest changelog entry {newest} (release coverage verified)"
     )
 
 
@@ -459,6 +631,20 @@ def main(argv: list[str]) -> int:
         return 1
     diffs.extend(hand_list_diffs(doc, go_lists))
 
+    # The changelog fetch is a live-only staleness tripwire; --spec means an
+    # offline run (CI/tests), so skip the network call and stay hermetic. Verify
+    # live source freshness before either comparison or baseline mutation.
+    if spec_path is None:
+        try:
+            note = staleness_note(doc)
+        except StalenessVerificationError as exc:
+            print(
+                f"sync-enums: staleness verification failed: {exc}",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"sync-enums: {note}", file=sys.stderr)
+
     if update:
         BASELINE.parent.mkdir(parents=True, exist_ok=True)
         version = doc.get("info", {}).get("version", "unknown")
@@ -468,11 +654,6 @@ def main(argv: list[str]) -> int:
         BASELINE.write_text(header + "".join(f"{d}\n" for d in diffs), encoding="utf-8")
         print(f"wrote {len(diffs)} baseline line(s)", file=sys.stderr)
         return 0
-
-    # The changelog fetch is a live-only staleness tripwire; --spec means an
-    # offline run (CI/tests), so skip the network call and stay hermetic.
-    if spec_path is None:
-        print(f"sync-enums: {staleness_note(doc)}", file=sys.stderr)
     baseline = read_baseline()
     new = [d for d in diffs if d not in baseline]
     fixed = baseline - set(diffs)
