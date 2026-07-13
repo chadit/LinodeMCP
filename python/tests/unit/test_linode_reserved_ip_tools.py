@@ -448,7 +448,7 @@ def test_reserved_ip_tools_are_exported_registered_and_profiled(
         (
             "linode_networking_reserved_ip_list",
             Capability.Read,
-            Scope.ReservedIPsReadOnly,
+            Scope.IPsReadOnly,
         ),
         (
             "linode_networking_reserved_ip_type_list",
@@ -458,7 +458,7 @@ def test_reserved_ip_tools_are_exported_registered_and_profiled(
         (
             "linode_networking_reserved_ip_create",
             Capability.Write,
-            Scope.ReservedIPsReadWrite,
+            Scope.IPsReadWrite,
         ),
         (
             "linode_networking_reserved_ip_update",
@@ -475,5 +475,5 @@ def test_reserved_ip_tools_are_exported_registered_and_profiled(
 def test_reserved_ip_tools_require_documented_token_scopes(
     tool_name: str, capability: Capability, expected: Scope
 ) -> None:
-    """Reserved-IP tools declare the endpoint family's dedicated token scope."""
+    """Reserved-IP tools declare each endpoint's documented token scope."""
     assert required_scopes(tool_name, capability) == [expected]
