@@ -4922,10 +4922,22 @@ func TestLinodeNodeBalancerCreateToolDefinition(t *testing.T) {
 	}
 
 	var schemaContract struct {
+		Properties map[string]struct {
+			Type string `json:"type"`
+		} `json:"properties"`
 		Required []string `json:"required"`
 	}
 	if err := json.Unmarshal(tool.RawInputSchema, &schemaContract); err != nil {
 		t.Fatalf("failed to decode tool schema: %v", err)
+	}
+
+	ipv4Schema, ok := schemaContract.Properties[keyIPv4]
+	if !ok {
+		t.Fatalf("tool.RawInputSchema missing property %v", keyIPv4)
+	}
+
+	if ipv4Schema.Type != caseString {
+		t.Errorf("tool.RawInputSchema property %v type = %v, want %v", keyIPv4, ipv4Schema.Type, caseString)
 	}
 
 	if slices.Contains(schemaContract.Required, keyIPv4) {
@@ -4969,6 +4981,11 @@ func TestLinodeNodeBalancerCreateToolValidation(t *testing.T) {
 		{
 			name:         "invalid IPv4",
 			args:         map[string]any{keyRegion: regionUSEast, keyIPv4: "2001:db8::1", keyConfirm: true},
+			wantContains: "ipv4 must be a valid IPv4 address",
+		},
+		{
+			name:         "non-string IPv4",
+			args:         map[string]any{keyRegion: regionUSEast, keyIPv4: float64(1), keyConfirm: true},
 			wantContains: "ipv4 must be a valid IPv4 address",
 		},
 	}

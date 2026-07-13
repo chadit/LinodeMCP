@@ -156,7 +156,7 @@ func TestClientCreateNodeBalancerDoesNotRetryTransientError(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
-		http.Error(w, "temporary", http.StatusServiceUnavailable)
+		http.Error(w, "temporary", http.StatusTooManyRequests)
 	}))
 	t.Cleanup(srv.Close)
 

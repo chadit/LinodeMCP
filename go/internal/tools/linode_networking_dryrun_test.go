@@ -94,6 +94,10 @@ func TestLinodeNodeBalancerCreateToolDryRunPreviewWithoutCreating(t *testing.T) 
 		t.Errorf("effect does not contain %v", regionUSEast)
 	}
 
+	if !strings.Contains(effect, reservedIPv4Fixture) {
+		t.Errorf("effect does not contain selected IPv4 address %v", reservedIPv4Fixture)
+	}
+
 	warnings, _ := body["warnings"].([]any)
 	if len(warnings) != 1 {
 		t.Fatalf("len(warnings) = %d, want %d", len(warnings), 1)
