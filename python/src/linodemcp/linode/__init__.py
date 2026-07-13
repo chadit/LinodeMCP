@@ -22,6 +22,7 @@ import httpx
 from linodemcp.linode.metrics import get_api_recorder, metrics_endpoint
 
 _MANAGED_SERVICE_TIMEOUT_MAX = 255
+_IPV4_VERSION = 4
 
 T = TypeVar("T")
 
@@ -391,6 +392,22 @@ def validate_label(label: str | None) -> None:
         if not (char.isalnum() or char in "_-."):
             msg = f"label contains invalid character '{char}'"
             raise ValueError(msg)
+
+
+def _validated_ipv4_address(value: object) -> str:
+    """Return a validated IPv4 address string."""
+    if not isinstance(value, str):
+        msg = "ipv4 must be a valid IPv4 address"
+        raise TypeError(msg)
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError as exc:
+        msg = "ipv4 must be a valid IPv4 address"
+        raise ValueError(msg) from exc
+    if address.version != _IPV4_VERSION:
+        msg = "ipv4 must be a valid IPv4 address"
+        raise ValueError(msg)
+    return value
 
 
 def build_profile_token_create_body(
@@ -9003,14 +9020,7 @@ class Client:
         """
         validate_label(label)
         if ipv4 is not None:
-            try:
-                address = ipaddress.ip_address(ipv4)
-            except ValueError as exc:
-                msg = "ipv4 must be a valid IPv4 address"
-                raise ValueError(msg) from exc
-            if not isinstance(address, ipaddress.IPv4Address):
-                msg = "ipv4 must be a valid IPv4 address"
-                raise ValueError(msg)
+            ipv4 = _validated_ipv4_address(ipv4)
 
         try:
             body: dict[str, Any] = {

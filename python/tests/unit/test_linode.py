@@ -10550,16 +10550,18 @@ async def test_create_nodebalancer_raw_omits_unselected_ipv4() -> None:
     await client.close()
 
 
-@pytest.mark.parametrize("ipv4", ["2001:db8::1", "not-an-address", ""])
+@pytest.mark.parametrize("ipv4", ["2001:db8::1", "not-an-address", "", 123, True])
 async def test_create_nodebalancer_raw_rejects_invalid_ipv4_before_request(
-    ipv4: str,
+    ipv4: Any,
 ) -> None:
     """create_nodebalancer_raw rejects non-IPv4 values before making a request."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with (
         patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
-        pytest.raises(ValueError, match="ipv4 must be a valid IPv4 address"),
+        pytest.raises(
+            (TypeError, ValueError), match="ipv4 must be a valid IPv4 address"
+        ),
     ):
         await client.create_nodebalancer_raw(region="us-east", ipv4=ipv4)
 
