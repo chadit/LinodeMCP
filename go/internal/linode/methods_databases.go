@@ -307,8 +307,8 @@ func (c *Client) httpResetDatabasePostgreSQLInstanceCredentials(ctx context.Cont
 }
 
 // writeDatabaseInstanceProto issues a create/update request and decodes the API
-// body into the proto DatabaseInstance element. The MySQL and PostgreSQL create
-// and update paths only differ by method, endpoint, and operation label, so they
+// body into the proto DatabaseInstance element. The PostgreSQL create and both
+// update paths only differ by method, endpoint, and operation label, so they
 // route through this one helper to keep dupl happy.
 func (c *Client) writeDatabaseInstanceProto(ctx context.Context, operation, method, endpoint string, body any) (*linodev1.DatabaseInstance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -332,7 +332,22 @@ func (c *Client) writeDatabaseInstanceProto(ctx context.Context, operation, meth
 // httpCreateDatabaseInstanceProto creates a MySQL Managed Database instance and
 // decodes the response into the proto element.
 func (c *Client) httpCreateDatabaseInstanceProto(ctx context.Context, req *CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
-	return c.writeDatabaseInstanceProto(ctx, "CreateDatabaseInstance", http.MethodPost, endpointDatabaseInstances, req)
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDatabaseInstances, req)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateDatabaseInstance", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	instance := &linodev1.DatabaseInstance{}
+	if err := c.handleProtoResponse(resp, instance); err != nil {
+		return nil, err
+	}
+
+	return instance, nil
 }
 
 // httpCreateDatabasePostgreSQLInstanceProto creates a PostgreSQL Managed Database
