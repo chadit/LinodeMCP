@@ -633,7 +633,7 @@ async def _instance_volume_deps(
 async def _instance_ip_deps(
     client: RetryableClient, instance_id: int
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """Public IPv4 addresses are released back to the pool on delete."""
+    """Describe how ephemeral and reserved public IPv4 addresses are affected."""
     try:
         ips = await client.list_instance_ips(instance_id)
     except (APIError, NetworkError, httpx.HTTPError) as exc:
@@ -641,6 +641,7 @@ async def _instance_ip_deps(
 
     ipv4 = cast("dict[str, Any]", ips.get("ipv4", {}))
     public = cast("list[dict[str, Any]]", ipv4.get("public", []))
+    reserved = cast("list[dict[str, Any]]", ipv4.get("reserved", []))
     deps: list[dict[str, Any]] = [
         {
             "kind": "public_ip",
@@ -649,6 +650,18 @@ async def _instance_ip_deps(
         }
         for addr in public
     ]
+    deps.extend(
+        {
+            "kind": "public_ip",
+            "label": str(addr.get("address", "")),
+            "action": "detached",
+            "note": (
+                "Reserved IP is detached from the instance; reservation and "
+                "billing continue."
+            ),
+        }
+        for addr in reserved
+    )
 
     return deps, []
 
