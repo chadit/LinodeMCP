@@ -214,6 +214,11 @@ def _scope_category(tool_name: str) -> str | None:
         "linode_firewall_settings_get",
     ):
         return _CAT_ACCOUNT
+
+    # The API's security metadata intentionally splits this route family:
+    # create and collection-list use ips:*, while get, update, type-list,
+    # and delete use reserved-ips:*. Keep only the two collection overrides
+    # here; the item and pricing tools resolve through _prefix_table below.
     if tool_name in (
         "linode_networking_reserved_ip_create",
         "linode_networking_reserved_ip_list",
