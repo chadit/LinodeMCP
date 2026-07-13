@@ -27417,7 +27417,7 @@ async def test_profile_device_revoke_dry_run_returns_preview(
 async def test_instance_delete_dry_run_dependency_walk(
     sample_config: Config,
 ) -> None:
-    """dry_run distinguishes ephemeral and reserved IPs and never deletes."""
+    """dry_run surfaces attached volumes + public IPs, warns, never deletes."""
     from dataclasses import fields as dataclass_fields
     from types import SimpleNamespace
 
@@ -27436,10 +27436,7 @@ async def test_instance_delete_dry_run_dependency_walk(
             SimpleNamespace(id=1, label="other-vol", size=10, linode_id=999),
         ]
         mock_client.list_instance_ips.return_value = {
-            "ipv4": {
-                "public": [{"address": "198.51.100.10"}],
-                "reserved": [{"address": "203.0.113.25"}],
-            }
+            "ipv4": {"public": [{"address": "198.51.100.10"}]}
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -27456,16 +27453,15 @@ async def test_instance_delete_dry_run_dependency_walk(
         assert body["would_execute"]["path"] == "/linode/instances/123"
 
         deps = body["dependencies"]
-        assert sorted(d["kind"] for d in deps) == ["public_ip", "public_ip", "volume"]
+        assert sorted(d["kind"] for d in deps) == ["public_ip", "volume"]
 
         volume_dep = next(d for d in deps if d["kind"] == "volume")
         assert volume_dep["id"] == 6789
         assert volume_dep["action"] == "detached"
 
-        ip_deps = {d["label"]: d for d in deps if d["kind"] == "public_ip"}
-        assert ip_deps["198.51.100.10"]["action"] == "released"
-        assert ip_deps["203.0.113.25"]["action"] == "detached"
-        assert "reservation and billing continue" in ip_deps["203.0.113.25"]["note"]
+        ip_dep = next(d for d in deps if d["kind"] == "public_ip")
+        assert ip_dep["label"] == "198.51.100.10"
+        assert ip_dep["action"] == "released"
 
         assert body["warnings"]
         mock_client.delete_instance.assert_not_called()

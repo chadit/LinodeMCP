@@ -202,6 +202,10 @@ func instanceDeleteDependenciesByLabel(t *testing.T, rawDependencies any) ([]str
 		kinds = append(kinds, kind)
 
 		if label, labelOK := dependency["label"].(string); labelOK {
+			if _, duplicate := dependenciesByLabel[label]; duplicate {
+				t.Fatalf("duplicate dependency label %q", label)
+			}
+
 			dependenciesByLabel[label] = dependency
 		}
 	}
