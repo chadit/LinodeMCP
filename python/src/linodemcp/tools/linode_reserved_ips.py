@@ -32,6 +32,86 @@ if TYPE_CHECKING:
 
 
 _REGION_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$")
+_RESERVED_IP_FIELD_ORDER = (
+    "address",
+    "assigned_entity",
+    "gateway",
+    "interface_id",
+    "linode_id",
+    "prefix",
+    "public",
+    "rdns",
+    "region",
+    "reserved",
+    "subnet_mask",
+    "tags",
+    "type",
+    "vpc_nat_1_1",
+)
+_RESERVED_IP_NULLABLE_FIELDS = frozenset(
+    {
+        "assigned_entity",
+        "gateway",
+        "interface_id",
+        "linode_id",
+        "rdns",
+        "vpc_nat_1_1",
+    }
+)
+
+
+def _restore_reserved_ip_nulls(
+    raw: dict[str, Any], serialized: dict[str, Any]
+) -> dict[str, Any]:
+    """Restore documented nulls after typed proto serialization.
+
+    Proto presence preserves integer and object types but omits fields decoded
+    from JSON null. Rebuild in proto field order so the raw tool response stays
+    deterministic while retaining explicit API null values.
+    """
+    restored: dict[str, Any] = {}
+    for field in _RESERVED_IP_FIELD_ORDER:
+        if field in serialized:
+            restored[field] = serialized[field]
+        elif (
+            field in _RESERVED_IP_NULLABLE_FIELDS
+            and field in raw
+            and raw[field] is None
+        ):
+            restored[field] = None
+    return restored
+
+
+def _restore_reserved_ip_list_nulls(
+    raw: Any, serialized: dict[str, Any]
+) -> dict[str, Any]:
+    """Restore explicit nulls for each reserved IP in a list envelope."""
+    raw_page = cast("dict[str, Any]", raw) if isinstance(raw, dict) else {}
+    raw_data = raw_page.get("data", [])
+    raw_items = (
+        [
+            cast("dict[str, Any]", item)
+            for item in cast("list[object]", raw_data)
+            if isinstance(item, dict)
+        ]
+        if isinstance(raw_data, list)
+        else []
+    )
+    serialized_data = serialized.get("reserved_ips", [])
+    serialized_items = (
+        [
+            cast("dict[str, Any]", item)
+            for item in cast("list[object]", serialized_data)
+            if isinstance(item, dict)
+        ]
+        if isinstance(serialized_data, list)
+        else []
+    )
+    serialized["reserved_ips"] = [
+        _restore_reserved_ip_nulls(raw_item, serialized_item)
+        for raw_item, serialized_item in zip(raw_items, serialized_items, strict=True)
+    ]
+    return serialized
 
 
 def _reserved_ipv4_argument(
@@ -123,7 +203,8 @@ async def handle_linode_networking_reserved_ip_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         reserved_ip = await client.create_reserved_ip(region, tags)
-        return serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
+        serialized = serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
+        return _restore_reserved_ip_nulls(reserved_ip, serialized)
 
     return await execute_tool(cfg, arguments, "reserve public IPv4 address", _call)
 
@@ -149,11 +230,12 @@ async def handle_linode_networking_reserved_ip_list(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         response = await client.list_reserved_ips(page=page, page_size=page_size)
-        return serialize_list_response(
+        serialized = serialize_list_response(
             response,
             "reserved_ips",
             ip_pb2.ReservedIPListResponse(),
         )
+        return _restore_reserved_ip_list_nulls(response, serialized)
 
     return await execute_tool(cfg, arguments, "list reserved IPv4 addresses", _call)
 
@@ -177,7 +259,8 @@ async def handle_linode_networking_reserved_ip_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         reserved_ip = await client.get_reserved_ip(address)
-        return serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
+        serialized = serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
+        return _restore_reserved_ip_nulls(reserved_ip, serialized)
 
     return await execute_tool(cfg, arguments, "get reserved IPv4 address", _call)
 
@@ -228,7 +311,8 @@ async def handle_linode_networking_reserved_ip_update(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         reserved_ip = await client.update_reserved_ip(address, typed_tags)
-        return serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
+        serialized = serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
+        return _restore_reserved_ip_nulls(reserved_ip, serialized)
 
     return await execute_tool(cfg, arguments, "replace reserved IPv4 tags", _call)
 

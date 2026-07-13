@@ -137,25 +137,43 @@ message IPv6RangeDeleteResponse {
   string range = 2;
 }
 
-// ReservedIPAddress mirrors the complete reserved public IPv4 response. The
-// API deliberately uses null for unassigned relationships and unset network
-// fields, so those values use google.protobuf.Value to preserve null as well
-// as the documented object shapes without inventing local enum allowlists.
+// ReservedIPAssignedEntity identifies the resource currently using a reserved
+// address. The API returns null when the address is unassigned; the Python
+// handler restores that explicit null after proto serialization.
+message ReservedIPAssignedEntity {
+  int64 id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// ReservedIPVPCNAT describes a 1:1 VPC NAT association. The API returns null
+// when no association exists; the Python handler restores that explicit null
+// after proto serialization.
+message ReservedIPVPCNAT {
+  string address = 1;
+  int64 subnet_id = 2;
+  int64 vpc_id = 3;
+}
+
+// ReservedIPAddress mirrors the complete reserved public IPv4 response.
+// Nullable scalars use proto presence and typed relationship messages preserve
+// integer IDs; the handler restores documented explicit nulls in field order.
 message ReservedIPAddress {
   string address = 1;
-  google.protobuf.Value assigned_entity = 2;
-  google.protobuf.Value gateway = 3;
-  google.protobuf.Value interface_id = 4;
-  google.protobuf.Value linode_id = 5;
+  ReservedIPAssignedEntity assigned_entity = 2;
+  optional string gateway = 3;
+  optional int64 interface_id = 4;
+  optional int64 linode_id = 5;
   int32 prefix = 6;
   bool public = 7;
-  google.protobuf.Value rdns = 8;
+  optional string rdns = 8;
   string region = 9;
   bool reserved = 10;
   string subnet_mask = 11;
   repeated string tags = 12;
   string type = 13;
-  google.protobuf.Value vpc_nat_1_1 = 14;
+  ReservedIPVPCNAT vpc_nat_1_1 = 14;
 }
 
 // ReservedIPListResponse is the project list envelope for the paginated

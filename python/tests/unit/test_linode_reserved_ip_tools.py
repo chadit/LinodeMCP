@@ -47,7 +47,7 @@ RESERVED_IP = {
         "url": "/v4/linode/instances/1234",
     },
     "gateway": "192.0.2.1",
-    "interface_id": None,
+    "interface_id": 456,
     "linode_id": 1234,
     "prefix": 24,
     "public": True,
@@ -98,6 +98,12 @@ async def test_reserved_ip_create_passes_body_and_preserves_response(
     )
     body = _body(result)
     assert body == RESERVED_IP
+    assert result[0].text == json.dumps(RESERVED_IP, indent=2)
+    assert type(body["assigned_entity"]["id"]) is int
+    assert type(body["interface_id"]) is int
+    assert type(body["linode_id"]) is int
+    assert type(body["vpc_nat_1_1"]["subnet_id"]) is int
+    assert type(body["vpc_nat_1_1"]["vpc_id"]) is int
     mock_linode_client.create_reserved_ip.assert_awaited_once_with(
         "us-east", ["prod", "web"]
     )
@@ -110,7 +116,10 @@ async def test_reserved_ip_list_passes_pagination_and_preserves_nulls(
     unassigned = {
         **RESERVED_IP,
         "assigned_entity": None,
+        "gateway": None,
+        "interface_id": None,
         "linode_id": None,
+        "rdns": None,
         "vpc_nat_1_1": None,
     }
     mock_linode_client.list_reserved_ips.return_value = {
@@ -126,7 +135,10 @@ async def test_reserved_ip_list_passes_pagination_and_preserves_nulls(
     assert body["count"] == 1
     assert body["reserved_ips"][0]["reserved"] is True
     assert body["reserved_ips"][0]["assigned_entity"] is None
+    assert body["reserved_ips"][0]["gateway"] is None
+    assert body["reserved_ips"][0]["interface_id"] is None
     assert body["reserved_ips"][0]["linode_id"] is None
+    assert body["reserved_ips"][0]["rdns"] is None
     assert body["reserved_ips"][0]["vpc_nat_1_1"] is None
     mock_linode_client.list_reserved_ips.assert_awaited_once_with(page=2, page_size=50)
 
