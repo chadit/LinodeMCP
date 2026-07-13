@@ -10512,17 +10512,70 @@ async def test_create_nodebalancer_raw_returns_full_body() -> None:
         mock_request.return_value = mock_response
 
         result = await client.create_nodebalancer_raw(
-            region="us-east", label="edge-lb", client_conn_throttle=10
+            region="us-east",
+            label="edge-lb",
+            client_conn_throttle=10,
+            ipv4="192.0.2.141",
         )
 
-        assert result["id"] == 7777
+        assert result == {
+            "id": 7777,
+            "label": "edge-lb",
+            "region": "us-east",
+        }
         args, _kwargs = mock_request.await_args_list[0]
         assert args[0] == "POST"
         assert args[1] == "/nodebalancers"
-        assert args[2]["region"] == "us-east"
-        assert args[2]["label"] == "edge-lb"
-        assert args[2]["client_conn_throttle"] == 10
+        assert args[2] == {
+            "region": "us-east",
+            "label": "edge-lb",
+            "client_conn_throttle": 10,
+            "ipv4": "192.0.2.141",
+        }
 
+    await client.close()
+
+
+async def test_create_nodebalancer_raw_omits_ipv4_by_default() -> None:
+    """create_nodebalancer_raw preserves ephemeral allocation when IPv4 is omitted."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": 7777,
+        "label": "edge-lb",
+        "region": "us-east",
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        await client.create_nodebalancer_raw(region="us-east")
+
+    mock_request.assert_awaited_once_with(
+        "POST",
+        "/nodebalancers",
+        {"region": "us-east", "client_conn_throttle": 0},
+    )
+
+    await client.close()
+
+
+@pytest.mark.parametrize("ipv4", ["invalid", "2001:db8::1", "192.0.2.1/32", 1, True])
+async def test_create_nodebalancer_raw_rejects_invalid_ipv4(ipv4: object) -> None:
+    """create_nodebalancer_raw validates IPv4 values before making a request."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    with (
+        patch.object(client, "make_request", new_callable=AsyncMock) as mock_request,
+        pytest.raises(
+            (TypeError, ValueError), match="ipv4 must be a valid IPv4 address"
+        ),
+    ):
+        await client.create_nodebalancer_raw("us-east", ipv4=cast("Any", ipv4))
+
+    mock_request.assert_not_awaited()
     await client.close()
 
 

@@ -321,6 +321,19 @@ def validate_dns_record_target(record_type: str, target: str) -> None:
             raise ValueError(msg)
 
 
+def validate_ipv4_address(address: object) -> None:
+    """Validate that a value is an IPv4 address string."""
+    if not isinstance(address, str):
+        msg = "ipv4 must be a valid IPv4 address"
+        raise TypeError(msg)
+
+    try:
+        ipaddress.IPv4Address(address)
+    except ipaddress.AddressValueError:
+        msg = "ipv4 must be a valid IPv4 address"
+        raise ValueError(msg) from None
+
+
 def validate_firewall_policy(policy: str) -> None:
     """Validate firewall policy value."""
     if policy.upper() not in ("ACCEPT", "DROP"):
@@ -8993,6 +9006,7 @@ class Client:
         label: str | None = None,
         client_conn_throttle: int = 0,
         tags: list[str] | None = None,
+        ipv4: str | None = None,
     ) -> dict[str, Any]:
         """Create a NodeBalancer and return the full raw API body.
 
@@ -9001,6 +9015,8 @@ class Client:
         Python output matches Go, which decodes the same full API JSON.
         """
         validate_label(label)
+        if ipv4 is not None:
+            validate_ipv4_address(ipv4)
 
         try:
             body: dict[str, Any] = {
@@ -9011,6 +9027,8 @@ class Client:
                 body["label"] = label
             if tags:
                 body["tags"] = tags
+            if ipv4 is not None:
+                body["ipv4"] = ipv4
 
             response = await self.make_request("POST", "/nodebalancers", body)
             data: dict[str, Any] = response.json()
@@ -14208,16 +14226,16 @@ class RetryableClient:
         label: str | None = None,
         client_conn_throttle: int = 0,
         tags: list[str] | None = None,
+        ipv4: str | None = None,
     ) -> dict[str, Any]:
-        """Create NodeBalancer with retry, returning the full raw API body."""
-        result: dict[str, Any] = await self._execute_with_retry(
-            self.client.create_nodebalancer_raw,
+        """Create a NodeBalancer once and return the full raw API body."""
+        return await self.client.create_nodebalancer_raw(
             region,
             label,
             client_conn_throttle,
             tags,
+            ipv4,
         )
-        return result
 
     async def update_nodebalancer_raw(
         self,

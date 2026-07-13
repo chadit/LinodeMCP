@@ -560,6 +560,22 @@ async def test_retryable_resize_volume_delegates() -> None:
     await retryable.close()
 
 
+async def test_retryable_create_nodebalancer_raw_does_not_replay() -> None:
+    """RetryableClient delegates the non-idempotent create POST once."""
+    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+
+    with patch.object(
+        retryable.client, "create_nodebalancer_raw", new_callable=AsyncMock
+    ) as mock_create:
+        mock_create.side_effect = httpx.ConnectTimeout("transient")
+
+        with pytest.raises(httpx.ConnectTimeout):
+            await retryable.create_nodebalancer_raw("us-east", ipv4="192.0.2.141")
+
+    mock_create.assert_awaited_once_with("us-east", None, 0, None, "192.0.2.141")
+    await retryable.close()
+
+
 async def test_retryable_delete_nodebalancer_delegates() -> None:
     """RetryableClient.delete_nodebalancer delegates to the base client."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")

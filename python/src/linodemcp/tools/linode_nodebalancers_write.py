@@ -11,7 +11,7 @@ from linodemcp.genpb.linode.mcp.v1 import (
     nodebalancer_config_pb2,
     nodebalancer_pb2,
 )
-from linodemcp.linode import APIError, NetworkError
+from linodemcp.linode import APIError, NetworkError, validate_ipv4_address
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
@@ -398,11 +398,26 @@ async def handle_linode_nodebalancer_create(
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_create tool request."""
     region = arguments.get("region", "")
+    ipv4 = arguments.get("ipv4")
+
+    if ipv4 is not None:
+        try:
+            validate_ipv4_address(ipv4)
+        except (TypeError, ValueError) as exc:
+            return error_response(str(exc))
 
     if is_dry_run(arguments):
         if not region:
             return error_response("region is required")
         nb_label = arguments.get("label")
+        request_body: dict[str, Any] = {
+            "region": region,
+            "client_conn_throttle": arguments.get("client_conn_throttle", 0),
+        }
+        if nb_label:
+            request_body["label"] = nb_label
+        if ipv4 is not None:
+            request_body["ipv4"] = ipv4
         effect = (
             f"A new NodeBalancer {nb_label!r} will be created in region {region}."
             if nb_label
@@ -416,9 +431,10 @@ async def handle_linode_nodebalancer_create(
             None,
             side_effects=[effect],
             warnings=["Billing for the NodeBalancer starts immediately on creation."],
+            request_body=request_body,
         )
 
-    if not arguments.get("confirm"):
+    if arguments.get("confirm") is not True:
         return error_response(
             "This operation creates a billable resource. Set confirm=true to proceed."
         )
@@ -431,6 +447,7 @@ async def handle_linode_nodebalancer_create(
             region=region,
             label=arguments.get("label"),
             client_conn_throttle=arguments.get("client_conn_throttle", 0),
+            ipv4=ipv4,
         )
         return serialize_api_response(
             {
