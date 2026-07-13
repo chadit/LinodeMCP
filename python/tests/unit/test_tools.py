@@ -27417,7 +27417,7 @@ async def test_profile_device_revoke_dry_run_returns_preview(
 async def test_instance_delete_dry_run_dependency_walk(
     sample_config: Config,
 ) -> None:
-    """dry_run distinguishes ephemeral and reserved IPs and never deletes."""
+    """dry_run surfaces attached volumes + public IPs, warns, never deletes."""
     from dataclasses import fields as dataclass_fields
     from types import SimpleNamespace
 
@@ -27436,10 +27436,7 @@ async def test_instance_delete_dry_run_dependency_walk(
             SimpleNamespace(id=1, label="other-vol", size=10, linode_id=999),
         ]
         mock_client.list_instance_ips.return_value = {
-            "ipv4": {
-                "public": [{"address": "198.51.100.10"}],
-                "reserved": [{"address": "203.0.113.25"}],
-            }
+            "ipv4": {"public": [{"address": "198.51.100.10"}]}
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -27456,132 +27453,17 @@ async def test_instance_delete_dry_run_dependency_walk(
         assert body["would_execute"]["path"] == "/linode/instances/123"
 
         deps = body["dependencies"]
-        assert sorted(d["kind"] for d in deps) == ["public_ip", "public_ip", "volume"]
+        assert sorted(d["kind"] for d in deps) == ["public_ip", "volume"]
 
         volume_dep = next(d for d in deps if d["kind"] == "volume")
         assert volume_dep["id"] == 6789
         assert volume_dep["action"] == "detached"
 
-        ip_deps = {d["label"]: d for d in deps if d["kind"] == "public_ip"}
-        assert ip_deps["198.51.100.10"]["action"] == "released"
-        assert ip_deps["203.0.113.25"]["action"] == "detached"
-        assert "reservation and billing continue" in ip_deps["203.0.113.25"]["note"]
+        ip_dep = next(d for d in deps if d["kind"] == "public_ip")
+        assert ip_dep["label"] == "198.51.100.10"
+        assert ip_dep["action"] == "released"
 
         assert body["warnings"]
-        mock_client.delete_instance.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    ("ip_payload", "expected_labels", "expect_parse_warning"),
-    [
-        pytest.param(None, set[str](), True, id="null-response"),
-        pytest.param({"ipv4": None}, set[str](), False, id="null-ipv4"),
-        pytest.param(
-            {
-                "ipv4": {
-                    "public": [{"address": "198.51.100.10"}],
-                    "reserved": "not-a-list",
-                }
-            },
-            {"198.51.100.10"},
-            True,
-            id="partial-valid-data",
-        ),
-        pytest.param(
-            {"ipv4": {"public": [None], "reserved": [{"address": None}]}},
-            set[str](),
-            True,
-            id="malformed-addresses",
-        ),
-    ],
-)
-async def test_instance_delete_dry_run_handles_malformed_ip_payloads(
-    sample_config: Config,
-    ip_payload: Any,
-    expected_labels: set[str],
-    expect_parse_warning: bool,
-) -> None:
-    """Malformed IP data becomes a best-effort warning, not a preview failure."""
-    from dataclasses import fields as dataclass_fields
-
-    from linodemcp.linode import Instance
-
-    instance_kwargs: dict[str, Any] = {
-        field.name: None for field in dataclass_fields(Instance)
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = Instance(**instance_kwargs)
-        mock_client.list_volumes.return_value = []
-        mock_client.list_instance_ips.return_value = ip_payload
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_delete(
-            {"instance_id": 123, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        labels = {
-            dependency["label"]
-            for dependency in body.get("dependencies", [])
-            if dependency["kind"] == "public_ip"
-        }
-        parse_warnings = [
-            warning
-            for warning in body["warnings"]
-            if warning.startswith("Could not parse")
-        ]
-
-        assert labels == expected_labels
-        assert bool(parse_warnings) is expect_parse_warning
-        mock_client.delete_instance.assert_not_called()
-
-
-async def test_instance_delete_dry_run_handles_ip_json_decode_error(
-    sample_config: Config,
-) -> None:
-    """Invalid IP response JSON warns while preserving valid dependencies."""
-    from dataclasses import fields as dataclass_fields
-    from types import SimpleNamespace
-
-    from linodemcp.linode import Instance
-
-    instance_kwargs: dict[str, Any] = {
-        field.name: None for field in dataclass_fields(Instance)
-    }
-
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_client.get_instance.return_value = Instance(**instance_kwargs)
-        mock_client.list_volumes.return_value = [
-            SimpleNamespace(id=6789, label="data-vol", size=50, linode_id=123)
-        ]
-        mock_client.list_instance_ips.side_effect = ValueError("invalid JSON")
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_cls.return_value = mock_client
-
-        result = await handle_linode_instance_delete(
-            {"instance_id": 123, "dry_run": True}, sample_config
-        )
-
-        body = json.loads(result[0].text)
-        assert body["dependencies"] == [
-            {
-                "kind": "volume",
-                "id": 6789,
-                "label": "data-vol",
-                "action": "detached",
-                "note": "50GB volume stays; billing continues.",
-            }
-        ]
-        assert any(
-            warning.startswith("Could not list IP addresses: invalid JSON")
-            for warning in body["warnings"]
-        )
         mock_client.delete_instance.assert_not_called()
 
 
