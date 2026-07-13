@@ -3,4 +3,6 @@
 # Ratchet: convert a handler to proto on both sides, then remove its line;
 # never add a line by hand. Regenerate:
 #   python scripts/verify_write_proto.py --update-baseline
-
+linode_networking_reserved_ip_create	missing	proto
+linode_networking_reserved_ip_delete	missing	proto
+linode_networking_reserved_ip_update	missing	proto

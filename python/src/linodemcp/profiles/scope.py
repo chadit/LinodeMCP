@@ -51,6 +51,9 @@ class Scope(StrEnum):
     IPsReadOnly = "ips:read_only"
     IPsReadWrite = "ips:read_write"
 
+    ReservedIPsReadOnly = "reserved-ips:read_only"
+    ReservedIPsReadWrite = "reserved-ips:read_write"
+
     LinodesReadOnly = "linodes:read_only"
     LinodesReadWrite = "linodes:read_write"
 
@@ -103,6 +106,7 @@ _CAT_LKE = "lke"
 _CAT_LONGVIEW = "longview"
 _CAT_NODEBALANCERS = "nodebalancers"
 _CAT_OBJECT_STORAGE = "object_storage"
+_CAT_RESERVED_IPS = "reserved-ips"
 _CAT_STACKSCRIPTS = "stackscripts"
 _CAT_VOLUMES = "volumes"
 _CAT_VPC = "vpc"
@@ -131,6 +135,10 @@ def _scope_matrix() -> dict[str, tuple[Scope, Scope]]:
         _CAT_OBJECT_STORAGE: (
             Scope.ObjectStorageReadOnly,
             Scope.ObjectStorageReadWrite,
+        ),
+        _CAT_RESERVED_IPS: (
+            Scope.ReservedIPsReadOnly,
+            Scope.ReservedIPsReadWrite,
         ),
         _CAT_STACKSCRIPTS: (
             Scope.StackScriptsReadOnly,
@@ -161,6 +169,7 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
         ),
         (("linode_database_", "linode_databases_"), _CAT_DATABASES),
         (("linode_object_storage_",), _CAT_OBJECT_STORAGE),
+        (("linode_networking_reserved_ip_",), _CAT_RESERVED_IPS),
         (("linode_lke_",), _CAT_LKE),
         (("linode_longview_",), _CAT_LONGVIEW),
         (("linode_nodebalancer_", "linode_nodebalancers_"), _CAT_NODEBALANCERS),

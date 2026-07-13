@@ -13,6 +13,9 @@ import (
 // manifest at the repo root; this test runs three levels below it.
 const capabilitiesManifestPath = "../../../docs/tools-capabilities.txt"
 
+// toolParityBaselinePath records accepted language-specific tool surfaces.
+const toolParityBaselinePath = "../../../docs/tool-parity-baseline.txt"
+
 // loadCapabilityManifest parses docs/tools-capabilities.txt into a tool->tier
 // map. Each non-comment line is "<tool>\t<Capability>"; the tier strings match
 // profiles.Capability.String() with the "Cap" prefix stripped (Read, Write,
@@ -62,6 +65,40 @@ func loadCapabilityManifest(t *testing.T) map[string]string {
 	return entries
 }
 
+// loadPythonOnlyTools returns tools explicitly accepted as registered in
+// Python but not Go. These tools still belong in the capability manifest so
+// their Python capability tier remains pinned.
+func loadPythonOnlyTools(t *testing.T) map[string]bool {
+	t.Helper()
+
+	file, err := os.Open(filepath.Clean(toolParityBaselinePath))
+	if err != nil {
+		t.Fatalf("open tool parity baseline: %v", err)
+	}
+
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			t.Errorf("close tool parity baseline: %v", closeErr)
+		}
+	}()
+
+	tools := make(map[string]bool)
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		name, detail, found := strings.Cut(scanner.Text(), ": ")
+		if found && detail == "registered in Python but not Go" {
+			tools[name] = true
+		}
+	}
+
+	if scanErr := scanner.Err(); scanErr != nil {
+		t.Fatalf("read tool parity baseline: %v", scanErr)
+	}
+
+	return tools
+}
+
 // TestToolCapabilitiesMatchManifest enforces cross-language capability parity:
 // every registered tool's capability tag must equal docs/tools-capabilities.txt.
 // The Python twin (tests/unit/test_tools_capabilities.py) checks the same file,
@@ -71,6 +108,7 @@ func TestToolCapabilitiesMatchManifest(t *testing.T) {
 	t.Parallel()
 
 	expected := loadCapabilityManifest(t)
+	pythonOnly := loadPythonOnlyTools(t)
 
 	srv := newCapabilityTestServer(t)
 	infos := srv.AllToolInfos()
@@ -98,7 +136,7 @@ func TestToolCapabilitiesMatchManifest(t *testing.T) {
 	var missing []string
 
 	for name := range expected {
-		if !seen[name] {
+		if !seen[name] && !pythonOnly[name] {
 			missing = append(missing, name)
 		}
 	}

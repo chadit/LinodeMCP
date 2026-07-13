@@ -5,4 +5,9 @@
 # convert a factory to a proto schema on both sides, then remove its line;
 # never add a line by hand. Regenerate:
 #   python scripts/verify_input_proto.py --update-baseline
-
+linode_networking_reserved_ip_create	missing	generated
+linode_networking_reserved_ip_delete	missing	generated
+linode_networking_reserved_ip_get	missing	generated
+linode_networking_reserved_ip_list	missing	generated
+linode_networking_reserved_ip_type_list	missing	generated
+linode_networking_reserved_ip_update	missing	generated

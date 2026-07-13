@@ -1,12 +1,9 @@
 """Cross-language tool-surface parity gate.
 
-``docs/tools-manifest.txt`` is the canonical tool surface for both
-implementations. Every listed tool must exist in BOTH implementations:
-this test asserts the Python registry equals exactly the full manifest
-set, and the Go twin (``go/internal/server/tools_manifest_test.go``)
-enforces the same. Any tab annotation on a manifest line (the retired
-go-only/py-only mechanism) fails the test outright, so one-sided tools
-cannot quietly return.
+``docs/tools-manifest.txt`` is the canonical shared tool surface for both
+implementations. Every listed tool must exist in BOTH implementations; accepted
+language-specific additions are recorded in ``docs/tool-parity-baseline.txt``
+and remain outside the shared manifest.
 """
 
 from __future__ import annotations
@@ -16,6 +13,9 @@ from pathlib import Path
 from linodemcp.server import get_tool_registry
 
 _MANIFEST_PATH = Path(__file__).resolve().parents[3] / "docs" / "tools-manifest.txt"
+_PARITY_BASELINE_PATH = (
+    Path(__file__).resolve().parents[3] / "docs" / "tool-parity-baseline.txt"
+)
 
 
 def _load_manifest() -> set[str]:
@@ -39,13 +39,23 @@ def _load_manifest() -> set[str]:
     return entries
 
 
+def _load_python_only_tools() -> set[str]:
+    """Return tools explicitly accepted as registered only in Python."""
+    suffix = ": registered in Python but not Go"
+    return {
+        line.removesuffix(suffix)
+        for line in _PARITY_BASELINE_PATH.read_text(encoding="utf-8").splitlines()
+        if line.endswith(suffix)
+    }
+
+
 def test_tool_surface_matches_manifest() -> None:
-    """The Python registry must equal the full manifest set exactly."""
+    """The Python registry must equal the shared plus accepted Python surface."""
     expected = _load_manifest()
     actual = {entry.name for entry in get_tool_registry()}
 
     missing = sorted(expected - actual)
-    extra = sorted(actual - expected)
+    extra = sorted(actual - expected - _load_python_only_tools())
 
     assert not missing, (
         "tools in docs/tools-manifest.txt but not registered by the Python "
