@@ -77,8 +77,9 @@ func instanceVolumeDeps(ctx context.Context, client *linode.Client, linodeID int
 	return deps, ""
 }
 
-// instanceIPDeps lists the instance's public IPv4 addresses, which are
-// released back to the pool when the instance is deleted.
+// instanceIPDeps lists the instance's public IPv4 addresses. Ephemeral
+// addresses return to the pool when the instance is deleted; reserved
+// addresses detach while their reservation and billing continue.
 func instanceIPDeps(ctx context.Context, client *linode.Client, linodeID int) ([]DryRunDependency, string) {
 	ips, err := client.ListInstanceIPs(ctx, linodeID)
 	if err != nil {
@@ -89,13 +90,23 @@ func instanceIPDeps(ctx context.Context, client *linode.Client, linodeID int) ([
 		return nil, ""
 	}
 
-	deps := make([]DryRunDependency, 0, len(ips.IPv4.Public))
+	deps := make([]DryRunDependency, 0, len(ips.IPv4.Public)+len(ips.IPv4.Reserved))
 	for i := range ips.IPv4.Public {
 		addr := &ips.IPv4.Public[i]
 		deps = append(deps, DryRunDependency{
 			Kind:   "public_ip",
 			Label:  addr.Address,
 			Action: dependencyActionReleased,
+		})
+	}
+
+	for i := range ips.IPv4.Reserved {
+		addr := &ips.IPv4.Reserved[i]
+		deps = append(deps, DryRunDependency{
+			Kind:   "public_ip",
+			Label:  addr.Address,
+			Action: dependencyActionDetached,
+			Note:   "Reserved IP is detached from the instance; reservation and billing continue.",
 		})
 	}
 
@@ -126,11 +137,12 @@ func instanceFirewallDeps(ctx context.Context, client *linode.Client, linodeID i
 }
 
 // instanceDeleteDependencyWalk is the Tier A walk for linode_instance_delete.
-// It surfaces the resources a delete affects (attached volumes detach, public
-// IPs release, firewall attachments drop), estimates the monthly billing
-// change, and warns when the instance is running. Each sub-list is
-// best-effort: a fetch error becomes a warning rather than failing the whole
-// preview, so a partial dependency picture still reaches the model.
+// It surfaces the resources a delete affects (attached volumes detach,
+// ephemeral public IPs release, reserved public IPs detach, firewall
+// attachments drop), estimates the monthly billing change, and warns when the
+// instance is running. Each sub-list is best-effort: a fetch error becomes a
+// warning rather than failing the whole preview, so a partial dependency
+// picture still reaches the model.
 func instanceDeleteDependencyWalk(ctx context.Context, client *linode.Client, linodeID int, state any) (DryRunDetails, error) {
 	var details DryRunDetails
 

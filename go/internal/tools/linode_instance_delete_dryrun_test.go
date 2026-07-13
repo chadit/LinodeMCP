@@ -12,11 +12,14 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
+const instanceDeletePublicIPKind = "public_ip"
+
 // TestLinodeInstanceDeleteToolDryRunDependencies exercises the Phase 2 Tier A
 // dependency walk: the preview must surface attached volumes (detached),
-// public IPs (released), and firewall attachments (removed), estimate the
-// monthly billing change from the instance type, warn when the instance is
-// running, and never issue a DELETE.
+// ephemeral public IPs (released), reserved public IPs (detached with their
+// reservation and billing preserved), and firewall attachments (removed),
+// estimate the monthly billing change from the instance type, warn when the
+// instance is running, and never issue a DELETE.
 func TestLinodeInstanceDeleteToolDryRunDependencies(t *testing.T) {
 	t.Parallel()
 
@@ -28,7 +31,10 @@ func TestLinodeInstanceDeleteToolDryRunDependencies(t *testing.T) {
 			Data: []linode.Volume{{ID: 6789, Label: "data-vol", Size: 50}},
 		},
 		"/linode/instances/123/ips": linode.InstanceIPAddresses{
-			IPv4: &linode.InstanceIPv4{Public: []linode.IPAddress{{Address: "198.51.100.10"}}},
+			IPv4: &linode.InstanceIPv4{
+				Public:   []linode.IPAddress{{Address: "198.51.100.10"}},
+				Reserved: []linode.IPAddress{{Address: "203.0.113.25"}},
+			},
 		},
 		"/linode/instances/123/firewalls": linode.PaginatedResponse[linode.Firewall]{
 			Data: []linode.Firewall{{ID: 42, Label: "web-fw"}},
@@ -70,52 +76,137 @@ func TestLinodeInstanceDeleteToolDryRunDependencies(t *testing.T) {
 		t.Errorf("got %v, want %v", would["path"], instanceGetPath)
 	}
 
-	deps, _ := body["dependencies"].([]any)
-	if len(deps) != 3 {
-		t.Fatalf("len(deps) = %d, want %d", len(deps), 3)
+	assertInstanceDeleteDependencies(t, body["dependencies"])
+
+	billing, billingOK := body["billing_delta"].(map[string]any)
+	if !billingOK {
+		t.Fatal("billing delta is not an object")
 	}
 
-	kinds := make([]string, 0, len(deps))
-
-	for _, entry := range deps {
-		dep, depOK := entry.(map[string]any)
-		if !depOK {
-			t.Fatal("ok = false, want true")
-		}
-
-		kind, ok := dep[tcKind].(string)
-		if !ok {
-			t.Fatal("ok = false, want true")
-		}
-
-		kinds = append(kinds, kind)
-	}
-
-	{
-		gotEls := slices.Clone(kinds)
-		wantEls := slices.Clone([]string{"volume", "public_ip", "firewall"})
-
-		slices.Sort(gotEls)
-		slices.Sort(wantEls)
-
-		if !slices.Equal(gotEls, wantEls) {
-			t.Errorf("got %v, want %v (any order)", kinds, []string{"volume", "public_ip", "firewall"})
-		}
-	}
-
-	billing, _ := body["billing_delta"].(map[string]any)
 	if !reflect.DeepEqual(billing["monthly_change_usd"], "-20.00") {
 		t.Errorf("got %v, want %v", billing["monthly_change_usd"], "-20.00")
 	}
 
-	warnings, _ := body["warnings"].([]any)
-	if len(warnings) == 0 {
-		t.Error("warnings is empty")
+	if !reflect.DeepEqual(billing["note"], "Instance billing stops. Attached volume billing continues.") {
+		t.Errorf("billing note = %v, want attached volume billing continuation", billing["note"])
+	}
+
+	warnings, warningsOK := body["warnings"].([]any)
+	if !warningsOK {
+		t.Fatal("warnings is not an array")
+	}
+
+	if !slices.Contains(warnings, any("Instance is currently running. Delete will not pause for a graceful shutdown.")) {
+		t.Errorf("warnings = %v, want running-instance deletion warning", warnings)
 	}
 
 	if slices.Contains(*methods, http.MethodDelete) {
 		t.Errorf("*methods should not contain %v", http.MethodDelete)
 	}
+}
+
+func assertInstanceDeleteDependencies(t *testing.T, rawDependencies any) {
+	t.Helper()
+
+	kinds, dependenciesByLabel := instanceDeleteDependenciesByLabel(t, rawDependencies)
+	gotKinds := slices.Clone(kinds)
+	wantKinds := slices.Clone([]string{"volume", instanceDeletePublicIPKind, instanceDeletePublicIPKind, "firewall"})
+
+	slices.Sort(gotKinds)
+	slices.Sort(wantKinds)
+
+	if !slices.Equal(gotKinds, wantKinds) {
+		t.Errorf("dependency kinds = %v, want %v (any order)", kinds, wantKinds)
+	}
+
+	ephemeralIP, ephemeralFound := dependenciesByLabel["198.51.100.10"]
+	if !ephemeralFound {
+		t.Fatal("ephemeral public IP dependency is missing")
+	}
+
+	if !reflect.DeepEqual(ephemeralIP["action"], "released") {
+		t.Errorf("ephemeral IP action = %v, want %v", ephemeralIP["action"], "released")
+	}
+
+	volume, volumeFound := dependenciesByLabel["data-vol"]
+	if !volumeFound {
+		t.Fatal("attached volume dependency is missing")
+	}
+
+	if !reflect.DeepEqual(volume["action"], "detached") {
+		t.Errorf("volume action = %v, want %v", volume["action"], "detached")
+	}
+
+	if !reflect.DeepEqual(volume["note"], "50GB volume stays; billing continues.") {
+		t.Errorf("volume note = %v, want survival and continued-billing message", volume["note"])
+	}
+
+	reservedIP, reservedFound := dependenciesByLabel["203.0.113.25"]
+	if !reservedFound {
+		t.Fatal("reserved public IP dependency is missing")
+	}
+
+	if !reflect.DeepEqual(reservedIP["action"], "detached") {
+		t.Errorf("reserved IP action = %v, want %v", reservedIP["action"], "detached")
+	}
+
+	reservedNote, noteFound := reservedIP["note"].(string)
+	if !noteFound {
+		t.Fatal("reserved IP note is missing")
+	}
+
+	if !strings.Contains(reservedNote, "reservation and billing continue") {
+		t.Errorf("reserved IP note = %q, want continued reservation and billing message", reservedNote)
+	}
+
+	firewall, firewallFound := dependenciesByLabel["web-fw"]
+	if !firewallFound {
+		t.Fatal("firewall dependency is missing")
+	}
+
+	if !reflect.DeepEqual(firewall["action"], "removed") {
+		t.Errorf("firewall action = %v, want %v", firewall["action"], "removed")
+	}
+
+	if !reflect.DeepEqual(firewall["note"], "Firewall stays; this instance is removed from its device list.") {
+		t.Errorf("firewall note = %v, want attachment-removal message", firewall["note"])
+	}
+}
+
+func instanceDeleteDependenciesByLabel(t *testing.T, rawDependencies any) ([]string, map[string]map[string]any) {
+	t.Helper()
+
+	dependencies, dependenciesOK := rawDependencies.([]any)
+	if !dependenciesOK {
+		t.Fatal("dependencies is not an array")
+	}
+
+	if len(dependencies) != 4 {
+		t.Fatalf("len(dependencies) = %d, want %d", len(dependencies), 4)
+	}
+
+	kinds := make([]string, 0, len(dependencies))
+	dependenciesByLabel := make(map[string]map[string]any, len(dependencies))
+
+	for _, entry := range dependencies {
+		dependency, dependencyOK := entry.(map[string]any)
+		if !dependencyOK {
+			t.Fatal("dependency is not an object")
+		}
+
+		kind, kindOK := dependency[tcKind].(string)
+		if !kindOK {
+			t.Fatal("dependency kind is missing")
+		}
+
+		kinds = append(kinds, kind)
+
+		if label, labelOK := dependency["label"].(string); labelOK {
+			dependenciesByLabel[label] = dependency
+		}
+	}
+
+	return kinds, dependenciesByLabel
 }
 
 // TestLinodeInstanceRebuildToolDryRunSideEffects exercises the Phase 2 Tier A
