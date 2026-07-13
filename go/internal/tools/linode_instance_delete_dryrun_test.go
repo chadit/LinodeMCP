@@ -2,7 +2,6 @@ package tools_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"reflect"
 	"slices"
@@ -13,10 +12,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
-const (
-	instanceDeletePublicIPKind = "public_ip"
-	instanceDeleteVolumesPath  = "/linode/instances/123/volumes"
-)
+const instanceDeletePublicIPKind = "public_ip"
 
 // TestLinodeInstanceDeleteToolDryRunDependencies exercises the Phase 2 Tier A
 // dependency walk: the preview must surface attached volumes (detached),
@@ -28,10 +24,10 @@ func TestLinodeInstanceDeleteToolDryRunDependencies(t *testing.T) {
 	t.Parallel()
 
 	cfg, methods := dryRunRouteServer(t, map[string]any{
-		instanceGetPath: linode.Instance{
-			ID: 123, Label: labelWebProd, Status: statusRunning, Type: "g6-standard-2",
+		"/linode/instances/123": linode.Instance{
+			ID: 123, Label: "web-prod-01", Status: statusRunning, Type: "g6-standard-2",
 		},
-		instanceDeleteVolumesPath: linode.PaginatedResponse[linode.Volume]{
+		"/linode/instances/123/volumes": linode.PaginatedResponse[linode.Volume]{
 			Data: []linode.Volume{{ID: 6789, Label: "data-vol", Size: 50}},
 		},
 		"/linode/instances/123/ips": linode.InstanceIPAddresses{
@@ -102,95 +98,6 @@ func TestLinodeInstanceDeleteToolDryRunDependencies(t *testing.T) {
 
 	if !slices.Contains(warnings, any("Instance is currently running. Delete will not pause for a graceful shutdown.")) {
 		t.Errorf("warnings = %v, want running-instance deletion warning", warnings)
-	}
-
-	if slices.Contains(*methods, http.MethodDelete) {
-		t.Errorf("*methods should not contain %v", http.MethodDelete)
-	}
-}
-
-func TestLinodeInstanceDeleteToolDryRunSkipsMalformedIPEntries(t *testing.T) {
-	t.Parallel()
-
-	cfg, methods := dryRunRouteServer(t, map[string]any{
-		instanceGetPath:           linode.Instance{ID: 123, Label: labelWebProd},
-		instanceDeleteVolumesPath: linode.PaginatedResponse[linode.Volume]{},
-		"/linode/instances/123/ips": map[string]any{
-			keyIPv4: map[string]any{
-				keyInterfacePublic: []any{
-					nil,
-					map[string]any{managedServiceAddressParam: ""},
-					map[string]any{managedServiceAddressParam: "198.51.100.10"},
-				},
-				"reserved": []any{
-					map[string]any{managedServiceAddressParam: nil},
-					map[string]any{managedServiceAddressParam: "203.0.113.25"},
-				},
-			},
-		},
-		"/linode/instances/123/firewalls": linode.PaginatedResponse[linode.Firewall]{},
-	})
-
-	_, _, handler := tools.NewLinodeInstanceDeleteTool(cfg)
-
-	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		keyInstanceID: float64(123),
-		keyDryRun:     true,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result.IsError {
-		t.Fatal("result.IsError = true, want false")
-	}
-
-	var body map[string]any
-	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	dependencies, dependenciesOK := body["dependencies"].([]any)
-	if !dependenciesOK {
-		t.Fatal("dependencies is not an array")
-	}
-
-	if len(dependencies) != 2 {
-		t.Fatalf("len(dependencies) = %d, want %d", len(dependencies), 2)
-	}
-
-	dependenciesByLabel := make(map[string]map[string]any, len(dependencies))
-	for _, entry := range dependencies {
-		dependency, dependencyOK := entry.(map[string]any)
-		if !dependencyOK {
-			t.Fatal("dependency is not an object")
-		}
-
-		label, labelOK := dependency["label"].(string)
-		if !labelOK || label == "" {
-			t.Fatalf("dependency label = %v, want non-empty string", dependency["label"])
-		}
-
-		dependenciesByLabel[label] = dependency
-	}
-
-	if !reflect.DeepEqual(dependenciesByLabel["198.51.100.10"]["action"], "released") {
-		t.Errorf("ephemeral IP action = %v, want released", dependenciesByLabel["198.51.100.10"]["action"])
-	}
-
-	if !reflect.DeepEqual(dependenciesByLabel["203.0.113.25"]["action"], "detached") {
-		t.Errorf("reserved IP action = %v, want detached", dependenciesByLabel["203.0.113.25"]["action"])
-	}
-
-	warnings, warningsOK := body["warnings"].([]any)
-	if !warningsOK {
-		t.Fatal("warnings is not an array")
-	}
-
-	warningText := fmt.Sprint(warnings)
-	if !strings.Contains(warningText, "public IPv4 address entry") ||
-		!strings.Contains(warningText, "reserved IPv4 address entry") {
-		t.Errorf("warnings = %v, want malformed public and reserved IP warnings", warnings)
 	}
 
 	if slices.Contains(*methods, http.MethodDelete) {

@@ -91,16 +91,8 @@ func instanceIPDeps(ctx context.Context, client *linode.Client, linodeID int) ([
 	}
 
 	deps := make([]DryRunDependency, 0, len(ips.IPv4.Public)+len(ips.IPv4.Reserved))
-	warnings := make([]string, 0, 2)
-
 	for i := range ips.IPv4.Public {
 		addr := &ips.IPv4.Public[i]
-		if strings.TrimSpace(addr.Address) == "" {
-			warnings = append(warnings, "Could not parse public IPv4 address entry: address is missing.")
-
-			continue
-		}
-
 		deps = append(deps, DryRunDependency{
 			Kind:   "public_ip",
 			Label:  addr.Address,
@@ -110,12 +102,6 @@ func instanceIPDeps(ctx context.Context, client *linode.Client, linodeID int) ([
 
 	for i := range ips.IPv4.Reserved {
 		addr := &ips.IPv4.Reserved[i]
-		if strings.TrimSpace(addr.Address) == "" {
-			warnings = append(warnings, "Could not parse reserved IPv4 address entry: address is missing.")
-
-			continue
-		}
-
 		deps = append(deps, DryRunDependency{
 			Kind:   "public_ip",
 			Label:  addr.Address,
@@ -124,7 +110,7 @@ func instanceIPDeps(ctx context.Context, client *linode.Client, linodeID int) ([
 		})
 	}
 
-	return deps, strings.Join(warnings, " ")
+	return deps, ""
 }
 
 // instanceFirewallDeps lists firewalls this instance is attached to. The
