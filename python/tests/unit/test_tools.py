@@ -132,6 +132,7 @@ from linodemcp.tools import (
     create_linode_nodebalancer_config_node_update_tool,
     create_linode_nodebalancer_config_rebuild_tool,
     create_linode_nodebalancer_config_update_tool,
+    create_linode_nodebalancer_create_tool,
     create_linode_nodebalancer_firewall_list_tool,
     create_linode_nodebalancer_firewall_update_tool,
     create_linode_nodebalancer_stats_get_tool,
@@ -12508,16 +12509,35 @@ async def test_handle_linode_nodebalancer_firewalls_update_error(
         assert "Failed" in result[0].text or "error" in result[0].text.lower()
 
 
-async def test_handle_linode_nodebalancer_create_no_confirm(
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"region": "us-east"},
+        {"region": "us-east", "confirm": False},
+        {"region": "us-east", "confirm": "true"},
+        {"region": "us-east", "confirm": 1},
+    ],
+)
+async def test_handle_linode_nodebalancer_create_requires_strict_confirm(
+    arguments: dict[str, Any],
     sample_config: Config,
 ) -> None:
-    """Test linode_nodebalancer_create tool without confirmation."""
-    result = await handle_linode_nodebalancer_create(
-        {"region": "us-east"}, sample_config
-    )
+    """NodeBalancer create rejects missing and non-literal confirmation."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_create(arguments, sample_config)
 
     assert len(result) == 1
     assert "confirm" in result[0].text.lower()
+    mock_client_class.assert_not_called()
+
+
+def test_linode_nodebalancer_create_tool_exposes_optional_ipv4() -> None:
+    """The shared NodeBalancer create schema advertises optional IPv4."""
+    tool, capability = create_linode_nodebalancer_create_tool()
+
+    assert capability is Capability.Write
+    assert tool.inputSchema["properties"]["ipv4"]["type"] == "string"
+    assert "ipv4" not in tool.inputSchema["required"]
 
 
 async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
@@ -12544,7 +12564,12 @@ async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_nodebalancer_create(
-            {"region": "us-east", "confirm": True}, sample_config
+            {
+                "region": "us-east",
+                "ipv4": "192.0.2.141",
+                "confirm": True,
+            },
+            sample_config,
         )
 
         assert len(result) == 1
@@ -12555,6 +12580,61 @@ async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
         assert payload["message"] == expected_message
         assert payload["nodebalancer"]["id"] == 12345
         assert payload["nodebalancer"]["transfer"]["total"] == 300.0
+        mock_client.create_nodebalancer_raw.assert_awaited_once_with(
+            region="us-east",
+            label=None,
+            client_conn_throttle=0,
+            ipv4="192.0.2.141",
+        )
+
+
+async def test_handle_linode_nodebalancer_create_omits_unselected_ipv4(
+    sample_config: Config,
+) -> None:
+    """NodeBalancer create preserves omission when IPv4 is not selected."""
+    raw_nodebalancer: dict[str, Any] = {
+        "id": 12345,
+        "label": "nodebalancer",
+        "region": "us-east",
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_nodebalancer_raw.return_value = raw_nodebalancer
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        await handle_linode_nodebalancer_create(
+            {"region": "us-east", "confirm": True}, sample_config
+        )
+
+    mock_client.create_nodebalancer_raw.assert_awaited_once_with(
+        region="us-east",
+        label=None,
+        client_conn_throttle=0,
+        ipv4=None,
+    )
+
+
+@pytest.mark.parametrize("ipv4", ["2001:db8::1", "not-an-address", "", 123])
+async def test_handle_linode_nodebalancer_create_rejects_invalid_ipv4(
+    ipv4: object,
+    sample_config: Config,
+) -> None:
+    """NodeBalancer create rejects invalid IPv4 values before client setup."""
+    arguments: dict[str, Any] = {
+        "region": "us-east",
+        "ipv4": ipv4,
+        "confirm": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_create(arguments, sample_config)
+
+    assert len(result) == 1
+    assert "ipv4 must be a valid IPv4 address" in result[0].text
+    mock_client_class.assert_not_called()
 
 
 async def test_handle_linode_nodebalancer_update(sample_config: Config) -> None:
@@ -12713,7 +12793,7 @@ async def test_nodebalancer_create_dry_run_returns_preview(
 ) -> None:
     """dry_run=true previews the create with no resource state and no call."""
     result = await handle_linode_nodebalancer_create(
-        {"region": "us-east", "dry_run": True},
+        {"region": "us-east", "ipv4": "192.0.2.141", "dry_run": True},
         sample_config,
     )
 
@@ -12723,10 +12803,41 @@ async def test_nodebalancer_create_dry_run_returns_preview(
     assert body["tool"] == "linode_nodebalancer_create"
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/nodebalancers"
+    assert body["would_execute"]["body"] == {
+        "region": "us-east",
+        "ipv4": "192.0.2.141",
+    }
     assert body["current_state"] is None
     assert any("us-east" in s for s in body["side_effects"])
+    assert any("192.0.2.141" in s for s in body["side_effects"])
     assert body["warnings"]
     assert "confirm=true" not in result[0].text
+
+
+async def test_nodebalancer_create_dry_run_omits_unselected_ipv4(
+    sample_config: Config,
+) -> None:
+    """Dry-run body omits IPv4 when no reserved address is selected."""
+    result = await handle_linode_nodebalancer_create(
+        {"region": "us-east", "dry_run": True}, sample_config
+    )
+
+    body = json.loads(result[0].text)["would_execute"]["body"]
+    assert body == {"region": "us-east"}
+    assert "ipv4" not in body
+
+
+@pytest.mark.parametrize("ipv4", ["2001:db8::1", "not-an-address", "", 123])
+async def test_nodebalancer_create_dry_run_rejects_invalid_ipv4(
+    ipv4: object,
+    sample_config: Config,
+) -> None:
+    """Dry-run validates the same IPv4 input as live creation."""
+    result = await handle_linode_nodebalancer_create(
+        {"region": "us-east", "ipv4": ipv4, "dry_run": True}, sample_config
+    )
+
+    assert "ipv4 must be a valid IPv4 address" in result[0].text
 
 
 async def test_nodebalancer_create_dry_run_still_validates_region(

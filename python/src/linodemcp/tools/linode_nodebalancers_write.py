@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
@@ -393,21 +394,56 @@ def create_linode_nodebalancer_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _nodebalancer_create_request_body(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    region = arguments.get("region")
+    if not isinstance(region, str) or not region:
+        return None, "region is required"
+
+    body: dict[str, Any] = {"region": region}
+    label = arguments.get("label")
+    if label:
+        body["label"] = label
+    client_conn_throttle = arguments.get("client_conn_throttle", 0)
+    if client_conn_throttle:
+        body["client_conn_throttle"] = client_conn_throttle
+
+    if "ipv4" not in arguments:
+        return body, None
+
+    ipv4 = arguments["ipv4"]
+    if not isinstance(ipv4, str):
+        return None, "ipv4 must be a valid IPv4 address"
+    try:
+        address = ipaddress.ip_address(ipv4)
+    except ValueError:
+        return None, "ipv4 must be a valid IPv4 address"
+    if not isinstance(address, ipaddress.IPv4Address):
+        return None, "ipv4 must be a valid IPv4 address"
+
+    body["ipv4"] = ipv4
+    return body, None
+
+
 async def handle_linode_nodebalancer_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_create tool request."""
-    region = arguments.get("region", "")
-
     if is_dry_run(arguments):
-        if not region:
-            return error_response("region is required")
-        nb_label = arguments.get("label")
+        body, validation_error = _nodebalancer_create_request_body(arguments)
+        if validation_error is not None or body is None:
+            return error_response(validation_error or "invalid request")
+
+        region = cast("str", body["region"])
+        nb_label = body.get("label")
         effect = (
             f"A new NodeBalancer {nb_label!r} will be created in region {region}."
             if nb_label
             else f"A new NodeBalancer will be created in region {region}."
         )
+        if ipv4 := body.get("ipv4"):
+            effect += f" Reserved IPv4 address {ipv4} will be assigned."
         return build_dry_run_response(
             "linode_nodebalancer_create",
             arguments.get("environment", ""),
@@ -416,21 +452,24 @@ async def handle_linode_nodebalancer_create(
             None,
             side_effects=[effect],
             warnings=["Billing for the NodeBalancer starts immediately on creation."],
+            request_body=body,
         )
 
-    if not arguments.get("confirm"):
+    if arguments.get("confirm") is not True:
         return error_response(
             "This operation creates a billable resource. Set confirm=true to proceed."
         )
 
-    if not region:
-        return error_response("region is required")
+    body, validation_error = _nodebalancer_create_request_body(arguments)
+    if validation_error is not None or body is None:
+        return error_response(validation_error or "invalid request")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         raw = await client.create_nodebalancer_raw(
-            region=region,
-            label=arguments.get("label"),
-            client_conn_throttle=arguments.get("client_conn_throttle", 0),
+            region=cast("str", body["region"]),
+            label=cast("str | None", body.get("label")),
+            client_conn_throttle=cast("int", body.get("client_conn_throttle", 0)),
+            ipv4=cast("str | None", body.get("ipv4")),
         )
         return serialize_api_response(
             {

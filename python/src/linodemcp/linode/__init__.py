@@ -8993,6 +8993,7 @@ class Client:
         label: str | None = None,
         client_conn_throttle: int = 0,
         tags: list[str] | None = None,
+        ipv4: str | None = None,
     ) -> dict[str, Any]:
         """Create a NodeBalancer and return the full raw API body.
 
@@ -9001,16 +9002,28 @@ class Client:
         Python output matches Go, which decodes the same full API JSON.
         """
         validate_label(label)
+        if ipv4 is not None:
+            try:
+                address = ipaddress.ip_address(ipv4)
+            except ValueError as exc:
+                msg = "ipv4 must be a valid IPv4 address"
+                raise ValueError(msg) from exc
+            if not isinstance(address, ipaddress.IPv4Address):
+                msg = "ipv4 must be a valid IPv4 address"
+                raise ValueError(msg)
 
         try:
             body: dict[str, Any] = {
                 "region": region,
-                "client_conn_throttle": client_conn_throttle,
             }
             if label:
                 body["label"] = label
+            if client_conn_throttle:
+                body["client_conn_throttle"] = client_conn_throttle
             if tags:
                 body["tags"] = tags
+            if ipv4 is not None:
+                body["ipv4"] = ipv4
 
             response = await self.make_request("POST", "/nodebalancers", body)
             data: dict[str, Any] = response.json()
@@ -14208,16 +14221,17 @@ class RetryableClient:
         label: str | None = None,
         client_conn_throttle: int = 0,
         tags: list[str] | None = None,
+        ipv4: str | None = None,
     ) -> dict[str, Any]:
-        """Create NodeBalancer with retry, returning the full raw API body."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create a NodeBalancer once and return the full raw API body."""
+        return await self._execute_without_retry(
             self.client.create_nodebalancer_raw,
             region,
             label,
             client_conn_throttle,
             tags,
+            ipv4,
         )
-        return result
 
     async def update_nodebalancer_raw(
         self,
@@ -15091,6 +15105,24 @@ class RetryableClient:
             instance_id,
             root_pass,
         )
+
+    async def _execute_without_retry(
+        self, func: Callable[..., Awaitable[T]], *args: Any
+    ) -> T:
+        """Execute one protected network attempt without replaying mutations."""
+        self._circuit.allow()
+
+        async with self._request_semaphore:
+            await self._limiter.wait()
+            try:
+                result = await func(*args)
+            except Exception as exc:
+                if self._should_retry(exc):
+                    self._circuit.record_failure()
+                raise
+
+            self._circuit.record_success()
+            return result
 
     async def _execute_with_retry(
         self, func: Callable[..., Awaitable[T]], *args: Any
