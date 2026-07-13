@@ -9726,7 +9726,12 @@ async def test_handle_linode_instance_shutdown(sample_config: Config) -> None:
 async def test_handle_linode_instance_create_no_confirm(sample_config: Config) -> None:
     """Test linode_instance_create tool without confirmation."""
     result = await handle_linode_instance_create(
-        {"region": "us-east", "type": "g6-nanode-1", "firewall_id": 12345},
+        {
+            "region": "us-east",
+            "type": "g6-nanode-1",
+            "firewall_id": 12345,
+            "authorized_users": ["alice"],
+        },
         sample_config,
     )
 
@@ -9821,6 +9826,7 @@ async def test_handle_linode_instance_create(
                 "region": "us-east",
                 "type": "g6-nanode-1",
                 "firewall_id": 12345,
+                "authorized_users": ["alice"],
                 "confirm": True,
             },
             sample_config,
@@ -19681,13 +19687,13 @@ async def test_instance_migrate_tool_def() -> None:
 
 
 async def test_instance_rebuild_tool_def() -> None:
-    """Rebuild should require linode_id, image, root_pass, confirm."""
+    """Rebuild should require linode_id, image, and confirm."""
     tool, _ = create_linode_instance_rebuild_tool()
     assert tool.name == "linode_instance_rebuild"
     required: list[str] = tool.inputSchema.get("required") or []
     assert "linode_id" in required
     assert "image" in required
-    assert "root_pass" in required
+    assert "root_pass" not in required
     assert "confirm" in required
 
 
@@ -20277,7 +20283,13 @@ async def test_handle_linode_instance_disk_create_success(
         "status": "ready",
     }
     result = await handle_linode_instance_disk_create(
-        {"linode_id": 123, "label": "my-disk", "size": 1024, "confirm": True},
+        {
+            "linode_id": 123,
+            "label": "my-disk",
+            "size": 1024,
+            "authorized_users": "alice",
+            "confirm": True,
+        },
         sample_config,
     )
     assert len(result) == 1
@@ -20293,7 +20305,7 @@ async def test_handle_linode_instance_disk_create_success(
         image=None,
         root_pass=None,
         authorized_keys=None,
-        authorized_users=None,
+        authorized_users=["alice"],
     )
 
 
@@ -20474,7 +20486,13 @@ async def test_instance_disk_create_dry_run_returns_preview(
     mock_linode_client.get_instance.return_value = {"id": 123}
 
     result = await handle_linode_instance_disk_create(
-        {"linode_id": 123, "label": "data", "size": 10240, "dry_run": True},
+        {
+            "linode_id": 123,
+            "label": "data",
+            "size": 10240,
+            "authorized_users": "alice",
+            "dry_run": True,
+        },
         sample_config,
     )
 
@@ -20894,15 +20912,15 @@ async def test_instance_rebuild_dry_run_returns_preview(
     mock_linode_client.rebuild_instance.assert_not_called()
 
 
-async def test_instance_rebuild_dry_run_still_validates_root_pass(
+async def test_instance_rebuild_dry_run_still_validates_authentication(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
-    """Missing root_pass must error regardless of dry_run."""
+    """Missing all authentication methods must error regardless of dry_run."""
     result = await handle_linode_instance_rebuild(
         {"linode_id": 123, "image": "linode/ubuntu24.04", "dry_run": True},
         sample_config,
     )
-    assert "root_pass is required" in result[0].text
+    assert "at least one authentication method" in result[0].text
     mock_linode_client.rebuild_instance.assert_not_called()
 
 
@@ -20913,6 +20931,7 @@ async def test_instance_create_dry_run_returns_preview(sample_config: Config) ->
             "region": "us-east",
             "type": "g6-nanode-1",
             "firewall_id": 789,
+            "authorized_users": ["alice"],
             "dry_run": True,
         },
         sample_config,

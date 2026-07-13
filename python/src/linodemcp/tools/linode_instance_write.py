@@ -6,7 +6,7 @@ import httpx
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import firewall_pb2, instance_pb2
-from linodemcp.linode import APIError, NetworkError
+from linodemcp.linode import APIError, NetworkError, validate_instance_authentication
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
@@ -428,8 +428,9 @@ def create_linode_instance_create_tool() -> tuple[Tool, Capability]:
         name="linode_instance_create",
         description=(
             "Creates a new Linode instance under the current Linode Interfaces "
-            "generation. WARNING: Billing starts immediately. Requires "
-            "firewall_id (get one from linode_firewall_list or create with "
+            "generation. WARNING: Billing starts immediately. Requires one "
+            "of root_pass, authorized_keys, or authorized_users, plus firewall_id "
+            "(get one from linode_firewall_list or create with "
             "linode_firewall_create). Note: VPC attachment via the current "
             "interface model is not yet supported by this tool; use "
             "linode_vpc_* tools after create."
@@ -462,10 +463,25 @@ async def handle_linode_instance_create(
     instance_type = arguments.get("type", "")
     firewall_id = arguments.get("firewall_id", 0)
 
-    if is_dry_run(arguments):
-        fields_error = _instance_create_error(region, instance_type, firewall_id)
-        if fields_error is not None:
-            return _error_response(fields_error)
+    dry_run = is_dry_run(arguments)
+    if not dry_run and arguments.get("confirm") is not True:
+        return _error_response(
+            "This operation creates a billable resource. Set confirm=true to proceed."
+        )
+
+    fields_error = _instance_create_error(region, instance_type, firewall_id)
+    if fields_error is not None:
+        return _error_response(fields_error)
+    try:
+        validate_instance_authentication(
+            arguments.get("root_pass"),
+            arguments.get("authorized_keys"),
+            arguments.get("authorized_users"),
+        )
+    except (TypeError, ValueError) as exc:
+        return _error_response(str(exc))
+
+    if dry_run:
         image = arguments.get("image")
         effect = f"A new {instance_type} instance will be created in region {region}"
         if image:
@@ -480,15 +496,6 @@ async def handle_linode_instance_create(
             warnings=["Billing for the instance starts immediately on creation."],
         )
 
-    if not arguments.get("confirm"):
-        return _error_response(
-            "This operation creates a billable resource. Set confirm=true to proceed."
-        )
-
-    fields_error = _instance_create_error(region, instance_type, firewall_id)
-    if fields_error is not None:
-        return _error_response(fields_error)
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
         raw = await client.create_instance_raw(
             region=region,
@@ -498,6 +505,7 @@ async def handle_linode_instance_create(
             label=arguments.get("label"),
             root_pass=arguments.get("root_pass"),
             authorized_keys=arguments.get("authorized_keys"),
+            authorized_users=arguments.get("authorized_users"),
             booted=arguments.get("booted"),
             backups_enabled=arguments.get("backups_enabled", False),
             route_ipv4=arguments.get("route_ipv4", True),

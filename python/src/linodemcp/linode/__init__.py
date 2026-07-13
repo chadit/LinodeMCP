@@ -265,9 +265,9 @@ def validate_ssh_key(key: str) -> None:
 
 
 def validate_root_password(password: str | None) -> None:
-    """Validate root password strength."""
+    """Validate root password strength when one is supplied."""
     if not password:
-        return  # Password is optional
+        return
 
     if len(password) < MIN_PASSWORD_LENGTH:
         msg = "root_pass must be at least 12 characters"
@@ -284,6 +284,47 @@ def validate_root_password(password: str | None) -> None:
     if not (has_upper and has_lower and has_digit):
         msg = "root_pass must contain uppercase, lowercase, and digits"
         raise ValueError(msg)
+
+
+def validate_instance_authentication(
+    root_pass: object,
+    authorized_keys: object,
+    authorized_users: object,
+) -> None:
+    """Require one correctly typed, non-empty authentication method."""
+
+    def _password_present(value: object) -> bool:
+        if value is None:
+            return False
+        if not isinstance(value, str):
+            raise TypeError("root_pass must be a string")
+        validate_root_password(value)
+        return bool(value.strip())
+
+    def _list_present(name: str, value: object) -> bool:
+        if value is None:
+            return False
+        if not isinstance(value, list):
+            raise TypeError(f"{name} must be a list of strings")
+        items = cast("list[object]", value)
+        if not all(isinstance(item, str) for item in items):
+            raise ValueError(f"{name} must contain only strings")
+        string_items = cast("list[str]", items)
+        if any(not item.strip() for item in string_items):
+            raise ValueError(f"{name} entries must not be empty")
+        return bool(string_items)
+
+    if not any(
+        (
+            _password_present(root_pass),
+            _list_present("authorized_keys", authorized_keys),
+            _list_present("authorized_users", authorized_users),
+        )
+    ):
+        raise ValueError(
+            "at least one authentication method is required: "
+            "root_pass, authorized_keys, or authorized_users"
+        )
 
 
 def validate_dns_record_name(name: str) -> None:
@@ -543,6 +584,7 @@ __all__ = [
     "validate_dns_record_name",
     "validate_dns_record_target",
     "validate_firewall_policy",
+    "validate_instance_authentication",
     "validate_label",
     "validate_root_password",
     "validate_ssh_key",
@@ -8168,15 +8210,14 @@ class Client:
         route_ipv6: bool = True,
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create an instance and return the full raw API body.
+        """Create an authenticated instance and return the full raw API body.
 
-        Validates the label and root password, then posts the interface-bearing
-        create body. The proto-backed write handler decodes the full JSON into
-        the write proto so Python output matches Go, which decodes the same
-        full API JSON.
+        Authentication is required even when ``image`` is omitted. The remaining
+        validation and request shape produce the same full API JSON decoded by
+        the Go implementation.
         """
         validate_label(label)
-        validate_root_password(root_pass)
+        validate_instance_authentication(root_pass, authorized_keys, authorized_users)
 
         try:
             body: dict[str, Any] = {
@@ -8200,11 +8241,11 @@ class Client:
                 body["image"] = image
             if label:
                 body["label"] = label
-            if root_pass:
+            if root_pass is not None:
                 body["root_pass"] = root_pass
-            if authorized_keys:
+            if authorized_keys is not None:
                 body["authorized_keys"] = authorized_keys
-            if authorized_users:
+            if authorized_users is not None:
                 body["authorized_users"] = authorized_users
             if tags:
                 body["tags"] = tags
@@ -9982,8 +10023,12 @@ class Client:
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create a disk for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/disks"
+        """Create a disk with one required authentication method."""
+        validate_instance_authentication(root_pass, authorized_keys, authorized_users)
+        safe_instance_id = quote(
+            str(_validate_positive_path_int(instance_id, "instance_id")), safe=""
+        )
+        endpoint = f"/linode/instances/{safe_instance_id}/disks"
         try:
             body: dict[str, Any] = {
                 "label": label,
@@ -10309,18 +10354,21 @@ class Client:
         self,
         instance_id: int,
         image: str,
-        root_pass: str,
+        root_pass: str | None = None,
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
         booted: bool | None = None,
     ) -> dict[str, Any]:
         """Rebuild an instance with a new image."""
-        endpoint = f"/linode/instances/{instance_id}/rebuild"
+        validate_instance_authentication(root_pass, authorized_keys, authorized_users)
+        safe_instance_id = quote(
+            str(_validate_positive_path_int(instance_id, "instance_id")), safe=""
+        )
+        endpoint = f"/linode/instances/{safe_instance_id}/rebuild"
         try:
-            body: dict[str, Any] = {
-                "image": image,
-                "root_pass": root_pass,
-            }
+            body: dict[str, Any] = {"image": image}
+            if root_pass is not None:
+                body["root_pass"] = root_pass
             if authorized_keys is not None:
                 body["authorized_keys"] = authorized_keys
             if authorized_users is not None:
@@ -13903,8 +13951,8 @@ class RetryableClient:
         route_ipv6: bool = True,
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create instance with retry, returning the full raw API body."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create an instance once without replaying the non-idempotent POST."""
+        return await self._execute_once(
             self.client.create_instance_raw,
             region,
             instance_type,
@@ -13920,7 +13968,6 @@ class RetryableClient:
             route_ipv6,
             tags,
         )
-        return result
 
     async def delete_instance(self, instance_id: int) -> None:
         """Delete instance with retry."""
@@ -14822,8 +14869,8 @@ class RetryableClient:
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create instance disk with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create an instance disk once without replaying the POST."""
+        return await self._execute_once(
             self.client.create_instance_disk,
             instance_id,
             label,
@@ -14834,7 +14881,6 @@ class RetryableClient:
             authorized_keys,
             authorized_users,
         )
-        return result
 
     async def create_instance_config(
         self,
@@ -15055,13 +15101,13 @@ class RetryableClient:
         self,
         instance_id: int,
         image: str,
-        root_pass: str,
+        root_pass: str | None = None,
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
         booted: bool | None = None,
     ) -> dict[str, Any]:
-        """Rebuild instance with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Rebuild an instance once without replaying the destructive POST."""
+        return await self._execute_once(
             self.client.rebuild_instance,
             instance_id,
             image,
@@ -15070,7 +15116,6 @@ class RetryableClient:
             authorized_users,
             booted,
         )
-        return result
 
     async def rescue_instance(
         self,
@@ -15091,6 +15136,20 @@ class RetryableClient:
             instance_id,
             root_pass,
         )
+
+    async def _execute_once(self, func: Callable[..., Awaitable[T]], *args: Any) -> T:
+        """Execute one network attempt with normal client controls."""
+        self._circuit.allow()
+        async with self._request_semaphore:
+            await self._limiter.wait()
+            try:
+                result = await func(*args)
+            except Exception as exc:
+                if self._should_retry(exc):
+                    self._circuit.record_failure()
+                raise
+            self._circuit.record_success()
+            return result
 
     async def _execute_with_retry(
         self, func: Callable[..., Awaitable[T]], *args: Any

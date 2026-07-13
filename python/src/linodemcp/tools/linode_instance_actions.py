@@ -6,7 +6,7 @@ import httpx
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import instance_pb2
-from linodemcp.linode import APIError, NetworkError
+from linodemcp.linode import APIError, NetworkError, validate_instance_authentication
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
@@ -35,12 +35,17 @@ def _parse_instance_id(
 ) -> int | list[TextContent]:
     """Parse and validate linode_id from arguments."""
     raw = arguments.get("linode_id", "")
-    if not raw:
+    if raw is None or raw == "":
         return _error_response("linode_id is required")
+    if isinstance(raw, bool):
+        return _error_response("linode_id must be a valid integer")
     try:
-        return int(raw)
+        linode_id = int(raw)
     except (ValueError, TypeError):
         return _error_response("linode_id must be a valid integer")
+    if linode_id < 1:
+        return _error_response("linode_id must be a positive integer")
+    return linode_id
 
 
 def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
@@ -232,11 +237,12 @@ async def _instance_rebuild_side_effects_walk(
     if image:
         warnings.append(
             f"Rebuild replaces the current image {image!r}, destroys all data, "
-            "and resets the root password."
+            "and replaces the instance authentication configuration."
         )
     else:
         warnings.append(
-            "Rebuild destroys all data on the instance and resets the root password."
+            "Rebuild destroys all data and replaces the instance "
+            "authentication configuration."
         )
 
     details: DryRunDetails = {"warnings": warnings}
@@ -246,7 +252,11 @@ async def _instance_rebuild_side_effects_walk(
 
 
 async def _instance_rebuild_two_stage(
-    arguments: dict[str, Any], cfg: Config, linode_id: int, image: str, root_pass: str
+    arguments: dict[str, Any],
+    cfg: Config,
+    linode_id: int,
+    image: str,
+    root_pass: str | None,
 ) -> list[TextContent] | None:
     """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
     if arguments.get("mode") not in ("plan", "apply"):
@@ -296,10 +306,19 @@ async def handle_linode_instance_rebuild(
         return iid
 
     image = arguments.get("image", "")
-    root_pass = arguments.get("root_pass", "")
-    for field_name, value in (("image", image), ("root_pass", root_pass)):
-        if not value:
-            return _error_response(f"{field_name} is required")
+    root_pass = arguments.get("root_pass")
+    auth_error: str | None = "image is required" if not image else None
+    if auth_error is None:
+        try:
+            validate_instance_authentication(
+                root_pass,
+                arguments.get("authorized_keys"),
+                arguments.get("authorized_users"),
+            )
+        except (TypeError, ValueError) as exc:
+            auth_error = str(exc)
+    if auth_error is not None:
+        return _error_response(auth_error)
 
     two_stage = await _instance_rebuild_two_stage(arguments, cfg, iid, image, root_pass)
     if two_stage is not None:
@@ -323,8 +342,8 @@ async def handle_linode_instance_rebuild(
             _walk,
         )
 
-    confirm = arguments.get("confirm", False)
-    if not confirm:
+    confirm = arguments.get("confirm")
+    if confirm is not True:
         return _error_response(
             "This DESTROYS ALL DATA on the instance and rebuilds it. Set confirm=true "
             "to proceed."

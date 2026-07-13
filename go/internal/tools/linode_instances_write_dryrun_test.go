@@ -34,6 +34,7 @@ func TestLinodeInstanceCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 		keyRegion:     regionUSEast,
 		keyType:       typeG6Nanode1,
 		keyFirewallID: float64(789),
+		keyRootPass:   rootPassStrong,
 		keyDryRun:     true,
 	}))
 	if err != nil {

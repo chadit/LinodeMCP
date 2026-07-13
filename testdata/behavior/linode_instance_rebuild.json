@@ -15,7 +15,7 @@
     {
       "name": "requires root_pass",
       "args": { "linode_id": 5, "image": "linode/ubuntu22.04" },
-      "expect_error": "root_pass is required"
+      "expect_error": "at least one authentication method is required: root_pass, authorized_keys, or authorized_users"
     },
     {
       "name": "confirm alone hits the destroy gate",

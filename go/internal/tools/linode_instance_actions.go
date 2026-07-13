@@ -266,36 +266,36 @@ func handleInstanceRebuildRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError("image is required"), nil
 	}
 
-	rootPass := request.GetString("root_pass", "")
-	if rootPass == "" {
-		return mcp.NewToolResultError("root_pass is required"), nil
+	rootPass, validationMessage := stringArgument(request, "root_pass", false)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	if err := validateRootPassword(rootPass); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	var authorizedKeys []string
+	if raw, exists := request.GetArguments()["authorized_keys"]; exists {
+		authorizedKeys, validationMessage = stringSliceFromToolArg(raw, "authorized_keys")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+	}
+
+	var authorizedUsers []string
+	if raw, exists := request.GetArguments()["authorized_users"]; exists {
+		authorizedUsers, validationMessage = stringSliceFromToolArg(raw, "authorized_users")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+	}
+
+	if validationMessage := validateProvisioningAuth(rootPass, authorizedKeys, authorizedUsers); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	req := &linode.RebuildInstanceRequest{
-		Image:    image,
-		RootPass: rootPass,
-	}
-
-	if raw, exists := request.GetArguments()["authorized_keys"]; exists {
-		keys, validationMessage := stringSliceFromToolArg(raw, "authorized_keys")
-		if validationMessage != "" {
-			return mcp.NewToolResultError(validationMessage), nil
-		}
-
-		req.AuthorizedKeys = keys
-	}
-
-	if raw, exists := request.GetArguments()["authorized_users"]; exists {
-		users, validationMessage := stringSliceFromToolArg(raw, "authorized_users")
-		if validationMessage != "" {
-			return mcp.NewToolResultError(validationMessage), nil
-		}
-
-		req.AuthorizedUsers = users
+		Image:           image,
+		RootPass:        rootPass,
+		AuthorizedKeys:  authorizedKeys,
+		AuthorizedUsers: authorizedUsers,
 	}
 
 	// Only set Booted when the caller explicitly passed the parameter.

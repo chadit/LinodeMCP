@@ -292,6 +292,7 @@ func TestLinodeInstanceDiskCreateToolDryRunPreviewWithoutCreating(t *testing.T) 
 		keyLinodeID: float64(123),
 		keyLabel:    "data-disk",
 		keySize:     float64(10240),
+		keyRootPass: rootPassStrong,
 		keyDryRun:   true,
 	}))
 	if err != nil {

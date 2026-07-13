@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_disk_create",
-  "description": "Pins the shared missing-linode_id and missing-label rejections and the disk-create POST body. size rejection text diverges (see report).",
+  "description": "Pins the shared missing-linode_id and missing-label rejections and the authenticated disk-create POST body. size rejection text diverges (see report).",
   "cases": [
     {
       "name": "rejects missing linode_id",
@@ -14,12 +14,12 @@
     },
     {
       "name": "creates a disk",
-      "args": { "linode_id": 123, "label": "boot", "size": 1024, "confirm": true },
+      "args": { "linode_id": 123, "label": "boot", "size": 1024, "authorized_users": "example-user", "confirm": true },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/linode/instances/123/disks",
-        "body": { "label": "boot", "size": 1024 }
+        "body": { "label": "boot", "size": 1024, "authorized_users": ["example-user"] }
       }
     },
     {

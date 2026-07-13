@@ -4241,12 +4241,11 @@ func (c *Client) ShutdownInstance(ctx context.Context, instanceID int) error {
 	})
 }
 
-// CreateInstanceProto creates an instance as a proto message with automatic
-// retry on transient failures.
+// CreateInstanceProto creates an instance proto without retrying the state-changing request.
 func (c *Client) CreateInstanceProto(ctx context.Context, req *CreateInstanceRequest) (*linodev1.Instance, error) {
 	var instance *linodev1.Instance
 
-	err := c.executeWithRetry(ctx, "CreateInstance", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateInstance", func() error {
 		var err error
 
 		instance, err = c.httpCreateInstanceProto(ctx, req)
@@ -6571,17 +6570,16 @@ func (c *Client) UpdateInstanceConfigInterfaceProto(ctx context.Context, linodeI
 	return configInterface, err
 }
 
-// CreateInstanceDiskProto creates a disk and returns the proto element, with
-// automatic retry on transient failures.
+// CreateInstanceDiskProto creates a disk proto without retrying the state-changing request.
 func (c *Client) CreateInstanceDiskProto(ctx context.Context, linodeID int, req *CreateDiskRequest) (*linodev1.InstanceDisk, error) {
 	var disk *linodev1.InstanceDisk
 
-	err := c.executeWithRetry(ctx, "CreateInstanceDisk", func() error {
-		var retryErr error
+	err := c.executeWithoutRetry(ctx, "CreateInstanceDisk", func() error {
+		var err error
 
-		disk, retryErr = c.httpCreateInstanceDiskProto(ctx, linodeID, req)
+		disk, err = c.httpCreateInstanceDiskProto(ctx, linodeID, req)
 
-		return retryErr
+		return err
 	})
 
 	return disk, err
@@ -6635,17 +6633,16 @@ func (c *Client) CreateInstanceBackupProto(ctx context.Context, linodeID int, la
 	return backup, err
 }
 
-// RebuildInstanceProto rebuilds an instance and returns the proto element, with
-// automatic retry on transient failures.
+// RebuildInstanceProto rebuilds an instance proto without retrying the state-changing request.
 func (c *Client) RebuildInstanceProto(ctx context.Context, linodeID int, req *RebuildInstanceRequest) (*linodev1.Instance, error) {
 	var instance *linodev1.Instance
 
-	err := c.executeWithRetry(ctx, "RebuildInstance", func() error {
-		var retryErr error
+	err := c.executeWithoutRetry(ctx, "RebuildInstance", func() error {
+		var err error
 
-		instance, retryErr = c.httpRebuildInstanceProto(ctx, linodeID, req)
+		instance, err = c.httpRebuildInstanceProto(ctx, linodeID, req)
 
-		return retryErr
+		return err
 	})
 
 	return instance, err

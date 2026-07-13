@@ -1001,6 +1001,7 @@ func TestLinodeInstanceCreateToolBodyShapeMatchesBIMHelperScriptsReference(t *te
 		keyType:       typeG6Nanode1,
 		keyLabel:      "web-server",
 		keyFirewallID: 12345,
+		keyRootPass:   rootPassStrong,
 		keyConfirm:    true,
 	})
 
@@ -1148,6 +1149,7 @@ func TestLinodeInstanceCreateToolRouteFlagsOmitIpv4KeyWhenFalse(t *testing.T) {
 		keyRegion:     regionUSEast,
 		keyType:       typeG6Nanode1,
 		keyFirewallID: 12345,
+		keyRootPass:   rootPassStrong,
 		"route_ipv4":  false,
 		"route_ipv6":  true,
 		keyConfirm:    true,

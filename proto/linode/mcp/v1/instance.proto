@@ -611,7 +611,8 @@ message InstanceCreateInput {
   // The image ID to deploy (e.g., 'linode/debian11'). Required for provisioned
   // instances.
   optional string image = 5;
-  // The root password for the instance. Required if image is provided.
+  // Root password for the instance (optional). At least one of root_pass,
+  // authorized_keys, or authorized_users must be non-empty.
   optional string root_pass = 6;
   // Cloud Firewall ID to attach to the public interface. Required under the
   // current Linode Interfaces generation.
@@ -636,6 +637,9 @@ message InstanceCreateInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 14;
+  // Linode usernames whose SSH keys to install (optional). At least one of
+  // root_pass, authorized_keys, or authorized_users must be non-empty.
+  repeated string authorized_users = 15;
 }
 
 // InstanceUpdateInput is the input contract for linode_instance_update.
@@ -750,7 +754,7 @@ message InstanceMutateInput {
 }
 
 // InstanceRebuildInput is the input contract for linode_instance_rebuild, a
-// two-stage destroy: linode_id, image, root_pass, and confirm are required,
+// two-stage destroy: linode_id, image, authentication, and confirm are required,
 // and mode/plan_id drive the plan/apply flow.
 message InstanceRebuildInput {
   // Linode environment to use (optional, defaults to "default").
@@ -760,9 +764,9 @@ message InstanceRebuildInput {
   // The image to rebuild with (e.g. 'linode/ubuntu24.04'). Use
   // linode_image_list to find valid values.
   string image = 3;
-  // Root password for the rebuilt instance (min 12 chars, must include upper,
-  // lower, and digits).
-  string root_pass = 4;
+  // Root password for the rebuilt instance (optional; when supplied, min 12
+  // chars with upper/lower/digits).
+  optional string root_pass = 4;
   // SSH public keys to add to root's authorized_keys (optional).
   repeated string authorized_keys = 5;
   // Linode usernames whose SSH keys to add (optional).

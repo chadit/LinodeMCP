@@ -290,7 +290,7 @@ type MutateInstanceRequest struct {
 // RebuildInstanceRequest represents the request body for rebuilding a Linode instance.
 type RebuildInstanceRequest struct {
 	Image           string   `json:"image"`
-	RootPass        string   `json:"root_pass"`
+	RootPass        string   `json:"root_pass,omitempty"`
 	AuthorizedKeys  []string `json:"authorized_keys,omitempty"`
 	AuthorizedUsers []string `json:"authorized_users,omitempty"`
 	Booted          *bool    `json:"booted,omitempty"`

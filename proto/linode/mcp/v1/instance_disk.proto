@@ -42,8 +42,9 @@ message InstanceDiskCreateInput {
   optional string filesystem = 5;
   // Image ID to deploy to the disk, e.g. linode/ubuntu22.04 (optional).
   optional string image = 6;
-  // Root password for the disk. Required when deploying an image (min 12 chars
-  // with upper/lower/digits) (optional).
+  // Root password for the disk (optional; when supplied, min 12 chars with
+  // upper/lower/digits). At least one of root_pass, authorized_keys, or
+  // authorized_users must be non-empty.
   optional string root_pass = 7;
   // Comma-separated list of SSH public keys to install (optional).
   optional string authorized_keys = 8;

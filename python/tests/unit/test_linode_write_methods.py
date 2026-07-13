@@ -495,7 +495,12 @@ async def test_create_instance_disk_returns_raw_body() -> None:
         mock_request.return_value = _ok_response(body)
 
         result = await client.create_instance_disk(
-            7, "boot-disk", 25600, filesystem="ext4", image="linode/debian12"
+            7,
+            "boot-disk",
+            25600,
+            filesystem="ext4",
+            image="linode/debian12",
+            authorized_users=["alice"],
         )
 
     assert result["id"] == 555
@@ -517,7 +522,9 @@ async def test_create_instance_disk_wraps_http_errors() -> None:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.create_instance_disk(7, "boot-disk", 25600)
+            await client.create_instance_disk(
+                7, "boot-disk", 25600, authorized_users=["alice"]
+            )
 
     assert "CreateInstanceDisk" in str(excinfo.value)
     await client.close()

@@ -113,7 +113,7 @@ func NewLinodeInstanceDiskCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 
 // validateDiskCreateArgs validates the disk create args, returning an error
 // message or "". Shared by the real create path and the dry-run preview.
-func validateDiskCreateArgs(linodeID int, label string, size int) string {
+func validateDiskCreateArgs(linodeID int, label string, size int, rootPass string, authorizedKeys, authorizedUsers []string) string {
 	if linodeID == 0 {
 		return ErrLinodeIDRequired.Error()
 	}
@@ -126,16 +126,35 @@ func validateDiskCreateArgs(linodeID int, label string, size int) string {
 		return "size is required and must be greater than 0"
 	}
 
-	return ""
+	return validateProvisioningAuth(rootPass, authorizedKeys, authorizedUsers)
 }
 
 func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	linodeID := request.GetInt("linode_id", 0)
 	label := request.GetString("label", "")
 	size := request.GetInt("size", 0)
+	image := request.GetString("image", "")
+
+	rootPass, validationMessage := stringArgument(request, "root_pass", false)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	authorizedKeysRaw, validationMessage := stringArgument(request, "authorized_keys", false)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	authorizedUsersRaw, validationMessage := stringArgument(request, "authorized_users", false)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	authorizedKeys := splitCommaSeparated(authorizedKeysRaw)
+	authorizedUsers := splitCommaSeparated(authorizedUsersRaw)
 
 	if IsDryRun(request) {
-		if msg := validateDiskCreateArgs(linodeID, label, size); msg != "" {
+		if msg := validateDiskCreateArgs(linodeID, label, size, rootPass, authorizedKeys, authorizedUsers); msg != "" {
 			return mcp.NewToolResultError(msg), nil
 		}
 
@@ -151,37 +170,21 @@ func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolR
 		return result, nil
 	}
 
-	if msg := validateDiskCreateArgs(linodeID, label, size); msg != "" {
+	if msg := validateDiskCreateArgs(linodeID, label, size, rootPass, authorizedKeys, authorizedUsers); msg != "" {
 		return mcp.NewToolResultError(msg), nil
 	}
 
 	req := linode.CreateDiskRequest{
-		Label: label,
-		Size:  size,
+		Label:           label,
+		Size:            size,
+		Image:           image,
+		RootPass:        rootPass,
+		AuthorizedKeys:  authorizedKeys,
+		AuthorizedUsers: authorizedUsers,
 	}
 
 	if fs := request.GetString("filesystem", ""); fs != "" {
 		req.Filesystem = fs
-	}
-
-	if image := request.GetString("image", ""); image != "" {
-		req.Image = image
-	}
-
-	if rootPass := request.GetString("root_pass", ""); rootPass != "" {
-		if err := validateRootPassword(rootPass); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-
-		req.RootPass = rootPass
-	}
-
-	if keysStr := request.GetString("authorized_keys", ""); keysStr != "" {
-		req.AuthorizedKeys = splitCommaSeparated(keysStr)
-	}
-
-	if usersStr := request.GetString("authorized_users", ""); usersStr != "" {
-		req.AuthorizedUsers = splitCommaSeparated(usersStr)
 	}
 
 	client, err := prepareClient(request, cfg)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/proto"
@@ -168,7 +169,35 @@ const errFirewallIDRequired = "firewall_id is required for instance creation. Ge
 
 // validateInstanceCreateArgs validates the instance create args, returning an
 // error message or "". Shared by the real create path and the dry-run preview.
-func validateInstanceCreateArgs(region, instanceType, rootPass string, firewallID int) string {
+const errProvisioningAuthRequired = "at least one authentication method is required: root_pass, authorized_keys, or authorized_users"
+
+func validateProvisioningAuth(rootPass string, authorizedKeys, authorizedUsers []string) string {
+	for _, key := range authorizedKeys {
+		if strings.TrimSpace(key) == "" {
+			return "authorized_keys entries must not be empty"
+		}
+	}
+
+	for _, user := range authorizedUsers {
+		if strings.TrimSpace(user) == "" {
+			return "authorized_users entries must not be empty"
+		}
+	}
+
+	if rootPass == "" && len(authorizedKeys) == 0 && len(authorizedUsers) == 0 {
+		return errProvisioningAuthRequired
+	}
+
+	if rootPass != "" {
+		if err := validateRootPassword(rootPass); err != nil {
+			return err.Error()
+		}
+	}
+
+	return ""
+}
+
+func validateInstanceCreateArgs(region, instanceType, rootPass string, authorizedKeys, authorizedUsers []string, firewallID int) string {
 	if region == "" {
 		return errRegionRequired
 	}
@@ -181,11 +210,7 @@ func validateInstanceCreateArgs(region, instanceType, rootPass string, firewallI
 		return errFirewallIDRequired
 	}
 
-	if err := validateRootPassword(rootPass); err != nil {
-		return err.Error()
-	}
-
-	return ""
+	return validateProvisioningAuth(rootPass, authorizedKeys, authorizedUsers)
 }
 
 func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -193,14 +218,35 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 	instanceType := request.GetString("type", "")
 	label := request.GetString("label", "")
 	image := request.GetString("image", "")
-	rootPass := request.GetString("root_pass", "")
+
+	rootPass, validationMessage := stringArgument(request, "root_pass", false)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	backupsEnabled := request.GetBool("backups_enabled", false)
 	firewallID := request.GetInt("firewall_id", 0)
 	routeIPv4 := request.GetBool("route_ipv4", true)
 	routeIPv6 := request.GetBool("route_ipv6", true)
 
+	var authorizedKeys []string
+	if raw, exists := request.GetArguments()["authorized_keys"]; exists {
+		authorizedKeys, validationMessage = stringSliceFromToolArg(raw, "authorized_keys")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+	}
+
+	var authorizedUsers []string
+	if raw, exists := request.GetArguments()["authorized_users"]; exists {
+		authorizedUsers, validationMessage = stringSliceFromToolArg(raw, "authorized_users")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+	}
+
 	if IsDryRun(request) {
-		if msg := validateInstanceCreateArgs(region, instanceType, rootPass, firewallID); msg != "" {
+		if msg := validateInstanceCreateArgs(region, instanceType, rootPass, authorizedKeys, authorizedUsers, firewallID); msg != "" {
 			return mcp.NewToolResultError(msg), nil
 		}
 
@@ -214,7 +260,7 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 		return result, nil
 	}
 
-	if msg := validateInstanceCreateArgs(region, instanceType, rootPass, firewallID); msg != "" {
+	if msg := validateInstanceCreateArgs(region, instanceType, rootPass, authorizedKeys, authorizedUsers, firewallID); msg != "" {
 		return mcp.NewToolResultError(msg), nil
 	}
 
@@ -229,6 +275,8 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 		Label:               label,
 		Image:               image,
 		RootPass:            rootPass,
+		AuthorizedKeys:      authorizedKeys,
+		AuthorizedUsers:     authorizedUsers,
 		BackupsEnabled:      backupsEnabled,
 		InterfaceGeneration: linode.CurrentInterfaceGeneration,
 		Interfaces: []linode.InstanceInterface{
@@ -238,15 +286,6 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 				FirewallID:   &firewallID,
 			},
 		},
-	}
-
-	if raw, exists := request.GetArguments()["authorized_keys"]; exists {
-		keys, validationMessage := stringSliceFromToolArg(raw, "authorized_keys")
-		if validationMessage != "" {
-			return mcp.NewToolResultError(validationMessage), nil
-		}
-
-		req.AuthorizedKeys = keys
 	}
 
 	// Only set Booted when the caller explicitly passed it: the MCP schema

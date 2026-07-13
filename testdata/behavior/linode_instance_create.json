@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_create",
-  "description": "Pins the three shared field-required rejections and the create POST body. Both languages omit booted (API defaults true) and backups_enabled (API default) unless the caller sets them, so a minimal call sends the same body: region, type, interface_generation, and one public interface.",
+  "description": "Pins the three shared field-required rejections and the create POST body. Both languages omit booted (API defaults true) and backups_enabled (API default) unless the caller sets them, while forwarding the selected authentication method.",
   "cases": [
     {
       "name": "requires region",
@@ -19,7 +19,7 @@
     },
     {
       "name": "creates an instance with a public interface",
-      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1", "firewall_id": 123 },
+      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1", "firewall_id": 123, "authorized_users": ["example-user"] },
       "api_response": { "id": 100, "label": "web", "region": "us-east", "type": "g6-nanode-1", "status": "provisioning" },
       "expect_request": {
         "method": "POST",
@@ -27,6 +27,7 @@
         "body": {
           "region": "us-east",
           "type": "g6-nanode-1",
+          "authorized_users": ["example-user"],
           "interface_generation": "linode",
           "interfaces": [
             {

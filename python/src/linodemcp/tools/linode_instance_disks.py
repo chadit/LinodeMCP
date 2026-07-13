@@ -10,6 +10,7 @@ from linodemcp.genpb.linode.mcp.v1 import (
     instance_pb2,
     volume_pb2,
 )
+from linodemcp.linode import validate_instance_authentication
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
@@ -491,15 +492,18 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_instance_disk_create tool."""
     return Tool(
         name="linode_instance_disk_create",
-        description="Creates a disk on a Linode instance",
+        description=(
+            "Creates a disk on a Linode instance. Requires one of root_pass, "
+            "authorized_keys, or authorized_users."
+        ),
         inputSchema=schema("linode.mcp.v1.InstanceDiskCreateInput"),
     ), Capability.Write
 
 
-async def handle_linode_instance_disk_create(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_instance_disk_create tool request."""
+def _instance_disk_create_values(
+    arguments: dict[str, Any],
+) -> tuple[int, str, int, list[str] | None, list[str] | None] | list[TextContent]:
+    """Validate and normalize disk-create arguments shared by all modes."""
     iid = _parse_instance_id(arguments)
     if isinstance(iid, list):
         return iid
@@ -507,12 +511,47 @@ async def handle_linode_instance_disk_create(
     label = arguments.get("label", "")
     if not label:
         return _error_response("label is required")
-
     size = arguments.get("size")
     if not size:
         return _error_response("size is required")
 
+    return (
+        iid,
+        cast("str", label),
+        int(size),
+        _split_comma_separated(arguments.get("authorized_keys")),
+        _split_comma_separated(arguments.get("authorized_users")),
+    )
+
+
+def _instance_authentication_error(
+    root_pass: object,
+    authorized_keys: list[str] | None,
+    authorized_users: list[str] | None,
+) -> str | None:
+    """Return an authentication validation error, if any."""
+    try:
+        validate_instance_authentication(root_pass, authorized_keys, authorized_users)
+    except (TypeError, ValueError) as exc:
+        return str(exc)
+    return None
+
+
+async def handle_linode_instance_disk_create(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_instance_disk_create tool request."""
+    values = _instance_disk_create_values(arguments)
+    if isinstance(values, list):
+        return values
+    iid, label, size, authorized_keys, authorized_users = values
+
     if is_dry_run(arguments):
+        validation_error = _instance_authentication_error(
+            arguments.get("root_pass"), authorized_keys, authorized_users
+        )
+        if validation_error is not None:
+            return _error_response(validation_error)
 
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance(iid)
@@ -534,10 +573,16 @@ async def handle_linode_instance_disk_create(
             _walk,
         )
 
-    if not arguments.get("confirm"):
+    if arguments.get("confirm") is not True:
         return _error_response(
             "This creates a new disk on the instance. Set confirm=true to proceed."
         )
+
+    validation_error = _instance_authentication_error(
+        arguments.get("root_pass"), authorized_keys, authorized_users
+    )
+    if validation_error is not None:
+        return _error_response(validation_error)
 
     async def _call(
         client: RetryableClient,
@@ -545,12 +590,12 @@ async def handle_linode_instance_disk_create(
         disk = await client.create_instance_disk(
             iid,
             label=label,
-            size=int(size),
+            size=size,
             filesystem=arguments.get("filesystem"),
             image=arguments.get("image"),
             root_pass=arguments.get("root_pass"),
-            authorized_keys=_split_comma_separated(arguments.get("authorized_keys")),
-            authorized_users=_split_comma_separated(arguments.get("authorized_users")),
+            authorized_keys=authorized_keys,
+            authorized_users=authorized_users,
         )
         return serialize_api_response(
             {

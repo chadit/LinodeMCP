@@ -7610,7 +7610,7 @@ async def test_update_ssh_key_sends_put_to_profile_route() -> None:
 async def test_create_instance_sends_interfaces_body(
     sample_instance_data: dict[str, Any],
 ) -> None:
-    """The POST body for create_instance must match BIMHelperScripts
+    """The POST body for create_instance_raw must match BIMHelperScripts
     linode_add_network at api-common.sh:378: interface_generation = "linode"
     plus a single-element interfaces[] with public={}, default_route, and an
     interface-level firewall_id.
@@ -7628,6 +7628,7 @@ async def test_create_instance_sends_interfaces_body(
             region="us-east",
             instance_type="g6-nanode-1",
             firewall_id=12345,
+            authorized_users=["alice"],
         )
 
     assert mock_request.called, "make_request should have been called"
@@ -7667,6 +7668,7 @@ async def test_create_instance_omits_route_keys_when_false(
             region="us-east",
             instance_type="g6-nanode-1",
             firewall_id=12345,
+            authorized_users=["alice"],
             route_ipv4=False,
             route_ipv6=True,
         )
@@ -10376,6 +10378,7 @@ async def test_create_instance_raw_returns_full_body() -> None:
             instance_type="g6-standard-2",
             firewall_id=99,
             label="web",
+            authorized_users=["alice"],
         )
 
         assert result["id"] == 4242

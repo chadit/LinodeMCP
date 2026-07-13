@@ -649,7 +649,7 @@ async def test_rebuild_instance_includes_optionals(client: Client) -> None:
         result = await client.rebuild_instance(
             123,
             "linode/ubuntu24.04",
-            "s3cret-pass",
+            "Passwordless123",
             authorized_keys=["ssh-ed25519 AAAA"],
             authorized_users=["alice"],
             booted=False,
@@ -661,7 +661,7 @@ async def test_rebuild_instance_includes_optionals(client: Client) -> None:
     assert endpoint == "/linode/instances/123/rebuild"
     assert sent == {
         "image": "linode/ubuntu24.04",
-        "root_pass": "s3cret-pass",
+        "root_pass": "Passwordless123",
         "authorized_keys": ["ssh-ed25519 AAAA"],
         "authorized_users": ["alice"],
         "booted": False,
@@ -672,10 +672,13 @@ async def test_rebuild_instance_omits_unset_optionals(client: Client) -> None:
     """rebuild_instance sends only image and root_pass by default."""
     with patch.object(client, "make_request", new_callable=AsyncMock) as req:
         req.return_value = _ok_response({"id": 123})
-        await client.rebuild_instance(123, "linode/debian12", "pw")
+        await client.rebuild_instance(123, "linode/debian12", "Passwordless123")
 
     _, _, sent = req.await_args_list[0].args
-    assert sent == {"image": "linode/debian12", "root_pass": "pw"}
+    assert sent == {
+        "image": "linode/debian12",
+        "root_pass": "Passwordless123",
+    }
     assert "booted" not in sent
 
 
@@ -684,7 +687,7 @@ async def test_rebuild_instance_wraps_errors(client: Client) -> None:
     with patch.object(client, "make_request", new_callable=AsyncMock) as req:
         req.side_effect = httpx.HTTPError("boom")
         with pytest.raises(NetworkError) as excinfo:
-            await client.rebuild_instance(123, "linode/debian12", "pw")
+            await client.rebuild_instance(123, "linode/debian12", "Passwordless123")
 
     assert "RebuildInstance" in str(excinfo.value)
 

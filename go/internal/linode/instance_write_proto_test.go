@@ -3,7 +3,6 @@ package linode_test
 import (
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/linode"
@@ -189,54 +188,12 @@ func TestClientRebuildInstanceProtoDecodes(t *testing.T) {
 
 	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
 
-	got, err := client.RebuildInstanceProto(t.Context(), 123, &linode.RebuildInstanceRequest{Image: "linode/ubuntu24.04", RootPass: protoTestRootPass})
+	got, err := client.RebuildInstanceProto(t.Context(), 123, &linode.RebuildInstanceRequest{Image: passwordlessImage, RootPass: protoTestRootPass})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if got.GetId() != 123 || got.GetStatus() != "rebuilding" || got.GetRegion() != managedServiceRegion {
 		t.Errorf("got = %+v, want id 123 status rebuilding region us-east", got)
-	}
-}
-
-func TestClientRebuildInstanceProtoRetriesTransient(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if calls.Add(1) == 1 {
-			// A 429 is always retryable (even for a POST), so the retry
-			// wrapper must retry and the second attempt succeeds.
-			w.WriteHeader(http.StatusTooManyRequests)
-
-			if _, err := w.Write([]byte(`{"errors":[{"reason":"slow down"}]}`)); err != nil {
-				t.Errorf("write body: %v", err)
-			}
-
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-
-		if _, err := w.Write([]byte(`{"id":123,"status":"rebuilding"}`)); err != nil {
-			t.Errorf("write body: %v", err)
-		}
-	}))
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(2))
-
-	got, err := client.RebuildInstanceProto(t.Context(), 123, &linode.RebuildInstanceRequest{Image: "linode/ubuntu24.04", RootPass: "Str0ngP@ssw0rd!"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got.GetId() != 123 {
-		t.Errorf("got.GetId() = %v, want 123", got.GetId())
-	}
-
-	if calls.Load() != int32(2) {
-		t.Errorf("calls.Load() = %v, want 2 (one transient failure then a retry)", calls.Load())
 	}
 }

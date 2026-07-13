@@ -2056,7 +2056,7 @@ func TestLinodeInstanceDiskCreateToolSuccessfulCreation(t *testing.T) {
 	_, _, srvHandler := tools.NewLinodeInstanceDiskCreateTool(srvCfg)
 
 	req := createRequestWithArgs(t, map[string]any{
-		keyLinodeID: float64(123), keyLabel: labelMyDisk, keySize: float64(1024), keyConfirm: true,
+		keyLinodeID: float64(123), keyLabel: labelMyDisk, keySize: float64(1024), keyRootPass: rootPassStrong, keyConfirm: true,
 	})
 
 	result, err := srvHandler(t.Context(), req)
@@ -3893,7 +3893,7 @@ func TestLinodeInstanceRebuildToolValidation(t *testing.T) {
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyRootPass: rootPassStrong}, wantContains: errConfirmEqualsTrue},
 		{name: "missing image", args: map[string]any{keyLinodeID: float64(123), keyRootPass: rootPassStrong, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "image is required"},
-		{name: "missing root pass", args: map[string]any{keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "root_pass is required"},
+		{name: "missing authentication", args: map[string]any{keyLinodeID: float64(123), keyImage: imageIDUbuntu2404, keyConfirm: true, keyConfirmedDryRun: true}, wantContains: "at least one authentication method is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4100,8 +4100,8 @@ func TestLinodeInstanceRebuildToolDryRunStillValidatesRootPass(t *testing.T) {
 		t.Error("result.IsError = false, want true")
 	}
 
-	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "root_pass is required") {
-		t.Errorf("error text %q does not contain %q", text.Text, "root_pass is required")
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "at least one authentication method is required") {
+		t.Errorf("error text %q does not contain %q", text.Text, "at least one authentication method is required")
 	}
 }
 
