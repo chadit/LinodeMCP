@@ -1,0 +1,57 @@
+# Shared-config parity fixture.
+#
+# Loaded by BOTH implementations' unit tests
+# (go/internal/config/parity_fixture_test.go and
+# python/tests/unit/test_config_parity_fixture.py), which assert the same
+# parsed value for every field. Every value is deliberately NON-default so a
+# loader that silently drops a key fails its assertion instead of coasting on
+# a matching default. Durations use Go time.Duration strings: the only form
+# the Go yaml decoder accepts.
+server:
+  name: "ParityCheck"
+  logLevel: "debug"
+  transport: "stdio"
+  host: "127.0.0.2"
+  port: 8180
+
+observability:
+  metrics:
+    enabled: true
+    runtime: false
+    host: true
+    prometheus:
+      enabled: true
+      host: "192.0.2.7"
+      port: 9101
+      path: "/parity-metrics"
+  tracing:
+    enabled: true
+    endpoint: "collector.example.internal:4317"
+    protocol: "http"
+    insecure: true
+    sampleRate: 0.25
+    headers:
+      x-parity: "check"
+  logging:
+    level: "warn"
+    format: "text"
+  health:
+    enabled: true
+    host: "192.0.2.8"
+    port: 9102
+    path: "/parity-health"
+
+resilience:
+  rateLimitPerMinute: 500
+  circuitBreakerThreshold: 7
+  circuitBreakerTimeout: "45s"
+  maxRetries: 2
+  baseRetryDelay: "250ms"
+  maxRetryDelay: "1m30s"
+
+environments:
+  default:
+    label: "Parity"
+    linode:
+      apiUrl: "https://api.linode.com/v4"
+      token: "parity-test-token"

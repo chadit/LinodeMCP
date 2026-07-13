@@ -254,8 +254,3 @@ const (
 	tcVolumes333Clone                                = "/volumes/333/clone"
 	tcWeAreInvestigatingThisTicket                   = "We are investigating this ticket."
 )
-
-// Repeated literals extracted to satisfy goconst.
-const (
-	tcPermissions = "permissions"
-)

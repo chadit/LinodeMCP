@@ -19,27 +19,6 @@ const (
 	endpointLKETierVersions = "/lke/tiers"
 )
 
-// ListLKEClusters retrieves all LKE clusters for the authenticated user.
-func (c *Client) httpListLKEClusters(ctx context.Context) ([]LKECluster, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLKEClusters, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListLKEClusters", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[LKECluster]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
-}
-
 // httpListLKEClustersProto retrieves all LKE clusters as proto messages, decoded
 // directly from the API JSON for the proto-backed list path.
 func (c *Client) httpListLKEClustersProto(ctx context.Context) ([]*linodev1.LKECluster, error) {
@@ -131,48 +110,6 @@ func (c *Client) httpUpdateLKEClusterProto(ctx context.Context, clusterID int, r
 	}
 
 	return cluster, nil
-}
-
-// CreateLKECluster creates a new LKE cluster.
-func (c *Client) httpCreateLKECluster(ctx context.Context, req *CreateLKEClusterRequest) (*LKECluster, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointLKEClusters, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateLKECluster", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var cluster LKECluster
-	if err := c.handleResponse(resp, &cluster); err != nil {
-		return nil, err
-	}
-
-	return &cluster, nil
-}
-
-// UpdateLKECluster updates an existing LKE cluster.
-func (c *Client) httpUpdateLKECluster(ctx context.Context, clusterID int, req UpdateLKEClusterRequest) (*LKECluster, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d", clusterID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateLKECluster", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var cluster LKECluster
-	if err := c.handleResponse(resp, &cluster); err != nil {
-		return nil, err
-	}
-
-	return &cluster, nil
 }
 
 // DeleteLKECluster deletes an LKE cluster.
@@ -463,28 +400,6 @@ func (c *Client) httpRecycleLKENode(ctx context.Context, clusterID int, nodeID s
 	return c.handleResponse(resp, nil)
 }
 
-// GetLKEKubeconfig retrieves the kubeconfig for an LKE cluster.
-func (c *Client) httpGetLKEKubeconfig(ctx context.Context, clusterID int) (*LKEKubeconfig, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/kubeconfig", clusterID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetLKEKubeconfig", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var kubeconfig LKEKubeconfig
-	if err := c.handleResponse(resp, &kubeconfig); err != nil {
-		return nil, err
-	}
-
-	return &kubeconfig, nil
-}
-
 // httpGetLKEKubeconfigProto retrieves an LKE cluster kubeconfig as a proto
 // message.
 func (c *Client) httpGetLKEKubeconfigProto(ctx context.Context, clusterID int) (*linodev1.LKEKubeconfig, error) {
@@ -525,28 +440,6 @@ func (c *Client) httpDeleteLKEKubeconfig(ctx context.Context, clusterID int) err
 	return c.handleResponse(resp, nil)
 }
 
-// GetLKEDashboard retrieves the dashboard URL for an LKE cluster.
-func (c *Client) httpGetLKEDashboard(ctx context.Context, clusterID int) (*LKEDashboard, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/dashboard", clusterID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetLKEDashboard", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var dashboard LKEDashboard
-	if err := c.handleResponse(resp, &dashboard); err != nil {
-		return nil, err
-	}
-
-	return &dashboard, nil
-}
-
 // httpGetLKEDashboardProto retrieves the LKE dashboard URL as a proto message.
 func (c *Client) httpGetLKEDashboardProto(ctx context.Context, clusterID int) (*linodev1.LKEDashboard, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -567,29 +460,6 @@ func (c *Client) httpGetLKEDashboardProto(ctx context.Context, clusterID int) (*
 	}
 
 	return dashboard, nil
-}
-
-// ListLKEAPIEndpoints retrieves the API endpoints for an LKE cluster.
-func (c *Client) httpListLKEAPIEndpoints(ctx context.Context, clusterID int) ([]LKEAPIEndpoint, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/api-endpoints", clusterID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListLKEAPIEndpoints", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[LKEAPIEndpoint]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
 }
 
 // httpListLKEAPIEndpointsProto retrieves an LKE cluster's API endpoints as proto
@@ -644,28 +514,6 @@ func (c *Client) httpGetLKEControlPlaneACL(ctx context.Context, clusterID int) (
 	}
 
 	return &wrapper.ACL, nil
-}
-
-// UpdateLKEControlPlaneACL updates the control plane ACL for an LKE cluster.
-func (c *Client) httpUpdateLKEControlPlaneACL(ctx context.Context, clusterID int, req UpdateLKEControlPlaneACLRequest) (*LKEControlPlaneACL, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf(endpointLKEClusters+"/%d/control_plane_acl", clusterID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateLKEControlPlaneACL", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var acl LKEControlPlaneACL
-	if err := c.handleResponse(resp, &acl); err != nil {
-		return nil, err
-	}
-
-	return &acl, nil
 }
 
 // httpUpdateLKEControlPlaneACLProto updates the control plane ACL and decodes the
@@ -751,54 +599,11 @@ func (c *Client) httpDeleteLKEControlPlaneACL(ctx context.Context, clusterID int
 	return c.handleResponse(resp, nil)
 }
 
-// ListLKEVersions retrieves all available Kubernetes versions for LKE.
-func (c *Client) httpListLKEVersions(ctx context.Context) ([]LKEVersion, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLKEVersions, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListLKEVersions", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[LKEVersion]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
-}
-
 // httpListLKEVersionsProto retrieves all available Kubernetes versions as proto
 // messages, decoded directly from the API JSON for the proto-backed list path.
 func (c *Client) httpListLKEVersionsProto(ctx context.Context) ([]*linodev1.LKEVersion, error) {
 	return listProtoElements(ctx, c, "ListLKEVersions", endpointLKEVersions,
 		func() *linodev1.LKEVersion { return &linodev1.LKEVersion{} })
-}
-
-// GetLKEVersion retrieves a specific Kubernetes version for LKE.
-func (c *Client) httpGetLKEVersion(ctx context.Context, versionID string) (*LKEVersion, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf("%s/%s", endpointLKEVersions, url.PathEscape(versionID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetLKEVersion", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var version LKEVersion
-	if err := c.handleResponse(resp, &version); err != nil {
-		return nil, err
-	}
-
-	return &version, nil
 }
 
 // httpGetLKEVersionProto retrieves one LKE Kubernetes version as a proto message.
@@ -823,27 +628,6 @@ func (c *Client) httpGetLKEVersionProto(ctx context.Context, versionID string) (
 	return version, nil
 }
 
-// ListLKETypes retrieves all available node types for LKE clusters.
-func (c *Client) httpListLKETypes(ctx context.Context) ([]LKEType, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLKETypes, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListLKETypes", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[LKEType]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
-}
-
 // httpListLKETypesProto retrieves all available LKE node types as proto
 // messages, decoded directly from the API JSON for the proto-backed list path.
 func (c *Client) httpListLKETypesProto(ctx context.Context) ([]*linodev1.LinodeType, error) {
@@ -860,51 +644,6 @@ func (c *Client) httpListLKETierVersionsProto(ctx context.Context, tier string) 
 
 	return listProtoElements(ctx, c, "ListLKETierVersions", endpoint,
 		func() *linodev1.LKETierVersion { return &linodev1.LKETierVersion{} })
-}
-
-// ListLKETierVersions retrieves available LKE tier versions for a tier.
-func (c *Client) httpListLKETierVersions(ctx context.Context, tier string) ([]LKETierVersion, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointLKETierVersions + "/" + url.PathEscape(tier) + "/versions"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListLKETierVersions", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[LKETierVersion]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
-}
-
-// GetLKETierVersion retrieves a specific Kubernetes version for an LKE tier.
-func (c *Client) httpGetLKETierVersion(ctx context.Context, tierID, versionID string) (*LKETierVersion, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf("%s/%s/versions/%s", endpointLKETierVersions, url.PathEscape(tierID), url.PathEscape(versionID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetLKETierVersion", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var version LKETierVersion
-	if err := c.handleResponse(resp, &version); err != nil {
-		return nil, err
-	}
-
-	return &version, nil
 }
 
 // httpGetLKETierVersionProto retrieves one LKE tier Kubernetes version as a proto

@@ -132,6 +132,104 @@ def test_tracing_override(tmp_path: Path) -> None:
     assert tracing.headers == {"x-team": "infra"}
 
 
+def _config_data_with_resilience(resilience: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "environments": {
+            "default": {
+                "label": "d",
+                "linode": {"apiUrl": "https://api.linode.com/v4", "token": "t"},
+            }
+        },
+        "resilience": resilience,
+    }
+
+
+def test_resilience_duration_strings_load(tmp_path: Path) -> None:
+    """Go duration strings are the canonical form for the shared config file
+    (Go's yaml decoder rejects bare numbers for time.Duration), so Python must
+    read them into seconds."""
+    config_file = tmp_path / "config.yml"
+    config_file.write_text(
+        yaml.dump(
+            _config_data_with_resilience(
+                {
+                    "circuitBreakerTimeout": "45s",
+                    "baseRetryDelay": "250ms",
+                    "maxRetryDelay": "1m30s",
+                }
+            )
+        )
+    )
+
+    cfg = load_from_file(config_file)
+    assert cfg.resilience.circuit_breaker_timeout == 45.0
+    assert cfg.resilience.base_retry_delay == 0.25
+    assert cfg.resilience.max_retry_delay == 90.0
+
+
+def test_resilience_bare_numbers_still_load(tmp_path: Path) -> None:
+    """Configs written by older Python builds carried bare seconds; they keep
+    loading here even though Go rejects them and the serializer no longer
+    writes them."""
+    config_file = tmp_path / "config.yml"
+    config_file.write_text(
+        yaml.dump(
+            _config_data_with_resilience(
+                {"circuitBreakerTimeout": 45, "baseRetryDelay": 2.5}
+            )
+        )
+    )
+
+    cfg = load_from_file(config_file)
+    assert cfg.resilience.circuit_breaker_timeout == 45.0
+    assert cfg.resilience.base_retry_delay == 2.5
+
+
+def test_resilience_malformed_duration_rejected(tmp_path: Path) -> None:
+    """A unitless or garbage duration string fails loudly with the key name
+    instead of landing as a string in a numeric field."""
+    config_file = tmp_path / "config.yml"
+    config_file.write_text(
+        yaml.dump(_config_data_with_resilience({"circuitBreakerTimeout": "banana"}))
+    )
+
+    with pytest.raises(ConfigInvalidError, match="circuitBreakerTimeout"):
+        load_from_file(config_file)
+
+
+def test_resilience_serializes_go_duration_strings(tmp_path: Path) -> None:
+    """write_atomic emits duration strings, never bare numbers, so a config
+    written by Python loads in the Go binary; the file must also round-trip
+    back through the Python loader."""
+    from linodemcp.config import ResilienceConfig, write_atomic
+
+    config_file = tmp_path / "config.yml"
+    cfg = Config(
+        environments={
+            "default": EnvironmentConfig(
+                label="d",
+                linode=LinodeConfig(api_url="https://api.linode.com/v4", token="t"),
+            )
+        },
+        resilience=ResilienceConfig(
+            circuit_breaker_timeout=45.0,
+            base_retry_delay=1.5,
+            max_retry_delay=90.0,
+        ),
+    )
+    write_atomic(config_file, cfg)
+
+    data = yaml.safe_load(config_file.read_text())
+    assert data["resilience"]["circuitBreakerTimeout"] == "45s"
+    assert data["resilience"]["baseRetryDelay"] == "1.5s"
+    assert data["resilience"]["maxRetryDelay"] == "90s"
+
+    reloaded = load_from_file(config_file)
+    assert reloaded.resilience.circuit_breaker_timeout == 45.0
+    assert reloaded.resilience.base_retry_delay == 1.5
+    assert reloaded.resilience.max_retry_delay == 90.0
+
+
 def test_tracing_serializes_full_key_set(tmp_path: Path) -> None:
     """write_atomic emits the same six tracing keys Go's template writes, so
     a config file created by either binary reads identically in the other."""

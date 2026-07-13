@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -269,122 +268,6 @@ func TestClientGetFirewallDeviceRetriesTransientFailure(t *testing.T) {
 	}
 }
 
-func TestClientCreateFirewallDeviceSuccess(t *testing.T) {
-	t.Parallel()
-
-	device := linode.FirewallDevice{
-		ID: 789,
-		Entity: linode.FirewallDeviceEntity{
-			ID:    456,
-			Label: "web-02",
-			Type:  managedLinodeSettingsSSHUser,
-			URL:   "/v4/linode/instances/456",
-		},
-	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != endpointFirewallDevices {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointFirewallDevices)
-		}
-
-		if r.URL.RawQuery != "" {
-			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
-		}
-
-		if r.Header.Get("Authorization") != managedContactAuthHeader {
-			t.Errorf("got %v, want %v", r.Header.Get("Authorization"), managedContactAuthHeader)
-		}
-
-		var got linode.CreateFirewallDeviceRequest
-		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-
-		if !reflect.DeepEqual(got, linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser}) {
-			t.Errorf("got = %v, want %v", got, linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser})
-		}
-
-		w.Header().Set("Content-Type", tcApplicationJSON)
-
-		if err := json.NewEncoder(w).Encode(device); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	result, err := client.CreateFirewallDevice(t.Context(), 123, &linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result == nil {
-		t.Fatal("result is nil")
-	}
-
-	if result.ID != 789 {
-		t.Errorf("result.ID = %v, want %v", result.ID, 789)
-	}
-
-	if result.Entity.Type != managedLinodeSettingsSSHUser {
-		t.Errorf("result.Entity.Type = %v, want %v", result.Entity.Type, managedLinodeSettingsSSHUser)
-	}
-}
-
-func TestClientCreateFirewallDeviceRejectsInvalidInput(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name       string
-		firewallID int
-		req        *linode.CreateFirewallDeviceRequest
-		wantErr    error
-	}{
-		{name: caseZeroFirewallDeviceParentID, firewallID: 0, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser}, wantErr: linode.ErrFirewallIDPositive},
-		{name: "nil request", firewallID: 123, req: nil, wantErr: linode.ErrFirewallDeviceIDPositive},
-		{name: caseZeroFirewallDeviceID, firewallID: 123, req: &linode.CreateFirewallDeviceRequest{Type: managedLinodeSettingsSSHUser}, wantErr: linode.ErrFirewallDeviceIDPositive},
-		{name: "missing type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456}, wantErr: linode.ErrFirewallDeviceTypeRequired},
-		{name: "slash type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: "linode/123"}, wantErr: linode.ErrInvalidFirewallDeviceType},
-		{name: "query type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: "linode?x=1"}, wantErr: linode.ErrInvalidFirewallDeviceType},
-		{name: "traversal type", firewallID: 123, req: &linode.CreateFirewallDeviceRequest{ID: 456, Type: ".."}, wantErr: linode.ErrInvalidFirewallDeviceType},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
-
-			var called atomic.Bool
-
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				called.Store(true)
-				w.WriteHeader(http.StatusOK)
-			}))
-			t.Cleanup(srv.Close)
-
-			client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-			result, err := client.CreateFirewallDevice(t.Context(), testCase.firewallID, testCase.req)
-
-			if !errors.Is(err, testCase.wantErr) {
-				t.Fatalf("error = %v, want %v", err, testCase.wantErr)
-			}
-
-			if result != nil {
-				t.Errorf("result = %v, want nil", result)
-			}
-
-			if called.Load() {
-				t.Error("called.Load() = true, want false")
-			}
-		})
-	}
-}
-
 func TestClientDeleteFirewallDeviceSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -532,58 +415,6 @@ func TestClientDeleteFirewallDeviceDoesNotReplayTransientFailure(t *testing.T) {
 
 	if calls.Load() != int32(1) {
 		t.Errorf("calls.Load() = %v, want %v", calls.Load(), int32(1))
-	}
-}
-
-func TestClientCreateFirewallDeviceDoesNotReplayTransientFailure(t *testing.T) {
-	t.Parallel()
-
-	var requestCount atomic.Int32
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestCount.Add(1)
-
-		if r.Method != http.MethodPost {
-			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
-		}
-
-		if r.URL.Path != endpointFirewallDevices {
-			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, endpointFirewallDevices)
-		}
-
-		hijacker, ok := w.(http.Hijacker)
-		if !ok {
-			t.Error("response writer should support hijacking")
-
-			return
-		}
-
-		conn, _, err := hijacker.Hijack()
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-
-			return
-		}
-
-		if err := conn.Close(); err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	}))
-	t.Cleanup(srv.Close)
-
-	client := linode.NewClient(srv.URL, "my-token", nil, fastRetryOpts()...)
-
-	result, err := client.CreateFirewallDevice(t.Context(), 123, &linode.CreateFirewallDeviceRequest{ID: 456, Type: managedLinodeSettingsSSHUser})
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-
-	if result != nil {
-		t.Errorf("result = %v, want nil", result)
-	}
-
-	if requestCount.Load() != int32(1) {
-		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(1))
 	}
 }
 

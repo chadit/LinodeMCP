@@ -2538,17 +2538,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetInstance", e) from e
 
-    async def update_instance(self, instance_id: int, **fields: Any) -> Instance:
-        """Update a Linode instance."""
-        endpoint = f"/linode/instances/{instance_id}"
-        body = {key: value for key, value in fields.items() if value is not None}
-        try:
-            response = await self.make_request("PUT", endpoint, body)
-            data = response.json()
-            return self._parse_instance(data)
-        except httpx.HTTPError as e:
-            raise NetworkError("UpdateInstance", e) from e
-
     async def update_instance_raw(
         self, instance_id: int, **fields: Any
     ) -> dict[str, Any]:
@@ -4363,38 +4352,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateImageSharegroupToken", e) from e
 
-    async def update_image(
-        self,
-        image_id: str,
-        *,
-        label: str | None = None,
-        description: str | None = None,
-        tags: list[str] | None = None,
-    ) -> Image:
-        """Update a private image."""
-        if not image_id.strip():
-            raise ValueError("image_id must be a non-empty string")
-        if label is None and description is None and tags is None:
-            raise ValueError(
-                "at least one of label, description, or tags must be provided"
-            )
-
-        image_id_path = quote(image_id, safe="")
-        body: dict[str, Any] = {}
-        if label is not None:
-            body["label"] = label
-        if description is not None:
-            body["description"] = description
-        if tags is not None:
-            body["tags"] = tags
-
-        try:
-            response = await self.make_request("PUT", f"/images/{image_id_path}", body)
-            data = response.json()
-            return self._parse_image(data)
-        except httpx.HTTPError as e:
-            raise NetworkError("UpdateImage", e) from e
-
     async def update_image_raw(
         self,
         image_id: str,
@@ -4465,32 +4422,6 @@ class Client:
             return cast("dict[str, Any]", data)
         except httpx.HTTPError as e:
             raise NetworkError("GetKernel", e) from e
-
-    async def create_image(
-        self,
-        disk_id: int,
-        label: str | None = None,
-        description: str | None = None,
-        cloud_init: bool | None = None,
-        tags: list[str] | None = None,
-    ) -> Image:
-        """Create a private image from a Linode disk."""
-        body: dict[str, Any] = {"disk_id": disk_id}
-        if label is not None:
-            body["label"] = label
-        if description is not None:
-            body["description"] = description
-        if cloud_init is not None:
-            body["cloud_init"] = cloud_init
-        if tags is not None:
-            body["tags"] = tags
-
-        try:
-            response = await self.make_request("POST", "/images", body)
-            data = response.json()
-            return self._parse_image(data)
-        except httpx.HTTPError as e:
-            raise NetworkError("CreateImage", e) from e
 
     async def create_image_raw(
         self,
@@ -8430,54 +8361,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("CreateFirewall", e) from e
 
-    async def update_firewall(
-        self,
-        firewall_id: int,
-        label: str | None = None,
-        status: str | None = None,
-        inbound_policy: str | None = None,
-        outbound_policy: str | None = None,
-    ) -> Firewall:
-        """Update a firewall."""
-        endpoint = f"/networking/firewalls/{firewall_id}"
-        if inbound_policy:
-            validate_firewall_policy(inbound_policy)
-        if outbound_policy:
-            validate_firewall_policy(outbound_policy)
-
-        logger.info("Updating firewall", extra={"firewall_id": firewall_id})
-
-        try:
-            body: dict[str, Any] = {}
-            if label:
-                body["label"] = label
-            if status:
-                body["status"] = status
-            if inbound_policy or outbound_policy:
-                body["rules"] = {}
-                if inbound_policy:
-                    body["rules"]["inbound_policy"] = inbound_policy
-                if outbound_policy:
-                    body["rules"]["outbound_policy"] = outbound_policy
-
-            response = await self.make_request("PUT", endpoint, body)
-            data = response.json()
-            result = self._parse_firewall(data)
-            logger.info("Firewall updated", extra={"id": result.id})
-            return result
-        except httpx.ConnectTimeout as e:
-            logger.exception("Connection timeout updating firewall: %s", e)
-            raise NetworkError("UpdateFirewall", e) from e
-        except httpx.ReadTimeout as e:
-            logger.exception("Read timeout updating firewall: %s", e)
-            raise NetworkError("UpdateFirewall", e) from e
-        except httpx.HTTPStatusError as e:
-            logger.exception("HTTP error updating firewall")
-            raise NetworkError("UpdateFirewall", e) from e
-        except httpx.HTTPError as e:
-            logger.exception("HTTP error updating firewall: %s", e)
-            raise NetworkError("UpdateFirewall", e) from e
-
     async def update_firewall_raw(
         self,
         firewall_id: int,
@@ -8579,48 +8462,6 @@ class Client:
         except httpx.HTTPError as e:
             logger.exception("HTTP error creating firewall device: %s", e)
             raise NetworkError("CreateFirewallDevice", e) from e
-
-    async def update_firewall_rules(
-        self,
-        firewall_id: int,
-        inbound: list[dict[str, Any]],
-        outbound: list[dict[str, Any]],
-    ) -> dict[str, list[dict[str, Any]]]:
-        """Update firewall rules.
-
-        Replaces the inbound and outbound rule sets for a firewall.
-        """
-        _validate_firewall_rules_update_request(firewall_id, inbound, outbound)
-
-        endpoint = f"/networking/firewalls/{firewall_id}/rules"
-        body: dict[str, Any] = {"inbound": inbound, "outbound": outbound}
-
-        logger.info(
-            "Updating firewall rules",
-            extra={"firewall_id": firewall_id},
-        )
-
-        try:
-            response = await self.make_request("PUT", endpoint, body)
-            data = response.json()
-            result = {
-                "inbound": data.get("inbound", []),
-                "outbound": data.get("outbound", []),
-            }
-            logger.info("Firewall rules updated", extra={"firewall_id": firewall_id})
-            return result
-        except httpx.ConnectTimeout as e:
-            logger.exception("Connection timeout updating firewall rules: %s", e)
-            raise NetworkError("UpdateFirewallRules", e) from e
-        except httpx.ReadTimeout as e:
-            logger.exception("Read timeout updating firewall rules: %s", e)
-            raise NetworkError("UpdateFirewallRules", e) from e
-        except httpx.HTTPStatusError as e:
-            logger.exception("HTTP error updating firewall rules")
-            raise NetworkError("UpdateFirewallRules", e) from e
-        except httpx.HTTPError as e:
-            logger.exception("HTTP error updating firewall rules: %s", e)
-            raise NetworkError("UpdateFirewallRules", e) from e
 
     async def update_firewall_rules_raw(
         self,
@@ -9146,50 +8987,6 @@ class Client:
             logger.exception("HTTP error deleting volume: %s", e)
             raise NetworkError("DeleteVolume", e) from e
 
-    async def create_nodebalancer(
-        self,
-        region: str,
-        label: str | None = None,
-        client_conn_throttle: int = 0,
-        tags: list[str] | None = None,
-    ) -> NodeBalancer:
-        """Create a new NodeBalancer."""
-        validate_label(label)
-
-        logger.info("Creating NodeBalancer", extra={"region": region, "label": label})
-
-        try:
-            body: dict[str, Any] = {
-                "region": region,
-                "client_conn_throttle": client_conn_throttle,
-            }
-            if label:
-                body["label"] = label
-            if tags:
-                body["tags"] = tags
-
-            response = await self.make_request("POST", "/nodebalancers", body)
-            data = response.json()
-            result = self._parse_nodebalancer(data)
-            logger.info(
-                "NodeBalancer created", extra={"id": result.id, "label": result.label}
-            )
-            return result
-        except httpx.ConnectTimeout as e:
-            logger.exception("Connection timeout creating NodeBalancer: %s", e)
-            raise NetworkError("CreateNodeBalancer", e) from e
-        except httpx.ReadTimeout as e:
-            logger.exception("Read timeout creating NodeBalancer: %s", e)
-            raise NetworkError("CreateNodeBalancer", e) from e
-        except httpx.HTTPStatusError as e:
-            logger.exception(
-                "HTTP error creating NodeBalancer: status %d", e.response.status_code
-            )
-            raise NetworkError("CreateNodeBalancer", e) from e
-        except httpx.HTTPError as e:
-            logger.exception("HTTP error creating NodeBalancer: %s", e)
-            raise NetworkError("CreateNodeBalancer", e) from e
-
     async def create_nodebalancer_raw(
         self,
         region: str,
@@ -9220,46 +9017,6 @@ class Client:
             return data
         except httpx.HTTPError as e:
             raise NetworkError("CreateNodeBalancer", e) from e
-
-    async def update_nodebalancer(
-        self,
-        nodebalancer_id: int,
-        label: str | None = None,
-        client_conn_throttle: int | None = None,
-        tags: list[str] | None = None,
-    ) -> NodeBalancer:
-        """Update a NodeBalancer."""
-        endpoint = f"/nodebalancers/{nodebalancer_id}"
-        logger.info("Updating NodeBalancer", extra={"nodebalancer_id": nodebalancer_id})
-
-        try:
-            body: dict[str, Any] = {}
-            if label:
-                body["label"] = label
-            if client_conn_throttle is not None:
-                body["client_conn_throttle"] = client_conn_throttle
-            if tags is not None:
-                body["tags"] = tags
-
-            response = await self.make_request("PUT", endpoint, body)
-            data = response.json()
-            result = self._parse_nodebalancer(data)
-            logger.info("NodeBalancer updated", extra={"id": result.id})
-            return result
-        except httpx.ConnectTimeout as e:
-            logger.exception("Connection timeout updating NodeBalancer: %s", e)
-            raise NetworkError("UpdateNodeBalancer", e) from e
-        except httpx.ReadTimeout as e:
-            logger.exception("Read timeout updating NodeBalancer: %s", e)
-            raise NetworkError("UpdateNodeBalancer", e) from e
-        except httpx.HTTPStatusError as e:
-            logger.exception(
-                "HTTP error updating NodeBalancer: status %d", e.response.status_code
-            )
-            raise NetworkError("UpdateNodeBalancer", e) from e
-        except httpx.HTTPError as e:
-            logger.exception("HTTP error updating NodeBalancer: %s", e)
-            raise NetworkError("UpdateNodeBalancer", e) from e
 
     async def update_nodebalancer_raw(
         self,
@@ -10496,37 +10253,6 @@ class Client:
 
     # ── Instance Actions ──
 
-    async def clone_instance(
-        self,
-        instance_id: int,
-        region: str | None = None,
-        instance_type: str | None = None,
-        label: str | None = None,
-        backups_enabled: bool = False,
-        disks: list[int] | None = None,
-        configs: list[int] | None = None,
-    ) -> Instance:
-        """Clone an instance."""
-        endpoint = f"/linode/instances/{instance_id}/clone"
-        try:
-            body: dict[str, Any] = {}
-            if region is not None:
-                body["region"] = region
-            if instance_type is not None:
-                body["type"] = instance_type
-            if label is not None:
-                body["label"] = label
-            if backups_enabled:
-                body["backups_enabled"] = True
-            if disks is not None:
-                body["disks"] = disks
-            if configs is not None:
-                body["configs"] = configs
-            response = await self.make_request("POST", endpoint, body)
-            return self._parse_instance(response.json())
-        except httpx.HTTPError as e:
-            raise NetworkError("CloneInstance", e) from e
-
     async def clone_instance_raw(
         self,
         instance_id: int,
@@ -11622,13 +11348,6 @@ class RetryableClient:
         )
         return result
 
-    async def update_instance(self, instance_id: int, **fields: Any) -> Instance:
-        """Update a Linode instance with retry."""
-        result: Instance = await self._execute_with_retry(
-            lambda: self.client.update_instance(instance_id, **fields)
-        )
-        return result
-
     async def update_instance_raw(
         self, instance_id: int, **fields: Any
     ) -> dict[str, Any]:
@@ -12556,22 +12275,6 @@ class RetryableClient:
         """Delete an image share group token without retry replay."""
         await self.client.delete_image_sharegroup_token(token_uuid=token_uuid)
 
-    async def update_image(
-        self,
-        image_id: str,
-        *,
-        label: str | None = None,
-        description: str | None = None,
-        tags: list[str] | None = None,
-    ) -> Image:
-        """Update a private image without retry replay."""
-        return await self.client.update_image(
-            image_id=image_id,
-            label=label,
-            description=description,
-            tags=tags,
-        )
-
     async def update_image_raw(
         self,
         image_id: str,
@@ -12599,26 +12302,6 @@ class RetryableClient:
         """Get a single Linode kernel with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             lambda: self.client.get_kernel(kernel_id)
-        )
-        return result
-
-    async def create_image(
-        self,
-        disk_id: int,
-        label: str | None = None,
-        description: str | None = None,
-        cloud_init: bool | None = None,
-        tags: list[str] | None = None,
-    ) -> Image:
-        """Create a private image from a Linode disk with retry."""
-        result: Image = await self._execute_with_retry(
-            lambda: self.client.create_image(
-                disk_id=disk_id,
-                label=label,
-                description=description,
-                cloud_init=cloud_init,
-                tags=tags,
-            )
         )
         return result
 
@@ -14283,25 +13966,6 @@ class RetryableClient:
         )
         return result
 
-    async def update_firewall(
-        self,
-        firewall_id: int,
-        label: str | None = None,
-        status: str | None = None,
-        inbound_policy: str | None = None,
-        outbound_policy: str | None = None,
-    ) -> Firewall:
-        """Update firewall with retry."""
-        result: Firewall = await self._execute_with_retry(
-            self.client.update_firewall,
-            firewall_id,
-            label,
-            status,
-            inbound_policy,
-            outbound_policy,
-        )
-        return result
-
     async def create_firewall_raw(
         self,
         label: str,
@@ -14346,21 +14010,6 @@ class RetryableClient:
         """Create a new device for a firewall with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.create_firewall_device, firewall_id, device_id, device_type
-        )
-        return result
-
-    async def update_firewall_rules(
-        self,
-        firewall_id: int,
-        inbound: list[dict[str, Any]],
-        outbound: list[dict[str, Any]],
-    ) -> dict[str, list[dict[str, Any]]]:
-        """Update firewall rules with retry."""
-        result: dict[str, list[dict[str, Any]]] = await self._execute_with_retry(
-            self.client.update_firewall_rules,
-            firewall_id,
-            inbound,
-            outbound,
         )
         return result
 
@@ -14553,19 +14202,6 @@ class RetryableClient:
         )
         return result
 
-    async def create_nodebalancer(
-        self,
-        region: str,
-        label: str | None = None,
-        client_conn_throttle: int = 0,
-        tags: list[str] | None = None,
-    ) -> NodeBalancer:
-        """Create NodeBalancer with retry."""
-        result: NodeBalancer = await self._execute_with_retry(
-            self.client.create_nodebalancer, region, label, client_conn_throttle, tags
-        )
-        return result
-
     async def create_nodebalancer_raw(
         self,
         region: str,
@@ -14577,23 +14213,6 @@ class RetryableClient:
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.create_nodebalancer_raw,
             region,
-            label,
-            client_conn_throttle,
-            tags,
-        )
-        return result
-
-    async def update_nodebalancer(
-        self,
-        nodebalancer_id: int,
-        label: str | None = None,
-        client_conn_throttle: int | None = None,
-        tags: list[str] | None = None,
-    ) -> NodeBalancer:
-        """Update NodeBalancer with retry."""
-        result: NodeBalancer = await self._execute_with_retry(
-            self.client.update_nodebalancer,
-            nodebalancer_id,
             label,
             client_conn_throttle,
             tags,
@@ -15396,29 +15015,6 @@ class RetryableClient:
         )
 
     # ── Instance Actions (retry wrappers) ──
-
-    async def clone_instance(
-        self,
-        instance_id: int,
-        region: str | None = None,
-        instance_type: str | None = None,
-        label: str | None = None,
-        backups_enabled: bool = False,
-        disks: list[int] | None = None,
-        configs: list[int] | None = None,
-    ) -> Instance:
-        """Clone instance with retry."""
-        result: Instance = await self._execute_with_retry(
-            self.client.clone_instance,
-            instance_id,
-            region,
-            instance_type,
-            label,
-            backups_enabled,
-            disks,
-            configs,
-        )
-        return result
 
     async def clone_instance_raw(
         self,

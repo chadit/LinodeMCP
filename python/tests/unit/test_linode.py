@@ -1547,103 +1547,28 @@ async def test_retryable_list_account_payments_delegates_to_client() -> None:
     await retryable.close()
 
 
-async def test_update_image_sends_put_to_encoded_image_route() -> None:
-    """Updating an image sends PUT /images/{imageId} with writable fields only."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    response_data = {
-        "id": "private/12345",
-        "label": "renamed-image",
-        "description": "Updated image",
-        "type": "manual",
-        "is_public": False,
-        "deprecated": False,
-        "size": 2048,
-        "vendor": "",
-        "status": "available",
-        "created": "2024-01-01T00:00:00",
-        "created_by": "testuser",
-        "expiry": None,
-        "eol": None,
-        "capabilities": ["cloud-init"],
-        "tags": ["prod"],
-    }
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = response_data
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = mock_response
-
-        image = await client.update_image(
-            "private/12345",
-            label="renamed-image",
-            description="Updated image",
-            tags=["prod"],
-        )
-
-    assert image.id == "private/12345"
-    assert image.label == "renamed-image"
-    mock_request.assert_called_once_with(
-        "PUT",
-        "/images/private%2F12345",
-        {"label": "renamed-image", "description": "Updated image", "tags": ["prod"]},
-    )
-    await client.close()
-
-
-async def test_update_image_requires_a_writable_field() -> None:
-    """Updating an image requires at least one writable request field."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    with pytest.raises(ValueError, match="at least one"):
-        await client.update_image("private/12345")
-
-    await client.close()
-
-
-async def test_update_image_rejects_blank_image_id() -> None:
-    """Updating an image requires a non-empty image ID."""
+async def test_update_image_raw_rejects_blank_image_id() -> None:
+    """update_image_raw requires a non-empty image ID."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with pytest.raises(ValueError, match="image_id must be a non-empty string"):
-        await client.update_image("", label="renamed-image")
+        await client.update_image_raw("", label="renamed-image")
 
     await client.close()
 
 
-async def test_update_image_wraps_http_errors() -> None:
-    """Image update wraps HTTP client errors with route-specific context."""
+async def test_update_image_raw_wraps_http_errors() -> None:
+    """update_image_raw wraps HTTP client errors with route-specific context."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.update_image("private/12345", label="renamed-image")
+            await client.update_image_raw("private/12345", label="renamed-image")
 
     assert "UpdateImage" in str(excinfo.value)
     await client.close()
-
-
-async def test_retryable_update_image_does_not_replay_transient_errors() -> None:
-    """Retryable image update delegates once so mutating PUT calls are not replayed."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-
-    with patch.object(
-        retryable.client, "update_image", new_callable=AsyncMock
-    ) as mock_update:
-        mock_update.side_effect = httpx.ReadTimeout("timeout")
-
-        with pytest.raises(httpx.ReadTimeout):
-            await retryable.update_image("private/12345", label="renamed-image")
-
-    mock_update.assert_awaited_once_with(
-        image_id="private/12345",
-        label="renamed-image",
-        description=None,
-        tags=None,
-    )
-    await retryable.close()
 
 
 async def test_list_account_payment_methods_sends_exact_route_with_query() -> None:
@@ -9403,38 +9328,6 @@ async def test_retryable_upload_image_does_not_replay() -> None:
     await retryable.close()
 
 
-async def test_retryable_create_image_delegates_to_client() -> None:
-    """Retryable client should delegate image creation."""
-    client = RetryableClient(
-        "https://api.linode.com/v4",
-        "test-token",
-        RetryConfig(max_retries=1, base_delay=0.01),
-    )
-
-    with patch.object(
-        client.client,
-        "create_image",
-        new_callable=AsyncMock,
-    ) as mock_create:
-        await client.create_image(
-            123,
-            label="app-image",
-            description="Application image",
-            cloud_init=True,
-            tags=["prod"],
-        )
-
-        mock_create.assert_awaited_once_with(
-            disk_id=123,
-            label="app-image",
-            description="Application image",
-            cloud_init=True,
-            tags=["prod"],
-        )
-
-    await client.close()
-
-
 async def test_retryable_get_ipv6_range_delegates_to_client() -> None:
     """Retryable client should delegate IPv6 range retrieval."""
     client = RetryableClient(
@@ -10355,76 +10248,6 @@ async def test_get_domain_record() -> None:
     await client.close()
 
 
-async def test_update_firewall_rules() -> None:
-    """Test updating firewall rules."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "inbound": [
-            {
-                "action": "ACCEPT",
-                "protocol": "TCP",
-                "ports": "22",
-                "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
-                "label": "allow-ssh",
-                "description": "",
-            }
-        ],
-        "outbound": [],
-    }
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = mock_response
-
-        result = await client.update_firewall_rules(
-            12345,
-            inbound=[
-                {
-                    "action": "ACCEPT",
-                    "protocol": "TCP",
-                    "ports": "22",
-                    "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
-                    "label": "allow-ssh",
-                    "description": "",
-                }
-            ],
-            outbound=[],
-        )
-
-        assert result["inbound"] == [
-            {
-                "action": "ACCEPT",
-                "protocol": "TCP",
-                "ports": "22",
-                "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
-                "label": "allow-ssh",
-                "description": "",
-            }
-        ]
-        assert result["outbound"] == []
-        mock_request.assert_awaited_once()
-        args, _kwargs = mock_request.await_args_list[0]
-        assert args[0] == "PUT"
-        assert args[1] == "/networking/firewalls/12345/rules"
-        assert args[2] == {
-            "inbound": [
-                {
-                    "action": "ACCEPT",
-                    "protocol": "TCP",
-                    "ports": "22",
-                    "addresses": {"ipv4": ["0.0.0.0/0"], "ipv6": ["::/0"]},
-                    "label": "allow-ssh",
-                    "description": "",
-                }
-            ],
-            "outbound": [],
-        }
-
-    await client.close()
-
-
 async def test_create_firewall_raw() -> None:
     """create_firewall_raw returns the full API body for the proto write path."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -10726,14 +10549,14 @@ async def test_update_nodebalancer_raw_returns_full_body() -> None:
 
 
 @pytest.mark.parametrize("firewall_id", [0, -1, "12345", True])
-async def test_update_firewall_rules_rejects_invalid_firewall_id(
+async def test_update_firewall_rules_raw_rejects_invalid_firewall_id(
     firewall_id: Any,
 ) -> None:
-    """Test firewall rule update rejects invalid firewall IDs."""
+    """update_firewall_rules_raw rejects invalid firewall IDs."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with pytest.raises(ValueError, match="firewall_id must be a positive integer"):
-        await client.update_firewall_rules(firewall_id, inbound=[], outbound=[])
+        await client.update_firewall_rules_raw(firewall_id, inbound=[], outbound=[])
 
     await client.close()
 
@@ -10747,44 +10570,31 @@ async def test_update_firewall_rules_rejects_invalid_firewall_id(
         ([], ["bad-rule"], "outbound must be an array of objects"),
     ],
 )
-async def test_update_firewall_rules_rejects_invalid_rule_lists(
+async def test_update_firewall_rules_raw_rejects_invalid_rule_lists(
     inbound: Any, outbound: Any, message: str
 ) -> None:
-    """Test firewall rule update rejects invalid rule lists."""
+    """update_firewall_rules_raw rejects invalid rule lists."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with pytest.raises(TypeError, match=message):
-        await client.update_firewall_rules(12345, inbound=inbound, outbound=outbound)
+        await client.update_firewall_rules_raw(
+            12345, inbound=inbound, outbound=outbound
+        )
 
     await client.close()
 
 
-async def test_update_firewall_rules_wraps_http_errors() -> None:
-    """Test firewall rule update wraps HTTP errors."""
+async def test_update_firewall_rules_raw_wraps_http_errors() -> None:
+    """update_firewall_rules_raw wraps HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError, match="UpdateFirewallRules"):
-            await client.update_firewall_rules(12345, inbound=[], outbound=[])
+            await client.update_firewall_rules_raw(12345, inbound=[], outbound=[])
 
     await client.close()
-
-
-async def test_retryable_update_firewall_rules_delegates_to_client() -> None:
-    """Test RetryableClient delegates firewall rule updates to Client."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-
-    with patch.object(
-        retryable.client, "update_firewall_rules", new_callable=AsyncMock
-    ) as mock_update:
-        mock_update.return_value = {"inbound": [], "outbound": []}
-        result = await retryable.update_firewall_rules(12345, inbound=[], outbound=[])
-
-    assert result == {"inbound": [], "outbound": []}
-    mock_update.assert_awaited_once_with(12345, [], [])
-    await retryable.close()
 
 
 async def test_retryable_create_firewall_raw_delegates_to_client() -> None:
@@ -14296,60 +14106,6 @@ async def test_retryable_get_image_delegates_to_client() -> None:
     await client.close()
 
 
-async def test_create_image_sends_post_to_images_route() -> None:
-    """Test creating an image sends POST /images."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "id": "private/12345",
-        "label": "app-image",
-        "description": "Application image",
-        "type": "manual",
-        "is_public": False,
-        "deprecated": False,
-        "size": 2048,
-        "vendor": "",
-        "status": "creating",
-        "created": "2024-01-01T00:00:00",
-        "created_by": "testuser",
-        "updated": "2024-01-01T00:00:00",
-        "expiry": None,
-        "eol": None,
-        "capabilities": ["cloud-init"],
-        "regions": [],
-        "tags": ["prod"],
-    }
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = mock_response
-
-        image = await client.create_image(
-            disk_id=123,
-            label="app-image",
-            description="Application image",
-            cloud_init=True,
-            tags=["prod"],
-        )
-
-        mock_request.assert_called_once_with(
-            "POST",
-            "/images",
-            {
-                "disk_id": 123,
-                "label": "app-image",
-                "description": "Application image",
-                "cloud_init": True,
-                "tags": ["prod"],
-            },
-        )
-        assert image.id == "private/12345"
-        assert image.label == "app-image"
-
-    await client.close()
-
-
 async def test_upload_image_sends_post_to_upload_route() -> None:
     """Image upload creation sends POST /images/upload with documented body."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -14712,10 +14468,10 @@ class TestMakeRequestBody:
 
         await client.close()
 
-    async def test_update_instance_put_shape(
+    async def test_update_instance_raw_put_shape(
         self, sample_instance_data: dict[str, Any]
     ) -> None:
-        """PUT to a Linode instance sends the update body to the instance path."""
+        """update_instance_raw sends the update body to the instance path."""
         client = Client("https://api.linode.com/v4", "test-token")
 
         mock_response = MagicMock()
@@ -14725,11 +14481,11 @@ class TestMakeRequestBody:
         with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
             mock_req.return_value = mock_response
 
-            result = await client.update_instance(
+            result = await client.update_instance_raw(
                 123, label="updated", tags=["prod"], watchdog_enabled=False
             )
 
-            assert result.label == "updated"
+            assert result["label"] == "updated"
             assert mock_req.call_args[0][0] == "PUT"
             assert mock_req.call_args[0][1].endswith("/linode/instances/123")
             assert mock_req.call_args[1]["json"] == {

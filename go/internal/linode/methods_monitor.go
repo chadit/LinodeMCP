@@ -17,28 +17,6 @@ func (c *Client) httpListMonitorServicesProto(ctx context.Context) ([]*linodev1.
 		func() *linodev1.MonitorService { return &linodev1.MonitorService{} })
 }
 
-// httpGetMonitorService retrieves details for one supported monitoring service type.
-func (c *Client) httpGetMonitorService(ctx context.Context, serviceType string) (MonitorService, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return MonitorService{}, &NetworkError{Operation: "GetMonitorService", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var service MonitorService
-	if err := c.handleResponse(resp, &service); err != nil {
-		return MonitorService{}, err
-	}
-
-	return service, nil
-}
-
 // httpGetMonitorServiceProto retrieves a Monitor service as a proto message.
 func (c *Client) httpGetMonitorServiceProto(ctx context.Context, serviceType string) (*linodev1.MonitorService, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -59,50 +37,6 @@ func (c *Client) httpGetMonitorServiceProto(ctx context.Context, serviceType str
 	}
 
 	return service, nil
-}
-
-// httpListMonitorServiceMetricDefinitions retrieves metric definitions for one monitoring service type.
-func (c *Client) httpListMonitorServiceMetricDefinitions(ctx context.Context, serviceType string) (*PaginatedResponse[MonitorMetricDefinition], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/metric-definitions"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListMonitorServiceMetricDefinitions", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var definitions PaginatedResponse[MonitorMetricDefinition]
-	if err := c.handleResponse(resp, &definitions); err != nil {
-		return nil, err
-	}
-
-	return &definitions, nil
-}
-
-// httpListMonitorServiceAlertDefinitions retrieves alert definitions for one monitoring service type.
-func (c *Client) httpListMonitorServiceAlertDefinitions(ctx context.Context, serviceType string) (*PaginatedResponse[AlertDefinition], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListMonitorServiceAlertDefinitions", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var definitions PaginatedResponse[AlertDefinition]
-	if err := c.handleResponse(resp, &definitions); err != nil {
-		return nil, err
-	}
-
-	return &definitions, nil
 }
 
 // httpListMonitorServiceMetricDefinitionsProto retrieves metric definitions for
@@ -183,28 +117,6 @@ func (c *Client) httpCreateMonitorServiceToken(ctx context.Context, serviceType 
 	}
 
 	return token, nil
-}
-
-// httpCreateMonitorServiceAlertDefinition creates an alert definition for one monitoring service type.
-func (c *Client) httpCreateMonitorServiceAlertDefinition(ctx context.Context, serviceType string, request *CreateAlertDefinitionRequest) (*AlertDefinition, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateMonitorServiceAlertDefinition", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var definition AlertDefinition
-	if err := c.handleResponse(resp, &definition); err != nil {
-		return nil, err
-	}
-
-	return &definition, nil
 }
 
 // httpCreateMonitorServiceAlertDefinitionProto creates an alert definition and
@@ -317,28 +229,6 @@ func (c *Client) httpDeleteMonitorServiceAlertDefinition(ctx context.Context, se
 	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
-}
-
-// httpUpdateMonitorServiceAlertDefinition updates one alert definition for one monitoring service type.
-func (c *Client) httpUpdateMonitorServiceAlertDefinition(ctx context.Context, serviceType string, alertID int, request *UpdateAlertDefinitionRequest) (*AlertDefinition, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateMonitorServiceAlertDefinition", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var definition AlertDefinition
-	if err := c.handleResponse(resp, &definition); err != nil {
-		return nil, err
-	}
-
-	return &definition, nil
 }
 
 // httpListMonitorDashboardsProto retrieves monitoring dashboards as proto

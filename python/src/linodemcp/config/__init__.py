@@ -95,14 +95,19 @@ class TracingConfig:
 
 @dataclass
 class ResilienceConfig:
-    """Retry, rate limit, circuit breaker, and HTTP pool settings."""
+    """Retry, rate limit, circuit breaker, and HTTP pool settings.
+
+    Duration fields hold seconds as floats. The config file writes them as Go
+    time.Duration strings ("30s", "1m30s"): that is the only form Go's yaml
+    decoder accepts, so the shared config file must never carry bare numbers.
+    """
 
     rate_limit_per_minute: int = 700
     circuit_breaker_threshold: int = 5
-    circuit_breaker_timeout: int = 30
+    circuit_breaker_timeout: float = 30.0
     max_retries: int = 3
-    base_retry_delay: int = 1
-    max_retry_delay: int = 30
+    base_retry_delay: float = 1.0
+    max_retry_delay: float = 30.0
     pool_max_connections: int = 10
     pool_max_keepalive_connections: int = 10
     pool_keepalive_expiry: float = 30.0
@@ -462,10 +467,12 @@ def _apply_defaults(data: dict[str, Any]) -> None:
     data.setdefault("resilience", {})
     data["resilience"].setdefault("rateLimitPerMinute", 700)
     data["resilience"].setdefault("circuitBreakerThreshold", 5)
-    data["resilience"].setdefault("circuitBreakerTimeout", 30)
+    # Durations default to Go duration strings, never bare numbers: a config
+    # carrying this dict must stay loadable by the Go binary too.
+    data["resilience"].setdefault("circuitBreakerTimeout", "30s")
     data["resilience"].setdefault("maxRetries", 3)
-    data["resilience"].setdefault("baseRetryDelay", 1)
-    data["resilience"].setdefault("maxRetryDelay", 30)
+    data["resilience"].setdefault("baseRetryDelay", "1s")
+    data["resilience"].setdefault("maxRetryDelay", "30s")
     data["resilience"].setdefault("poolMaxConnections", 10)
     data["resilience"].setdefault("poolMaxKeepaliveConnections", 10)
     data["resilience"].setdefault("poolKeepaliveExpiry", 30.0)
@@ -729,10 +736,19 @@ def _data_to_config(data: dict[str, Any]) -> Config:
     resilience = ResilienceConfig(
         rate_limit_per_minute=resilience_data.get("rateLimitPerMinute", 700),
         circuit_breaker_threshold=resilience_data.get("circuitBreakerThreshold", 5),
-        circuit_breaker_timeout=resilience_data.get("circuitBreakerTimeout", 30),
+        circuit_breaker_timeout=_parse_duration_seconds(
+            resilience_data.get("circuitBreakerTimeout", 30),
+            "resilience.circuitBreakerTimeout",
+        ),
         max_retries=resilience_data.get("maxRetries", 3),
-        base_retry_delay=resilience_data.get("baseRetryDelay", 1),
-        max_retry_delay=resilience_data.get("maxRetryDelay", 30),
+        base_retry_delay=_parse_duration_seconds(
+            resilience_data.get("baseRetryDelay", 1),
+            "resilience.baseRetryDelay",
+        ),
+        max_retry_delay=_parse_duration_seconds(
+            resilience_data.get("maxRetryDelay", 30),
+            "resilience.maxRetryDelay",
+        ),
         pool_max_connections=resilience_data.get("poolMaxConnections", 10),
         pool_max_keepalive_connections=resilience_data.get(
             "poolMaxKeepaliveConnections", 10
@@ -932,6 +948,39 @@ def parse_duration_seconds(value: str) -> float:
     return sign * total
 
 
+def _parse_duration_seconds(value: Any, key: str) -> float:
+    """Coerce a resilience duration config value to seconds.
+
+    The shared config format is Go's duration string ("30s", "1m30s"): the
+    only form Go's yaml decoder accepts for time.Duration fields. Bare
+    numbers stay accepted here as seconds because configs written by older
+    Python builds carried them; Go never reads those, and write_atomic now
+    emits the string form so a Python-written file loads in both binaries.
+    """
+    if isinstance(value, bool):
+        msg = f"{key} must be a duration string like '30s' or a number of seconds"
+        raise ConfigInvalidError(msg)
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return parse_duration_seconds(value)
+        except ValueError as e:
+            msg = f"{key}: {e} (use a Go duration string like '30s')"
+            raise ConfigInvalidError(msg) from e
+    msg = f"{key} must be a duration string like '30s' or a number of seconds"
+    raise ConfigInvalidError(msg)
+
+
+def _format_duration_go(seconds: float) -> str:
+    """Format seconds as a Go-parseable duration string.
+
+    write_atomic must emit this form because Go's yaml decoder rejects bare
+    numbers for time.Duration fields; "30s" and "1.5s" load in both binaries.
+    """
+    return f"{seconds:g}s"
+
+
 def load_from_file(path: Path) -> Config:
     """Load configuration from a file."""
     if not path.exists():
@@ -1038,10 +1087,12 @@ def _config_to_data(cfg: Config) -> dict[str, Any]:
         "resilience": {
             "rateLimitPerMinute": cfg.resilience.rate_limit_per_minute,
             "circuitBreakerThreshold": cfg.resilience.circuit_breaker_threshold,
-            "circuitBreakerTimeout": cfg.resilience.circuit_breaker_timeout,
+            "circuitBreakerTimeout": _format_duration_go(
+                cfg.resilience.circuit_breaker_timeout
+            ),
             "maxRetries": cfg.resilience.max_retries,
-            "baseRetryDelay": cfg.resilience.base_retry_delay,
-            "maxRetryDelay": cfg.resilience.max_retry_delay,
+            "baseRetryDelay": _format_duration_go(cfg.resilience.base_retry_delay),
+            "maxRetryDelay": _format_duration_go(cfg.resilience.max_retry_delay),
         },
         "environments": environments,
         "active_profile": cfg.active_profile,

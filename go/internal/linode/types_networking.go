@@ -335,16 +335,6 @@ func firewallCreateBodyFromRequest(req CreateFirewallRequest) firewallCreateBody
 	return body
 }
 
-// firewallRulesReplaceBody is the wire form of a PUT /networking/firewalls/{id}/
-// rules request: the inbound and outbound rule lists only. inbound_policy and
-// outbound_policy are optional with no documented default, so they are omitted
-// rather than sent as empty enum strings (the shared FirewallRules struct would
-// emit them). This matches the Python client, which sends only inbound/outbound.
-type firewallRulesReplaceBody struct {
-	Inbound  []FirewallRule `json:"inbound"`
-	Outbound []FirewallRule `json:"outbound"`
-}
-
 // FirewallRulesReplaceRequest carries caller-supplied inbound and outbound
 // firewall rule objects verbatim for a PUT /networking/firewalls/{id}/rules
 // call. Rules stay as raw maps rather than the typed FirewallRule because

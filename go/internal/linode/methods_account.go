@@ -101,26 +101,6 @@ func (c *Client) httpGetProfileProto(ctx context.Context) (*linodev1.Profile, er
 	return profile, nil
 }
 
-// httpCreateProfileToken creates a personal access token for the authenticated profile.
-func (c *Client) httpCreateProfileToken(ctx context.Context, req CreateProfileTokenRequest) (*ProfileToken, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTokens, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateProfileToken", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var token ProfileToken
-	if err := c.handleResponse(resp, &token); err != nil {
-		return nil, err
-	}
-
-	return &token, nil
-}
-
 // httpCreateProfileTokenProto creates a personal access token and decodes the
 // created token (including the one-time secret) into a proto message for the
 // proto-backed write path.
@@ -165,26 +145,6 @@ func (c *Client) httpUpdateProfilePreferences(ctx context.Context, req ProfilePr
 	}
 
 	return preferences, nil
-}
-
-// httpEnableProfileTFA generates a two-factor authentication secret for the authenticated profile.
-func (c *Client) httpEnableProfileTFA(ctx context.Context) (ProfileTFAEnableResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTFAEnable, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "EnableProfileTFA", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var result ProfileTFAEnableResponse
-	if err := c.handleResponse(resp, &result); err != nil {
-		return nil, err
-	}
-
-	return result, nil
 }
 
 // httpEnableProfileTFAProto generates a two-factor authentication secret and
@@ -311,76 +271,12 @@ func (c *Client) httpConfirmProfileTFAEnable(ctx context.Context, req *ProfileTF
 	return result, nil
 }
 
-// httpListProfileSecurityQuestions lists available profile security questions.
-func (c *Client) httpListProfileSecurityQuestions(ctx context.Context) (*ProfileSecurityQuestions, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfileSecurityQuestions, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListProfileSecurityQuestions", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var questions ProfileSecurityQuestions
-	if err := c.handleResponse(resp, &questions); err != nil {
-		return nil, err
-	}
-
-	return &questions, nil
-}
-
-// httpListProfileLogins retrieves login history for the authenticated profile.
-func (c *Client) httpListProfileLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointProfileLogins, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListProfileLogins", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var logins PaginatedResponse[AccountLogin]
-	if err := c.handleResponse(resp, &logins); err != nil {
-		return nil, err
-	}
-
-	return &logins, nil
-}
-
 // httpListProfileLoginsProto retrieves profile login history as proto messages
 // for the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListProfileLogins.
 func (c *Client) httpListProfileLoginsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountLogin, error) {
 	return listProtoElementsPaginated(ctx, c, "ListProfileLogins", endpointProfileLogins, page, pageSize,
 		func() *linodev1.AccountLogin { return &linodev1.AccountLogin{} })
-}
-
-// httpListProfileTokens retrieves personal access tokens for the authenticated profile.
-func (c *Client) httpListProfileTokens(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileToken], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointProfileTokens, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListProfileTokens", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var tokens PaginatedResponse[ProfileToken]
-	if err := c.handleResponse(resp, &tokens); err != nil {
-		return nil, err
-	}
-
-	return &tokens, nil
 }
 
 // httpDeleteProfileToken revokes a personal access token for the authenticated profile.
@@ -402,32 +298,6 @@ func (c *Client) httpDeleteProfileToken(ctx context.Context, tokenID int) error 
 	}
 
 	return nil
-}
-
-// httpUpdateProfileToken updates one personal access token on the authenticated profile.
-func (c *Client) httpUpdateProfileToken(ctx context.Context, tokenID string, req UpdateProfileTokenRequest) (*ProfileToken, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	if req == nil {
-		req = UpdateProfileTokenRequest{}
-	}
-
-	endpoint := endpointProfileTokens + "/" + url.PathEscape(tokenID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateProfileToken", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var token ProfileToken
-	if err := c.handleResponse(resp, &token); err != nil {
-		return nil, err
-	}
-
-	return &token, nil
 }
 
 // httpUpdateProfileTokenProto updates one personal access token and decodes the
@@ -457,50 +327,6 @@ func (c *Client) httpUpdateProfileTokenProto(ctx context.Context, tokenID string
 	}
 
 	return token, nil
-}
-
-// httpListProfileDevices retrieves trusted devices for the authenticated profile.
-func (c *Client) httpListProfileDevices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ProfileDevice], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointProfileDevices, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListProfileDevices", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var devices PaginatedResponse[ProfileDevice]
-	if err := c.handleResponse(resp, &devices); err != nil {
-		return nil, err
-	}
-
-	return &devices, nil
-}
-
-// httpGetProfileLogin retrieves one login from the authenticated profile.
-func (c *Client) httpGetProfileLogin(ctx context.Context, loginID int) (*AccountLogin, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointProfileLogins + "/" + url.PathEscape(strconv.Itoa(loginID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfileLogin", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var login AccountLogin
-	if err := c.handleResponse(resp, &login); err != nil {
-		return nil, err
-	}
-
-	return &login, nil
 }
 
 // httpGetProfileLoginProto retrieves one profile login as a proto message (shared
@@ -746,28 +572,6 @@ func (c *Client) httpGetProfilePreferences(ctx context.Context) (*ProfilePrefere
 	return &preferences, nil
 }
 
-// httpListProfileApps retrieves OAuth app authorizations for the authenticated profile.
-func (c *Client) httpListProfileApps(ctx context.Context, page, pageSize int) (*PaginatedResponse[AuthorizedApp], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointProfileApps, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListProfileApps", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var apps PaginatedResponse[AuthorizedApp]
-	if err := c.handleResponse(resp, &apps); err != nil {
-		return nil, err
-	}
-
-	return &apps, nil
-}
-
 // httpListProfileAppsProto retrieves OAuth app authorizations as proto messages
 // for the proto-backed list path. page/page_size flow through withPaginationQuery,
 // so the request matches httpListProfileApps.
@@ -836,26 +640,6 @@ func (c *Client) httpUpdateAccountProto(ctx context.Context, req *UpdateAccountR
 	return account, nil
 }
 
-// httpGetAccountTransfer retrieves the authenticated account's network transfer usage.
-func (c *Client) httpGetAccountTransfer(ctx context.Context) (*AccountTransfer, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountTransfer, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountTransfer", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var transfer AccountTransfer
-	if err := c.handleResponse(resp, &transfer); err != nil {
-		return nil, err
-	}
-
-	return &transfer, nil
-}
-
 // httpGetAccountTransferProto retrieves account transfer usage as a proto message.
 func (c *Client) httpGetAccountTransferProto(ctx context.Context) (*linodev1.AccountTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -916,26 +700,6 @@ func (c *Client) httpGetAccountSettingsProto(ctx context.Context) (*linodev1.Acc
 	return settings, nil
 }
 
-// httpUpdateAccountSettings updates account-wide settings via PUT /v4/account/settings.
-func (c *Client) httpUpdateAccountSettings(ctx context.Context, req *UpdateAccountSettingsRequest) (*AccountSettings, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpointAccountSettings, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateAccountSettings", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var settings AccountSettings
-	if err := c.handleResponse(resp, &settings); err != nil {
-		return nil, err
-	}
-
-	return &settings, nil
-}
-
 // httpUpdateAccountSettingsProto updates account settings and decodes the
 // response into the proto AccountSettings element.
 func (c *Client) httpUpdateAccountSettingsProto(ctx context.Context, req *UpdateAccountSettingsRequest) (*linodev1.AccountSettings, error) {
@@ -976,28 +740,6 @@ func (c *Client) httpEnableAccountManaged(ctx context.Context) error {
 	return nil
 }
 
-// httpListManagedCredentials retrieves stored managed credentials.
-func (c *Client) httpListManagedCredentials(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedCredential], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointManagedCredentials, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListManagedCredentials", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var credentials PaginatedResponse[ManagedCredential]
-	if err := c.handleResponse(resp, &credentials); err != nil {
-		return nil, err
-	}
-
-	return &credentials, nil
-}
-
 // httpListManagedCredentialsProto retrieves stored managed credentials as proto
 // messages for the proto-backed list path. page/page_size flows through
 // withPaginationQuery, so the request matches httpListManagedCredentials. The
@@ -1005,28 +747,6 @@ func (c *Client) httpListManagedCredentials(ctx context.Context, page, pageSize 
 func (c *Client) httpListManagedCredentialsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedCredential, error) {
 	return listProtoElementsPaginated(ctx, c, "ListManagedCredentials", endpointManagedCredentials, page, pageSize,
 		func() *linodev1.ManagedCredential { return &linodev1.ManagedCredential{} })
-}
-
-// httpUpdateManagedCredential updates one stored Managed credential.
-func (c *Client) httpUpdateManagedCredential(ctx context.Context, credentialID int, req UpdateManagedCredentialRequest) (*ManagedCredential, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedCredential", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var credential ManagedCredential
-	if err := c.handleResponse(resp, &credential); err != nil {
-		return nil, err
-	}
-
-	return &credential, nil
 }
 
 // httpUpdateManagedCredentialProto updates one stored Managed credential's label
@@ -1094,26 +814,6 @@ func (c *Client) httpGetManagedSSHKeyProto(ctx context.Context) (*linodev1.Manag
 	}
 
 	return sshKey, nil
-}
-
-// httpCreateManagedCredential creates a stored Managed credential.
-func (c *Client) httpCreateManagedCredential(ctx context.Context, request *CreateManagedCredentialRequest) (*ManagedCredential, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedCredentials, request)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateManagedCredential", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var credential ManagedCredential
-	if err := c.handleResponse(resp, &credential); err != nil {
-		return nil, err
-	}
-
-	return &credential, nil
 }
 
 // httpCreateManagedCredentialProto creates a stored Managed credential and decodes
@@ -1203,26 +903,6 @@ func (c *Client) httpRevokeManagedCredential(ctx context.Context, credentialID i
 	return nil
 }
 
-// httpGetAccountAgreements retrieves account agreement acknowledgment status.
-func (c *Client) httpGetAccountAgreements(ctx context.Context) (*AccountAgreements, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountAgreements, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountAgreements", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var agreements AccountAgreements
-	if err := c.handleResponse(resp, &agreements); err != nil {
-		return nil, err
-	}
-
-	return &agreements, nil
-}
-
 // httpGetAccountAgreementsProto retrieves account agreement acknowledgment status
 // as a proto message. The endpoint returns a flat object of bool flags, decoded
 // into AccountAgreements.
@@ -1245,28 +925,6 @@ func (c *Client) httpGetAccountAgreementsProto(ctx context.Context) (*linodev1.A
 	return agreements, nil
 }
 
-// httpListAccountMaintenance retrieves account maintenance records.
-func (c *Client) httpListAccountMaintenance(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountMaintenance], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountMaintenance, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountMaintenance", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var maintenance PaginatedResponse[AccountMaintenance]
-	if err := c.handleResponse(resp, &maintenance); err != nil {
-		return nil, err
-	}
-
-	return &maintenance, nil
-}
-
 // httpListAccountMaintenanceProto retrieves account maintenance records as proto
 // messages for the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListAccountMaintenance.
@@ -1275,56 +933,12 @@ func (c *Client) httpListAccountMaintenanceProto(ctx context.Context, page, page
 		func() *linodev1.AccountMaintenance { return &linodev1.AccountMaintenance{} })
 }
 
-// httpListMaintenancePolicies retrieves available Linode maintenance policies.
-func (c *Client) httpListMaintenancePolicies(ctx context.Context, page, pageSize int) (*PaginatedResponse[MaintenancePolicy], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointMaintenancePolicies, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListMaintenancePolicies", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var policies PaginatedResponse[MaintenancePolicy]
-	if err := c.handleResponse(resp, &policies); err != nil {
-		return nil, err
-	}
-
-	return &policies, nil
-}
-
 // httpListMaintenancePoliciesProto retrieves maintenance policies as proto
 // messages for the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListMaintenancePolicies.
 func (c *Client) httpListMaintenancePoliciesProto(ctx context.Context, page, pageSize int) ([]*linodev1.MaintenancePolicy, error) {
 	return listProtoElementsPaginated(ctx, c, "ListMaintenancePolicies", endpointMaintenancePolicies, page, pageSize,
 		func() *linodev1.MaintenancePolicy { return &linodev1.MaintenancePolicy{} })
-}
-
-// httpListAccountNotifications retrieves account notifications.
-func (c *Client) httpListAccountNotifications(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountNotification], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountNotifications, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountNotifications", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var notifications PaginatedResponse[AccountNotification]
-	if err := c.handleResponse(resp, &notifications); err != nil {
-		return nil, err
-	}
-
-	return &notifications, nil
 }
 
 // httpListAccountNotificationsProto retrieves account notifications as proto
@@ -1362,28 +976,6 @@ func (c *Client) httpListProfileSecurityQuestionsProto(ctx context.Context) ([]*
 		func() *linodev1.SecurityQuestion { return &linodev1.SecurityQuestion{} })
 }
 
-// httpListAccountAvailability retrieves account service availability by region.
-func (c *Client) httpGetAccountAvailability(ctx context.Context, regionID string) (*AccountAvailability, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountAvailability + "/" + url.PathEscape(regionID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountAvailability", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var availability AccountAvailability
-	if err := c.handleResponse(resp, &availability); err != nil {
-		return nil, err
-	}
-
-	return &availability, nil
-}
-
 // httpGetAccountAvailabilityProto retrieves one region's account availability as a
 // proto message.
 func (c *Client) httpGetAccountAvailabilityProto(ctx context.Context, regionID string) (*linodev1.AccountAvailability, error) {
@@ -1407,27 +999,6 @@ func (c *Client) httpGetAccountAvailabilityProto(ctx context.Context, regionID s
 	return availability, nil
 }
 
-func (c *Client) httpListAccountAvailability(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountAvailability], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountAvailability, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountAvailability", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var availability PaginatedResponse[AccountAvailability]
-	if err := c.handleResponse(resp, &availability); err != nil {
-		return nil, err
-	}
-
-	return &availability, nil
-}
-
 // httpListAccountAvailabilityProto retrieves account service availability as
 // proto messages for the proto-backed list path. The page/page_size pair flows
 // through withPaginationQuery, so the request matches httpListAccountAvailability.
@@ -1436,56 +1007,12 @@ func (c *Client) httpListAccountAvailabilityProto(ctx context.Context, page, pag
 		func() *linodev1.AccountAvailability { return &linodev1.AccountAvailability{} })
 }
 
-// httpListBetas retrieves available beta programs.
-func (c *Client) httpListBetas(ctx context.Context, page, pageSize int) (*PaginatedResponse[BetaProgram], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointBetas, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListBetas", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var betas PaginatedResponse[BetaProgram]
-	if err := c.handleResponse(resp, &betas); err != nil {
-		return nil, err
-	}
-
-	return &betas, nil
-}
-
 // httpListBetasProto retrieves available beta programs as proto messages for the
 // proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListBetas.
 func (c *Client) httpListBetasProto(ctx context.Context, page, pageSize int) ([]*linodev1.BetaProgram, error) {
 	return listProtoElementsPaginated(ctx, c, "ListBetas", endpointBetas, page, pageSize,
 		func() *linodev1.BetaProgram { return &linodev1.BetaProgram{} })
-}
-
-// httpGetBeta retrieves one available beta program.
-func (c *Client) httpGetBeta(ctx context.Context, betaID string) (*BetaProgram, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointBetas + "/" + url.PathEscape(betaID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetBeta", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var beta BetaProgram
-	if err := c.handleResponse(resp, &beta); err != nil {
-		return nil, err
-	}
-
-	return &beta, nil
 }
 
 // httpGetBetaProto retrieves one available beta program as a proto message.
@@ -1510,56 +1037,12 @@ func (c *Client) httpGetBetaProto(ctx context.Context, betaID string) (*linodev1
 	return beta, nil
 }
 
-// httpListAccountBetas retrieves enrolled account beta programs.
-func (c *Client) httpListAccountBetas(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountBetaProgram], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountBetas, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountBetas", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var betas PaginatedResponse[AccountBetaProgram]
-	if err := c.handleResponse(resp, &betas); err != nil {
-		return nil, err
-	}
-
-	return &betas, nil
-}
-
 // httpListAccountBetasProto retrieves enrolled account beta programs as proto
 // messages for the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListAccountBetas.
 func (c *Client) httpListAccountBetasProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountBetaProgram, error) {
 	return listProtoElementsPaginated(ctx, c, "ListAccountBetas", endpointAccountBetas, page, pageSize,
 		func() *linodev1.AccountBetaProgram { return &linodev1.AccountBetaProgram{} })
-}
-
-// httpListAccountOAuthClients retrieves OAuth clients for the account.
-func (c *Client) httpListAccountOAuthClients(ctx context.Context, page, pageSize int) (*PaginatedResponse[OAuthClient], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountOAuthClients, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountOAuthClients", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var clients PaginatedResponse[OAuthClient]
-	if err := c.handleResponse(resp, &clients); err != nil {
-		return nil, err
-	}
-
-	return &clients, nil
 }
 
 // httpListAccountOAuthClientsProto retrieves OAuth clients for the account as
@@ -1570,56 +1053,12 @@ func (c *Client) httpListAccountOAuthClientsProto(ctx context.Context, page, pag
 		func() *linodev1.OAuthClient { return &linodev1.OAuthClient{} })
 }
 
-// httpListLongviewClients retrieves Longview clients for the account.
-func (c *Client) httpListLongviewClients(ctx context.Context, page, pageSize int) (*PaginatedResponse[LongviewClient], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointLongviewClients, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListLongviewClients", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var clients PaginatedResponse[LongviewClient]
-	if err := c.handleResponse(resp, &clients); err != nil {
-		return nil, err
-	}
-
-	return &clients, nil
-}
-
 // httpListLongviewClientsProto retrieves Longview clients as proto messages for
 // the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListLongviewClients.
 func (c *Client) httpListLongviewClientsProto(ctx context.Context, page, pageSize int) ([]*linodev1.LongviewClient, error) {
 	return listProtoElementsPaginated(ctx, c, "ListLongviewClients", endpointLongviewClients, page, pageSize,
 		func() *linodev1.LongviewClient { return &linodev1.LongviewClient{} })
-}
-
-// httpUpdateLongviewClient updates one Longview client's editable fields.
-func (c *Client) httpUpdateLongviewClient(ctx context.Context, clientID int, req *UpdateLongviewClientRequest) (*LongviewClient, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointLongviewClients + "/" + url.PathEscape(strconv.Itoa(clientID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateLongviewClient", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var client LongviewClient
-	if err := c.handleResponse(resp, &client); err != nil {
-		return nil, err
-	}
-
-	return &client, nil
 }
 
 // UpdateLongviewClientProto updates one Longview client and returns the proto
@@ -1668,28 +1107,6 @@ func (c *Client) httpDeleteLongviewClient(ctx context.Context, clientID int) err
 	return c.handleResponse(resp, nil)
 }
 
-// httpListAccountPaymentMethods retrieves payment methods for the account.
-func (c *Client) httpListAccountPaymentMethods(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPaymentMethod], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountPaymentMethods, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountPaymentMethods", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var methods PaginatedResponse[AccountPaymentMethod]
-	if err := c.handleResponse(resp, &methods); err != nil {
-		return nil, err
-	}
-
-	return &methods, nil
-}
-
 // httpGetAccountPaymentMethod retrieves one payment method by ID.
 func (c *Client) httpGetAccountPaymentMethod(ctx context.Context, paymentMethodID string) (*AccountPaymentMethod, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -1734,26 +1151,6 @@ func (c *Client) httpGetAccountPaymentMethodProto(ctx context.Context, paymentMe
 	}
 
 	return method, nil
-}
-
-// httpCreateAccountPaymentMethod adds a payment method to the account.
-func (c *Client) httpCreateAccountPaymentMethod(ctx context.Context, req *CreateAccountPaymentMethodRequest) (*AccountPaymentMethod, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountPaymentMethods, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountPaymentMethod", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var method AccountPaymentMethod
-	if err := c.handleResponse(resp, &method); err != nil {
-		return nil, err
-	}
-
-	return &method, nil
 }
 
 // CreateAccountPaymentMethodProto adds a payment method and returns the proto
@@ -1860,28 +1257,6 @@ func (c *Client) httpGetAccountOAuthClientProto(ctx context.Context, clientID st
 	return oauthClient, nil
 }
 
-// httpUpdateOAuthClient updates one OAuth client by ID.
-func (c *Client) httpUpdateOAuthClient(ctx context.Context, clientID string, req *UpdateOAuthClientRequest) (*OAuthClient, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateOAuthClient", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var client OAuthClient
-	if err := c.handleResponse(resp, &client); err != nil {
-		return nil, err
-	}
-
-	return &client, nil
-}
-
 // httpUpdateOAuthClientProto updates one OAuth client and decodes the response
 // into the proto OAuthClient element (the metadata element, no secret).
 func (c *Client) httpUpdateOAuthClientProto(ctx context.Context, clientID string, req *UpdateOAuthClientRequest) (*linodev1.OAuthClient, error) {
@@ -1975,28 +1350,6 @@ func (c *Client) httpDeleteAccountOAuthClient(ctx context.Context, clientID stri
 	return c.handleResponse(resp, nil)
 }
 
-// httpResetOAuthClientSecret resets one OAuth client secret by ID.
-func (c *Client) httpResetOAuthClientSecret(ctx context.Context, clientID string) (*OAuthClientSecret, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID) + "/reset-secret"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ResetOAuthClientSecret", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var secret OAuthClientSecret
-	if err := c.handleResponse(resp, &secret); err != nil {
-		return nil, err
-	}
-
-	return &secret, nil
-}
-
 // httpResetOAuthClientSecretProto resets an OAuth client secret and decodes the
 // response into the proto OAuthClientSecret element.
 func (c *Client) httpResetOAuthClientSecretProto(ctx context.Context, clientID string) (*linodev1.OAuthClientSecret, error) {
@@ -2020,56 +1373,12 @@ func (c *Client) httpResetOAuthClientSecretProto(ctx context.Context, clientID s
 	return secret, nil
 }
 
-// httpListAccountEvents retrieves account events.
-func (c *Client) httpListAccountEvents(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEvent], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountEvents, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountEvents", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var events PaginatedResponse[AccountEvent]
-	if err := c.handleResponse(resp, &events); err != nil {
-		return nil, err
-	}
-
-	return &events, nil
-}
-
 // httpListAccountEventsProto retrieves account events as proto messages for the
 // proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListAccountEvents.
 func (c *Client) httpListAccountEventsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountEvent, error) {
 	return listProtoElementsPaginated(ctx, c, "ListAccountEvents", endpointAccountEvents, page, pageSize,
 		func() *linodev1.AccountEvent { return &linodev1.AccountEvent{} })
-}
-
-// httpListAccountUsers retrieves users for the account.
-func (c *Client) httpListAccountUsers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountUser], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountUsers, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountUsers", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var users PaginatedResponse[AccountUser]
-	if err := c.handleResponse(resp, &users); err != nil {
-		return nil, err
-	}
-
-	return &users, nil
 }
 
 // httpListAccountUsersProto retrieves account users as proto messages for the
@@ -2171,50 +1480,6 @@ func (c *Client) httpGetAccountUserGrantsProto(ctx context.Context, username str
 	return grants, nil
 }
 
-// httpUpdateAccountUserGrants updates one account user's grants by username.
-func (c *Client) httpUpdateAccountUserGrants(ctx context.Context, username string, request *UpdateAccountUserGrantsRequest) (*Grants, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username) + "/grants"
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateAccountUserGrants", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var grants Grants
-	if err := c.handleResponse(resp, &grants); err != nil {
-		return nil, err
-	}
-
-	return &grants, nil
-}
-
-// httpUpdateAccountUser updates one account user by username.
-func (c *Client) httpUpdateAccountUser(ctx context.Context, username string, request *UpdateAccountUserRequest) (*AccountUser, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateAccountUser", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var user AccountUser
-	if err := c.handleResponse(resp, &user); err != nil {
-		return nil, err
-	}
-
-	return &user, nil
-}
-
 // httpCreateAccountUserProto creates a user and decodes the response into the
 // proto AccountUser element.
 func (c *Client) httpCreateAccountUserProto(ctx context.Context, request *CreateAccountUserRequest) (*linodev1.AccountUser, error) {
@@ -2299,76 +1564,12 @@ func (c *Client) httpDeleteAccountUser(ctx context.Context, username string) err
 	return c.handleResponse(resp, nil)
 }
 
-// httpCreateAccountUser creates a user on the account.
-func (c *Client) httpCreateAccountUser(ctx context.Context, request *CreateAccountUserRequest) (*AccountUser, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountUsers, request)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountUser", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var user AccountUser
-	if err := c.handleResponse(resp, &user); err != nil {
-		return nil, err
-	}
-
-	return &user, nil
-}
-
-// httpListAccountLogins retrieves user logins for the account.
-func (c *Client) httpListAccountLogins(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountLogin], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountLogins, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountLogins", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var logins PaginatedResponse[AccountLogin]
-	if err := c.handleResponse(resp, &logins); err != nil {
-		return nil, err
-	}
-
-	return &logins, nil
-}
-
 // httpListAccountLoginsProto retrieves account logins as proto messages for the
 // proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListAccountLogins.
 func (c *Client) httpListAccountLoginsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountLogin, error) {
 	return listProtoElementsPaginated(ctx, c, "ListAccountLogins", endpointAccountLogins, page, pageSize,
 		func() *linodev1.AccountLogin { return &linodev1.AccountLogin{} })
-}
-
-// httpGetAccountLogin retrieves one account login by ID.
-func (c *Client) httpGetAccountLogin(ctx context.Context, loginID int) (*AccountLogin, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountLogins + "/" + url.PathEscape(strconv.Itoa(loginID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountLogin", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var login AccountLogin
-	if err := c.handleResponse(resp, &login); err != nil {
-		return nil, err
-	}
-
-	return &login, nil
 }
 
 // httpGetAccountLoginProto retrieves one account login as a proto message.
@@ -2393,27 +1594,6 @@ func (c *Client) httpGetAccountLoginProto(ctx context.Context, loginID int) (*li
 	return login, nil
 }
 
-func (c *Client) httpListAccountInvoices(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountInvoice], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountInvoices, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountInvoices", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var invoices PaginatedResponse[AccountInvoice]
-	if err := c.handleResponse(resp, &invoices); err != nil {
-		return nil, err
-	}
-
-	return &invoices, nil
-}
-
 // httpListAccountInvoicesProto retrieves account invoices as proto messages for
 // the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListAccountInvoices.
@@ -2422,56 +1602,12 @@ func (c *Client) httpListAccountInvoicesProto(ctx context.Context, page, pageSiz
 		func() *linodev1.AccountInvoice { return &linodev1.AccountInvoice{} })
 }
 
-// httpListAccountPayments retrieves account payments.
-func (c *Client) httpListAccountPayments(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountPayment], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountPayments, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountPayments", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var payments PaginatedResponse[AccountPayment]
-	if err := c.handleResponse(resp, &payments); err != nil {
-		return nil, err
-	}
-
-	return &payments, nil
-}
-
 // httpListAccountPaymentsProto retrieves account payments as proto messages for
 // the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListAccountPayments.
 func (c *Client) httpListAccountPaymentsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountPayment, error) {
 	return listProtoElementsPaginated(ctx, c, "ListAccountPayments", endpointAccountPayments, page, pageSize,
 		func() *linodev1.AccountPayment { return &linodev1.AccountPayment{} })
-}
-
-// httpGetAccountPayment retrieves one account payment by ID.
-func (c *Client) httpGetAccountPayment(ctx context.Context, paymentID int) (*AccountPayment, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountPayments + "/" + url.PathEscape(strconv.Itoa(paymentID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountPayment", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var payment AccountPayment
-	if err := c.handleResponse(resp, &payment); err != nil {
-		return nil, err
-	}
-
-	return &payment, nil
 }
 
 // httpGetAccountPaymentProto retrieves one account payment as a proto message.
@@ -2494,26 +1630,6 @@ func (c *Client) httpGetAccountPaymentProto(ctx context.Context, paymentID int) 
 	}
 
 	return payment, nil
-}
-
-// httpCreateAccountPayment makes a payment on the account.
-func (c *Client) httpCreateAccountPayment(ctx context.Context, req *CreateAccountPaymentRequest) (*AccountPayment, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountPayments, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountPayment", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var payment AccountPayment
-	if err := c.handleResponse(resp, &payment); err != nil {
-		return nil, err
-	}
-
-	return &payment, nil
 }
 
 // CreateAccountPaymentProto makes an account payment and returns the proto
@@ -2543,28 +1659,6 @@ func (c *Client) httpCreateAccountPaymentProto(ctx context.Context, req *CreateA
 	return payment, nil
 }
 
-// httpGetAccountInvoice retrieves one account invoice by ID.
-func (c *Client) httpGetAccountInvoice(ctx context.Context, invoiceID int) (*AccountInvoice, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountInvoices + "/" + strconv.Itoa(invoiceID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountInvoice", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var invoice AccountInvoice
-	if err := c.handleResponse(resp, &invoice); err != nil {
-		return nil, err
-	}
-
-	return &invoice, nil
-}
-
 // httpGetAccountInvoiceProto retrieves one account invoice as a proto message.
 func (c *Client) httpGetAccountInvoiceProto(ctx context.Context, invoiceID int) (*linodev1.AccountInvoice, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -2585,28 +1679,6 @@ func (c *Client) httpGetAccountInvoiceProto(ctx context.Context, invoiceID int) 
 	}
 
 	return invoice, nil
-}
-
-// httpListAccountInvoiceItems retrieves items for one account invoice.
-func (c *Client) httpListAccountInvoiceItems(ctx context.Context, invoiceID, page, pageSize int) (*PaginatedResponse[AccountInvoiceItem], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountInvoices+"/"+strconv.Itoa(invoiceID)+"/items", page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountInvoiceItems", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var items PaginatedResponse[AccountInvoiceItem]
-	if err := c.handleResponse(resp, &items); err != nil {
-		return nil, err
-	}
-
-	return &items, nil
 }
 
 // httpListAccountPaymentMethodsProto retrieves account payment methods as proto
@@ -2637,49 +1709,6 @@ func (c *Client) httpListAccountInvoiceItemsProto(ctx context.Context, invoiceID
 func (c *Client) httpListAccountChildAccountsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ChildAccount, error) {
 	return listProtoElementsPaginated(ctx, c, "ListAccountChildAccounts", endpointAccountChildAccounts, page, pageSize,
 		func() *linodev1.ChildAccount { return &linodev1.ChildAccount{} })
-}
-
-// httpListAccountChildAccounts retrieves child-level accounts.
-func (c *Client) httpListAccountChildAccounts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ChildAccount], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountChildAccounts, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountChildAccounts", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var childAccounts PaginatedResponse[ChildAccount]
-	if err := c.handleResponse(resp, &childAccounts); err != nil {
-		return nil, err
-	}
-
-	return &childAccounts, nil
-}
-
-func (c *Client) httpListAccountServiceTransfers(ctx context.Context, page, pageSize int) (*PaginatedResponse[AccountEntityTransfer], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointAccountServiceTransfers, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListAccountServiceTransfers", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var transfers PaginatedResponse[AccountEntityTransfer]
-	if err := c.handleResponse(resp, &transfers); err != nil {
-		return nil, err
-	}
-
-	return &transfers, nil
 }
 
 // httpListAccountServiceTransfersProto retrieves account service transfers as
@@ -2768,26 +1797,6 @@ func (c *Client) httpAcceptAccountServiceTransfer(ctx context.Context, token str
 	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
 
 	return c.handleResponse(resp, nil)
-}
-
-// httpCreateAccountServiceTransfer creates an account service transfer.
-func (c *Client) httpCreateAccountServiceTransfer(ctx context.Context, req *CreateAccountServiceTransferRequest) (*AccountEntityTransfer, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountServiceTransfers, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountServiceTransfer", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var transfer AccountEntityTransfer
-	if err := c.handleResponse(resp, &transfer); err != nil {
-		return nil, err
-	}
-
-	return &transfer, nil
 }
 
 // httpCreateAccountServiceTransferProto creates an account service transfer and
@@ -2919,28 +1928,6 @@ func (c *Client) httpGetAccountChildAccountProto(ctx context.Context, euuid stri
 	return childAccount, nil
 }
 
-// httpCreateAccountChildAccountToken creates a proxy user token for one child-level account.
-func (c *Client) httpCreateAccountChildAccountToken(ctx context.Context, euuid string) (*ProxyUserToken, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountChildAccounts + "/" + url.PathEscape(euuid) + "/token"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountChildAccountToken", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var token ProxyUserToken
-	if err := c.handleResponse(resp, &token); err != nil {
-		return nil, err
-	}
-
-	return &token, nil
-}
-
 // httpCreateAccountChildAccountTokenProto creates a proxy user token for one
 // child-level account and decodes the response into the proto ProxyUserToken
 // element. The token it carries is returned to the user by design.
@@ -2965,26 +1952,6 @@ func (c *Client) httpCreateAccountChildAccountTokenProto(ctx context.Context, eu
 	return token, nil
 }
 
-// httpCreateOAuthClient creates an account OAuth client.
-func (c *Client) httpCreateOAuthClient(ctx context.Context, req *CreateOAuthClientRequest) (*CreatedOAuthClient, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountOAuthClients, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateOAuthClient", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var client CreatedOAuthClient
-	if err := c.handleResponse(resp, &client); err != nil {
-		return nil, err
-	}
-
-	return &client, nil
-}
-
 // httpCreateOAuthClientProto creates an OAuth client and decodes the response
 // into the proto CreatedOAuthClient element (which carries the one-time secret).
 func (c *Client) httpCreateOAuthClientProto(ctx context.Context, req *CreateOAuthClientRequest) (*linodev1.CreatedOAuthClient, error) {
@@ -3004,28 +1971,6 @@ func (c *Client) httpCreateOAuthClientProto(ctx context.Context, req *CreateOAut
 	}
 
 	return client, nil
-}
-
-// httpGetAccountBeta retrieves one enrolled account beta program.
-func (c *Client) httpGetAccountBeta(ctx context.Context, betaID string) (*AccountBetaProgram, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointAccountBetas + "/" + url.PathEscape(betaID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountBeta", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var beta AccountBetaProgram
-	if err := c.handleResponse(resp, &beta); err != nil {
-		return nil, err
-	}
-
-	return &beta, nil
 }
 
 // httpGetAccountBetaProto retrieves one enrolled account beta program as a proto
@@ -3114,26 +2059,6 @@ func (c *Client) httpAcknowledgeAccountAgreements(ctx context.Context, req *Ackn
 	return c.handleResponse(resp, nil)
 }
 
-// httpCancelAccount cancels the account via POST /v4/account/cancel.
-func (c *Client) httpCancelAccount(ctx context.Context, req *CancelAccountRequest) (*CancelAccountResponse, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountCancel, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CancelAccount", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var cancelResponse CancelAccountResponse
-	if err := c.handleResponse(resp, &cancelResponse); err != nil {
-		return nil, err
-	}
-
-	return &cancelResponse, nil
-}
-
 // httpCancelAccountProto cancels the account and decodes the response into the
 // proto AccountCancelResponse element.
 func (c *Client) httpCancelAccountProto(ctx context.Context, req *CancelAccountRequest) (*linodev1.AccountCancelResponse, error) {
@@ -3153,26 +2078,6 @@ func (c *Client) httpCancelAccountProto(ctx context.Context, req *CancelAccountR
 	}
 
 	return cancelResponse, nil
-}
-
-// httpUpdateAccount updates account billing/contact fields via PUT /v4/account.
-func (c *Client) httpUpdateAccount(ctx context.Context, req *UpdateAccountRequest) (*Account, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpointAccount, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateAccount", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
-
-	var account Account
-	if err := c.handleResponse(resp, &account); err != nil {
-		return nil, err
-	}
-
-	return &account, nil
 }
 
 // httpUpdateProfile updates the authenticated user's profile via PUT /v4/profile.

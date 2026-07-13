@@ -15,10 +15,7 @@ import pytest
 from linodemcp.linode import (
     Client,
     DomainRecord,
-    Firewall,
-    Instance,
     NetworkError,
-    NodeBalancer,
     RetryableClient,
     Volume,
 )
@@ -37,8 +34,8 @@ def _ok_response(body: Any) -> MagicMock:
 # --- Firewalls -------------------------------------------------------------
 
 
-async def test_update_firewall_builds_partial_body() -> None:
-    """update_firewall only sends the fields the caller supplied."""
+async def test_update_firewall_raw_builds_partial_body() -> None:
+    """update_firewall_raw only sends the fields the caller supplied."""
     client = Client("https://api.linode.com/v4", "test-token")
     body = {
         "id": 5,
@@ -50,13 +47,12 @@ async def test_update_firewall_builds_partial_body() -> None:
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = _ok_response(body)
 
-        result = await client.update_firewall(
+        result = await client.update_firewall_raw(
             5, label="renamed", outbound_policy="DROP"
         )
 
-    assert isinstance(result, Firewall)
-    assert result.label == "renamed"
-    assert result.rules.outbound_policy == "DROP"
+    assert result["label"] == "renamed"
+    assert result["rules"]["outbound_policy"] == "DROP"
     method, endpoint, sent = mock_request.await_args_list[0].args
     assert method == "PUT"
     assert endpoint == "/networking/firewalls/5"
@@ -65,15 +61,15 @@ async def test_update_firewall_builds_partial_body() -> None:
     await client.close()
 
 
-async def test_update_firewall_wraps_http_errors() -> None:
-    """update_firewall wraps httpx failures as NetworkError."""
+async def test_update_firewall_raw_wraps_http_errors() -> None:
+    """update_firewall_raw wraps httpx failures as NetworkError."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.update_firewall(5, label="renamed")
+            await client.update_firewall_raw(5, label="renamed")
 
     assert "UpdateFirewall" in str(excinfo.value)
     await client.close()
@@ -307,38 +303,8 @@ async def test_resize_volume_rejects_undersized() -> None:
 # --- NodeBalancers ---------------------------------------------------------
 
 
-async def test_create_nodebalancer_decodes_response() -> None:
-    """create_nodebalancer posts to /nodebalancers and parses the body."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    body = {
-        "id": 200,
-        "label": "lb-1",
-        "region": "us-east",
-        "hostname": "nb-200.example.com",
-        "client_conn_throttle": 5,
-    }
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = _ok_response(body)
-
-        result = await client.create_nodebalancer(
-            "us-east", label="lb-1", client_conn_throttle=5
-        )
-
-    assert isinstance(result, NodeBalancer)
-    assert result.id == 200
-    assert result.region == "us-east"
-    assert result.client_conn_throttle == 5
-    method, endpoint, sent = mock_request.await_args_list[0].args
-    assert method == "POST"
-    assert endpoint == "/nodebalancers"
-    assert sent["region"] == "us-east"
-    assert sent["label"] == "lb-1"
-    await client.close()
-
-
-async def test_create_nodebalancer_wraps_http_errors() -> None:
-    """create_nodebalancer wraps an HTTP status error as NetworkError."""
+async def test_create_nodebalancer_raw_wraps_http_errors() -> None:
+    """create_nodebalancer_raw wraps an HTTP status error as NetworkError."""
     client = Client("https://api.linode.com/v4", "test-token")
     request = httpx.Request("POST", "https://api.linode.com/v4/nodebalancers")
     response = httpx.Response(400, request=request)
@@ -348,28 +314,9 @@ async def test_create_nodebalancer_wraps_http_errors() -> None:
         mock_request.side_effect = status_error
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.create_nodebalancer("us-east", label="lb-1")
+            await client.create_nodebalancer_raw("us-east", label="lb-1")
 
     assert "CreateNodeBalancer" in str(excinfo.value)
-    await client.close()
-
-
-async def test_update_nodebalancer_partial_body() -> None:
-    """update_nodebalancer sends only the provided fields."""
-    client = Client("https://api.linode.com/v4", "test-token")
-    body = {"id": 200, "label": "lb-renamed", "region": "us-east"}
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = _ok_response(body)
-
-        result = await client.update_nodebalancer(200, label="lb-renamed")
-
-    assert isinstance(result, NodeBalancer)
-    assert result.label == "lb-renamed"
-    method, endpoint, sent = mock_request.await_args_list[0].args
-    assert method == "PUT"
-    assert endpoint == "/nodebalancers/200"
-    assert sent == {"label": "lb-renamed"}
     await client.close()
 
 
@@ -496,8 +443,8 @@ async def test_resize_instance_wraps_http_errors() -> None:
     await client.close()
 
 
-async def test_clone_instance_decodes_response() -> None:
-    """clone_instance posts the clone body and parses the new instance."""
+async def test_clone_instance_raw_sends_clone_body() -> None:
+    """clone_instance_raw posts the clone body including disks and configs."""
     client = Client("https://api.linode.com/v4", "test-token")
     body = {
         "id": 8,
@@ -510,13 +457,12 @@ async def test_clone_instance_decodes_response() -> None:
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = _ok_response(body)
 
-        result = await client.clone_instance(
+        result = await client.clone_instance_raw(
             7, region="us-west", label="clone-1", disks=[111], configs=[222]
         )
 
-    assert isinstance(result, Instance)
-    assert result.id == 8
-    assert result.label == "clone-1"
+    assert result["id"] == 8
+    assert result["label"] == "clone-1"
     method, endpoint, sent = mock_request.await_args_list[0].args
     assert method == "POST"
     assert endpoint == "/linode/instances/7/clone"
@@ -526,15 +472,15 @@ async def test_clone_instance_decodes_response() -> None:
     await client.close()
 
 
-async def test_clone_instance_wraps_http_errors() -> None:
-    """clone_instance wraps httpx failures as NetworkError."""
+async def test_clone_instance_raw_wraps_http_errors() -> None:
+    """clone_instance_raw wraps httpx failures as NetworkError."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.clone_instance(7, region="us-west")
+            await client.clone_instance_raw(7, region="us-west")
 
     assert "CloneInstance" in str(excinfo.value)
     await client.close()
@@ -614,23 +560,6 @@ async def test_retryable_resize_volume_delegates() -> None:
     await retryable.close()
 
 
-async def test_retryable_create_nodebalancer_delegates() -> None:
-    """RetryableClient.create_nodebalancer delegates to the base client."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    expected = NodeBalancer.__new__(NodeBalancer)
-
-    with patch.object(
-        retryable.client, "create_nodebalancer", new_callable=AsyncMock
-    ) as mock_create:
-        mock_create.return_value = expected
-
-        result = await retryable.create_nodebalancer("us-east", label="lb-1")
-
-    assert result is expected
-    mock_create.assert_awaited_once_with("us-east", "lb-1", 0, None)
-    await retryable.close()
-
-
 async def test_retryable_delete_nodebalancer_delegates() -> None:
     """RetryableClient.delete_nodebalancer delegates to the base client."""
     retryable = RetryableClient("https://api.linode.com/v4", "test-token")
@@ -658,20 +587,4 @@ async def test_retryable_boot_instance_delegates() -> None:
         await retryable.boot_instance(7, config_id=3)
 
     mock_boot.assert_awaited_once_with(7, 3)
-    await retryable.close()
-
-
-async def test_retryable_clone_instance_delegates() -> None:
-    """RetryableClient.clone_instance delegates to the base client."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
-    expected = Instance.__new__(Instance)
-
-    with patch.object(
-        retryable.client, "clone_instance", new_callable=AsyncMock
-    ) as mock_clone:
-        mock_clone.return_value = expected
-
-        result = await retryable.clone_instance(7, region="us-west")
-
-    assert result is expected
     await retryable.close()

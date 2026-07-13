@@ -36,25 +36,6 @@ func jsonServer(t *testing.T, wantPath, wantMethod, body string, status int) *ht
 	}))
 }
 
-func TestClientCreateInstanceConfigProtoDecodes(t *testing.T) {
-	t.Parallel()
-
-	srv := jsonServer(t, "/linode/instances/123/configs", http.MethodPost,
-		`{"id":789,"label":"boot","kernel":"linode/latest-64bit"}`, http.StatusOK)
-	defer srv.Close()
-
-	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
-
-	got, err := client.CreateInstanceConfigProto(t.Context(), 123, &linode.CreateConfigRequest{Label: protoTestLabelBoot})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if got.GetId() != 789 || got.GetLabel() != protoTestLabelBoot || got.GetKernel() != configKernelLatest {
-		t.Errorf("got = %+v, want id 789 label boot kernel linode/latest-64bit", got)
-	}
-}
-
 func TestClientCreateInstanceConfigProtoError(t *testing.T) {
 	t.Parallel()
 

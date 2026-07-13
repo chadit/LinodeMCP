@@ -97,10 +97,10 @@ def sample_config() -> Config:
         resilience=ResilienceConfig(
             rate_limit_per_minute=700,
             circuit_breaker_threshold=5,
-            circuit_breaker_timeout=30,
+            circuit_breaker_timeout=30.0,
             max_retries=3,
-            base_retry_delay=1,
-            max_retry_delay=30,
+            base_retry_delay=1.0,
+            max_retry_delay=30.0,
         ),
         environments={
             "default": EnvironmentConfig(

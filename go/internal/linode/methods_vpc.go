@@ -12,27 +12,6 @@ const (
 	endpointVPCs = "/vpcs"
 )
 
-// ListVPCs retrieves all VPCs for the authenticated user.
-func (c *Client) httpListVPCs(ctx context.Context) ([]VPC, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointVPCs, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListVPCs", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var response PaginatedResponse[VPC]
-
-	if err := c.handleResponse(resp, &response); err != nil {
-		return nil, err
-	}
-
-	return response.Data, nil
-}
-
 // httpListVPCsProto retrieves all VPCs as proto messages, decoded directly from
 // the API JSON for the proto-backed list path.
 func (c *Client) httpListVPCsProto(ctx context.Context) ([]*linodev1.Vpc, error) {
@@ -50,48 +29,6 @@ func (c *Client) httpGetVPC(ctx context.Context, vpcID int) (*VPC, error) {
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetVPC", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var vpc VPC
-	if err := c.handleResponse(resp, &vpc); err != nil {
-		return nil, err
-	}
-
-	return &vpc, nil
-}
-
-// CreateVPC creates a new VPC.
-func (c *Client) httpCreateVPC(ctx context.Context, req CreateVPCRequest) (*VPC, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointVPCs, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateVPC", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var vpc VPC
-	if err := c.handleResponse(resp, &vpc); err != nil {
-		return nil, err
-	}
-
-	return &vpc, nil
-}
-
-// UpdateVPC updates an existing VPC.
-func (c *Client) httpUpdateVPC(ctx context.Context, vpcID int, req UpdateVPCRequest) (*VPC, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d", vpcID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateVPC", Err: err}
 	}
 
 	defer drainClose(resp)
@@ -246,50 +183,6 @@ func (c *Client) httpGetVPCSubnet(ctx context.Context, vpcID, subnetID int) (*VP
 	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetVPCSubnet", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var subnet VPCSubnet
-	if err := c.handleResponse(resp, &subnet); err != nil {
-		return nil, err
-	}
-
-	return &subnet, nil
-}
-
-// CreateVPCSubnet creates a new subnet within a VPC.
-func (c *Client) httpCreateVPCSubnet(ctx context.Context, vpcID int, req CreateSubnetRequest) (*VPCSubnet, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets", vpcID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateVPCSubnet", Err: err}
-	}
-
-	defer drainClose(resp)
-
-	var subnet VPCSubnet
-	if err := c.handleResponse(resp, &subnet); err != nil {
-		return nil, err
-	}
-
-	return &subnet, nil
-}
-
-// UpdateVPCSubnet updates an existing subnet within a VPC.
-func (c *Client) httpUpdateVPCSubnet(ctx context.Context, vpcID, subnetID int, req UpdateSubnetRequest) (*VPCSubnet, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets/%d", vpcID, subnetID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateVPCSubnet", Err: err}
 	}
 
 	defer drainClose(resp)

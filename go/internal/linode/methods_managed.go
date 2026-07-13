@@ -123,50 +123,6 @@ func (c *Client) httpDeleteManagedContact(ctx context.Context, contactID int) er
 	return c.handleResponse(resp, nil)
 }
 
-// httpListManagedContacts retrieves Managed contacts.
-func (c *Client) httpListManagedContacts(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedContact], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointManagedContacts, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListManagedContacts", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var contacts PaginatedResponse[ManagedContact]
-	if err := c.handleResponse(resp, &contacts); err != nil {
-		return nil, err
-	}
-
-	return &contacts, nil
-}
-
-// httpListManagedLinodeSettings retrieves Managed settings for Linodes.
-func (c *Client) httpListManagedLinodeSettings(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedLinodeSettings], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointManagedLinodeSettings, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListManagedLinodeSettings", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var settings PaginatedResponse[ManagedLinodeSettings]
-	if err := c.handleResponse(resp, &settings); err != nil {
-		return nil, err
-	}
-
-	return &settings, nil
-}
-
 // httpGetManagedStats retrieves Managed statistics from the last 24 hours.
 func (c *Client) httpGetManagedStats(ctx context.Context) (map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -185,28 +141,6 @@ func (c *Client) httpGetManagedStats(ctx context.Context) (map[string]any, error
 	}
 
 	return stats, nil
-}
-
-// httpUpdateManagedLinodeSettings updates Managed settings for one Linode.
-func (c *Client) httpUpdateManagedLinodeSettings(ctx context.Context, linodeID int, req UpdateManagedLinodeSettingsRequest) (*ManagedLinodeSettings, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointManagedLinodeSettings + "/" + url.PathEscape(strconv.Itoa(linodeID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedLinodeSettings", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var settings ManagedLinodeSettings
-	if err := c.handleResponse(resp, &settings); err != nil {
-		return nil, err
-	}
-
-	return &settings, nil
 }
 
 // httpUpdateManagedLinodeSettingsProto updates Managed settings for one Linode
@@ -275,28 +209,6 @@ func (c *Client) httpGetManagedServiceProto(ctx context.Context, serviceID int) 
 	}
 
 	return service, nil
-}
-
-// httpUpdateManagedService updates one Managed service monitor.
-func (c *Client) httpUpdateManagedService(ctx context.Context, serviceID int, req *UpdateManagedServiceRequest) (*ManagedService, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedService", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var service ManagedService
-	if err := c.handleResponse(resp, &service); err != nil {
-		return nil, err
-	}
-
-	return &service, nil
 }
 
 // httpUpdateManagedServiceProto updates one Managed service monitor and decodes
@@ -374,28 +286,6 @@ func (c *Client) httpEnableManagedService(ctx context.Context, serviceID int) er
 	return c.handleResponse(resp, nil)
 }
 
-// httpListManagedServices retrieves Managed services.
-func (c *Client) httpListManagedServices(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedService], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointManagedServices, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListManagedServices", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var services PaginatedResponse[ManagedService]
-	if err := c.handleResponse(resp, &services); err != nil {
-		return nil, err
-	}
-
-	return &services, nil
-}
-
 // httpListManagedServicesProto retrieves Managed services as proto messages for
 // the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListManagedServices.
@@ -428,28 +318,6 @@ func (c *Client) httpListManagedIssuesProto(ctx context.Context, page, pageSize 
 		func() *linodev1.ManagedIssue { return &linodev1.ManagedIssue{} })
 }
 
-// httpGetManagedIssue retrieves one Managed issue by ID.
-func (c *Client) httpGetManagedIssue(ctx context.Context, issueID int) (*ManagedIssue, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointManagedIssues + "/" + url.PathEscape(strconv.Itoa(issueID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedIssue", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var issue ManagedIssue
-	if err := c.handleResponse(resp, &issue); err != nil {
-		return nil, err
-	}
-
-	return &issue, nil
-}
-
 // httpGetManagedIssueProto retrieves one Managed issue as a proto message.
 func (c *Client) httpGetManagedIssueProto(ctx context.Context, issueID int) (*linodev1.ManagedIssue, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
@@ -472,48 +340,6 @@ func (c *Client) httpGetManagedIssueProto(ctx context.Context, issueID int) (*li
 	return issue, nil
 }
 
-// httpListManagedIssues retrieves Managed issues.
-func (c *Client) httpListManagedIssues(ctx context.Context, page, pageSize int) (*PaginatedResponse[ManagedIssue], error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := withPaginationQuery(endpointManagedIssues, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, &NetworkError{Operation: "ListManagedIssues", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var issues PaginatedResponse[ManagedIssue]
-	if err := c.handleResponse(resp, &issues); err != nil {
-		return nil, err
-	}
-
-	return &issues, nil
-}
-
-// httpCreateManagedService creates a Managed service monitor.
-func (c *Client) httpCreateManagedService(ctx context.Context, request *CreateManagedServiceRequest) (*ManagedService, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedServices, request)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateManagedService", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var service ManagedService
-	if err := c.handleResponse(resp, &service); err != nil {
-		return nil, err
-	}
-
-	return &service, nil
-}
-
 // httpCreateManagedServiceProto creates a Managed service monitor and decodes the
 // response into the proto element so the write tool emits the same field set as
 // the service GET/LIST path.
@@ -534,48 +360,6 @@ func (c *Client) httpCreateManagedServiceProto(ctx context.Context, request *Cre
 	}
 
 	return service, nil
-}
-
-// httpCreateManagedContact creates a managed contact.
-func (c *Client) httpCreateManagedContact(ctx context.Context, request *CreateManagedContactRequest) (*ManagedContact, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedContacts, request)
-	if err != nil {
-		return nil, &NetworkError{Operation: "CreateManagedContact", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var contact ManagedContact
-	if err := c.handleResponse(resp, &contact); err != nil {
-		return nil, err
-	}
-
-	return &contact, nil
-}
-
-// httpUpdateManagedContact updates one Managed contact.
-func (c *Client) httpUpdateManagedContact(ctx context.Context, contactID int, req UpdateManagedContactRequest) (*ManagedContact, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
-	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedContact", Err: err}
-	}
-
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
-
-	var contact ManagedContact
-	if err := c.handleResponse(resp, &contact); err != nil {
-		return nil, err
-	}
-
-	return &contact, nil
 }
 
 // httpUpdateManagedContactProto updates one Managed contact and decodes the
