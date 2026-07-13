@@ -19,6 +19,7 @@ const (
 	keyNodeBalancerID  = "nodebalancer_id"
 	keyConfigID        = "config_id"
 	keyNodeID          = "node_id"
+	keyIPv4            = "ipv4"
 	keyPort            = "port"
 	keyProtocol        = "protocol"
 	keyAlgorithm       = "algorithm"

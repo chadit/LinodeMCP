@@ -9021,10 +9021,11 @@ class Client:
         try:
             body: dict[str, Any] = {
                 "region": region,
-                "client_conn_throttle": client_conn_throttle,
             }
             if label:
                 body["label"] = label
+            if client_conn_throttle:
+                body["client_conn_throttle"] = client_conn_throttle
             if tags:
                 body["tags"] = tags
             if ipv4 is not None:
@@ -14229,7 +14230,8 @@ class RetryableClient:
         ipv4: str | None = None,
     ) -> dict[str, Any]:
         """Create a NodeBalancer once and return the full raw API body."""
-        return await self.client.create_nodebalancer_raw(
+        return await self._execute_without_retry(
+            self.client.create_nodebalancer_raw,
             region,
             label,
             client_conn_throttle,
@@ -15109,6 +15111,24 @@ class RetryableClient:
             instance_id,
             root_pass,
         )
+
+    async def _execute_without_retry(
+        self, func: Callable[..., Awaitable[T]], *args: Any
+    ) -> T:
+        """Execute one protected network attempt without replaying mutations."""
+        self._circuit.allow()
+
+        async with self._request_semaphore:
+            await self._limiter.wait()
+            try:
+                result = await func(*args)
+            except Exception as exc:
+                if self._should_retry(exc):
+                    self._circuit.record_failure()
+                raise
+
+            self._circuit.record_success()
+            return result
 
     async def _execute_with_retry(
         self, func: Callable[..., Awaitable[T]], *args: Any
