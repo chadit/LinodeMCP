@@ -212,10 +212,14 @@ async def test_plan_includes_dependency_walk(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
     # A plan reads like a dry-run preview: the body carries the dependency
-    # walk's output (a released public IP here), not just the state hash.
+    # walk's output, including distinct ephemeral and reserved IP effects, not
+    # just the state hash.
     mock_linode_client.get_instance.return_value = _instance_state()
     mock_linode_client.list_instance_ips.return_value = {
-        "ipv4": {"public": [{"address": "192.0.2.7"}]}
+        "ipv4": {
+            "public": [{"address": "192.0.2.7"}],
+            "reserved": [{"address": "198.51.100.8"}],
+        }
     }
 
     store = PlanStore()
@@ -226,7 +230,71 @@ async def test_plan_includes_dependency_walk(
         )
         body = json.loads(result[0].text)
         deps = body["dependencies"]
-        assert any(dep["kind"] == "public_ip" for dep in deps)
+        ip_deps = {dep["label"]: dep for dep in deps if dep["kind"] == "public_ip"}
+        assert ip_deps["192.0.2.7"]["action"] == "released"
+        assert ip_deps["198.51.100.8"]["action"] == "detached"
+        assert "reservation and billing continue" in ip_deps["198.51.100.8"]["note"]
         assert body["warnings"]
+    finally:
+        reset_plan_store(token)
+
+
+async def test_plan_malformed_ip_payload_warns_and_keeps_valid_dependencies(
+    sample_config: Config, mock_linode_client: AsyncMock
+) -> None:
+    """Malformed IP categories don't prevent a best-effort plan preview."""
+    mock_linode_client.get_instance.return_value = _instance_state()
+    mock_linode_client.list_instance_ips.return_value = {
+        "ipv4": {
+            "public": [{"address": "192.0.2.7"}],
+            "reserved": "not-a-list",
+        }
+    }
+
+    store = PlanStore()
+    token = set_plan_store(store)
+    try:
+        result = await handle_linode_instance_delete(
+            {"instance_id": 123, "mode": "plan"}, sample_config
+        )
+        body = json.loads(result[0].text)
+        ip_deps = {
+            dep["label"]: dep
+            for dep in body["dependencies"]
+            if dep["kind"] == "public_ip"
+        }
+
+        assert ip_deps["192.0.2.7"]["action"] == "released"
+        assert any(
+            warning.startswith("Could not parse reserved IPv4 addresses")
+            for warning in body["warnings"]
+        )
+        assert await store.length() == 1
+        mock_linode_client.delete_instance.assert_not_awaited()
+    finally:
+        reset_plan_store(token)
+
+
+async def test_plan_ip_json_decode_error_warns_and_stores_plan(
+    sample_config: Config, mock_linode_client: AsyncMock
+) -> None:
+    """Invalid IP response JSON remains a best-effort plan warning."""
+    mock_linode_client.get_instance.return_value = _instance_state()
+    mock_linode_client.list_instance_ips.side_effect = ValueError("invalid JSON")
+
+    store = PlanStore()
+    token = set_plan_store(store)
+    try:
+        result = await handle_linode_instance_delete(
+            {"instance_id": 123, "mode": "plan"}, sample_config
+        )
+        body = json.loads(result[0].text)
+
+        assert any(
+            warning.startswith("Could not list IP addresses: invalid JSON")
+            for warning in body["warnings"]
+        )
+        assert await store.length() == 1
+        mock_linode_client.delete_instance.assert_not_awaited()
     finally:
         reset_plan_store(token)
