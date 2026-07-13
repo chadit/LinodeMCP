@@ -633,24 +633,72 @@ async def _instance_volume_deps(
 async def _instance_ip_deps(
     client: RetryableClient, instance_id: int
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """Public IPv4 addresses are released back to the pool on delete."""
+    """Describe how ephemeral and reserved public IPv4 addresses are affected."""
     try:
-        ips = await client.list_instance_ips(instance_id)
+        raw_ips = cast("object", await client.list_instance_ips(instance_id))
     except (APIError, NetworkError, httpx.HTTPError) as exc:
         return [], [f"Could not list IP addresses: {exc}"]
 
-    ipv4 = cast("dict[str, Any]", ips.get("ipv4", {}))
-    public = cast("list[dict[str, Any]]", ipv4.get("public", []))
-    deps: list[dict[str, Any]] = [
-        {
-            "kind": "public_ip",
-            "label": str(addr.get("address", "")),
-            "action": "released",
-        }
-        for addr in public
-    ]
+    if not isinstance(raw_ips, dict):
+        return [], ["Could not parse IP addresses: response is not an object."]
 
-    return deps, []
+    ips = cast("dict[str, object]", raw_ips)
+    raw_ipv4: object = ips.get("ipv4", {})
+    if raw_ipv4 is None:
+        return [], []
+    if not isinstance(raw_ipv4, dict):
+        return [], ["Could not parse IP addresses: ipv4 is not an object."]
+
+    ipv4 = cast("dict[str, object]", raw_ipv4)
+    deps: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    categories = (
+        ("public", "released", None),
+        (
+            "reserved",
+            "detached",
+            "Reserved IP is detached from the instance; reservation and "
+            "billing continue.",
+        ),
+    )
+
+    for category, action, note in categories:
+        raw_addresses: object = ipv4.get(category, [])
+        if raw_addresses is None:
+            continue
+        if not isinstance(raw_addresses, list):
+            warnings.append(
+                f"Could not parse {category} IPv4 addresses: expected a list."
+            )
+            continue
+
+        for raw_address in cast("list[object]", raw_addresses):
+            if not isinstance(raw_address, dict):
+                warnings.append(
+                    f"Could not parse {category} IPv4 address entry: "
+                    "expected an object."
+                )
+                continue
+
+            address_entry = cast("dict[str, object]", raw_address)
+            address = address_entry.get("address")
+            if not isinstance(address, str) or not address:
+                warnings.append(
+                    f"Could not parse {category} IPv4 address entry: "
+                    "address is missing."
+                )
+                continue
+
+            dependency = {
+                "kind": "public_ip",
+                "label": address,
+                "action": action,
+            }
+            if note is not None:
+                dependency["note"] = note
+            deps.append(dependency)
+
+    return deps, warnings
 
 
 async def _instance_delete_dependency_walk(
