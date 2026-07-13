@@ -98,7 +98,7 @@ func nodeBalancerCreateRequestFromTool(request *mcp.CallToolRequest) (linode.Cre
 		return linode.CreateNodeBalancerRequest{}, "ipv4 must be a valid IPv4 address"
 	}
 
-	req.IPv4 = new(ipv4)
+	req.IPv4 = &ipv4
 
 	return req, ""
 }

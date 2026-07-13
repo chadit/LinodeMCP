@@ -27,10 +27,11 @@ type nodeBalancerCreateCase struct {
 func TestClientCreateNodeBalancerProtoRequestAndResponse(t *testing.T) {
 	t.Parallel()
 
+	selectedIPv4 := reservedIPv4Fixture
 	tests := []nodeBalancerCreateCase{
 		{
 			name: "selected reserved IPv4",
-			ipv4: new(reservedIPv4Fixture),
+			ipv4: &selectedIPv4,
 			wantBody: map[string]any{
 				keyRegion: regionUSEast,
 				keyIPv4:   reservedIPv4Fixture,
@@ -136,7 +137,8 @@ func TestClientCreateNodeBalancerRejectsInvalidIPv4BeforeRequest(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
-	req := linode.CreateNodeBalancerRequest{Region: regionUSEast, IPv4: new("2001:db8::1")}
+	invalidIPv4 := "2001:db8::1"
+	req := linode.CreateNodeBalancerRequest{Region: regionUSEast, IPv4: &invalidIPv4}
 
 	if _, err := client.CreateNodeBalancerProto(t.Context(), req); !errors.Is(err, linode.ErrIPv4AddressInvalid) {
 		t.Errorf("error = %v, want %v", err, linode.ErrIPv4AddressInvalid)
