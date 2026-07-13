@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"net/netip"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/proto"
@@ -31,18 +32,15 @@ func NewLinodeNodeBalancerCreateTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 }
 
 func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	region := request.GetString("region", "")
-	label := request.GetString("label", "")
-	clientConnThrottle := request.GetInt("client_conn_throttle", 0)
-
 	if IsDryRun(request) {
-		if region == "" {
-			return mcp.NewToolResultError("region is required"), nil
+		req, validationMessage := nodeBalancerCreateRequestFromTool(request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
 		}
 
-		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_nodebalancer_create", httpMethodPost, "/nodebalancers", nil,
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_nodebalancer_create", httpMethodPost, "/nodebalancers", req, nil,
 			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
-				return nodebalancerCreateSideEffects(ctx, label, region)
+				return nodebalancerCreateSideEffects(ctx, req.Label, req.Region, req.IPv4)
 			})
 	}
 
@@ -50,19 +48,14 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 		return result, nil
 	}
 
-	if region == "" {
-		return mcp.NewToolResultError("region is required"), nil
+	req, validationMessage := nodeBalancerCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	req := linode.CreateNodeBalancerRequest{
-		Region:             region,
-		Label:              label,
-		ClientConnThrottle: clientConnThrottle,
 	}
 
 	nodeBalancer, err := client.CreateNodeBalancerProto(ctx, req)
@@ -76,6 +69,38 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 	}
 
 	return MarshalProtoToolResponse(response)
+}
+
+func nodeBalancerCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateNodeBalancerRequest, string) {
+	region := request.GetString("region", "")
+	if region == "" {
+		return linode.CreateNodeBalancerRequest{}, "region is required"
+	}
+
+	req := linode.CreateNodeBalancerRequest{
+		Region:             region,
+		Label:              request.GetString("label", ""),
+		ClientConnThrottle: request.GetInt("client_conn_throttle", 0),
+	}
+
+	rawIPv4, present := request.GetArguments()["ipv4"]
+	if !present {
+		return req, ""
+	}
+
+	ipv4, ok := rawIPv4.(string)
+	if !ok {
+		return linode.CreateNodeBalancerRequest{}, "ipv4 must be a valid IPv4 address"
+	}
+
+	address, err := netip.ParseAddr(ipv4)
+	if err != nil || !address.Is4() {
+		return linode.CreateNodeBalancerRequest{}, "ipv4 must be a valid IPv4 address"
+	}
+
+	req.IPv4 = new(ipv4)
+
+	return req, ""
 }
 
 // NewLinodeNodeBalancerUpdateTool creates a tool for updating a NodeBalancer.

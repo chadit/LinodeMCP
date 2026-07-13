@@ -93,6 +93,9 @@ message NodeBalancerCreateInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 6;
+  // Reserved public IPv4 address to assign. When omitted, the API allocates
+  // an ephemeral IPv4 address.
+  optional string ipv4 = 7;
 }
 
 // NodeBalancerUpdateInput is the input contract for linode_nodebalancer_update.

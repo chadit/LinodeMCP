@@ -396,6 +396,7 @@ type CreateNodeBalancerRequest struct {
 	Label              string   `json:"label,omitempty"`
 	ClientConnThrottle int      `json:"client_conn_throttle,omitempty"`
 	Tags               []string `json:"tags,omitempty"`
+	IPv4               *string  `json:"ipv4,omitempty"`
 }
 
 // UpdateNodeBalancerRequest represents the request body for updating a NodeBalancer.

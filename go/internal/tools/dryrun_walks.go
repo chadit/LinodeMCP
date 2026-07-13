@@ -985,7 +985,7 @@ func firewallCreateSideEffects(ctx context.Context, label, inboundPolicy, outbou
 // nodebalancerCreateSideEffects is the Tier B preview for
 // linode_nodebalancer_create. It describes the load balancer that would be
 // created (arg-only, no fetch) and warns that billing begins on creation.
-func nodebalancerCreateSideEffects(ctx context.Context, label, region string) (DryRunDetails, error) {
+func nodebalancerCreateSideEffects(ctx context.Context, label, region string, ipv4 *string) (DryRunDetails, error) {
 	var details DryRunDetails
 
 	if err := ctx.Err(); err != nil {
@@ -995,6 +995,10 @@ func nodebalancerCreateSideEffects(ctx context.Context, label, region string) (D
 	effect := fmt.Sprintf("A new NodeBalancer will be created in region %s.", region)
 	if label != "" {
 		effect = fmt.Sprintf("A new NodeBalancer %q will be created in region %s.", label, region)
+	}
+
+	if ipv4 != nil {
+		effect += fmt.Sprintf(" Reserved IPv4 address %s will be assigned.", *ipv4)
 	}
 
 	details.SideEffects = append(details.SideEffects, effect)
