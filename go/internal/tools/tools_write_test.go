@@ -4915,20 +4915,38 @@ func TestLinodeNodeBalancerCreateToolDefinition(t *testing.T) {
 	}
 
 	rawSchema := string(tool.RawInputSchema)
-	for _, key := range []string{keyRegion, keyLabel, keyConfirm} {
+	for _, key := range []string{keyRegion, keyLabel, keyIPv4, keyConfirm} {
 		if !strings.Contains(rawSchema, key) {
 			t.Errorf("tool.RawInputSchema missing key %v", key)
 		}
+	}
+
+	var schemaContract struct {
+		Properties map[string]struct {
+			Type string `json:"type"`
+		} `json:"properties"`
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal(tool.RawInputSchema, &schemaContract); err != nil {
+		t.Fatalf("failed to decode tool schema: %v", err)
+	}
+
+	ipv4Schema, ok := schemaContract.Properties[keyIPv4]
+	if !ok {
+		t.Fatalf("tool.RawInputSchema missing property %v", keyIPv4)
+	}
+
+	if ipv4Schema.Type != caseString {
+		t.Errorf("tool.RawInputSchema property %v type = %v, want %v", keyIPv4, ipv4Schema.Type, caseString)
+	}
+
+	if slices.Contains(schemaContract.Required, keyIPv4) {
+		t.Errorf("tool.RawInputSchema requires optional key %v", keyIPv4)
 	}
 }
 
 func TestLinodeNodeBalancerCreateToolValidation(t *testing.T) {
 	t.Parallel()
-
-	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLLinodeV4, Token: tokenTest}},
-	}}
-	_, _, handler := tools.NewLinodeNodeBalancerCreateTool(cfg)
 
 	validationTests := []struct {
 		name         string
@@ -4941,33 +4959,79 @@ func TestLinodeNodeBalancerCreateToolValidation(t *testing.T) {
 			wantContains: errConfirmEqualsTrue,
 		},
 		{
+			name:         caseFalseConfirm,
+			args:         map[string]any{keyRegion: regionUSEast, keyConfirm: false},
+			wantContains: errConfirmEqualsTrue,
+		},
+		{
+			name:         caseStringConfirm,
+			args:         map[string]any{keyRegion: regionUSEast, keyConfirm: boolStringTrue},
+			wantContains: errConfirmEqualsTrue,
+		},
+		{
+			name:         caseNumericConfirm,
+			args:         map[string]any{keyRegion: regionUSEast, keyConfirm: float64(1)},
+			wantContains: errConfirmEqualsTrue,
+		},
+		{
 			name:         caseMissingRegion,
 			args:         map[string]any{keyConfirm: true},
 			wantContains: errRegionRequired,
+		},
+		{
+			name:         "invalid IPv4",
+			args:         map[string]any{keyRegion: regionUSEast, keyIPv4: "2001:db8::1", keyConfirm: true},
+			wantContains: "ipv4 must be a valid IPv4 address",
+		},
+		{
+			name:         "non-string IPv4",
+			args:         map[string]any{keyRegion: regionUSEast, keyIPv4: float64(1), keyConfirm: true},
+			wantContains: "ipv4 must be a valid IPv4 address",
 		},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			req := createRequestWithArgs(t, tt.args)
-
-			result, err := handler(t.Context(), req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if result == nil {
-				t.Fatal("result is nil")
-			}
-
-			if !result.IsError {
-				t.Error("result.IsError = false, want true")
-			}
-
-			if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, tt.wantContains) {
-				t.Errorf("error text %q does not contain %q", text.Text, tt.wantContains)
-			}
+			assertNodeBalancerCreateValidation(t, tt.args, tt.wantContains)
 		})
+	}
+}
+
+func assertNodeBalancerCreateValidation(t *testing.T, args map[string]any, wantContains string) {
+	t.Helper()
+
+	var calls atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNodeBalancerCreateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, wantContains) {
+		t.Errorf("error text %q does not contain %q", text.Text, wantContains)
+	}
+
+	if calls.Load() != 0 {
+		t.Errorf("calls.Load() = %v, want 0", calls.Load())
 	}
 }
 
@@ -4976,8 +5040,9 @@ func TestLinodeNodeBalancerCreateToolSuccessfulCreation(t *testing.T) {
 
 	nodeBalancer := linode.NodeBalancer{
 		ID:     444,
-		Label:  "web-lb",
+		Label:  nodeBalancerLabelFixture,
 		Region: regionUSEast,
+		IPv4:   reservedIPv4Fixture,
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -4987,6 +5052,16 @@ func TestLinodeNodeBalancerCreateToolSuccessfulCreation(t *testing.T) {
 
 		if r.Method != http.MethodPost {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodPost)
+		}
+
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		wantBody := map[string]any{keyRegion: regionUSEast, keyLabel: nodeBalancerLabelFixture, keyIPv4: reservedIPv4Fixture}
+		if !reflect.DeepEqual(body, wantBody) {
+			t.Errorf("body = %v, want %v", body, wantBody)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -5004,7 +5079,8 @@ func TestLinodeNodeBalancerCreateToolSuccessfulCreation(t *testing.T) {
 
 	req := createRequestWithArgs(t, map[string]any{
 		keyRegion:  regionUSEast,
-		keyLabel:   "web-lb",
+		keyLabel:   nodeBalancerLabelFixture,
+		keyIPv4:    reservedIPv4Fixture,
 		keyConfirm: true,
 	})
 
@@ -5026,12 +5102,54 @@ func TestLinodeNodeBalancerCreateToolSuccessfulCreation(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, "web-lb") {
-		t.Errorf("textContent.Text does not contain %v", "web-lb")
+	if !strings.Contains(textContent.Text, nodeBalancerLabelFixture) {
+		t.Errorf("textContent.Text does not contain %v", nodeBalancerLabelFixture)
 	}
 
 	if !strings.Contains(textContent.Text, "created successfully") {
 		t.Errorf("textContent.Text does not contain %v", "created successfully")
+	}
+
+	if !strings.Contains(textContent.Text, reservedIPv4Fixture) {
+		t.Errorf("textContent.Text does not contain selected IPv4 address")
+	}
+}
+
+func TestLinodeNodeBalancerCreateToolOmitsUnselectedIPv4(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if _, present := body[keyIPv4]; present {
+			t.Errorf("body contains omitted %v: %v", keyIPv4, body)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(linode.NodeBalancer{ID: 444, Label: nodeBalancerLabelFixture, Region: regionUSEast}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+	}}
+	_, _, handler := tools.NewLinodeNodeBalancerCreateTool(cfg)
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion: regionUSEast, keyConfirm: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Error("result.IsError = true, want false")
 	}
 }
 

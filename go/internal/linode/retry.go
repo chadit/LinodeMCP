@@ -4566,12 +4566,12 @@ func (c *Client) UpdateVolumeProto(ctx context.Context, volumeID int, req *Updat
 	return volume, err
 }
 
-// CreateNodeBalancerProto creates a NodeBalancer as a proto message with automatic
-// retry on transient failures.
+// CreateNodeBalancerProto creates a NodeBalancer as a proto message without
+// retrying the POST create call.
 func (c *Client) CreateNodeBalancerProto(ctx context.Context, req CreateNodeBalancerRequest) (*linodev1.NodeBalancer, error) {
 	var nodeBalancer *linodev1.NodeBalancer
 
-	err := c.executeWithRetry(ctx, "CreateNodeBalancer", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateNodeBalancer", func() error {
 		var err error
 
 		nodeBalancer, err = c.httpCreateNodeBalancerProto(ctx, req)
