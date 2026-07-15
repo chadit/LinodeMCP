@@ -51,7 +51,11 @@ jobs:
                   gh pr view "${PR_NUMBER}" --repo "${GH_REPO}" \
                     --json number,title,baseRefName,headRefName,headRefOid,author,changedFiles,additions,deletions,files \
                     > agent-review/pr-context.json
-                  gh pr diff "${PR_NUMBER}" --repo "${GH_REPO}" --patch > agent-review/pr.diff
+                  # Net merge-base diff, not --patch: a per-commit patch series repeats
+                  # files touched by several commits (PR #735: 68.6k chars vs 46.2k net),
+                  # asks the model to review intermediate states, and skews the
+                  # added-line map used for comment target validation.
+                  gh pr diff "${PR_NUMBER}" --repo "${GH_REPO}" > agent-review/pr.diff
 
                   python3 <<'PY'
                   import json
@@ -120,7 +124,11 @@ jobs:
                   if current:
                       files.append(''.join(current))
 
-                  max_chars = 90000
+                  # Caps per-call generation time, not context size. A single 68k-char
+                  # chunk at PR #735's size pushed GLM past what the endpoint tolerates
+                  # on one connection and every attempt died mid-response. 45k keeps
+                  # each prompt near the size that reliably completes.
+                  max_chars = 45000
                   chunks = []
                   current_chunk = []
                   current_size = 0
@@ -193,9 +201,13 @@ jobs:
                   # https://api.z.ai/api/paas/v4.
                   MODEL_BASE_URL: https://api.z.ai/api/coding/paas/v4
                   MODEL_ID: glm-5.2
-                  # GLM-5.2 tops out at "max" reasoning effort; z.ai recommends max for coding.
-                  MODEL_REASONING_EFFORT: max
-                  # Per-request timeout (seconds). Max effort reasons for a while on large chunks.
+                  # "high", not "max": at max effort a large chunk reasons for 12+ minutes,
+                  # longer than z.ai holds a non-streaming connection open. PR #735 lost
+                  # six straight calls to RemoteDisconnected/IncompleteRead that way, while
+                  # PR #732 finished its 747s call barely inside the window.
+                  MODEL_REASONING_EFFORT: high
+                  # Per-request timeout (seconds). High effort still reasons for a while
+                  # on large chunks.
                   MODEL_REQUEST_TIMEOUT: "600"
               shell: bash
               run: |
