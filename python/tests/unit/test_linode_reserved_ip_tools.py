@@ -214,10 +214,10 @@ async def test_reserved_ip_delete_handles_empty_success(
     mock_linode_client.delete_reserved_ip.assert_awaited_once_with("192.0.2.10")
 
 
-async def test_reserved_ip_delete_apply_requires_strict_boolean_confirm(
+async def test_reserved_ip_delete_applies_valid_plan_without_confirm(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
-    """Two-stage apply rejects false confirmation before deleting."""
+    """A valid two-stage plan acts as confirmation for apply."""
     mock_linode_client.get_reserved_ip.return_value = RESERVED_IP
     store = PlanStore()
     token = set_plan_store(store)
@@ -233,12 +233,14 @@ async def test_reserved_ip_delete_apply_requires_strict_boolean_confirm(
                 "address": "192.0.2.10",
                 "mode": "apply",
                 "plan_id": plan_id,
-                "confirm": False,
             },
             sample_config,
         )
-        assert "confirm=true" in apply_result[0].text
-        mock_linode_client.delete_reserved_ip.assert_not_called()
+        assert _body(apply_result) == {
+            "message": "Reserved IP 192.0.2.10 unreserved successfully",
+            "address": "192.0.2.10",
+        }
+        mock_linode_client.delete_reserved_ip.assert_awaited_once_with("192.0.2.10")
     finally:
         reset_plan_store(token)
 
