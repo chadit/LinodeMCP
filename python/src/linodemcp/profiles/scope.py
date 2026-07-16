@@ -51,6 +51,9 @@ class Scope(StrEnum):
     IPsReadOnly = "ips:read_only"
     IPsReadWrite = "ips:read_write"
 
+    ReservedIPsReadOnly = "reserved-ips:read_only"
+    ReservedIPsReadWrite = "reserved-ips:read_write"
+
     LinodesReadOnly = "linodes:read_only"
     LinodesReadWrite = "linodes:read_write"
 
@@ -98,11 +101,13 @@ _CAT_DATABASES = "databases"
 _CAT_DOMAINS = "domains"
 _CAT_FIREWALL = "firewall"
 _CAT_IMAGES = "images"
+_CAT_IPS = "ips"
 _CAT_LINODES = "linodes"
 _CAT_LKE = "lke"
 _CAT_LONGVIEW = "longview"
 _CAT_NODEBALANCERS = "nodebalancers"
 _CAT_OBJECT_STORAGE = "object_storage"
+_CAT_RESERVED_IPS = "reserved-ips"
 _CAT_STACKSCRIPTS = "stackscripts"
 _CAT_VOLUMES = "volumes"
 _CAT_VPC = "vpc"
@@ -121,6 +126,7 @@ def _scope_matrix() -> dict[str, tuple[Scope, Scope]]:
         _CAT_DOMAINS: (Scope.DomainsReadOnly, Scope.DomainsReadWrite),
         _CAT_FIREWALL: (Scope.FirewallReadOnly, Scope.FirewallReadWrite),
         _CAT_IMAGES: (Scope.ImagesReadOnly, Scope.ImagesReadWrite),
+        _CAT_IPS: (Scope.IPsReadOnly, Scope.IPsReadWrite),
         _CAT_LINODES: (Scope.LinodesReadOnly, Scope.LinodesReadWrite),
         _CAT_LKE: (Scope.LKEReadOnly, Scope.LKEReadWrite),
         _CAT_LONGVIEW: (Scope.LongviewReadOnly, Scope.LongviewReadWrite),
@@ -131,6 +137,10 @@ def _scope_matrix() -> dict[str, tuple[Scope, Scope]]:
         _CAT_OBJECT_STORAGE: (
             Scope.ObjectStorageReadOnly,
             Scope.ObjectStorageReadWrite,
+        ),
+        _CAT_RESERVED_IPS: (
+            Scope.ReservedIPsReadOnly,
+            Scope.ReservedIPsReadWrite,
         ),
         _CAT_STACKSCRIPTS: (
             Scope.StackScriptsReadOnly,
@@ -161,6 +171,7 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
         ),
         (("linode_database_", "linode_databases_"), _CAT_DATABASES),
         (("linode_object_storage_",), _CAT_OBJECT_STORAGE),
+        (("linode_networking_reserved_ip_",), _CAT_RESERVED_IPS),
         (("linode_lke_",), _CAT_LKE),
         (("linode_longview_",), _CAT_LONGVIEW),
         (("linode_nodebalancer_", "linode_nodebalancers_"), _CAT_NODEBALANCERS),
@@ -203,6 +214,16 @@ def _scope_category(tool_name: str) -> str | None:
         "linode_firewall_settings_get",
     ):
         return _CAT_ACCOUNT
+
+    # The API's security metadata intentionally splits this route family:
+    # create and collection-list use ips:*, while get, update, type-list,
+    # and delete use reserved-ips:*. Keep only the two collection overrides
+    # here; the item and pricing tools resolve through _prefix_table below.
+    if tool_name in (
+        "linode_networking_reserved_ip_create",
+        "linode_networking_reserved_ip_list",
+    ):
+        return _CAT_IPS
 
     for prefixes, category in _prefix_table():
         if tool_name.startswith(prefixes):

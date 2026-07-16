@@ -314,6 +314,8 @@ async def execute_dry_run(
     fetch_state: Callable[[RetryableClient], Awaitable[Any]],
     details_fn: Callable[[RetryableClient, Any], Awaitable[DryRunDetails]]
     | None = None,
+    *,
+    request_body: Any | None = None,
 ) -> list[TextContent]:
     """Run the dry-run code path: fetch current state, return the v0
     preview wire shape, never mutate.
@@ -341,7 +343,13 @@ async def execute_dry_run(
             if details_fn is not None:
                 details = await details_fn(client, current_state)
             return build_dry_run_response(
-                tool_name, environment, method, path, current_state, **details
+                tool_name,
+                environment,
+                method,
+                path,
+                current_state,
+                request_body=request_body,
+                **details,
             )
     except Exception as e:
         if isinstance(e, (EnvironmentNotFoundError, ValueError)):

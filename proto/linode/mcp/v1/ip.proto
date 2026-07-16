@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 // InstanceIPType is the address family requested by the IP allocate tools
@@ -133,6 +135,163 @@ message IPv6RangeWriteResponse {
 message IPv6RangeDeleteResponse {
   string message = 1;
   string range = 2;
+}
+
+// ReservedIPAssignedEntity identifies the resource currently using a reserved
+// address. The API returns null when the address is unassigned; the Python
+// handler restores that explicit null after proto serialization.
+message ReservedIPAssignedEntity {
+  int64 id = 1;
+  string label = 2;
+  string type = 3;
+  string url = 4;
+}
+
+// ReservedIPVPCNAT describes a 1:1 VPC NAT association. The API returns null
+// when no association exists; the Python handler restores that explicit null
+// after proto serialization.
+message ReservedIPVPCNAT {
+  string address = 1;
+  int64 subnet_id = 2;
+  int64 vpc_id = 3;
+}
+
+// ReservedIPAddress mirrors the complete reserved public IPv4 response.
+// Nullable scalars use proto presence and typed relationship messages preserve
+// integer IDs; the handler restores documented explicit nulls in field order.
+message ReservedIPAddress {
+  string address = 1;
+  ReservedIPAssignedEntity assigned_entity = 2;
+  optional string gateway = 3;
+  optional int64 interface_id = 4;
+  optional int64 linode_id = 5;
+  int32 prefix = 6;
+  bool public = 7;
+  optional string rdns = 8;
+  string region = 9;
+  bool reserved = 10;
+  string subnet_mask = 11;
+  repeated string tags = 12;
+  string type = 13;
+  ReservedIPVPCNAT vpc_nat_1_1 = 14;
+}
+
+// ReservedIPListResponse is the project list envelope for the paginated
+// reserved-IP collection.
+message ReservedIPListResponse {
+  int32 count = 1;
+  repeated ReservedIPAddress reserved_ips = 2;
+}
+
+// ReservedIPPrice preserves nullable hourly/monthly values from the pricing
+// response rather than imposing defaults on a billing value the API omitted.
+message ReservedIPPrice {
+  google.protobuf.Value hourly = 1;
+  google.protobuf.Value monthly = 2;
+}
+
+// ReservedIPRegionPrice is a regional price override.
+message ReservedIPRegionPrice {
+  string id = 1;
+  google.protobuf.Value hourly = 2;
+  google.protobuf.Value monthly = 3;
+}
+
+// ReservedIPType is one reserved-IP pricing type returned by the API.
+message ReservedIPType {
+  string id = 1;
+  string label = 2;
+  ReservedIPPrice price = 3;
+  repeated ReservedIPRegionPrice region_prices = 4;
+  int64 transfer = 5;
+}
+
+// ReservedIPTypeListResponse is the project list envelope for pricing types.
+message ReservedIPTypeListResponse {
+  int32 count = 1;
+  repeated ReservedIPType reserved_ip_types = 2;
+}
+
+// ReservedIPDeleteResponse confirms an empty successful unreserve response.
+message ReservedIPDeleteResponse {
+  string message = 1;
+  string address = 2;
+}
+
+// ReservedIPCreateInput is the input contract for
+// linode_networking_reserved_ip_create.
+message ReservedIPCreateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Region in which to reserve the public IPv4 address.
+  string region = 2;
+  // Existing tags to apply to the reserved address.
+  repeated string tags = 3;
+  // Must be true to confirm reservation and billing. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it. Default false.
+  optional bool dry_run = 5;
+}
+
+// ReservedIPListInput is the input contract for
+// linode_networking_reserved_ip_list.
+message ReservedIPListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
+}
+
+// ReservedIPGetInput is the input contract for
+// linode_networking_reserved_ip_get.
+message ReservedIPGetInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Reserved public IPv4 address to retrieve.
+  string address = 2;
+}
+
+// ReservedIPUpdateInput is the input contract for
+// linode_networking_reserved_ip_update. tags is required by the handler;
+// repeated proto fields cannot appear in generated required arrays.
+message ReservedIPUpdateInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Reserved public IPv4 address whose tags will be replaced.
+  string address = 2;
+  // Complete replacement set of existing tags. An empty list removes all tags.
+  repeated string tags = 3;
+  // Must be true to confirm replacing tags. Ignored when dry_run=true.
+  bool confirm = 4;
+  // Preview the call without making it. Default false.
+  optional bool dry_run = 5;
+}
+
+// ReservedIPTypeListInput is the input contract for
+// linode_networking_reserved_ip_type_list.
+message ReservedIPTypeListInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+}
+
+// ReservedIPDeleteInput is the input contract for
+// linode_networking_reserved_ip_delete.
+message ReservedIPDeleteInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Reserved public IPv4 address to unreserve permanently.
+  string address = 2;
+  // Must be true to confirm unreserving the address. Ignored when dry_run=true.
+  bool confirm = 3;
+  // Preview the call without making it. Default false.
+  optional bool dry_run = 4;
+  // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
+  // re-checks drift and executes. Omit for a single-step call.
+  optional string mode = 5;
+  // The plan_id returned by mode:"plan", supplied with mode:"apply".
+  optional string plan_id = 6;
 }
 
 // IPv6PoolListInput is the input contract for linode_ipv6_pool_list.

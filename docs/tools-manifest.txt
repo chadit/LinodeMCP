@@ -1,7 +1,8 @@
 # Canonical LinodeMCP tool surface.
 # One tool name per line, sorted. Every tool listed here exists in BOTH
-# implementations; one-sided tools are not allowed and annotations on a
-# line fail the gates.
+# implementations. Accepted one-sided tools stay out of this file and are
+# recorded in docs/tool-parity-baseline.txt; annotations on a line fail the
+# gates.
 # Parity tests in both languages enforce this file:
 #   go/internal/server/tools_manifest_test.go
 #   python/tests/unit/test_tools_manifest.py

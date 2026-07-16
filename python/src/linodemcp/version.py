@@ -84,7 +84,7 @@ FEATURE_TOOLS_LIST = (
     "linode_lke_acl_update,linode_lke_acl_delete,"
     "linode_lke_version_list,linode_lke_version_get,"
     "linode_lke_type_list,linode_lke_tier_version_list,linode_lke_tier_version_get,"
-    "linode_vlan_delete,linode_vlan_list,linode_networking_ip_share,linode_vpc_list,linode_vpc_get,linode_vpc_create,"
+    "linode_vlan_delete,linode_vlan_list,linode_networking_ip_share,linode_networking_reserved_ip_create,linode_networking_reserved_ip_delete,linode_networking_reserved_ip_get,linode_networking_reserved_ip_list,linode_networking_reserved_ip_type_list,linode_networking_reserved_ip_update,linode_vpc_list,linode_vpc_get,linode_vpc_create,"
     "linode_vpc_update,linode_vpc_delete,linode_vpc_ip_all_list,"
     "linode_vpc_ip_list,linode_vpc_subnet_list,linode_vpc_subnet_get,"
     "linode_vpc_subnet_create,linode_vpc_subnet_update,"

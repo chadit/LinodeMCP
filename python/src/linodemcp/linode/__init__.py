@@ -9821,6 +9821,84 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteIPv6Range", e) from e
 
+    # ── Reserved public IPv4 addresses ──
+
+    async def create_reserved_ip(
+        self, region: str, tags: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Reserve a public IPv4 address in a region."""
+        body: dict[str, Any] = {"region": region}
+        if tags is not None:
+            body["tags"] = tags
+        try:
+            response = await self.make_request("POST", "/networking/reserved/ips", body)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("CreateReservedIP", e) from e
+
+    async def list_reserved_ips(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List reserved public IPv4 addresses."""
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        query_string = urlencode(params) if params else ""
+        endpoint = (
+            f"/networking/reserved/ips?{query_string}"
+            if query_string
+            else "/networking/reserved/ips"
+        )
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("ListReservedIPs", e) from e
+
+    async def get_reserved_ip(self, address: str) -> dict[str, Any]:
+        """Get a reserved public IPv4 address."""
+        encoded_address = quote(address, safe="")
+        endpoint = f"/networking/reserved/ips/{encoded_address}"
+        try:
+            response = await self.make_request("GET", endpoint)
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("GetReservedIP", e) from e
+
+    async def update_reserved_ip(self, address: str, tags: list[str]) -> dict[str, Any]:
+        """Replace a reserved public IPv4 address's tags."""
+        encoded_address = quote(address, safe="")
+        endpoint = f"/networking/reserved/ips/{encoded_address}"
+        try:
+            response = await self.make_request("PUT", endpoint, {"tags": tags})
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("UpdateReservedIP", e) from e
+
+    async def list_reserved_ip_types(self) -> dict[str, Any]:
+        """List reserved public IPv4 pricing types."""
+        try:
+            response = await self.make_request("GET", "/networking/reserved/ips/types")
+            result: dict[str, Any] = response.json()
+            return result
+        except httpx.HTTPError as e:
+            raise NetworkError("ListReservedIPTypes", e) from e
+
+    async def delete_reserved_ip(self, address: str) -> None:
+        """Permanently unreserve a public IPv4 address."""
+        encoded_address = quote(address, safe="")
+        endpoint = f"/networking/reserved/ips/{encoded_address}"
+        try:
+            await self.make_request("DELETE", endpoint)
+        except httpx.HTTPError as e:
+            raise NetworkError("DeleteReservedIP", e) from e
+
     # ── Instance Backups ──
 
     async def list_instance_backups(self, instance_id: int) -> dict[str, Any]:
@@ -14716,6 +14794,47 @@ class RetryableClient:
     async def delete_ipv6_range(self, ipv6_range: str) -> None:
         """Delete IPv6 range with retry."""
         await self._execute_with_retry(self.client.delete_ipv6_range, ipv6_range)
+
+    # ── Reserved public IPv4 addresses (retry wrappers) ──
+
+    async def create_reserved_ip(
+        self, region: str, tags: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Reserve a public IPv4 address once without replay."""
+        result: dict[str, Any] = await self.client.create_reserved_ip(region, tags)
+        return result
+
+    async def list_reserved_ips(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> dict[str, Any]:
+        """List reserved public IPv4 addresses with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            lambda: self.client.list_reserved_ips(page=page, page_size=page_size)
+        )
+        return result
+
+    async def get_reserved_ip(self, address: str) -> dict[str, Any]:
+        """Get a reserved public IPv4 address with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.get_reserved_ip, address
+        )
+        return result
+
+    async def update_reserved_ip(self, address: str, tags: list[str]) -> dict[str, Any]:
+        """Replace reserved-IP tags once without replay."""
+        result: dict[str, Any] = await self.client.update_reserved_ip(address, tags)
+        return result
+
+    async def list_reserved_ip_types(self) -> dict[str, Any]:
+        """List reserved public IPv4 pricing types with retry."""
+        result: dict[str, Any] = await self._execute_with_retry(
+            self.client.list_reserved_ip_types
+        )
+        return result
+
+    async def delete_reserved_ip(self, address: str) -> None:
+        """Permanently unreserve a public IPv4 address once without replay."""
+        await self.client.delete_reserved_ip(address)
 
     # ── Instance Backups (retry wrappers) ──
 
