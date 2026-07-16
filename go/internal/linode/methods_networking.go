@@ -1637,6 +1637,10 @@ func (c *Client) httpGetNodeBalancerProto(ctx context.Context, nodeBalancerID in
 
 // httpCreateNodeBalancerProto creates a NodeBalancer as a proto message.
 func (c *Client) httpCreateNodeBalancerProto(ctx context.Context, req CreateNodeBalancerRequest) (*linodev1.NodeBalancer, error) {
+	if err := validateCreateNodeBalancerRequest(req); err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
@@ -1653,6 +1657,19 @@ func (c *Client) httpCreateNodeBalancerProto(ctx context.Context, req CreateNode
 	}
 
 	return nodeBalancer, nil
+}
+
+func validateCreateNodeBalancerRequest(req CreateNodeBalancerRequest) error {
+	if req.IPv4 == nil {
+		return nil
+	}
+
+	address, err := netip.ParseAddr(*req.IPv4)
+	if err != nil || !address.Is4() {
+		return ErrIPv4AddressInvalid
+	}
+
+	return nil
 }
 
 // httpUpdateNodeBalancerProto updates a NodeBalancer as a proto message.

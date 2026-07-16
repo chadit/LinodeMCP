@@ -306,7 +306,7 @@ async def test_retryable_client_does_not_replay_provisioning_posts(
     await client.close()
 
 
-async def test_execute_once_fails_fast_when_circuit_is_open() -> None:
+async def test_execute_without_retry_fails_fast_when_circuit_is_open() -> None:
     client = RetryableClient("https://api.linode.com/v4", "test-token")
     operation = AsyncMock()
     controlled_client = cast("Any", client)

@@ -33,10 +33,15 @@ func TestLinodeNodeBalancerCreateToolDryRunPreviewWithoutCreating(t *testing.T) 
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyRegion: regionUSEast,
+		keyIPv4:   reservedIPv4Fixture,
 		keyDryRun: true,
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
 	}
 
 	if result.IsError {
@@ -61,6 +66,16 @@ func TestLinodeNodeBalancerCreateToolDryRunPreviewWithoutCreating(t *testing.T) 
 		t.Errorf("got %v, want %v", would["path"], "/nodebalancers")
 	}
 
+	wouldBody, ok := would["body"].(map[string]any)
+	if !ok {
+		t.Fatalf("would_execute.body is not an object: %v", would["body"])
+	}
+
+	wantBody := map[string]any{keyRegion: regionUSEast, keyIPv4: reservedIPv4Fixture}
+	if !reflect.DeepEqual(wouldBody, wantBody) {
+		t.Errorf("would_execute.body = %v, want %v", wouldBody, wantBody)
+	}
+
 	if body["current_state"] != nil {
 		t.Errorf("value = %v, want nil", body["current_state"])
 	}
@@ -79,9 +94,54 @@ func TestLinodeNodeBalancerCreateToolDryRunPreviewWithoutCreating(t *testing.T) 
 		t.Errorf("effect does not contain %v", regionUSEast)
 	}
 
+	if !strings.Contains(effect, reservedIPv4Fixture) {
+		t.Errorf("effect does not contain selected IPv4 address %v", reservedIPv4Fixture)
+	}
+
 	warnings, _ := body["warnings"].([]any)
 	if len(warnings) != 1 {
 		t.Fatalf("len(warnings) = %d, want %d", len(warnings), 1)
+	}
+}
+
+func TestLinodeNodeBalancerCreateToolDryRunOmitsUnselectedIPv4(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeNodeBalancerCreateTool(dryRunNoCallServer(t))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion: regionUSEast,
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.IsError {
+		t.Fatal("result.IsError = true, want false")
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal([]byte(dryRunResultText(t, result)), &body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	would, wouldOK := body["would_execute"].(map[string]any)
+	if !wouldOK {
+		t.Fatalf("would_execute is not an object: %v", body["would_execute"])
+	}
+
+	wouldBody, bodyOK := would["body"].(map[string]any)
+	if !bodyOK {
+		t.Fatalf("would_execute.body is not an object: %v", would["body"])
+	}
+
+	if _, present := wouldBody[keyIPv4]; present {
+		t.Errorf("would_execute.body contains omitted %v: %v", keyIPv4, wouldBody)
 	}
 }
 
@@ -95,12 +155,43 @@ func TestLinodeNodeBalancerCreateToolDryRunStillValidatesRegion(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
 	if !result.IsError {
 		t.Error("result.IsError = false, want true")
 	}
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "region is required") {
 		t.Errorf("error text %q does not contain %q", text.Text, "region is required")
+	}
+}
+
+func TestLinodeNodeBalancerCreateToolDryRunRejectsInvalidIPv4(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeNodeBalancerCreateTool(dryRunNoCallServer(t))
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyRegion: regionUSEast,
+		keyIPv4:   "2001:db8::1",
+		keyDryRun: true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if !result.IsError {
+		t.Error("result.IsError = false, want true")
+	}
+
+	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, "ipv4 must be a valid IPv4 address") {
+		t.Errorf("error text %q does not contain IPv4 validation message", text.Text)
 	}
 }
 
