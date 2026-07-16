@@ -27,6 +27,8 @@ from linodemcp.tools.linode_reserved_ips import (
     handle_linode_networking_reserved_ip_type_list,
     handle_linode_networking_reserved_ip_update,
 )
+from linodemcp.twostage import reset_plan_store, set_plan_store
+from linodemcp.twostage.store import PlanStore
 from linodemcp.version import get_version_info
 
 if TYPE_CHECKING:
@@ -210,6 +212,35 @@ async def test_reserved_ip_delete_handles_empty_success(
         "address": "192.0.2.10",
     }
     mock_linode_client.delete_reserved_ip.assert_awaited_once_with("192.0.2.10")
+
+
+async def test_reserved_ip_delete_apply_requires_strict_boolean_confirm(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Two-stage apply rejects false confirmation before deleting."""
+    mock_linode_client.get_reserved_ip.return_value = RESERVED_IP
+    store = PlanStore()
+    token = set_plan_store(store)
+    try:
+        plan_result = await handle_linode_networking_reserved_ip_delete(
+            {"address": "192.0.2.10", "mode": "plan"}, sample_config
+        )
+        plan_id = _body(plan_result)["plan_id"]
+        mock_linode_client.delete_reserved_ip.assert_not_called()
+
+        apply_result = await handle_linode_networking_reserved_ip_delete(
+            {
+                "address": "192.0.2.10",
+                "mode": "apply",
+                "plan_id": plan_id,
+                "confirm": False,
+            },
+            sample_config,
+        )
+        assert "confirm=true" in apply_result[0].text
+        mock_linode_client.delete_reserved_ip.assert_not_called()
+    finally:
+        reset_plan_store(token)
 
 
 @pytest.mark.parametrize(

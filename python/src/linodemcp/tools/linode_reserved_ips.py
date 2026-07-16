@@ -362,6 +362,12 @@ async def handle_linode_networking_reserved_ip_delete(
     if isinstance(address, list):
         return address
 
+    if arguments.get("mode") == "apply" and arguments.get("confirm") is not True:
+        return error_response(
+            "This permanently unreserves the IP and it cannot be recovered. "
+            "Set confirm=true to proceed."
+        )
+
     async def _fetch(client: RetryableClient) -> dict[str, Any]:
         return await client.get_reserved_ip(address)
 
