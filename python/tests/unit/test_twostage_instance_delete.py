@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
+from linodemcp.linode import Instance, parse_instance
 from linodemcp.tools.linode_instance_write import handle_linode_instance_delete
 from linodemcp.twostage import reset_plan_store, set_plan_store
 from linodemcp.twostage.store import PlanStore
@@ -33,8 +34,8 @@ def stub_instance_walk(mock_linode_client: AsyncMock) -> None:
     mock_linode_client.list_instance_ips.return_value = {"ipv4": {"public": []}}
 
 
-def _instance_state(status: str = "running") -> dict[str, Any]:
-    return {"id": 123, "label": "web-prod-01", "status": status}
+def _instance_state(status: str = "running") -> Instance:
+    return parse_instance({"id": 123, "label": "web-prod-01", "status": status})
 
 
 async def _make_plan(cfg: Config) -> str:
@@ -108,7 +109,7 @@ async def test_apply_ignores_cosmetic_drift(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
     state = _instance_state()
-    state["updated"] = "2026-06-01T00:00:00"
+    state.updated = "2026-06-01T00:00:00"
     mock_linode_client.get_instance.return_value = state
 
     store = PlanStore()
@@ -117,7 +118,7 @@ async def test_apply_ignores_cosmetic_drift(
         plan_id = await _make_plan(sample_config)
 
         drifted = _instance_state()
-        drifted["updated"] = "2026-06-08T12:34:56"
+        drifted.updated = "2026-06-08T12:34:56"
         mock_linode_client.get_instance.return_value = drifted
 
         result = await handle_linode_instance_delete(

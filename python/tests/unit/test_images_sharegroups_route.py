@@ -2424,9 +2424,13 @@ async def test_member_token_delete_rejects_invalid_path_params(
 
 @pytest.mark.asyncio
 async def test_image_sharegroup_member_token_delete_dry_run_previews_without_confirm(
-    sample_config: Any,
+    sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Dry-run previews without requiring the confirm gate."""
+    mock_linode_client.get_image_sharegroup.return_value = {
+        "id": 3,
+        "label": "share",
+    }
     result = await handle_linode_image_sharegroup_member_token_delete(
         {
             "sharegroup_id": 3,
@@ -2443,9 +2447,13 @@ async def test_image_sharegroup_member_token_delete_dry_run_previews_without_con
 async def test_image_sharegroup_member_token_delete_dry_run_returns_encoded_preview(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """dry_run=true previews member token revoke without calling the client."""
+    """dry_run=true previews the member token revoke without deleting."""
     sharegroup_id = 3
     token_uuid = "11111111-1111-4111-8111-111111111111"
+    mock_linode_client.get_image_sharegroup.return_value = {
+        "id": 3,
+        "label": "share",
+    }
 
     result = await handle_linode_image_sharegroup_member_token_delete(
         {
@@ -2753,7 +2761,11 @@ async def test_handle_linode_images_sharegroup_image_delete_rejects_invalid_path
 async def test_handle_linode_images_sharegroup_image_delete_dry_run(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Dry run previews the destructive request without a client call."""
+    """Dry run previews the destructive request without deleting."""
+    mock_linode_client.get_image_sharegroup.return_value = {
+        "id": 123,
+        "label": "share",
+    }
     result = await handle_linode_image_sharegroup_image_delete(
         {"sharegroup_id": 123, "image_id": 456, "confirm": True, "dry_run": True},
         sample_config,
@@ -4043,9 +4055,13 @@ async def test_handle_linode_images_sharegroups_token_delete_rejects_invalid_tok
 
 @pytest.mark.asyncio
 async def test_image_sharegroup_token_delete_dry_run_previews_without_confirm(
-    sample_config: Any,
+    sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Dry-run previews without requiring the confirm gate."""
+    mock_linode_client.get_image_sharegroup_by_token.return_value = {
+        "id": 3,
+        "label": "share",
+    }
     result = await handle_linode_image_sharegroup_token_delete(
         {
             "token_uuid": "11111111-1111-4111-8111-111111111111",
@@ -4061,8 +4077,12 @@ async def test_image_sharegroup_token_delete_dry_run_previews_without_confirm(
 async def test_image_sharegroup_token_delete_dry_run_returns_encoded_preview(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """dry_run=true previews token delete without calling the client."""
+    """dry_run=true previews the token delete without deleting."""
     token_uuid = "11111111-1111-4111-8111-111111111111"
+    mock_linode_client.get_image_sharegroup_by_token.return_value = {
+        "id": 3,
+        "label": "share",
+    }
 
     result = await handle_linode_image_sharegroup_token_delete(
         {
@@ -4719,7 +4739,15 @@ async def test_handle_linode_image_delete_rejects_malformed_image_id(
 async def test_handle_linode_image_delete_dry_run(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
-    """Dry-run reports exact DELETE path without calling the client."""
+    """Dry-run reports the raw DELETE path without deleting.
+
+    The preview path is display metadata and stays unescaped like the Go
+    builder's; the client still percent-encodes the real request.
+    """
+    mock_linode_client.get_image.return_value = {
+        "id": "private/123",
+        "label": "backup-image",
+    }
     result = await handle_linode_image_delete(
         {"image_id": "private/123", "confirm": True, "dry_run": True},
         sample_config,
@@ -4729,7 +4757,7 @@ async def test_handle_linode_image_delete_dry_run(
     assert payload["tool"] == "linode_image_delete"
     assert payload["would_execute"] == {
         "method": "DELETE",
-        "path": "/images/private%2F123",
+        "path": "/images/private/123",
     }
     mock_linode_client.delete_image.assert_not_called()
 

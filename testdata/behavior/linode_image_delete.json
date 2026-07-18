@@ -17,6 +17,77 @@
       "args": { "image_id": "private/123", "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/images/private%2F123" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "image_id": "private/123",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /images/private/123": {
+          "capabilities": [],
+          "created": "",
+          "created_by": "",
+          "deprecated": false,
+          "description": "",
+          "eol": null,
+          "expiry": null,
+          "id": "",
+          "is_public": false,
+          "label": "",
+          "size": 0,
+          "status": "",
+          "tags": [],
+          "type": "",
+          "vendor": ""
+        },
+        "GET /images/private%2F123": {
+          "capabilities": [],
+          "created": "",
+          "created_by": "",
+          "deprecated": false,
+          "description": "",
+          "eol": null,
+          "expiry": null,
+          "id": "",
+          "is_public": false,
+          "label": "",
+          "size": 0,
+          "status": "",
+          "tags": [],
+          "type": "",
+          "vendor": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/images/private/123"
+        },
+        "current_state": {
+          "capabilities": [],
+          "created": "",
+          "created_by": "",
+          "deprecated": false,
+          "description": "",
+          "eol": null,
+          "expiry": null,
+          "id": "",
+          "is_public": false,
+          "label": "",
+          "size": 0,
+          "status": "",
+          "tags": [],
+          "type": "",
+          "vendor": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

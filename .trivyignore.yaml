@@ -10,3 +10,11 @@ misconfigurations:
     paths:
       - "go/Dockerfile"
     statement: "Alpine latest is intentional for static binary - picks up patches automatically"
+  - id: DS-0001
+    paths:
+      - "ci/Dockerfile"
+    statement: "CI-mirror image tracks golang:latest on purpose: gate tooling is always-latest with local matching CI, and go.mod's toolchain directive governs the compiler, so builds do not depend on this tag"
+  - id: DS-0026
+    paths:
+      - "ci/Dockerfile"
+    statement: "One-shot verification container (make check-container), never deployed as a long-running service, so HEALTHCHECK does not apply"

@@ -12,6 +12,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     build_dry_run_response,
     error_response,
+    execute_dry_run,
     execute_tool,
     is_dry_run,
     pagination_int_argument,
@@ -429,16 +430,17 @@ async def handle_linode_longview_client_delete(
         return error_response(str(exc))
 
     if is_dry_run(arguments):
-        environment = arguments.get("environment")
-        if not isinstance(environment, str):
-            environment = ""
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_longview_client(client_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_longview_client_delete",
-            environment,
             "DELETE",
             f"/longview/clients/{client_id}",
-            None,
-            side_effects=[f"Longview client {client_id} would be deleted."],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:

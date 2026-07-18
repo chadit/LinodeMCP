@@ -12,6 +12,45 @@
       "args": { "service_type": "dbaas", "alert_id": 42, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/monitor/services/dbaas/alert-definitions/42" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /monitor/services/dbaas/alert-definitions/42": {
+          "criteria": null,
+          "description": "",
+          "id": 0,
+          "label": "",
+          "service_type": "",
+          "severity": 0,
+          "type": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_service_alert_definition_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/monitor/services/dbaas/alert-definitions/42"
+        },
+        "current_state": {
+          "criteria": null,
+          "description": "",
+          "id": 0,
+          "label": "",
+          "service_type": "",
+          "severity": 0,
+          "type": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

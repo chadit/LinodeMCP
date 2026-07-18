@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from linodemcp.config import TwoStageConfig
+from linodemcp.linode import parse_instance
 from linodemcp.tools import (
     handle_linode_instance_backups_cancel,
     handle_linode_instance_backups_enable,
@@ -218,11 +219,13 @@ async def test_password_reset_two_stage_apply_proto_output(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """The two-stage apply body is proto-canonical, same shape as single-step."""
-    mock_linode_client.get_instance.return_value = {
-        "id": 123,
-        "status": "offline",
-        "updated": "2026-01-01T00:00:00",
-    }
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {
+            "id": 123,
+            "status": "offline",
+            "updated": "2026-01-01T00:00:00",
+        }
+    )
     mock_linode_client.reset_instance_password.return_value = None
     sample_config.two_stage = TwoStageConfig(
         opt_in={"linode_instance_password_reset": True}

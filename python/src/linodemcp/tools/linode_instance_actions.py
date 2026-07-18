@@ -6,7 +6,7 @@ import httpx
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import instance_pb2
-from linodemcp.linode import APIError, NetworkError
+from linodemcp.linode import APIError, NetworkError, instance_preview_state
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
@@ -14,6 +14,7 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    preview_state_str,
 )
 from linodemcp.tools.proto_response import raw_int, raw_str, serialize_api_response
 from linodemcp.tools.toolschemas import schema
@@ -63,7 +64,7 @@ async def handle_linode_instance_clone(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         return await execute_dry_run(
             cfg,
@@ -119,7 +120,7 @@ def _instance_migrate_side_effects(state: Any, target_region: str) -> DryRunDeta
     """Phase 2 Tier B walk for instance migrate. Names the region change (from
     the fetched state to the requested region) and notes the downtime.
     """
-    from_region = getattr(state, "region", "")
+    from_region = preview_state_str(state, "region")
     if target_region and from_region:
         effect = (
             f"Instance migrates from region {from_region} to {target_region}; "
@@ -147,7 +148,7 @@ async def handle_linode_instance_migrate(
         region = arguments.get("region", "")
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
             return _instance_migrate_side_effects(state, region)
@@ -222,16 +223,18 @@ async def _instance_rebuild_side_effects_walk(
         warnings.append(f"Could not list instance disks: {exc}")
         disks = []
 
+    # Double quotes match the Go walk's %q formatting, so the fixture-pinned
+    # side-effect text is identical across languages.
     side_effects = [
-        f"Disk {disk.get('label', '')!r} ({disk.get('size', 0)} MB, "
+        f'Disk "{disk.get("label", "")}" ({disk.get("size", 0)} MB, '
         f"{disk.get('filesystem', '')}) is erased and recreated from the new image."
         for disk in disks
     ]
 
-    image = getattr(state, "image", "")
+    image = preview_state_str(state, "image")
     if image:
         warnings.append(
-            f"Rebuild replaces the current image {image!r}, destroys all data, "
+            f'Rebuild replaces the current image "{image}", destroys all data, '
             "and resets the root password."
         )
     else:
@@ -253,7 +256,7 @@ async def _instance_rebuild_two_stage(
         return None
 
     async def _ts_fetch(client: RetryableClient) -> Any:
-        return await client.get_instance(linode_id)
+        return instance_preview_state(await client.get_instance(linode_id))
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.rebuild_instance(
@@ -308,7 +311,7 @@ async def handle_linode_instance_rebuild(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         async def _walk(client: RetryableClient, state: Any) -> DryRunDetails:
             return await _instance_rebuild_side_effects_walk(client, iid, state)
@@ -377,7 +380,7 @@ def _instance_rescue_side_effects_walk(state: Any) -> DryRunDetails:
             "configuration is bypassed until you reboot out of rescue mode."
         ]
     }
-    if getattr(state, "status", "") == "running":
+    if preview_state_str(state, "status") == "running":
         details["warnings"] = [
             "Instance is currently running; entering rescue mode reboots it, "
             "causing downtime."
@@ -396,7 +399,7 @@ async def handle_linode_instance_rescue(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
             return _instance_rescue_side_effects_walk(state)
@@ -454,7 +457,7 @@ def _instance_password_reset_side_effects_walk(state: Any) -> DryRunDetails:
             "The instance is powered down and rebooted to apply the new root password."
         ]
     }
-    if getattr(state, "status", "") == "running":
+    if preview_state_str(state, "status") == "running":
         details["warnings"] = [
             "Instance is currently running; the reset shuts it down and "
             "reboots it, causing downtime."
@@ -470,7 +473,7 @@ async def _instance_password_reset_two_stage(
         return None
 
     async def _ts_fetch(client: RetryableClient) -> Any:
-        return await client.get_instance(iid)
+        return instance_preview_state(await client.get_instance(iid))
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.reset_instance_password(iid, root_pass)
@@ -517,7 +520,7 @@ async def handle_linode_instance_password_reset(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
             return _instance_password_reset_side_effects_walk(state)

@@ -17,6 +17,33 @@
       "args": { "region": "us-east", "label": "my-bucket", "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/object-storage/buckets/us-east/my-bucket/ssl" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /object-storage/buckets/us-east/my-bucket/ssl": {
+          "ssl": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_ssl_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/object-storage/buckets/us-east/my-bucket/ssl"
+        },
+        "current_state": {
+          "ssl": false
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

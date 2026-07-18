@@ -1213,6 +1213,7 @@ class StackScript:
     updated: str
     script: str
     user_defined_fields: list[UDF]
+    rev_note: str = ""
 
 
 # LKE (Linode Kubernetes Engine) types
@@ -1735,6 +1736,104 @@ def instance_to_response_dict(instance: Instance) -> dict[str, Any]:
     body["interfaces"] = [
         _serialize_instance_interface(iface) for iface in instance.interfaces
     ]
+    return body
+
+
+def parse_instance(data: dict[str, Any]) -> Instance:
+    """Parse a raw /linode/instances API object into the Instance model.
+
+    Module-level so tests and non-client callers can build a real Instance
+    from a sparse API-shaped dict instead of hand-filling every field.
+    """
+    specs_data = data.get("specs", {})
+    specs = Specs(
+        disk=specs_data.get("disk", 0),
+        memory=specs_data.get("memory", 0),
+        vcpus=specs_data.get("vcpus", 0),
+        gpus=specs_data.get("gpus", 0),
+        transfer=specs_data.get("transfer", 0),
+    )
+
+    alerts_data = data.get("alerts", {})
+    alerts = Alerts(
+        cpu=alerts_data.get("cpu", 0),
+        network_in=alerts_data.get("network_in", 0),
+        network_out=alerts_data.get("network_out", 0),
+        transfer_quota=alerts_data.get("transfer_quota", 0),
+        io=alerts_data.get("io", 0),
+    )
+
+    backups_data = data.get("backups", {})
+    schedule_data = backups_data.get("schedule", {})
+    schedule = Schedule(
+        day=schedule_data.get("day", ""),
+        window=schedule_data.get("window", ""),
+    )
+
+    last_backup = None
+    if last_data := backups_data.get("last_successful"):
+        last_backup = Backup(
+            id=last_data.get("id", 0),
+            label=last_data.get("label", ""),
+            status=last_data.get("status", ""),
+            type=last_data.get("type", ""),
+            region=last_data.get("region", ""),
+            created=last_data.get("created", ""),
+            updated=last_data.get("updated", ""),
+            finished=last_data.get("finished", ""),
+        )
+
+    backups = Backups(
+        enabled=backups_data.get("enabled", False),
+        available=backups_data.get("available", False),
+        schedule=schedule,
+        last_successful=last_backup,
+    )
+
+    interfaces = [
+        _parse_instance_interface(iface_data)
+        for iface_data in data.get("interfaces", [])
+    ]
+
+    return Instance(
+        id=data.get("id", 0),
+        label=data.get("label", ""),
+        status=data.get("status", ""),
+        type=data.get("type", ""),
+        region=data.get("region", ""),
+        image=data.get("image", ""),
+        ipv4=data.get("ipv4", []),
+        ipv6=data.get("ipv6", ""),
+        hypervisor=data.get("hypervisor", ""),
+        specs=specs,
+        alerts=alerts,
+        backups=backups,
+        created=data.get("created", ""),
+        updated=data.get("updated", ""),
+        group=data.get("group", ""),
+        tags=data.get("tags", []),
+        watchdog_enabled=data.get("watchdog_enabled", False),
+        interface_generation=data.get("interface_generation", ""),
+        interfaces=interfaces,
+    )
+
+
+def instance_preview_state(instance: Instance) -> dict[str, Any]:
+    """Serialize an Instance for a dry-run or plan current_state.
+
+    Mirrors Go's json.Marshal of the Instance struct rather than the proto
+    read shape: interface_generation and interfaces carry omitempty (dropped
+    when empty), while the nil last_successful backup pointer marshals as an
+    explicit null instead of being omitted the way protojson leaves an unset
+    message field out.
+    """
+    body = instance_to_response_dict(instance)
+    if not body.get("interfaces"):
+        body.pop("interfaces", None)
+
+    backups = body.get("backups")
+    if isinstance(backups, dict):
+        cast("dict[str, Any]", backups).setdefault("last_successful", None)
     return body
 
 
@@ -10593,77 +10692,7 @@ class Client:
 
     def _parse_instance(self, data: dict[str, Any]) -> Instance:
         """Parse instance data from API response."""
-        specs_data = data.get("specs", {})
-        specs = Specs(
-            disk=specs_data.get("disk", 0),
-            memory=specs_data.get("memory", 0),
-            vcpus=specs_data.get("vcpus", 0),
-            gpus=specs_data.get("gpus", 0),
-            transfer=specs_data.get("transfer", 0),
-        )
-
-        alerts_data = data.get("alerts", {})
-        alerts = Alerts(
-            cpu=alerts_data.get("cpu", 0),
-            network_in=alerts_data.get("network_in", 0),
-            network_out=alerts_data.get("network_out", 0),
-            transfer_quota=alerts_data.get("transfer_quota", 0),
-            io=alerts_data.get("io", 0),
-        )
-
-        backups_data = data.get("backups", {})
-        schedule_data = backups_data.get("schedule", {})
-        schedule = Schedule(
-            day=schedule_data.get("day", ""),
-            window=schedule_data.get("window", ""),
-        )
-
-        last_backup = None
-        if last_data := backups_data.get("last_successful"):
-            last_backup = Backup(
-                id=last_data.get("id", 0),
-                label=last_data.get("label", ""),
-                status=last_data.get("status", ""),
-                type=last_data.get("type", ""),
-                region=last_data.get("region", ""),
-                created=last_data.get("created", ""),
-                updated=last_data.get("updated", ""),
-                finished=last_data.get("finished", ""),
-            )
-
-        backups = Backups(
-            enabled=backups_data.get("enabled", False),
-            available=backups_data.get("available", False),
-            schedule=schedule,
-            last_successful=last_backup,
-        )
-
-        interfaces = [
-            _parse_instance_interface(iface_data)
-            for iface_data in data.get("interfaces", [])
-        ]
-
-        return Instance(
-            id=data.get("id", 0),
-            label=data.get("label", ""),
-            status=data.get("status", ""),
-            type=data.get("type", ""),
-            region=data.get("region", ""),
-            image=data.get("image", ""),
-            ipv4=data.get("ipv4", []),
-            ipv6=data.get("ipv6", ""),
-            hypervisor=data.get("hypervisor", ""),
-            specs=specs,
-            alerts=alerts,
-            backups=backups,
-            created=data.get("created", ""),
-            updated=data.get("updated", ""),
-            group=data.get("group", ""),
-            tags=data.get("tags", []),
-            watchdog_enabled=data.get("watchdog_enabled", False),
-            interface_generation=data.get("interface_generation", ""),
-            interfaces=interfaces,
-        )
+        return parse_instance(data)
 
     def _parse_account(self, data: dict[str, Any]) -> Account:
         """Parse account data from API response."""
@@ -10972,6 +11001,7 @@ class Client:
             updated=data.get("updated", ""),
             script=data.get("script", ""),
             user_defined_fields=user_defined_fields,
+            rev_note=data.get("rev_note", ""),
         )
 
 

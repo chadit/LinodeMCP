@@ -39,8 +39,11 @@ Configure multiple Linode environments (production, staging, dev) in a single co
 **For implementers & contributors**, working on the code:
 
 - [Development](#development): build, test, and lint commands for both implementations
+- [Adding a language](docs/adding-a-language.md): the checklist and gates for bringing up a new language implementation
 - [Release process](docs/release-process.md): cutting a release, the artifact pipeline, failure handling
 - [Project layout](#project-layout) and [key design decisions](#key-design-decisions)
+
+The full docs index, including the machine-read gate files `make check` consumes, lives at [docs/README.md](docs/README.md). Agents can start from [llms.txt](llms.txt).
 
 ## Installation
 
@@ -542,9 +545,9 @@ Each call's safety path is recorded in the audit log's `mode` field (`normal` / 
 
 ## Two-stage writes
 
-A dry-run shows what a destructive call would do, but nothing ties that preview to the call you run next, so the resource can change in between. Two-stage writes close that gap. Pass `mode: "plan"` to a delete tool to get back a `plan_id` plus the current state; pass `mode: "apply"` with that `plan_id` to run it. Before applying, the server re-reads the resource and refuses if it changed since the plan (`PLAN_DRIFT_DETECTED`), expired (`PLAN_EXPIRED`, five minutes by default), was already used, or never existed (`PLAN_NOT_FOUND`).
+A dry-run shows what a destructive call would do, but nothing ties that preview to the call you run next, so the resource can change in between. Two-stage writes close that gap. Pass `mode: "plan"` to a delete tool to get back a `plan_id` plus the current state; pass `mode: "apply"` with that `plan_id` to run it. Before applying, the server re-reads the resource and refuses if it drifted since the plan, expired (five minutes by default), or was already used.
 
-A plan is a superset of a detailed dry-run: it runs the same dependency walk, so the plan body carries `dependencies`, `side_effects`, `billing_delta`, and `warnings` alongside the state hash. A drift refusal names the top-level fields that changed. Cosmetic fields (server-side timestamps, telemetry counters) are stripped before the drift check, so a benign `updated` bump doesn't cause a needless refusal. Plans are single-use, in-memory, and session-scoped; a restart drops them. Destructive delete tools opt in by default, as does `linode_instance_rebuild`; a write tool like `linode_instance_resize` opts in via the `two_stage` config block, which also tunes lifetime and opt-in per tool. Plan and apply each record a `mode` in the audit log.
+A plan carries the same preview a detailed dry-run would (dependencies, side effects, billing deltas, warnings) alongside the state hash. Plans are single-use and in-memory; a restart drops them. Destructive tools opt in by default, and the `two_stage` config block tunes lifetime and per-tool opt-in. Plan and apply each record a `mode` in the audit log.
 
 Full reference: [docs/two-stage-writes.md](docs/two-stage-writes.md). Drift refusals and recovery: [docs/state-drift.md](docs/state-drift.md).
 
@@ -569,9 +572,7 @@ Five MCP tools query the log; all carry `CapMeta` so they are available in every
 
 Sensitive values are redacted before write. The credential list (API tokens, passwords, SSH keys, etc.) is always on; the PII list (postal address, phone, tax ID) is on by default and can be disabled with `audit.redact_pii: false` for operators investigating account-level activity. Both tiers redact by exact field name to keep results reviewable.
 
-Retention defaults to 14 days; set `audit.retention_days: 0` to keep events forever (loud warning logged at startup).
-
-For copy-paste integration with specific MCP hosts, see [docs/host-integrations/claude-code/commands/audit.md](docs/host-integrations/claude-code/commands/audit.md) and [docs/host-integrations/claude-desktop/commands/audit.md](docs/host-integrations/claude-desktop/commands/audit.md). For the full reference (event schema, sinks, redaction model, query tools, investigative patterns), see [docs/audit-log.md](docs/audit-log.md). For the custom-report filter grammar, see [docs/audit-reports.md](docs/audit-reports.md).
+For copy-paste integration with specific MCP hosts, see [docs/host-integrations/claude-code/commands/audit.md](docs/host-integrations/claude-code/commands/audit.md) and [docs/host-integrations/claude-desktop/commands/audit.md](docs/host-integrations/claude-desktop/commands/audit.md). For the full reference (event schema, redaction model, query tools, investigative patterns), see [docs/audit-log.md](docs/audit-log.md). For sinks, retention, and recovery, see [docs/audit-operations.md](docs/audit-operations.md). For the custom-report filter grammar, see [docs/audit-reports.md](docs/audit-reports.md).
 
 ## Development
 
@@ -662,7 +663,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in active development (v0.1.0). Both implementations expose the same 454-tool surface, pinned by [docs/tools-manifest.txt](docs/tools-manifest.txt) and enforced by parity tests in each language. Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages, and the Python implementation is at full feature parity with Go.
+This project is in active development (v0.1.0). Both implementations are pinned by [docs/contracts/tools-manifest.txt](docs/contracts/tools-manifest.txt), which lists 460 tools, and the surface is enforced by parity tests in each language. Python implements the full set; Go implements all but a few routes that are tracked as accepted differences in [docs/contracts/tool-parity-baseline.txt](docs/contracts/tool-parity-baseline.txt). Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages, and the Python implementation is at full feature parity with Go.
 
 ## License
 

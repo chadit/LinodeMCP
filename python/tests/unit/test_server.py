@@ -7868,6 +7868,12 @@ async def test_database_mysql_instance_delete_dry_run_encodes_path(
 ) -> None:
     """MySQL database delete dry-run returns the DELETE preview."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_database_mysql_instance.return_value = {"id": 123}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_database_mysql_instance_delete",
@@ -7880,7 +7886,7 @@ async def test_database_mysql_instance_delete_dry_run_encodes_path(
         "method": "DELETE",
         "path": "/databases/mysql/instances/123",
     }
-    mock_client_class.assert_not_called()
+    mock_client.delete_mysql_database_instance.assert_not_called()
 
 
 async def test_database_postgresql_instance_delete_client_sends_exact_route() -> None:
@@ -8040,6 +8046,12 @@ async def test_database_postgresql_instance_delete_dry_run_encodes_path(
 ) -> None:
     """PostgreSQL database delete dry-run returns the DELETE preview."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_database_postgresql_instance.return_value = {"id": 123}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
         srv = Server(_full_access_config(sample_config))
         result = await srv.dispatch(
             "linode_database_postgresql_instance_delete",
@@ -8052,7 +8064,7 @@ async def test_database_postgresql_instance_delete_dry_run_encodes_path(
         "method": "DELETE",
         "path": "/databases/postgresql/instances/123",
     }
-    mock_client_class.assert_not_called()
+    mock_client.delete_postgresql_database_instance.assert_not_called()
 
 
 async def test_database_mysql_instance_resume_tool_is_exported_and_registered(
@@ -15189,6 +15201,7 @@ async def test_linode_images_sharegroup_delete_dry_run_uses_encoded_path(
     """Image share group delete dry-run previews encoded path."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
+        mock_client.get_image_sharegroup.return_value = {"id": 3, "label": "share"}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client

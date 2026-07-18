@@ -11,7 +11,7 @@ resolve. Tools only one side resolves are a coverage note, not a failure (the
 heuristics have documented blind spots, e.g. messages built in helpers).
 
 The gate passes iff the divergence set is a subset of
-docs/message-parity-baseline.txt (expected empty after the P1 sweep): a NEW
+docs/contracts/message-parity-baseline.txt (expected empty after the P1 sweep): a NEW
 divergence fails, and a fixed one must be dropped (the file only shrinks).
 Regenerate with --update-baseline.
 
@@ -25,9 +25,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import _baselines
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SCRIPTS = _REPO_ROOT / "scripts"
-_BASELINE = _REPO_ROOT / "docs" / "message-parity-baseline.txt"
+_BASELINE = _REPO_ROOT / "docs" / "contracts" / "message-parity-baseline.txt"
 
 _BASELINE_HEADER = (
     "# Cross-language confirm-message divergences the extractors can see.\n"
@@ -60,7 +62,7 @@ def _divergences() -> list[str]:
     go_map = _extract(
         "_msg_extract_go.py",
         str(_REPO_ROOT / "go" / "internal" / "tools"),
-        str(_REPO_ROOT / "docs" / "tools-manifest.txt"),
+        str(_REPO_ROOT / "docs" / "contracts" / "tools-manifest.txt"),
     )
     py_map = _extract(
         "_msg_extract_py.py",
@@ -77,17 +79,8 @@ def _divergences() -> list[str]:
 
 
 def _load_baseline() -> set[str]:
-    """Read the ratchet baseline, skipping comments and blanks."""
-    if not _BASELINE.exists():
-        return set()
-
-    entries: set[str] = set()
-    for raw in _BASELINE.read_text(encoding="utf-8").splitlines():
-        stripped = raw.strip()
-        if stripped and not stripped.startswith("#"):
-            entries.add(stripped)
-
-    return entries
+    """Read the baseline's entries with "  # accepted ..." annotations stripped."""
+    return _baselines.read_entries(_BASELINE)
 
 
 def _say(line: str) -> None:
@@ -99,8 +92,11 @@ def main() -> int:
     divergences = _divergences()
 
     if "--update-baseline" in sys.argv:
-        _BASELINE.write_text(
-            _BASELINE_HEADER + "\n".join(divergences) + "\n", encoding="utf-8"
+        _baselines.write_baseline(
+            _BASELINE,
+            _BASELINE_HEADER,
+            divergences,
+            _baselines.read_baseline(_BASELINE),
         )
         _say(f"baseline updated: {len(divergences)} divergence(s)")
         return 0

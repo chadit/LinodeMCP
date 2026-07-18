@@ -22,6 +22,43 @@
       "args": { "domain_id": 5, "record_id": 7, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/domains/5/records/7" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "domain_id": 5,
+        "record_id": 7,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /domains/5/records/7": {}
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_domain_record_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/domains/5/records/7"
+        },
+        "current_state": {
+          "created": "",
+          "id": 0,
+          "name": "",
+          "port": 0,
+          "priority": 0,
+          "protocol": "",
+          "service": "",
+          "tag": "",
+          "target": "",
+          "ttl_sec": 0,
+          "type": "",
+          "updated": "",
+          "weight": 0
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

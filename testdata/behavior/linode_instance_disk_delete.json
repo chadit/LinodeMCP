@@ -22,6 +22,72 @@
       "args": { "linode_id": 123, "disk_id": 5, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/linode/instances/123/disks/5" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "disk_id": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123/disks/5": {
+          "created": "",
+          "filesystem": "ext4",
+          "id": 5,
+          "label": "boot-disk",
+          "size": 25600,
+          "status": "ready",
+          "updated": ""
+        },
+        "GET /linode/instances/123/configs": {
+          "data": [
+            {
+              "id": 91,
+              "label": "boot-config",
+              "devices": {
+                "sda": {
+                  "disk_id": 5
+                },
+                "sdb": null
+              }
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_disk_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/linode/instances/123/disks/5"
+        },
+        "current_state": {
+          "created": "",
+          "filesystem": "ext4",
+          "id": 5,
+          "label": "boot-disk",
+          "size": 25600,
+          "status": "ready",
+          "updated": ""
+        },
+        "dependencies": [
+          {
+            "kind": "instance_config",
+            "id": 91,
+            "label": "boot-config",
+            "action": "removed",
+            "note": "References this disk; its device slot is cleared when the disk is deleted."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Config profiles reference this disk; deleting it leaves those slots empty."
+        ]
+      }
     }
   ]
 }

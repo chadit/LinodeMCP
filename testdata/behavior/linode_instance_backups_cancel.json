@@ -17,6 +17,104 @@
       "args": { "linode_id": 123, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "POST", "path": "/linode/instances/123/backups/cancel" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_backups_cancel",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/123/backups/cancel"
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 0,
+          "image": "",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "",
+          "region": "",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "",
+          "tags": [],
+          "type": "",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

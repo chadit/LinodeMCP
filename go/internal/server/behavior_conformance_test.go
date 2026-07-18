@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -25,15 +26,30 @@ type behaviorFixture struct {
 	Cases []behaviorCase `json:"cases"`
 }
 
-// behaviorCase drives one dispatch. Exactly one of ExpectError (a local
-// validation failure, bare message text) or ExpectRequest (the HTTP call the
-// handler must make) is set.
+// behaviorCase drives one dispatch. Exactly one outcome field is set:
+// ExpectError (a local validation failure, bare message text), ExpectRequest
+// (the one HTTP call the handler must make), or ExpectResult (the successful
+// response content, compared as parsed JSON so formatting is irrelevant).
+//
+// The fake API answers from APIResponses when present: a map keyed
+// "METHOD /path" (no query string, so per-language pagination params don't
+// fragment the routing) whose values are the JSON bodies to serve. A request
+// with no matching key fails the case, but an unused key does not:
+// implementations may fetch equivalent data from different endpoints, and
+// the contract these fixtures pin is the OUTPUT, not the fetch pattern.
+// Without APIResponses the single APIResponse (or {}) answers every request.
+//
+// A case whose args include dry_run:true additionally asserts that every
+// captured request is a GET: a dry run may read whatever it needs to build
+// its preview but must never mutate.
 type behaviorCase struct {
-	Name          string           `json:"name"`
-	Args          map[string]any   `json:"args"`
-	APIResponse   json.RawMessage  `json:"api_response"`
-	ExpectError   string           `json:"expect_error"`
-	ExpectRequest *behaviorRequest `json:"expect_request"`
+	Name          string                     `json:"name"`
+	Args          map[string]any             `json:"args"`
+	APIResponse   json.RawMessage            `json:"api_response"`
+	APIResponses  map[string]json.RawMessage `json:"api_responses"`
+	ExpectError   string                     `json:"expect_error"`
+	ExpectRequest *behaviorRequest           `json:"expect_request"`
+	ExpectResult  json.RawMessage            `json:"expect_result"`
 }
 
 // behaviorRequest is the expected outgoing HTTP call: method, path (with any
@@ -116,39 +132,61 @@ func TestBehaviorConformance(t *testing.T) {
 		for _, testCase := range fixture.Cases {
 			t.Run(fixture.Tool+"/"+testCase.Name, func(t *testing.T) {
 				t.Parallel()
-				runBehaviorCase(t, fixture.Tool, testCase)
+				runBehaviorCase(t, fixture.Tool, &testCase)
 			})
 		}
 	}
 }
 
+// resolveBehaviorResponse picks the body and status for one fake-API request.
+// Routed mode (api_responses) matches on "METHOD /path" with the query string
+// stripped; a miss serves 404 and reports notFound so the case fails loudly.
+func resolveBehaviorResponse(testCase *behaviorCase, method, path string) (json.RawMessage, int, bool) {
+	if testCase.APIResponses == nil {
+		response := testCase.APIResponse
+		if response == nil {
+			response = json.RawMessage(`{}`)
+		}
+
+		return response, http.StatusOK, true
+	}
+
+	response, ok := testCase.APIResponses[method+" "+path]
+	if !ok {
+		return json.RawMessage(`{}`), http.StatusNotFound, false
+	}
+
+	return response, http.StatusOK, true
+}
+
 // runBehaviorCase dispatches one case and checks its expected outcome.
-func runBehaviorCase(t *testing.T, toolName string, testCase behaviorCase) {
+func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 	t.Helper()
 
 	var (
 		captureMu sync.Mutex
 		captured  []capturedRequest
+		unmatched []string
 	)
 
 	apiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		record := capturedRequest{method: r.Method, path: r.URL.RequestURI(), body: body}
+		response, status, matched := resolveBehaviorResponse(testCase, r.Method, r.URL.Path)
 
 		func() {
 			captureMu.Lock()
 			defer captureMu.Unlock()
 
 			captured = append(captured, record)
+
+			if !matched {
+				unmatched = append(unmatched, r.Method+" "+r.URL.Path)
+			}
 		}()
 
 		w.Header().Set("Content-Type", "application/json")
-
-		response := testCase.APIResponse
-		if response == nil {
-			response = json.RawMessage(`{}`)
-		}
-
+		w.WriteHeader(status)
 		_, _ = w.Write(response)
 	}))
 	defer apiSrv.Close()
@@ -181,13 +219,61 @@ func runBehaviorCase(t *testing.T, toolName string, testCase behaviorCase) {
 
 	isError, text := decodeBehaviorResult(t, rawResponse)
 
-	if testCase.ExpectError != "" {
-		checkBehaviorError(t, isError, text, testCase.ExpectError)
-
-		return
+	if len(unmatched) > 0 {
+		t.Errorf("requests with no api_responses entry: %s", strings.Join(unmatched, ", "))
 	}
 
-	checkBehaviorRequest(t, isError, text, captured, testCase.ExpectRequest)
+	if dryRun, _ := testCase.Args["dry_run"].(bool); dryRun {
+		checkBehaviorNoMutation(t, captured)
+	}
+
+	switch {
+	case testCase.ExpectError != "":
+		checkBehaviorError(t, isError, text, testCase.ExpectError)
+	case testCase.ExpectResult != nil:
+		checkBehaviorResult(t, isError, text, testCase.ExpectResult)
+	default:
+		checkBehaviorRequest(t, isError, text, captured, testCase.ExpectRequest)
+	}
+}
+
+// checkBehaviorNoMutation asserts a dry-run case only ever read: the walk may
+// GET whatever it needs for the preview, but any other verb is a mutation the
+// dry-run contract forbids.
+func checkBehaviorNoMutation(t *testing.T, captured []capturedRequest) {
+	t.Helper()
+
+	for _, request := range captured {
+		if request.method != http.MethodGet {
+			t.Errorf("dry-run case issued %s %s; only GET is allowed", request.method, request.path)
+		}
+	}
+}
+
+// checkBehaviorResult asserts a successful response whose content equals the
+// expected JSON value. Comparison happens on parsed values so whitespace and
+// key order are irrelevant; both languages must produce the same content for
+// the same fixture, which is the cross-language contract this pins.
+func checkBehaviorResult(t *testing.T, isError bool, text string, want json.RawMessage) {
+	t.Helper()
+
+	if isError {
+		t.Fatalf("isError = true, want false (text %q)", text)
+	}
+
+	var gotValue, wantValue any
+
+	if err := json.Unmarshal([]byte(text), &gotValue); err != nil {
+		t.Fatalf("result is not JSON: %v\nresult text:\n%s", err, text)
+	}
+
+	if err := json.Unmarshal(want, &wantValue); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !reflect.DeepEqual(gotValue, wantValue) {
+		t.Errorf("result mismatch\ngot:\n%s\nwant:\n%s", text, want)
+	}
 }
 
 // checkBehaviorError asserts a local validation failure with the exact bare

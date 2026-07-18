@@ -26,8 +26,10 @@ from linodemcp.linode import (
     Schedule,
     Specs,
     SSHKey,
+    StackScript,
     Transfer,
     Volume,
+    parse_instance,
 )
 from linodemcp.profiles import Capability
 from linodemcp.tools import (
@@ -9219,8 +9221,29 @@ async def test_linode_stackscript_delete_tool_schema() -> None:
 
 
 async def test_handle_linode_stackscript_delete_dry_run(sample_config: Config) -> None:
-    """Dry-run previews the DELETE route without calling the client."""
+    """Dry-run previews the DELETE route with the fetched script as state."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_stackscript.return_value = StackScript(
+            id=12345,
+            username="tester",
+            user_gravatar_id="",
+            label="deploy",
+            description="",
+            images=[],
+            deployments_total=0,
+            deployments_active=0,
+            is_public=False,
+            mine=True,
+            created="",
+            updated="",
+            script="#!/bin/bash",
+            user_defined_fields=[],
+        )
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
         result = await handle_linode_stackscript_delete(
             {"stackscript_id": 12345, "confirm": False, "dry_run": True},
             sample_config,
@@ -9231,8 +9254,8 @@ async def test_handle_linode_stackscript_delete_dry_run(sample_config: Config) -
     assert payload["tool"] == "linode_stackscript_delete"
     assert payload["would_execute"]["method"] == "DELETE"
     assert payload["would_execute"]["path"] == "/linode/stackscripts/12345"
-    assert len(payload["side_effects"]) == 1
-    mock_client_class.assert_not_called()
+    assert payload["current_state"]["label"] == "deploy"
+    mock_client.delete_stackscript.assert_not_called()
 
 
 async def test_handle_linode_stackscript_delete(sample_config: Config) -> None:
@@ -18917,7 +18940,8 @@ async def test_vpc_subnet_delete_dry_run_surfaces_linode_dependencies(
 ) -> None:
     """Phase 2 Tier A walk: Linodes with interfaces in the subnet detach.
 
-    The walk reads the already-fetched subnet state, so no extra GET fires.
+    The walk reads the already-fetched subnet state and fetches the parent VPC
+    once to label the warning, so its label has to be mocked too.
     """
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
@@ -18926,6 +18950,7 @@ async def test_vpc_subnet_delete_dry_run_surfaces_linode_dependencies(
             "label": "web-subnet",
             "linodes": [{"id": 456}, {"id": 789}],
         }
+        mock_client.get_vpc.return_value = {"id": 123, "label": "prod-vpc"}
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -18943,7 +18968,14 @@ async def test_vpc_subnet_delete_dry_run_surfaces_linode_dependencies(
         assert len(deps) == 2
         assert all(d["kind"] == "instance" for d in deps)
         assert all(d["action"] == "detached" for d in deps)
-        assert body["warnings"]
+        # Pin the fetched VPC label into the warning: an unconfigured get_vpc mock
+        # renders a coroutine repr here instead of "prod-vpc", so this also guards
+        # against that regression.
+        assert body["warnings"] == [
+            '2 Linode(s) have interfaces in subnet "web-subnet" '
+            '(VPC "prod-vpc") and will be detached.'
+        ]
+        mock_client.get_vpc.assert_awaited_once_with(123)
         mock_client.delete_vpc_subnet.assert_not_called()
 
 
@@ -20327,11 +20359,13 @@ async def test_instance_backups_cancel_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch the instance via GET and never cancel."""
-    mock_linode_client.get_instance.return_value = {
-        "id": 123,
-        "label": "my-linode",
-        "status": "running",
-    }
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {
+            "id": 123,
+            "label": "my-linode",
+            "status": "running",
+        }
+    )
     result = await handle_linode_instance_backups_cancel(
         {"linode_id": 123, "dry_run": True}, sample_config
     )
@@ -20509,7 +20543,7 @@ async def test_instance_backup_create_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never snapshot."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_backup_create(
         {"linode_id": 123, "dry_run": True}, sample_config
@@ -20566,7 +20600,7 @@ async def test_instance_backups_enable_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never enable."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_backups_enable(
         {"linode_id": 123, "dry_run": True}, sample_config
@@ -20582,7 +20616,7 @@ async def test_instance_disk_create_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch the instance via GET and never create."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_disk_create(
         {"linode_id": 123, "label": "data", "size": 10240, "dry_run": True},
@@ -20982,11 +21016,13 @@ async def test_instance_rebuild_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch the instance via GET and never rebuild."""
-    mock_linode_client.get_instance.return_value = {
-        "id": 123,
-        "label": "my-linode",
-        "status": "running",
-    }
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {
+            "id": 123,
+            "label": "my-linode",
+            "status": "running",
+        }
+    )
     result = await handle_linode_instance_rebuild(
         {
             "linode_id": 123,
@@ -21056,7 +21092,9 @@ async def test_instance_boot_dry_run_returns_preview_without_mutating(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never boot."""
-    mock_linode_client.get_instance.return_value = {"id": 123, "status": "offline"}
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {"id": 123, "status": "offline"}
+    )
 
     result = await handle_linode_instance_boot(
         {"instance_id": 123, "dry_run": True}, sample_config
@@ -21075,7 +21113,7 @@ async def test_instance_reboot_dry_run_returns_preview_without_mutating(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never reboot."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_reboot(
         {"instance_id": 123, "dry_run": True}, sample_config
@@ -21091,7 +21129,7 @@ async def test_instance_shutdown_dry_run_returns_preview_without_mutating(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never shut down."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_shutdown(
         {"instance_id": 123, "dry_run": True}, sample_config
@@ -21107,7 +21145,7 @@ async def test_instance_resize_dry_run_returns_preview_without_mutating(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never resize."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_resize(
         {"instance_id": 123, "type": "g6-standard-1", "dry_run": True},
@@ -21135,7 +21173,7 @@ async def test_instance_clone_dry_run_returns_preview_without_mutating(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never clone."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_clone(
         {"linode_id": 123, "dry_run": True}, sample_config
@@ -21151,7 +21189,7 @@ async def test_instance_migrate_dry_run_returns_preview_without_mutating(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never migrate."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_migrate(
         {"linode_id": 123, "dry_run": True}, sample_config
@@ -21164,14 +21202,8 @@ async def test_instance_migrate_dry_run_returns_preview_without_mutating(
 
 
 def _instance_with(**overrides: Any) -> Any:
-    """Build a real Instance dataclass with the given fields set."""
-    from dataclasses import fields as dataclass_fields
-
-    from linodemcp.linode import Instance
-
-    kwargs: dict[str, Any] = {f.name: None for f in dataclass_fields(Instance)}
-    kwargs.update(overrides)
-    return Instance(**kwargs)
+    """Build a real Instance with the given API fields set and the rest zeroed."""
+    return parse_instance(dict(overrides))
 
 
 async def test_instance_resize_dry_run_surfaces_type_change(
@@ -21225,7 +21257,7 @@ async def test_instance_rescue_dry_run_returns_preview_without_mutating(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch state via GET and never rescue."""
-    mock_linode_client.get_instance.return_value = {"id": 123}
+    mock_linode_client.get_instance.return_value = parse_instance({"id": 123})
 
     result = await handle_linode_instance_rescue(
         {"linode_id": 123, "dry_run": True}, sample_config
@@ -21274,11 +21306,13 @@ async def test_instance_password_reset_dry_run_returns_preview(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:
     """dry_run=true must fetch the instance via GET and never reset."""
-    mock_linode_client.get_instance.return_value = {
-        "id": 123,
-        "label": "my-linode",
-        "status": "offline",
-    }
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {
+            "id": 123,
+            "label": "my-linode",
+            "status": "offline",
+        }
+    )
     result = await handle_linode_instance_password_reset(
         {"linode_id": 123, "root_pass": "NewStr0ngP@ss!", "dry_run": True},
         sample_config,
@@ -21305,16 +21339,8 @@ async def test_instance_password_reset_dry_run_still_validates_root_pass(
 
 def _running_instance() -> Any:
     """Build a real Instance dataclass marked running, for side-effect walks."""
-    from dataclasses import fields as dataclass_fields
 
-    from linodemcp.linode import Instance
-
-    instance_kwargs: dict[str, Any] = {
-        field.name: None for field in dataclass_fields(Instance)
-    }
-    instance_kwargs["status"] = "running"
-    instance_kwargs["image"] = "linode/debian12"
-    return Instance(**instance_kwargs)
+    return parse_instance({"status": "running", "image": "linode/debian12"})
 
 
 async def test_instance_rebuild_dry_run_surfaces_disk_side_effects(
@@ -26828,7 +26854,9 @@ async def test_instance_update_dry_run_returns_preview(
     """dry_run=true fetches the instance via GET and never updates."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_instance.return_value = {"id": 123, "label": "old"}
+        mock_client.get_instance.return_value = parse_instance(
+            {"id": 123, "label": "old"}
+        )
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_cls.return_value = mock_client
@@ -27170,16 +27198,65 @@ async def test_account_tag_create_dry_run_returns_preview(
 async def test_account_tag_delete_dry_run_returns_preview(
     sample_config: Config,
 ) -> None:
-    """dry_run=true previews the tag delete DELETE with no call."""
-    result = await handle_linode_tag_delete(
-        {"tag_label": "my-tag", "dry_run": True}, sample_config
-    )
+    """dry_run=true previews the DELETE with the tagged objects as state."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_tagged_objects.return_value = {
+            "data": [{"type": "linode", "data": {"id": 5, "label": "web-01"}}],
+            "page": 1,
+            "pages": 1,
+            "results": 1,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_tag_delete(
+            {"tag_label": "my-tag", "dry_run": True}, sample_config
+        )
 
     body = json.loads(result[0].text)
     assert body["tool"] == "linode_tag_delete"
     assert body["would_execute"]["method"] == "DELETE"
     assert body["would_execute"]["path"] == "/tags/my-tag"
-    assert body["current_state"] is None
+    assert body["current_state"]["results"] == 1
+    dep = body["dependencies"][0]
+    assert dep["kind"] == "linode"
+    assert dep["action"] == "removed"
+
+
+async def test_account_tag_delete_dry_run_counts_beyond_first_page(
+    sample_config: Config,
+) -> None:
+    """The warning total comes from the envelope's results field, not the page.
+
+    A tag on more objects than one page holds must not have its blast radius
+    understated: the count uses the API total and a second warning says how
+    many objects the preview itemized.
+    """
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_client.list_tagged_objects.return_value = {
+            "data": [{"type": "linode", "data": {"id": 5, "label": "web-01"}}],
+            "page": 1,
+            "pages": 2,
+            "results": 150,
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_cls.return_value = mock_client
+
+        result = await handle_linode_tag_delete(
+            {"tag_label": "my-tag", "dry_run": True}, sample_config
+        )
+
+    body = json.loads(result[0].text)
+    assert len(body["dependencies"]) == 1
+    assert body["warnings"] == [
+        "Deleting this tag removes it from 150 tagged object(s); "
+        "the objects are not deleted.",
+        "Only the first 1 tagged object(s) are itemized in this preview.",
+    ]
 
 
 async def test_account_support_ticket_create_dry_run_returns_preview(
@@ -27528,26 +27605,18 @@ async def test_profile_device_revoke_dry_run_returns_preview(
 async def test_instance_delete_dry_run_dependency_walk(
     sample_config: Config,
 ) -> None:
-    """dry_run surfaces attached volumes + public IPs, warns, never deletes."""
-    from dataclasses import fields as dataclass_fields
-    from types import SimpleNamespace
-
-    from linodemcp.linode import Instance
-
-    instance_kwargs: dict[str, Any] = {
-        field.name: None for field in dataclass_fields(Instance)
-    }
-    instance_kwargs["status"] = "running"
-
+    """dry_run surfaces volumes, IPs, and firewalls, warns, never deletes."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_instance.return_value = Instance(**instance_kwargs)
-        mock_client.list_volumes.return_value = [
-            SimpleNamespace(id=6789, label="data-vol", size=50, linode_id=123),
-            SimpleNamespace(id=1, label="other-vol", size=10, linode_id=999),
-        ]
+        mock_client.get_instance.return_value = parse_instance({"status": "running"})
+        mock_client.list_instance_volumes.return_value = {
+            "data": [{"id": 6789, "label": "data-vol", "size": 50, "linode_id": 123}]
+        }
         mock_client.list_instance_ips.return_value = {
             "ipv4": {"public": [{"address": "198.51.100.10"}]}
+        }
+        mock_client.list_instance_firewalls.return_value = {
+            "data": [{"id": 42, "label": "edge-fw"}]
         }
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
@@ -27564,7 +27633,7 @@ async def test_instance_delete_dry_run_dependency_walk(
         assert body["would_execute"]["path"] == "/linode/instances/123"
 
         deps = body["dependencies"]
-        assert sorted(d["kind"] for d in deps) == ["public_ip", "volume"]
+        assert sorted(d["kind"] for d in deps) == ["firewall", "public_ip", "volume"]
 
         volume_dep = next(d for d in deps if d["kind"] == "volume")
         assert volume_dep["id"] == 6789
@@ -27573,6 +27642,14 @@ async def test_instance_delete_dry_run_dependency_walk(
         ip_dep = next(d for d in deps if d["kind"] == "public_ip")
         assert ip_dep["label"] == "198.51.100.10"
         assert ip_dep["action"] == "released"
+
+        firewall_dep = next(d for d in deps if d["kind"] == "firewall")
+        assert firewall_dep["id"] == 42
+        assert firewall_dep["action"] == "removed"
+
+        # The zero-typed instance cannot be priced, so the estimate degrades
+        # to the unknown sentinel the Go walk emits.
+        assert body["billing_delta"]["monthly_change_usd"] == "unknown"
 
         assert body["warnings"]
         mock_client.delete_instance.assert_not_called()
@@ -27867,7 +27944,9 @@ async def test_handle_linode_instance_config_create_dry_run_returns_preview(
     devices = {"sda": {"disk_id": 123}}
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_instance.return_value = {"id": 456, "label": "vm"}
+        mock_client.get_instance.return_value = parse_instance(
+            {"id": 456, "label": "vm"}
+        )
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client

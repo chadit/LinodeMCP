@@ -172,18 +172,27 @@ def serialize_api_response(raw: dict[str, Any], message: Message) -> dict[str, A
 
 
 def _sorted_deep(value: Any) -> Any:
-    """Sort dict keys recursively at every nesting level.
+    """Canonicalize a free-form subtree: sort keys, collapse integral floats.
 
     Python protobuf map iteration order (which backs Struct) is not guaranteed,
     so relying on MessageToJson's emission order makes Struct output flip
     between runs. Go's protojson sorts map keys deterministically; this makes
     the Python side match by construction.
+
+    Numbers inside Struct/Value are IEEE doubles, and Python's MessageToJson
+    renders an integral double as "5.0" where Go's protojson renders "5".
+    Collapsing integral floats to ints matches Go's bytes on the wire. Values
+    past 2^53 have already lost precision entering the double, so consumers
+    keep ids and counts below that; the collapse itself is exact for any
+    integral double.
     """
     if isinstance(value, dict):
         typed = cast("dict[str, Any]", value)
         return {key: _sorted_deep(typed[key]) for key in sorted(typed)}
     if isinstance(value, list):
         return [_sorted_deep(item) for item in cast("list[object]", value)]
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
     return value
 
 
@@ -200,6 +209,25 @@ def serialize_struct_response(raw: dict[str, Any]) -> dict[str, Any]:
     return cast("dict[str, Any]", result)
 
 
+def _collapse_integral_deep(value: Any) -> Any:
+    """Collapse integral doubles to ints without touching key order.
+
+    The preview envelopes carry google.protobuf.Value fields outside the
+    key-sorted subtrees too (dependencies[].id), and their typed fields must
+    keep proto field order, so this walk rebuilds the tree in place-order and
+    only rewrites the numbers. See _sorted_deep for why the collapse matches
+    Go's bytes.
+    """
+    if isinstance(value, dict):
+        typed = cast("dict[str, Any]", value)
+        return {key: _collapse_integral_deep(item) for key, item in typed.items()}
+    if isinstance(value, list):
+        return [_collapse_integral_deep(item) for item in cast("list[object]", value)]
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
 def serialize_preview_envelope(raw: dict[str, Any], message: Message) -> dict[str, Any]:
     """Serialize a dry-run or plan envelope and sort its free-form subtrees.
 
@@ -209,9 +237,13 @@ def serialize_preview_envelope(raw: dict[str, Any], message: Message) -> dict[st
     protojson sorts them. Sorting just those two subtrees makes both languages
     emit the same key order without disturbing the top-level field order. Mirrors
     the Go builders, which route current_state and body through structpb.Value so
-    protojson sorts them there.
+    protojson sorts them there. Every Value number in the envelope (including
+    dependencies[].id) gets the integral-float collapse so ids read "11", not
+    "11.0".
     """
-    result = serialize_api_response(raw, message)
+    result = cast(
+        "dict[str, Any]", _collapse_integral_deep(serialize_api_response(raw, message))
+    )
     if "current_state" in result:
         result["current_state"] = _sorted_deep(result["current_state"])
     would = result.get("would_execute")

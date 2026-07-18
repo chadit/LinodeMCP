@@ -1,0 +1,8 @@
+# Handler-level write-proto stragglers: mutating tools not yet proto-routed
+# on both sides. One line per straggler: <tool>\t<go_status>\t<py_status>.
+# Ratchet: convert a handler to proto on both sides, then remove its line;
+# never add a line by hand. Regenerate:
+#   python scripts/verify_write_proto.py --update-baseline
+linode_networking_reserved_ip_create	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_delete	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_update	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038

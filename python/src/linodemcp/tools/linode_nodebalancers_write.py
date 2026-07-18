@@ -15,6 +15,7 @@ from linodemcp.linode import APIError, NetworkError, validate_ipv4_address
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
+    WALK_PAGE_SIZE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
@@ -23,6 +24,7 @@ from linodemcp.tools.helpers import (
     is_dry_run,
     pagination_int_argument,
     required_int_id,
+    walk_page_items,
 )
 from linodemcp.tools.proto_enum import optional_enum_error
 from linodemcp.tools.proto_response import (
@@ -331,6 +333,42 @@ def create_linode_nodebalancer_config_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+async def _nodebalancer_config_delete_dependency_walk(
+    client: RetryableClient, nodebalancer_id: int, config_id: int
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for NodeBalancer config delete. Deleting a config
+    destroys its backend node list, so each node is a cascade-deleted
+    dependency. Best-effort: a failed node list becomes a warning, not an
+    error. Mirrors the Go nodebalancerConfigDeleteDependencyWalk.
+    """
+    try:
+        page = await client.list_nodebalancer_config_nodes(
+            nodebalancer_id, config_id, 1, WALK_PAGE_SIZE
+        )
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        return {"warnings": [f"Could not list config backend nodes: {exc}"]}
+
+    dependencies = [
+        {
+            "kind": "nodebalancer_node",
+            "id": node.get("id"),
+            "label": str(node.get("label", "")),
+            "action": "cascade_deleted",
+            "note": f"backend {node.get('address', '')} ({node.get('mode', '')})",
+        }
+        for node in walk_page_items(page)
+    ]
+
+    details: DryRunDetails = {}
+    if dependencies:
+        details["dependencies"] = dependencies
+        details["warnings"] = [
+            f"Deleting this config removes {len(dependencies)} backend "
+            "node(s) from the rotation."
+        ]
+    return details
+
+
 async def handle_linode_nodebalancer_config_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -346,17 +384,25 @@ async def handle_linode_nodebalancer_config_delete(
         return error_response(error)
 
     if is_dry_run(arguments):
+        nb_id = nodebalancer_id
+        cfg_id = config_id
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_nodebalancer_config(nodebalancer_id, config_id)
+            return await client.get_nodebalancer_config(nb_id, cfg_id)
+
+        async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+            return await _nodebalancer_config_delete_dependency_walk(
+                client, nb_id, cfg_id
+            )
 
         return await execute_dry_run(
             cfg,
             arguments,
             "linode_nodebalancer_config_delete",
             "DELETE",
-            f"/nodebalancers/{nodebalancer_id}/configs/{config_id}",
+            f"/nodebalancers/{nb_id}/configs/{cfg_id}",
             _fetch,
+            _walk,
         )
 
     if arguments.get("confirm") is not True:

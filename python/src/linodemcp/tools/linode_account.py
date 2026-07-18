@@ -3190,6 +3190,58 @@ def create_linode_tag_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+def _tag_delete_dependency_walk(state: Any) -> DryRunDetails:
+    """Phase 2 Tier A walk for tag delete. Deleting a tag removes it from
+    every object that carries it; the objects survive, so each is a removed
+    dependency. State-only: the tagged objects come from the fetched page,
+    no extra API call. The warning count still comes from the page envelope's
+    results field (the API's total across all pages), so a truncated first
+    page cannot understate the blast radius; a second warning says how many
+    were itemized. Mirrors the Go tagDeleteDependencyWalk.
+    """
+    page = cast("dict[str, Any]", state) if isinstance(state, dict) else {}
+    raw_objects = page.get("data", [])
+    tagged_items = (
+        cast("list[object]", raw_objects) if isinstance(raw_objects, list) else []
+    )
+    objects = [
+        cast("dict[str, Any]", obj) for obj in tagged_items if isinstance(obj, dict)
+    ]
+
+    dependencies: list[dict[str, Any]] = []
+    for tagged in objects:
+        dependency: dict[str, Any] = {
+            "kind": str(tagged.get("type") or "resource"),
+            "action": "removed",
+            "note": "Loses this tag; the resource itself is not deleted.",
+        }
+        data = tagged.get("data")
+        if isinstance(data, dict) and "id" in data:
+            dependency["id"] = cast("dict[str, Any]", data)["id"]
+        dependencies.append(dependency)
+
+    details: DryRunDetails = {}
+    if dependencies:
+        total = len(dependencies)
+        raw_results = page.get("results")
+        if isinstance(raw_results, int) and not isinstance(raw_results, bool):
+            total = max(total, raw_results)
+
+        warnings = [
+            f"Deleting this tag removes it from {total} tagged "
+            "object(s); the objects are not deleted."
+        ]
+        if total > len(dependencies):
+            warnings.append(
+                f"Only the first {len(dependencies)} tagged object(s) are "
+                "itemized in this preview."
+            )
+
+        details["dependencies"] = dependencies
+        details["warnings"] = warnings
+    return details
+
+
 async def _account_tag_delete_two_stage(
     arguments: dict[str, Any], cfg: Config, tag_label: str
 ) -> list[TextContent] | None:
@@ -3207,6 +3259,9 @@ async def _account_tag_delete_two_stage(
             common_pb2.MessageResponse(),
         )
 
+    async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+        return _tag_delete_dependency_walk(state)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -3216,6 +3271,7 @@ async def _account_tag_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("Tag"),
+        dependency_walk=_ts_walk,
     )
 
 
@@ -3237,12 +3293,21 @@ async def handle_linode_tag_delete(
         return two_stage
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.list_tagged_objects(tag_label)
+
+        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+            return _tag_delete_dependency_walk(state)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_tag_delete",
-            arguments.get("environment", ""),
             "DELETE",
             f"/tags/{tag_label}",
-            None,
+            _fetch,
+            _walk,
         )
 
     if not arguments.get("confirm"):

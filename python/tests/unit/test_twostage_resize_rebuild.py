@@ -11,6 +11,7 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from linodemcp.config import TwoStageConfig
+from linodemcp.linode import parse_instance
 from linodemcp.tools.linode_instance_actions import handle_linode_instance_rebuild
 from linodemcp.tools.linode_instance_write import handle_linode_instance_resize
 from linodemcp.twostage import reset_plan_store, set_plan_store
@@ -25,7 +26,9 @@ if TYPE_CHECKING:
 async def test_rebuild_plan_then_apply(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = {"id": 123, "status": "offline"}
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {"id": 123, "status": "offline"}
+    )
     mock_linode_client.list_instance_disks.return_value = []
 
     rebuild_args: dict[str, Any] = {
@@ -60,7 +63,9 @@ async def test_rebuild_plan_then_apply(
 async def test_resize_plan_then_apply_opted_in(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = {"id": 123, "type": "g6-nanode-1"}
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {"id": 123, "type": "g6-nanode-1"}
+    )
     mock_linode_client.list_instance_disks.return_value = []
     sample_config.two_stage = TwoStageConfig(opt_in={"linode_instance_resize": True})
 
@@ -104,7 +109,9 @@ async def test_resize_default_off_falls_through(
 ) -> None:
     # Without a config opt-in, a mode:"plan" resize call must NOT produce a plan;
     # CapWrite does not opt in by default.
-    mock_linode_client.get_instance.return_value = {"id": 123, "type": "g6-nanode-1"}
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {"id": 123, "type": "g6-nanode-1"}
+    )
     mock_linode_client.list_instance_disks.return_value = []
 
     store = PlanStore()

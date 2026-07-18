@@ -1,13 +1,15 @@
 # Canonical LinodeMCP tool surface.
-# One tool name per line, sorted. Every tool listed here exists in BOTH
-# implementations. Accepted one-sided tools stay out of this file and are
-# recorded in docs/tool-parity-baseline.txt; annotations on a line fail the
-# gates.
-# Parity tests in both languages enforce this file:
+# One tool name per line, sorted. This file lists the FULL surface: every
+# tool any registered language implements. A language that has not caught
+# up on a listed tool records that absence in docs/contracts/tool-parity-baseline.txt
+# as "<tool>: missing in <language>" with a tracking annotation, so the gap
+# stays a visible commitment. Annotations on a manifest line fail the gates.
+# Parity tests in every language enforce this file:
 #   go/internal/server/tools_manifest_test.go
 #   python/tests/unit/test_tools_manifest.py
-# When adding, renaming, or removing a tool, update this file and both
-# implementations together or the gates fail.
+# When adding, renaming, or removing a tool, update this file and every
+# implementation (or record the accepted absence) in the same change or the
+# gates fail.
 hello
 linode_account_agreement_acknowledge
 linode_account_agreement_list
@@ -320,6 +322,12 @@ linode_networking_ip_share
 linode_networking_ip_update
 linode_networking_ipv4_assign
 linode_networking_ipv4_share
+linode_networking_reserved_ip_create
+linode_networking_reserved_ip_delete
+linode_networking_reserved_ip_get
+linode_networking_reserved_ip_list
+linode_networking_reserved_ip_type_list
+linode_networking_reserved_ip_update
 linode_nodebalancer_config_create
 linode_nodebalancer_config_delete
 linode_nodebalancer_config_get

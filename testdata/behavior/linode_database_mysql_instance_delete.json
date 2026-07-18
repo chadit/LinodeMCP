@@ -29,6 +29,58 @@
         "method": "DELETE",
         "path": "/databases/mysql/instances/123"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "instance_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /databases/mysql/instances/123": {
+          "allow_list": null,
+          "cluster_size": 0,
+          "created": "",
+          "encrypted": false,
+          "engine": "",
+          "id": 0,
+          "label": "",
+          "region": "",
+          "replication_type": "",
+          "ssl_connection": false,
+          "status": "",
+          "type": "",
+          "updated": "",
+          "version": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_mysql_instance_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/databases/mysql/instances/123"
+        },
+        "current_state": {
+          "allow_list": null,
+          "cluster_size": 0,
+          "created": "",
+          "encrypted": false,
+          "engine": "",
+          "id": 0,
+          "label": "",
+          "region": "",
+          "replication_type": "",
+          "ssl_connection": false,
+          "status": "",
+          "type": "",
+          "updated": "",
+          "version": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

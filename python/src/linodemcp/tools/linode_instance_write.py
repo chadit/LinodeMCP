@@ -6,18 +6,21 @@ import httpx
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import firewall_pb2, instance_pb2
-from linodemcp.linode import APIError, NetworkError
+from linodemcp.linode import APIError, NetworkError, instance_preview_state
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
     TWO_STAGE_OPT_IN_NOTE,
+    WALK_PAGE_SIZE,
     DryRunDetails,
     build_dry_run_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
     pagination_int_argument,
+    preview_state_str,
     required_int_id,
+    walk_page_items,
 )
 from linodemcp.tools.proto_response import (
     raw_int,
@@ -89,7 +92,7 @@ async def handle_linode_instance_boot(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(int(instance_id))
+            return instance_preview_state(await client.get_instance(int(instance_id)))
 
         return await execute_dry_run(
             cfg,
@@ -140,7 +143,7 @@ async def handle_linode_instance_reboot(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(int(instance_id))
+            return instance_preview_state(await client.get_instance(int(instance_id)))
 
         return await execute_dry_run(
             cfg,
@@ -191,7 +194,7 @@ async def handle_linode_instance_shutdown(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(int(instance_id))
+            return instance_preview_state(await client.get_instance(int(instance_id)))
 
         return await execute_dry_run(
             cfg,
@@ -539,7 +542,7 @@ async def handle_linode_instance_update(
         iid = int(instance_id)
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         return await execute_dry_run(
             cfg,
@@ -611,20 +614,19 @@ async def _instance_volume_deps(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Volumes attached to the instance detach (not destroy) on delete."""
     try:
-        volumes = await client.list_volumes()
+        page = await client.list_instance_volumes(instance_id, 1, WALK_PAGE_SIZE)
     except (APIError, NetworkError, httpx.HTTPError) as exc:
-        return [], [f"Could not list volumes: {exc}"]
+        return [], [f"Could not list attached volumes: {exc}"]
 
     deps = [
         {
             "kind": "volume",
-            "id": volume.id,
-            "label": volume.label,
+            "id": volume.get("id"),
+            "label": str(volume.get("label", "")),
             "action": "detached",
-            "note": f"{volume.size}GB volume stays; billing continues.",
+            "note": f"{volume.get('size', 0)}GB volume stays; billing continues.",
         }
-        for volume in volumes
-        if volume.linode_id == instance_id
+        for volume in walk_page_items(page)
     ]
 
     return deps, []
@@ -653,35 +655,80 @@ async def _instance_ip_deps(
     return deps, []
 
 
+async def _instance_firewall_deps(
+    client: RetryableClient, instance_id: int
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Firewalls survive the delete; the instance drops from their devices."""
+    try:
+        page = await client.list_instance_firewalls(instance_id, 1, WALK_PAGE_SIZE)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        return [], [f"Could not list firewalls: {exc}"]
+
+    deps = [
+        {
+            "kind": "firewall",
+            "id": firewall.get("id"),
+            "label": str(firewall.get("label", "")),
+            "action": "removed",
+            "note": "Firewall stays; this instance is removed from its device list.",
+        }
+        for firewall in walk_page_items(page)
+    ]
+
+    return deps, []
+
+
+async def _instance_billing_delta(
+    client: RetryableClient, type_id: str
+) -> dict[str, Any]:
+    """Best-effort monthly cost change from deleting an instance of type_id.
+
+    Mirrors the Go instanceBillingDelta: an empty type or a failed pricing
+    fetch degrades to the "unknown" sentinel instead of failing the preview.
+    """
+    if not type_id:
+        return {"monthly_change_usd": "unknown"}
+
+    try:
+        instance_type = await client.get_type(type_id)
+    except (APIError, NetworkError, httpx.HTTPError):
+        return {
+            "monthly_change_usd": "unknown",
+            "note": "Could not fetch type pricing for the estimate.",
+        }
+
+    return {
+        "monthly_change_usd": f"-{instance_type.price.monthly:.2f}",
+        "note": "Instance billing stops. Attached volume billing continues.",
+    }
+
+
 async def _instance_delete_dependency_walk(
     client: RetryableClient, instance_id: int, state: Any
 ) -> DryRunDetails:
-    """Phase 2 Tier A walk for instance delete. Best-effort: a failed
-    sub-fetch becomes a warning, not an error. Firewall attachments and the
-    billing estimate are omitted from this preview because the Python client
-    lacks the per-instance firewall list and type-pricing lookups; that
-    coverage is tracked for a later pass.
+    """Phase 2 Tier A walk for instance delete. Mirrors the Go
+    instanceDeleteDependencyWalk: attached volumes detach, public IPv4
+    addresses release, firewall attachments drop, the monthly billing change
+    is estimated, and a running instance adds a shutdown warning.
+    Best-effort: a failed sub-fetch becomes a warning, not an error.
     """
     dependencies: list[dict[str, Any]] = []
     warnings: list[str] = []
 
-    for collect in (_instance_volume_deps, _instance_ip_deps):
+    for collect in (_instance_volume_deps, _instance_ip_deps, _instance_firewall_deps):
         deps, deps_warnings = await collect(client, instance_id)
         dependencies.extend(deps)
         warnings.extend(deps_warnings)
 
-    warnings.append(
-        "Firewall attachments and the billing estimate are not included in "
-        "this preview."
-    )
+    billing = await _instance_billing_delta(client, preview_state_str(state, "type"))
 
-    if getattr(state, "status", "") == "running":
+    if preview_state_str(state, "status") == "running":
         warnings.append(
             "Instance is currently running. Delete will not pause for a "
             "graceful shutdown."
         )
 
-    details: DryRunDetails = {}
+    details: DryRunDetails = {"billing_delta": billing}
     if dependencies:
         details["dependencies"] = dependencies
     if warnings:
@@ -702,7 +749,7 @@ async def _instance_delete_two_stage(
         return _error_response("instance_id is required")
 
     async def _ts_fetch(client: RetryableClient) -> Any:
-        return await client.get_instance(int(instance_id))
+        return instance_preview_state(await client.get_instance(int(instance_id)))
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.delete_instance(int(instance_id))
@@ -745,7 +792,7 @@ async def handle_linode_instance_delete(
             return _error_response("instance_id is required")
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(int(instance_id))
+            return instance_preview_state(await client.get_instance(int(instance_id)))
 
         async def _walk(client: RetryableClient, state: Any) -> DryRunDetails:
             return await _instance_delete_dependency_walk(
@@ -1058,7 +1105,7 @@ async def handle_linode_instance_resize(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(int(instance_id))
+            return instance_preview_state(await client.get_instance(int(instance_id)))
 
         async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
             return _instance_resize_side_effects(

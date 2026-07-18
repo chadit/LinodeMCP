@@ -17,7 +17,10 @@ import pytest
 from linodemcp.tools._write_proto_classifier import classify
 
 _CAPABILITIES_PATH = (
-    Path(__file__).resolve().parents[3] / "docs" / "tools-capabilities.txt"
+    Path(__file__).resolve().parents[3]
+    / "docs"
+    / "contracts"
+    / "tools-capabilities.txt"
 )
 
 # Handlers known to serialize their success output through a proto message.

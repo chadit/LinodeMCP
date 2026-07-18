@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from linodemcp.linode import parse_instance
 from linodemcp.tools.linode_account import handle_linode_tag_delete
 from linodemcp.tools.linode_databases import (
     handle_linode_database_mysql_instance_delete,
@@ -114,7 +115,9 @@ _CASES = [
         handle_linode_instance_backups_cancel,
         {"linode_id": 123},
         "get_instance",
-        {"id": 123, "status": "running", "updated": "2026-01-01T00:00:00"},
+        parse_instance(
+            {"id": 123, "status": "running", "updated": "2026-01-01T00:00:00"}
+        ),
         "cancel_instance_backups",
         "canceled",
         id="instance_backups_cancel",
@@ -123,7 +126,9 @@ _CASES = [
         handle_linode_instance_password_reset,
         {"linode_id": 123, "root_pass": "Sup3rSecretPass99"},
         "get_instance",
-        {"id": 123, "status": "offline", "updated": "2026-01-01T00:00:00"},
+        parse_instance(
+            {"id": 123, "status": "offline", "updated": "2026-01-01T00:00:00"}
+        ),
         "reset_instance_password",
         "reset",
         id="instance_password_reset",

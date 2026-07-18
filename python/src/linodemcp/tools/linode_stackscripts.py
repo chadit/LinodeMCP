@@ -11,6 +11,7 @@ from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
+    execute_dry_run,
     execute_tool,
     is_dry_run,
     required_int_id,
@@ -167,13 +168,17 @@ async def handle_linode_stackscript_delete(
         return two_stage
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_stackscript(stackscript_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_stackscript_delete",
-            arguments.get("environment", ""),
             "DELETE",
             f"/linode/stackscripts/{stackscript_id}",
-            None,
-            side_effects=["The StackScript will be permanently deleted."],
+            _fetch,
         )
     if arguments.get("confirm") is not True:
         return error_response(

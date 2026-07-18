@@ -17,6 +17,73 @@
       "args": { "cluster_id": 12345, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/lke/clusters/12345" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345": {
+          "control_plane": {
+            "high_availability": false
+          },
+          "created": "",
+          "id": 12345,
+          "k8s_version": "1.31",
+          "label": "prod-cluster",
+          "region": "us-east",
+          "status": "",
+          "tags": null,
+          "updated": ""
+        },
+        "GET /lke/clusters/12345/pools": {
+          "data": [
+            {
+              "id": 61,
+              "type": "g6-standard-2",
+              "count": 3
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_cluster_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/lke/clusters/12345"
+        },
+        "current_state": {
+          "control_plane": {
+            "high_availability": false
+          },
+          "created": "",
+          "id": 12345,
+          "k8s_version": "1.31",
+          "label": "prod-cluster",
+          "region": "us-east",
+          "status": "",
+          "tags": null,
+          "updated": ""
+        },
+        "dependencies": [
+          {
+            "kind": "node_pool",
+            "id": 61,
+            "action": "cascade_deleted",
+            "note": "3 node(s) of type g6-standard-2"
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this cluster destroys 1 node pool(s) and 3 node(s); running workloads are lost."
+        ]
+      }
     }
   ]
 }

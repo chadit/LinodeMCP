@@ -30,6 +30,52 @@
         "method": "POST",
         "path": "/lke/clusters/12345/recycle"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345": {
+          "control_plane": {
+            "high_availability": false
+          },
+          "created": "",
+          "id": 0,
+          "k8s_version": "",
+          "label": "",
+          "region": "",
+          "status": "",
+          "tags": null,
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_cluster_recycle",
+        "would_execute": {
+          "method": "POST",
+          "path": "/lke/clusters/12345/recycle"
+        },
+        "current_state": {
+          "control_plane": {
+            "high_availability": false
+          },
+          "created": "",
+          "id": 0,
+          "k8s_version": "",
+          "label": "",
+          "region": "",
+          "status": "",
+          "tags": null,
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

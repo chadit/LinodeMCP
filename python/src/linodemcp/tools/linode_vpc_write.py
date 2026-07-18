@@ -567,10 +567,14 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
-def _vpc_subnet_delete_dependency_walk(subnet_state: Any) -> DryRunDetails:
+async def _vpc_subnet_delete_dependency_walk(
+    client: RetryableClient, vpc_id: int, subnet_state: Any
+) -> DryRunDetails:
     """Phase 2 Tier A walk for VPC subnet delete. The subnet state (already
     fetched for current_state) carries the Linodes with interfaces in this
-    subnet; each is surfaced as a detached dependency. No extra API call.
+    subnet; each is surfaced as a detached dependency. The parent VPC is
+    fetched once to label the warning, mirroring the Go walk; a failed VPC
+    fetch just leaves the label empty.
     """
     details: DryRunDetails = {}
     if not isinstance(subnet_state, dict):
@@ -583,16 +587,30 @@ def _vpc_subnet_delete_dependency_walk(subnet_state: Any) -> DryRunDetails:
             "kind": "instance",
             "id": linode_ref.get("id"),
             "action": "detached",
-            "note": "Has interface(s) in this subnet.",
+            "note": (
+                f"{len(cast('list[Any]', linode_ref.get('interfaces', [])))} "
+                "interface(s) in this subnet are detached."
+            ),
         }
         for linode_ref in linodes
     ]
-    if dependencies:
-        details["dependencies"] = dependencies
-        details["warnings"] = [
-            f"{len(dependencies)} Linode(s) have interfaces in this subnet "
-            "and will be detached."
-        ]
+    if not dependencies:
+        return details
+
+    vpc_label = ""
+    try:
+        vpc = await client.get_vpc(vpc_id)
+    except (APIError, NetworkError, httpx.HTTPError):
+        vpc = None
+    if vpc is not None:
+        vpc_label = str(vpc.get("label", ""))
+
+    subnet_label = str(subnet.get("label", ""))
+    details["dependencies"] = dependencies
+    details["warnings"] = [
+        f'{len(dependencies)} Linode(s) have interfaces in subnet "{subnet_label}" '
+        f'(VPC "{vpc_label}") and will be detached.'
+    ]
     return details
 
 
@@ -617,8 +635,8 @@ async def _vpc_subnet_delete_two_stage(
             vpc_pb2.VpcSubnetDeleteResponse(),
         )
 
-    async def _ts_walk(_client: RetryableClient, state: Any) -> DryRunDetails:
-        return _vpc_subnet_delete_dependency_walk(state)
+    async def _ts_walk(client: RetryableClient, state: Any) -> DryRunDetails:
+        return await _vpc_subnet_delete_dependency_walk(client, vpc_id, state)
 
     return await run_two_stage_destroy(
         cfg,
@@ -653,8 +671,8 @@ async def handle_linode_vpc_subnet_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_vpc_subnet(vpc_id, subnet_id)
 
-        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
-            return _vpc_subnet_delete_dependency_walk(state)
+        async def _walk(client: RetryableClient, state: Any) -> DryRunDetails:
+            return await _vpc_subnet_delete_dependency_walk(client, vpc_id, state)
 
         return await execute_dry_run(
             cfg,

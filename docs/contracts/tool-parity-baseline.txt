@@ -1,0 +1,13 @@
+# Accepted (known) cross-language tool-parity divergences. Ratchet:
+# fix one and remove its line; never add a line by hand (regenerate
+# instead, then attach the required annotation). Regenerate with:
+#   python scripts/verify_tool_parity.py --update-baseline
+# Every "missing in <language>" entry MUST carry an annotation naming
+# when it was accepted and the tracking issue that will close it:
+#   <entry>  # accepted YYYY-MM-DD <tracking-issue URL>
+linode_networking_reserved_ip_create: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_delete: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_get: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_list: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_type_list: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_update: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038

@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination baseline-guard parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check tool-parity write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check tool-parity tool-count dryrun pagination write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -104,7 +104,7 @@ scripts-lint:
 
 ## tool-parity: Verify Go/Python tool-surface parity (capability, params, required)
 # Runs the Go dumper (go run) and imports the Python registry (needs the venv),
-# then diffs the two against docs/tool-parity-baseline.txt. Fails on any new
+# then diffs the two against docs/contracts/tool-parity-baseline.txt. Fails on any new
 # divergence or any baseline entry that is now fixed (the baseline only shrinks).
 tool-parity:
 	@python/.venv/bin/python scripts/verify_tool_parity.py
@@ -114,7 +114,7 @@ tool-parity:
 # proto-routed or legacy (Go: go run ./cmd/write-proto-dump; Python: the
 # _write_proto_classifier module, needs the venv), then ratchets the straggler
 # set and the missing-conformance-fixture set down against their baselines in
-# docs/. Fails on any new straggler or any baseline entry that is now fixed.
+# docs/contracts/. Fails on any new straggler or any baseline entry that is now fixed.
 write-proto:
 	@python/.venv/bin/python scripts/verify_write_proto.py
 
@@ -122,7 +122,7 @@ write-proto:
 # The read-surface sibling of write-proto: statically classifies every Read
 # tool on both sides (Go: go run ./cmd/write-proto-dump -surface read; Python:
 # the _write_proto_classifier module in read mode, needs the venv), then
-# ratchets the straggler set down against docs/read-proto-baseline.txt. That
+# ratchets the straggler set down against docs/contracts/read-proto-baseline.txt. That
 # baseline doubles as the remaining-work list for the read-surface conversion.
 read-proto:
 	@python/.venv/bin/python scripts/verify_read_proto.py
@@ -132,7 +132,7 @@ read-proto:
 # every tool's factory on both sides (Go: go run ./cmd/write-proto-dump
 # -surface input; Python: the _write_proto_classifier module in input mode,
 # needs the venv) as proto-generated or hand-built, then ratchets the straggler
-# set down against docs/input-proto-baseline.txt. That baseline doubles as the
+# set down against docs/contracts/input-proto-baseline.txt. That baseline doubles as the
 # remaining-work list for the input-surface conversion.
 input-proto:
 	@python/.venv/bin/python scripts/verify_input_proto.py
@@ -142,7 +142,7 @@ input-proto:
 # every Meta tool on both sides (Go: go run ./cmd/write-proto-dump -surface
 # meta; Python: the _write_proto_classifier module in meta mode, needs the
 # venv), then ratchets the straggler set down against
-# docs/meta-proto-baseline.txt.
+# docs/contracts/meta-proto-baseline.txt.
 meta-proto:
 	@python/.venv/bin/python scripts/verify_meta_proto.py
 
@@ -150,7 +150,7 @@ meta-proto:
 # The handler-semantics gate: the shared fixtures in testdata/behavior/ replay
 # identical cases through both languages' real dispatch paths (the two test
 # runners enforce correctness); this target ratchets fixture COVERAGE against
-# docs/behavior-baseline.txt so new tools need fixtures and covered tools
+# docs/contracts/behavior-baseline.txt so new tools need fixtures and covered tools
 # cannot lose them.
 behavior:
 	@python/.venv/bin/python scripts/verify_behavior.py
@@ -158,7 +158,7 @@ behavior:
 ## messages: Verify cross-language confirm-message parity
 # Diffs every extractable confirm-gate message across both languages
 # (heuristic extractors promoted from the P1 sweep) and ratchets against
-# docs/message-parity-baseline.txt, so text drift on branches no fixture
+# docs/contracts/message-parity-baseline.txt, so text drift on branches no fixture
 # exercises still fails.
 messages:
 	@python/.venv/bin/python scripts/verify_messages.py
@@ -177,7 +177,47 @@ sync-defaults:
 	@python/.venv/bin/python scripts/verify_sync_defaults.py
 
 ## sync: Run all live API-drift checks (scheduled agent; needs network)
-sync: sync-enums sync-defaults
+sync: sync-enums sync-defaults sync-pagination
+
+## baseline-guard: Verify baseline growth vs BASE (default origin/main) carries annotations
+# Diff-aware, so it lives outside `check` (which reads committed state only):
+# the growth direction needs a reference rev. CI runs the same script against
+# the PR base / push predecessor (.github/workflows/baseline-guard.yml).
+BASE ?= origin/main
+baseline-guard:
+	@python3 scripts/verify_baseline_direction.py "$(BASE)"
+
+## parity-todo: Report per-language remaining work from the parity baselines
+# Read-only aggregation of docs/contracts/languages.txt plus every ratchet baseline:
+# what each language is missing, what is accepted-and-tracked, and what a
+# newly registered language still owes. Needs no venv.
+parity-todo:
+	@python3 scripts/parity_todo.py
+
+## tool-count: Verify README's tool count matches docs/contracts/tools-manifest.txt
+# Offline single-file check, so it rides in `check`: the manifest is the source
+# of truth and this fails when the README prose count drifts from it.
+tool-count:
+	@python3 scripts/verify_docs_tool_count.py
+
+## dryrun: Verify dry_run is advertised per capability tier across the surface
+# Offline and hard (no baseline): every Write/Admin/Destroy input carries
+# dry_run, no Read/Meta input does, and every tool maps to its proto input.
+# The fixture half (a pinned preview case) ratchets in the behavior gate.
+dryrun:
+	@python3 scripts/verify_dryrun.py
+
+## pagination: Verify list tools paginate when their spec route paginates
+# Offline: judges the tool surface against the reviewed snapshot in
+# docs/contracts/api-pagination-baseline.txt (sync-pagination owns that).
+# Known gaps ratchet down in docs/contracts/pagination-baseline.txt.
+pagination:
+	@python3 scripts/verify_pagination.py
+
+## sync-pagination: Diff the live spec's paginated-route set and bounds vs the snapshot
+# Network (live spec fetch), so scheduled-only like the other sync gates.
+sync-pagination:
+	@python3 scripts/verify_sync_pagination.py
 
 ## lint: Run all linters (fmt-check, go-lint, python-lint, scripts-lint, betterleaks, trivy, actionlint)
 lint: proto fmt-check go-lint python-lint scripts-lint betterleaks trivy actionlint
@@ -296,19 +336,42 @@ python-check:
 # --regex-engine=stdlib pins one engine everywhere: CI already forced stdlib
 # (the WASM engine trips betterleaks#74 there), and scanning with different
 # engines locally vs CI can produce different findings.
+# The scan target is the file set git reports as not ignored (tracked plus
+# untracked-unignored), not the whole directory: betterleaks has no gitignore
+# awareness, and gitignored content (virtualenvs, build output, scratch dirs)
+# can never reach a commit, so a hit there fails the gate on debris that
+# cannot ship. Deriving the list from git honors every ignore source
+# (.gitignore, .git/info/exclude, the global excludes file) with no
+# hand-maintained mirror to drift. The existence filter drops index entries
+# deleted from the working tree, which betterleaks aborts on. --config is
+# explicit because auto-discovery keys off a directory target and does not
+# fire for a file list, and losing the repo config would silently drop the
+# fixture allowlists. CI sees no change: a fresh checkout has no ignored
+# debris beyond generated code.
 betterleaks:
 	@command -v betterleaks >/dev/null 2>&1 || { echo "[error] betterleaks required (release binary: https://github.com/betterleaks/betterleaks/releases)" >&2; exit 1; }
 	@echo "Running betterleaks secrets scan..."
-	@betterleaks dir . --verbose --redact --regex-engine=stdlib
+	@git ls-files --cached --others --exclude-standard | \
+		while IFS= read -r f; do if [ -e "$$f" ]; then printf '%s\n' "$$f"; fi; done | \
+		tr '\n' '\0' | xargs -0 betterleaks dir --config .betterleaks.toml --verbose --redact --regex-engine=stdlib
 
 ## trivy: Run trivy security scan
 # Hard requirement, not skip-if-missing (same false-green trap as betterleaks).
 # Severity HIGH,CRITICAL and vuln,misconfig scanners are the canonical scan;
 # CI runs this exact target, so local and CI fail on the same findings.
+# Trivy has no gitignore awareness, so gitignored paths are passed as skip
+# flags derived from git's own ignore computation at scan time (covers
+# .gitignore, .git/info/exclude, and the global excludes file with no
+# hand-maintained mirror to drift). Gitignored content never ships, so a
+# finding there blocks pushes over debris that cannot reach a commit. The
+# flags use the =-attached form so each stays a single word through shell
+# word splitting. CI sees no change: a fresh checkout has no ignored debris
+# beyond generated code.
 trivy:
 	@command -v trivy >/dev/null 2>&1 || { echo "[error] trivy required (install: https://trivy.dev/latest/getting-started/installation/)" >&2; exit 1; }
 	@echo "Running trivy security scan..."
-	@trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 .
+	@trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 \
+		$$(git ls-files --others --ignored --exclude-standard --directory | awk '{ print (sub(/\/$$/, "") ? "--skip-dirs=" : "--skip-files=") $$0 }') .
 
 ## actionlint: Lint GitHub Actions workflow files
 # Unconditional `go run @latest`, same pattern as gosec/cairnlint/pyright: a

@@ -20,6 +20,7 @@ from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
+    execute_dry_run,
     execute_tool,
     is_dry_run,
     pagination_int_argument,
@@ -967,16 +968,17 @@ async def handle_linode_database_mysql_instance_delete(
         return two_stage
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_database_mysql_instance(instance_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_database_mysql_instance_delete",
-            arguments.get("environment", ""),
             "DELETE",
             delete_path,
-            None,
-            side_effects=[
-                f"MySQL Managed Database instance {instance_id} will be deleted."
-            ],
-            warnings=["Deleting a Managed Database is destructive."],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:
@@ -1275,16 +1277,17 @@ async def handle_linode_database_postgresql_instance_delete(
         return two_stage
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_database_postgresql_instance(instance_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_database_postgresql_instance_delete",
-            arguments.get("environment", ""),
             "DELETE",
             delete_path,
-            None,
-            side_effects=[
-                f"PostgreSQL Managed Database instance {instance_id} will be deleted."
-            ],
-            warnings=["Deleting a Managed Database is destructive."],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:

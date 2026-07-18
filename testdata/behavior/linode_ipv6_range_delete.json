@@ -17,6 +17,44 @@
       "args": { "range": "2600:3c03::/64", "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/networking/ipv6/ranges/2600:3c03::%2F64" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "range": "2600:3c03::/64",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /networking/ipv6/ranges/2600:3c03::/64": {
+          "range": "2600:3c03::",
+          "prefix": 64,
+          "region": "us-east",
+          "route_target": ""
+        },
+        "GET /networking/ipv6/ranges/2600:3c03::%2F64": {
+          "range": "2600:3c03::",
+          "prefix": 64,
+          "region": "us-east",
+          "route_target": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_ipv6_range_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/networking/ipv6/ranges/2600:3c03::/64"
+        },
+        "current_state": {
+          "prefix": 64,
+          "range": "2600:3c03::",
+          "region": "us-east",
+          "route_target": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

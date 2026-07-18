@@ -111,41 +111,27 @@ gives you the preview that `dry_run` would, plus a `plan_id` to apply against.
 ## Which tools are opted in
 
 The opt-in default is by capability: a destructive (`CapDestroy`) tool that
-routes through the shared destroy flow opts in, so plan/apply works for it. The
-delete tools are the core of that surface:
+routes through the shared destroy flow opts in, so plan/apply works for it.
+There is no hand-maintained list to consult. The current Destroy surface is
+pinned in [`contracts/tools-capabilities.txt`](./contracts/tools-capabilities.txt)
+(the `Destroy` rows), or ask the live server with
+`linode_profile_list_tools(capability="destroy")`.
 
-`linode_instance_delete`, `linode_volume_delete`, `linode_lke_cluster_delete`,
-`linode_firewall_delete`, `linode_nodebalancer_delete`, `linode_vpc_delete`,
-`linode_domain_delete`, `linode_image_delete`, `linode_stackscript_delete`,
-`linode_sshkey_delete`, `linode_placement_group_delete`,
-`linode_instance_disk_delete`, `linode_vpc_subnet_delete`,
-`linode_domain_record_delete`, and `linode_lke_pool_delete`.
+The cases that are easy to get wrong:
 
-A second wave of `CapDestroy` tools is wired the same way:
-
-`linode_database_mysql_instance_delete`, `linode_database_postgresql_instance_delete`,
-`linode_firewall_device_delete`, `linode_image_sharegroup_delete`,
-`linode_image_sharegroup_token_delete`, `linode_instance_backups_cancel`,
-`linode_instance_ip_delete`, `linode_instance_password_reset`,
-`linode_ipv6_range_delete`, `linode_lke_kubeconfig_delete`,
-`linode_lke_node_delete`, `linode_lke_service_token_delete`,
-`linode_object_storage_bucket_delete`, `linode_object_storage_key_delete`,
-`linode_object_storage_ssl_delete`, `linode_tag_delete`, and
-`linode_vlan_delete`. A few of these execute via POST rather than DELETE
-(`linode_instance_backups_cancel` cancels the backup service,
-`linode_instance_password_reset` resets the root password); the plan still
-captures the pre-call state and the apply re-checks it for drift.
-
-`linode_instance_rebuild` is also `CapDestroy` (a rebuild wipes every disk), so
-it's opted in too. Its plan walks the instance's disks the same way its dry-run
-does.
-
-`CapAdmin` tools do not route through this flow, so they stay out by default,
-opting them in would advertise a flow they can't run. Other capabilities stay
-out unless you name them in `opt_in`. `linode_instance_resize` is the notable
-write-tool case: it's `CapWrite`, so it's single-step until you opt it in (see
-below), at which point a resize plan covers both the instance plan and its disk
-layout.
+- A few Destroy tools execute via POST rather than DELETE
+  (`linode_instance_backups_cancel` cancels the backup service,
+  `linode_instance_password_reset` resets the root password); the plan still
+  captures the pre-call state and the apply re-checks it for drift.
+- `linode_instance_rebuild` is `CapDestroy` (a rebuild wipes every disk), so
+  it's opted in too. Its plan walks the instance's disks the same way its
+  dry-run does.
+- `CapAdmin` tools do not route through this flow, so they stay out by
+  default; opting them in would advertise a flow they can't run.
+- Other capabilities stay out unless you name them in `opt_in`.
+  `linode_instance_resize` is the notable write-tool case: it's `CapWrite`, so
+  it's single-step until you opt it in (see below), at which point a resize
+  plan covers both the instance plan and its disk layout.
 
 A tool that isn't opted in ignores `mode` and `plan_id` and behaves like an
 ordinary single-step call.

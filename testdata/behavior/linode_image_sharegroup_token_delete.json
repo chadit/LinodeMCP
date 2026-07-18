@@ -17,6 +17,50 @@
       "args": { "token_uuid": "123e4567-e89b-12d3-a456-426614174000", "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/images/sharegroups/tokens/123e4567-e89b-12d3-a456-426614174000" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "token_uuid": "123e4567-e89b-12d3-a456-426614174000",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /images/sharegroups/tokens/123e4567-e89b-12d3-a456-426614174000/sharegroup": {
+          "created": "",
+          "description": null,
+          "expiry": null,
+          "id": 0,
+          "images_count": 0,
+          "is_suspended": false,
+          "label": "",
+          "members_count": 0,
+          "updated": null,
+          "uuid": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_sharegroup_token_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/images/sharegroups/tokens/123e4567-e89b-12d3-a456-426614174000"
+        },
+        "current_state": {
+          "created": "",
+          "description": null,
+          "expiry": null,
+          "id": 0,
+          "images_count": 0,
+          "is_suspended": false,
+          "label": "",
+          "members_count": 0,
+          "updated": null,
+          "uuid": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

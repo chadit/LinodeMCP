@@ -30,6 +30,80 @@
         "method": "DELETE",
         "path": "/networking/firewalls/123"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "firewall_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /networking/firewalls/123": {
+          "created": "",
+          "id": 123,
+          "label": "edge-fw",
+          "rules": {
+            "inbound": [],
+            "inbound_policy": "",
+            "outbound": [],
+            "outbound_policy": ""
+          },
+          "status": "enabled",
+          "tags": [],
+          "updated": ""
+        },
+        "GET /networking/firewalls/123/devices": {
+          "data": [
+            {
+              "id": 31,
+              "entity": {
+                "id": 5,
+                "type": "linode",
+                "label": "web-01",
+                "url": "/v4/linode/instances/5"
+              }
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/networking/firewalls/123"
+        },
+        "current_state": {
+          "created": "",
+          "id": 123,
+          "label": "edge-fw",
+          "rules": {
+            "inbound": [],
+            "inbound_policy": "",
+            "outbound": [],
+            "outbound_policy": ""
+          },
+          "status": "enabled",
+          "tags": [],
+          "updated": ""
+        },
+        "dependencies": [
+          {
+            "kind": "linode",
+            "id": 5,
+            "label": "web-01",
+            "action": "removed",
+            "note": "Loses this firewall's rules when the firewall is deleted."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "1 resource(s) currently use this firewall and will lose its rules."
+        ]
+      }
     }
   ]
 }

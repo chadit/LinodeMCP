@@ -170,6 +170,10 @@ Every call records the safety path it took in the audit event's `mode` field:
 | `bypass_dry_run` | a destroy executed with `confirm_bypass_dry_run` (no preview) |
 | `yolo` | executed via the yolo break-glass path |
 
+Two more modes exist beyond these four: `plan` and `apply`, recorded by the
+[two-stage flow](./two-stage-writes.md). The full six-value enum lives in the
+[audit event schema](./audit-log.md).
+
 Filter on it with the audit query tools, e.g. find every preview-skipped destroy:
 
 ```text

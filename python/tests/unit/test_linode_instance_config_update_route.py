@@ -1759,6 +1759,7 @@ async def test_handle_linode_instance_interface_delete_success(
 async def test_handle_linode_instance_interface_delete_dry_run_skips_client(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
+    mock_linode_client.get_instance_interface.return_value = {"id": 789}
     result = await handle_linode_instance_interface_delete(
         {
             "linode_id": 123,
@@ -2007,6 +2008,7 @@ async def test_handle_linode_instance_config_interface_delete_success(
 async def test_handle_linode_instance_config_interface_delete_dry_run_skips_client(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
+    mock_linode_client.get_instance_config_interface.return_value = {"id": 789}
     result = await handle_linode_instance_config_interface_delete(
         {
             "linode_id": 123,

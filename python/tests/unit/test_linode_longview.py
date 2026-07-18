@@ -119,17 +119,24 @@ async def test_longview_client_delete_handler_rejects_invalid_client_id(
 
 
 @pytest.mark.asyncio
-async def test_longview_client_delete_handler_dry_run_does_not_call_client() -> None:
-    fake = _FakeClient()
+async def test_longview_client_delete_handler_dry_run_does_not_call_client(
+    sample_config: Any, mock_linode_client: Any
+) -> None:
+    mock_linode_client.get_longview_client.return_value = {
+        "id": 123,
+        "label": "lv-client",
+    }
+
     result = await linode_longview.handle_linode_longview_client_delete(
-        {"client_id": 123, "confirm": True, "dry_run": True}, cast("Any", object())
+        {"client_id": 123, "confirm": True, "dry_run": True}, sample_config
     )
 
-    fake.delete_longview_client.assert_not_awaited()
+    mock_linode_client.delete_longview_client.assert_not_awaited()
     text = _text(result)
     assert "linode_longview_client_delete" in text
     assert "DELETE" in text
     assert "/longview/clients/123" in text
+    assert '"label": "lv-client"' in text
 
 
 def test_longview_client_get_tool_schema() -> None:

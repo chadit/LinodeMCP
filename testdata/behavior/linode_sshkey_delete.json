@@ -17,6 +17,33 @@
       "args": { "ssh_key_id": 123, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/profile/sshkeys/123" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "ssh_key_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /profile/sshkeys/123": {}
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_sshkey_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/profile/sshkeys/123"
+        },
+        "current_state": {
+          "created": "",
+          "id": 0,
+          "label": "",
+          "ssh_key": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

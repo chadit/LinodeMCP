@@ -20,13 +20,13 @@ Two independent classifiers do the static analysis (no handler is executed):
 
 A tool is a STRAGGLER when either side is not proto (minus the allowlist of
 intentionally-bare tools). The gate passes iff the current straggler set is a
-subset of docs/write-proto-baseline.txt: a NEW straggler fails, and a straggler
-that got fixed (removed from both classifiers) must be dropped from the baseline
-(the file only shrinks). Regenerate with --update-baseline.
+subset of docs/contracts/write-proto-baseline.txt: a NEW straggler fails, and a
+straggler that got fixed (removed from both classifiers) must be dropped from
+the baseline (the file only shrinks). Regenerate with --update-baseline.
 
 A second check ratchets conformance fixtures: every *WriteResponse proto in
 proto/linode/mcp/v1 should have a fixture registered in the Go conformance
-corpus. Missing ones are pinned in docs/write-proto-fixture-baseline.txt and
+corpus. Missing ones are pinned in docs/contracts/write-proto-fixture-baseline.txt and
 ratchet the same way.
 
 Run directly, via `make write-proto` (root Makefile), or as a pre-commit hook.
@@ -42,6 +42,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import _baselines
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _GO_DIR = _REPO_ROOT / "go"
 _PY_SRC = _REPO_ROOT / "python" / "src"
@@ -50,8 +52,10 @@ _CORPUS_TEST = (
     _REPO_ROOT / "go" / "internal" / "tools" / "proto_conformance_corpus_test.go"
 )
 
-_STRAGGLER_BASELINE = _REPO_ROOT / "docs" / "write-proto-baseline.txt"
-_FIXTURE_BASELINE = _REPO_ROOT / "docs" / "write-proto-fixture-baseline.txt"
+_STRAGGLER_BASELINE = _REPO_ROOT / "docs" / "contracts" / "write-proto-baseline.txt"
+_FIXTURE_BASELINE = (
+    _REPO_ROOT / "docs" / "contracts" / "write-proto-fixture-baseline.txt"
+)
 
 # Tools whose success body is intentionally not a proto message. monitor's token
 # create returns a bare {token, expiry} struct by design (proto-everywhere Wave
@@ -139,22 +143,18 @@ def _missing_fixtures() -> list[str]:
 
 
 def _load_baseline(path: Path) -> set[str]:
-    """Read a ratchet baseline into a set, skipping comments and blanks."""
-    if not path.exists():
-        return set()
-
-    entries: set[str] = set()
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        stripped = raw.strip()
-        if stripped and not stripped.startswith("#"):
-            entries.add(stripped)
-
-    return entries
+    """Read the baseline's entries with "  # accepted ..." annotations stripped."""
+    return _baselines.read_entries(path)
 
 
 def _write_baseline(path: Path, header: str, entries: list[str]) -> None:
-    """Overwrite a baseline file with the sorted current entries."""
-    path.write_text(header + "\n".join(sorted(entries)) + "\n", encoding="utf-8")
+    """Overwrite a baseline with the sorted current entries.
+
+    Annotations ("  # accepted ...") on surviving entries are preserved so a
+    regeneration cannot silently drop the audit trail the baseline guard
+    checks.
+    """
+    _baselines.write_baseline(path, header, entries, _baselines.read_baseline(path))
 
 
 _STRAGGLER_HEADER = (

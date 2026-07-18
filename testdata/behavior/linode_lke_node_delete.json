@@ -22,6 +22,47 @@
       "args": { "cluster_id": 12345, "node_id": "node-1", "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/lke/clusters/12345/nodes/node-1" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "node_id": "node-1",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345/nodes/node-1": {
+          "id": "node-1",
+          "instance_id": 101,
+          "status": "ready"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_node_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/lke/clusters/12345/nodes/node-1"
+        },
+        "current_state": {
+          "id": "node-1",
+          "instance_id": 101,
+          "status": "ready"
+        },
+        "dependencies": [
+          {
+            "kind": "instance",
+            "id": 101,
+            "label": "node-1",
+            "action": "cascade_deleted",
+            "note": "Backing Linode for this node."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this node removes it from its pool; the pool node count drops by one and scheduled workloads reschedule."
+        ]
+      }
     }
   ]
 }

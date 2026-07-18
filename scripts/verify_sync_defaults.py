@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-BASELINE = REPO_ROOT / "docs" / "api-defaults-baseline.txt"
+BASELINE = REPO_ROOT / "docs" / "contracts" / "api-defaults-baseline.txt"
 SPEC_URL = (
     "https://raw.githubusercontent.com/linode/linode-api-openapi/main/openapi.json"
 )

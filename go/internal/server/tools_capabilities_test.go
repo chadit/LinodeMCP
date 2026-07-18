@@ -11,12 +11,13 @@ import (
 
 // capabilitiesManifestPath points at the shared cross-language capability
 // manifest at the repo root; this test runs three levels below it.
-const capabilitiesManifestPath = "../../../docs/tools-capabilities.txt"
+const capabilitiesManifestPath = "../../../docs/contracts/tools-capabilities.txt"
 
-// toolParityBaselinePath records accepted language-specific tool surfaces.
-const toolParityBaselinePath = "../../../docs/tool-parity-baseline.txt"
+// toolParityBaselinePath records accepted cross-language divergences,
+// including per-language absences ("<tool>: missing in <language>").
+const toolParityBaselinePath = "../../../docs/contracts/tool-parity-baseline.txt"
 
-// loadCapabilityManifest parses docs/tools-capabilities.txt into a tool->tier
+// loadCapabilityManifest parses docs/contracts/tools-capabilities.txt into a tool->tier
 // map. Each non-comment line is "<tool>\t<Capability>"; the tier strings match
 // profiles.Capability.String() with the "Cap" prefix stripped (Read, Write,
 // Destroy, Admin, Meta).
@@ -65,10 +66,14 @@ func loadCapabilityManifest(t *testing.T) map[string]string {
 	return entries
 }
 
-// loadPythonOnlyTools returns tools explicitly accepted as registered in
-// Python but not Go. These tools still belong in the capability manifest so
-// their Python capability tier remains pinned.
-func loadPythonOnlyTools(t *testing.T) map[string]bool {
+// loadMissingInLanguage returns the tools whose absence in the given language
+// is an accepted divergence in the tool-parity baseline. The manifests keep
+// listing those tools (they describe the full surface, and the other
+// languages' tiers stay pinned), so this language's registry tests skip
+// exactly this set in their missing checks. Trailing "  # accepted ..."
+// annotations are stripped; scripts/verify_tool_parity.py enforces their
+// presence and format.
+func loadMissingInLanguage(t *testing.T, language string) map[string]bool {
 	t.Helper()
 
 	file, err := os.Open(filepath.Clean(toolParityBaselinePath))
@@ -82,12 +87,18 @@ func loadPythonOnlyTools(t *testing.T) map[string]bool {
 		}
 	}()
 
+	suffix := ": missing in " + language
 	tools := make(map[string]bool)
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		name, detail, found := strings.Cut(scanner.Text(), ": ")
-		if found && detail == "registered in Python but not Go" {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		entry, _, _ := strings.Cut(line, "  # ")
+		if name, found := strings.CutSuffix(strings.TrimSpace(entry), suffix); found {
 			tools[name] = true
 		}
 	}
@@ -100,7 +111,7 @@ func loadPythonOnlyTools(t *testing.T) map[string]bool {
 }
 
 // TestToolCapabilitiesMatchManifest enforces cross-language capability parity:
-// every registered tool's capability tag must equal docs/tools-capabilities.txt.
+// every registered tool's capability tag must equal docs/contracts/tools-capabilities.txt.
 // The Python twin (tests/unit/test_tools_capabilities.py) checks the same file,
 // so a tool cannot carry a different capability, and thus appear in a different
 // profile, across the two implementations.
@@ -108,7 +119,7 @@ func TestToolCapabilitiesMatchManifest(t *testing.T) {
 	t.Parallel()
 
 	expected := loadCapabilityManifest(t)
-	pythonOnly := loadPythonOnlyTools(t)
+	absent := loadMissingInLanguage(t, "go")
 
 	srv := newCapabilityTestServer(t)
 	infos := srv.AllToolInfos()
@@ -136,7 +147,7 @@ func TestToolCapabilitiesMatchManifest(t *testing.T) {
 	var missing []string
 
 	for name := range expected {
-		if !seen[name] && !pythonOnly[name] {
+		if !seen[name] && !absent[name] {
 			missing = append(missing, name)
 		}
 	}
@@ -146,14 +157,14 @@ func TestToolCapabilitiesMatchManifest(t *testing.T) {
 	sort.Strings(extra)
 
 	if len(mismatched) > 0 {
-		t.Errorf("tool capabilities differ from docs/tools-capabilities.txt: %s", strings.Join(mismatched, ", "))
+		t.Errorf("tool capabilities differ from docs/contracts/tools-capabilities.txt: %s", strings.Join(mismatched, ", "))
 	}
 
 	if len(missing) > 0 {
-		t.Errorf("tools in docs/tools-capabilities.txt but not registered: %s", strings.Join(missing, ", "))
+		t.Errorf("tools in docs/contracts/tools-capabilities.txt but not registered: %s", strings.Join(missing, ", "))
 	}
 
 	if len(extra) > 0 {
-		t.Errorf("tools registered but missing from docs/tools-capabilities.txt: %s", strings.Join(extra, ", "))
+		t.Errorf("tools registered but missing from docs/contracts/tools-capabilities.txt: %s", strings.Join(extra, ", "))
 	}
 }

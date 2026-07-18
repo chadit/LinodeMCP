@@ -1,5 +1,8 @@
 # Deprecated route removals
 
+Removal log for tools and API routes dropped from the surface, each with the
+replacement to use instead. One section per removal.
+
 ## Object Storage cluster get
 
 - Removed tool: `linode_object_storage_cluster_get`

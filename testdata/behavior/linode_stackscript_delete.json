@@ -27,6 +27,60 @@
         "method": "DELETE",
         "path": "/linode/stackscripts/123"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "stackscript_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/stackscripts/123": {
+          "created": "",
+          "deployments_active": 0,
+          "deployments_total": 0,
+          "description": "",
+          "id": 0,
+          "images": [],
+          "is_public": false,
+          "label": "",
+          "mine": false,
+          "rev_note": "",
+          "script": "",
+          "updated": "",
+          "user_defined_fields": [],
+          "user_gravatar_id": "",
+          "username": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_stackscript_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/linode/stackscripts/123"
+        },
+        "current_state": {
+          "created": "",
+          "deployments_active": 0,
+          "deployments_total": 0,
+          "description": "",
+          "id": 0,
+          "images": [],
+          "is_public": false,
+          "label": "",
+          "mine": false,
+          "rev_note": "",
+          "script": "",
+          "updated": "",
+          "user_defined_fields": [],
+          "user_gravatar_id": "",
+          "username": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

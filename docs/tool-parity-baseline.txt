@@ -1,9 +1,0 @@
-# Accepted (known) Go/Python tool-parity divergences. Ratchet:
-# fix one and remove its line; never add a line by hand. Regenerate
-# with: python scripts/verify_tool_parity.py --update-baseline
-linode_networking_reserved_ip_create: registered in Python but not Go
-linode_networking_reserved_ip_delete: registered in Python but not Go
-linode_networking_reserved_ip_get: registered in Python but not Go
-linode_networking_reserved_ip_list: registered in Python but not Go
-linode_networking_reserved_ip_type_list: registered in Python but not Go
-linode_networking_reserved_ip_update: registered in Python but not Go

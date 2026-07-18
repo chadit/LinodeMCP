@@ -22,6 +22,141 @@
       "args": { "tag_label": "prod", "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/tags/prod" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "tag_label": "prod",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /tags/prod": {
+          "data": [
+            {
+              "type": "linode",
+              "data": {
+                "id": 5,
+                "label": "web-01"
+              }
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_tag_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/tags/prod"
+        },
+        "current_state": {
+          "data": [
+            {
+              "data": {
+                "id": 5,
+                "label": "web-01"
+              },
+              "type": "linode"
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        },
+        "dependencies": [
+          {
+            "kind": "linode",
+            "id": 5,
+            "action": "removed",
+            "note": "Loses this tag; the resource itself is not deleted."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this tag removes it from 1 tagged object(s); the objects are not deleted."
+        ]
+      }
+    },
+    {
+      "name": "dry_run_preview_reports_total_beyond_first_page",
+      "args": {
+        "tag_label": "prod",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /tags/prod": {
+          "data": [
+            {
+              "type": "linode",
+              "data": {
+                "id": 5,
+                "label": "web-01"
+              }
+            },
+            {
+              "type": "domain",
+              "data": {
+                "id": 9,
+                "label": "example.com"
+              }
+            }
+          ],
+          "page": 1,
+          "pages": 75,
+          "results": 150
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_tag_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/tags/prod"
+        },
+        "current_state": {
+          "data": [
+            {
+              "data": {
+                "id": 5,
+                "label": "web-01"
+              },
+              "type": "linode"
+            },
+            {
+              "data": {
+                "id": 9,
+                "label": "example.com"
+              },
+              "type": "domain"
+            }
+          ],
+          "page": 1,
+          "pages": 75,
+          "results": 150
+        },
+        "dependencies": [
+          {
+            "kind": "linode",
+            "id": 5,
+            "action": "removed",
+            "note": "Loses this tag; the resource itself is not deleted."
+          },
+          {
+            "kind": "domain",
+            "id": 9,
+            "action": "removed",
+            "note": "Loses this tag; the resource itself is not deleted."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this tag removes it from 150 tagged object(s); the objects are not deleted.",
+          "Only the first 2 tagged object(s) are itemized in this preview."
+        ]
+      }
     }
   ]
 }

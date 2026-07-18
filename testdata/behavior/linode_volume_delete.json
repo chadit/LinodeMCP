@@ -17,6 +17,64 @@
       "args": { "volume_id": 5, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/volumes/5" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "volume_id": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /volumes/5": {
+          "created": "",
+          "filesystem_path": "",
+          "hardware_type": "",
+          "id": 5,
+          "label": "data-vol",
+          "linode_id": 9,
+          "linode_label": "web-01",
+          "region": "us-east",
+          "size": 50,
+          "status": "active",
+          "tags": [],
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_volume_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/volumes/5"
+        },
+        "current_state": {
+          "created": "",
+          "filesystem_path": "",
+          "hardware_type": "",
+          "id": 5,
+          "label": "data-vol",
+          "linode_id": 9,
+          "linode_label": "web-01",
+          "region": "us-east",
+          "size": 50,
+          "status": "active",
+          "tags": [],
+          "updated": ""
+        },
+        "dependencies": [
+          {
+            "kind": "instance",
+            "id": 9,
+            "label": "web-01",
+            "action": "detached",
+            "note": "Volume is attached; it detaches from this instance before deletion."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Volume is currently attached to an instance; it will be detached as part of deletion."
+        ]
+      }
     }
   ]
 }

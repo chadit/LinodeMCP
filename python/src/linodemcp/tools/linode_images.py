@@ -20,6 +20,7 @@ from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
     build_dry_run_response,
     error_response,
+    execute_dry_run,
     execute_tool,
     is_dry_run,
     pagination_int_argument,
@@ -862,13 +863,17 @@ async def handle_linode_image_sharegroup_token_delete(
         return two_stage
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_image_sharegroup_by_token(token_uuid_str)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_image_sharegroup_token_delete",
-            arguments.get("environment", ""),
             "DELETE",
             f"/images/sharegroups/tokens/{quote(token_uuid_str, safe='')}",
-            None,
-            side_effects=["The image share group token will be deleted."],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:
@@ -1059,13 +1064,17 @@ async def handle_linode_image_sharegroup_delete(
         return two_stage
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_image_sharegroup(sharegroup_id_str)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_image_sharegroup_delete",
-            arguments.get("environment", ""),
             "DELETE",
             f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}",
-            None,
-            side_effects=["The image share group will be deleted."],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:
@@ -1206,16 +1215,20 @@ async def handle_linode_image_sharegroup_member_token_delete(
     token_uuid_str = cast("str", token_uuid).strip()
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_image_sharegroup(sharegroup_id_str)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_image_sharegroup_member_token_delete",
-            arguments.get("environment", ""),
             "DELETE",
             (
                 f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}"
                 f"/members/{quote(token_uuid_str, safe='')}"
             ),
-            current_state=None,
-            side_effects=["The image share group membership token will be revoked."],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:
@@ -1318,18 +1331,20 @@ async def handle_linode_image_sharegroup_image_delete(
     image_id_str = str(cast("int", image_id))
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_image_sharegroup(sharegroup_id_str)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_image_sharegroup_image_delete",
-            arguments.get("environment", ""),
             "DELETE",
             (
                 f"/images/sharegroups/{quote(sharegroup_id_str, safe='')}"
                 f"/images/{quote(image_id_str, safe='')}"
             ),
-            current_state=None,
-            side_effects=[
-                "The shared image will be removed from the image share group."
-            ],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:
@@ -1860,7 +1875,7 @@ async def _image_delete_two_stage(
         arguments,
         tool_name="linode_image_delete",
         method="DELETE",
-        path=f"/images/{quote(image_id_str, safe='')}",
+        path=f"/images/{image_id_str}",
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("Image"),
@@ -1883,13 +1898,17 @@ async def handle_linode_image_delete(
         return two_stage
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_image(image_id_str)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_image_delete",
-            arguments.get("environment", ""),
             "DELETE",
-            f"/images/{quote(image_id_str, safe='')}",
-            None,
-            side_effects=["The private image will be deleted."],
+            f"/images/{image_id_str}",
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:

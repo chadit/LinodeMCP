@@ -34,6 +34,51 @@
         "method": "DELETE",
         "path": "/networking/firewalls/5/devices/10"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "firewall_id": 5,
+        "device_id": 10,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /networking/firewalls/5/devices/10": {
+          "created": "",
+          "entity": {
+            "id": 0,
+            "label": "",
+            "parent_entity": null,
+            "type": "",
+            "url": ""
+          },
+          "id": 0,
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_firewall_device_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/networking/firewalls/5/devices/10"
+        },
+        "current_state": {
+          "created": "",
+          "entity": {
+            "id": 0,
+            "label": "",
+            "parent_entity": null,
+            "type": "",
+            "url": ""
+          },
+          "id": 0,
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

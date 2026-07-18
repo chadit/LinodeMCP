@@ -22,6 +22,78 @@
       "args": { "vpc_id": 5, "subnet_id": 7, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/vpcs/5/subnets/7" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "vpc_id": 5,
+        "subnet_id": 7,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /vpcs/5/subnets/7": {
+          "created": "",
+          "id": 7,
+          "ipv4": "10.0.0.0/24",
+          "label": "subnet-a",
+          "linodes": [
+            {
+              "id": 9,
+              "interfaces": [
+                {
+                  "active": true,
+                  "config_id": 0,
+                  "id": 81
+                }
+              ]
+            }
+          ],
+          "updated": ""
+        },
+        "GET /vpcs/5": {
+          "id": 5,
+          "label": "prod-vpc"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_vpc_subnet_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/vpcs/5/subnets/7"
+        },
+        "current_state": {
+          "created": "",
+          "id": 7,
+          "ipv4": "10.0.0.0/24",
+          "label": "subnet-a",
+          "linodes": [
+            {
+              "id": 9,
+              "interfaces": [
+                {
+                  "active": true,
+                  "config_id": 0,
+                  "id": 81
+                }
+              ]
+            }
+          ],
+          "updated": ""
+        },
+        "dependencies": [
+          {
+            "kind": "instance",
+            "id": 9,
+            "action": "detached",
+            "note": "1 interface(s) in this subnet are detached."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "1 Linode(s) have interfaces in subnet \"subnet-a\" (VPC \"prod-vpc\") and will be detached."
+        ]
+      }
     }
   ]
 }

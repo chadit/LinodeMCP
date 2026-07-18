@@ -68,7 +68,9 @@ type _DependencyWalk = Callable[
 
 def _json_default(obj: object) -> Any:
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return dataclasses.asdict(obj)
+        # Same keyword-escape stripping as the dry-run path, so a plan's
+        # current_state carries the wire field names ("in", not "in_").
+        return dataclasses.asdict(obj, dict_factory=helpers.keyword_escape_dict_factory)
     return str(obj)
 
 

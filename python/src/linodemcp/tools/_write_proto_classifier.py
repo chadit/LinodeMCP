@@ -48,7 +48,9 @@ from pathlib import Path
 
 _TOOLS_DIR = Path(__file__).resolve().parent
 
-_CAPABILITIES_PATH = _TOOLS_DIR.parents[3] / "docs" / "tools-capabilities.txt"
+_CAPABILITIES_PATH = (
+    _TOOLS_DIR.parents[3] / "docs" / "contracts" / "tools-capabilities.txt"
+)
 
 _PROTO_SINKS: frozenset[str] = frozenset(
     {"serialize_api_response", "serialize_list_response", "proto_to_canonical_dict"}

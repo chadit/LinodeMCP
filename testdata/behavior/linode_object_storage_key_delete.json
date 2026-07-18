@@ -17,6 +17,44 @@
       "args": { "key_id": 456, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/object-storage/keys/456" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "key_id": 456,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /object-storage/keys/456": {
+          "access_key": "",
+          "bucket_access": null,
+          "id": 0,
+          "label": "",
+          "limited": false,
+          "regions": null,
+          "secret_key": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_object_storage_key_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/object-storage/keys/456"
+        },
+        "current_state": {
+          "access_key": "",
+          "bucket_access": null,
+          "id": 0,
+          "label": "",
+          "limited": false,
+          "regions": null,
+          "secret_key": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

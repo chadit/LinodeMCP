@@ -22,6 +22,50 @@
       "args": { "linode_id": 123, "config_id": 7, "interface_id": 9, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/linode/instances/123/configs/7/interfaces/9" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "config_id": 7,
+        "interface_id": 9,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123/configs/7/interfaces/9": {
+          "active": false,
+          "id": 0,
+          "ipam_address": null,
+          "ipv4": null,
+          "label": null,
+          "primary": false,
+          "purpose": "",
+          "subnet_id": null,
+          "vpc_id": null
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_config_interface_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/linode/instances/123/configs/7/interfaces/9"
+        },
+        "current_state": {
+          "active": false,
+          "id": 0,
+          "ipam_address": null,
+          "ipv4": null,
+          "label": null,
+          "primary": false,
+          "purpose": "",
+          "subnet_id": null,
+          "vpc_id": null
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

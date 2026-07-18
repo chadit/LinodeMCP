@@ -29,6 +29,51 @@
         "method": "DELETE",
         "path": "/images/sharegroups/5/images/7"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "sharegroup_id": 5,
+        "image_id": 7,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /images/sharegroups/5": {
+          "created": "",
+          "description": null,
+          "expiry": null,
+          "id": 0,
+          "images_count": 0,
+          "is_suspended": false,
+          "label": "",
+          "members_count": 0,
+          "updated": null,
+          "uuid": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_image_sharegroup_image_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/images/sharegroups/5/images/7"
+        },
+        "current_state": {
+          "created": "",
+          "description": null,
+          "expiry": null,
+          "id": 0,
+          "images_count": 0,
+          "is_suspended": false,
+          "label": "",
+          "members_count": 0,
+          "updated": null,
+          "uuid": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

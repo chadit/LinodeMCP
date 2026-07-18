@@ -1,6 +1,6 @@
 # Verifying releases
 
-Every release ships checksums, SBOMs, SLSA provenance, and a cosign-signed container image. This page gives the copy-paste commands to check each one. Substitute your version for `v0.2.0`.
+Every release ships checksums, SBOMs, SLSA provenance, and a cosign-signed container image. This page gives the copy-paste commands to check each one. Substitute your version for `v0.2.0`. For how these artifacts get built and published, see [release-process.md](./release-process.md).
 
 Tools you may need: [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) and [slsa-verifier](https://github.com/slsa-framework/slsa-verifier#installation).
 

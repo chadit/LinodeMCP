@@ -187,7 +187,7 @@ The boundary the profile system enforces is "the AI under this MCP session canno
 - Profile switching is a CLI operation. The model can suggest a switch but cannot execute one. The builder's `_draft_save` writes the *definition*, not the activation.
 - Built-in profiles are immutable as catalog entries. Overrides only toggle `disabled`.
 - Built-in profile names refuse user-defined shadowing in the save and clone paths.
-- Audit (Phase 6 deferred) records the active profile name on every tool call event, captured at call time so a switch mid-handler doesn't confuse the audit log.
+- The audit log records the active profile name on every tool-call event, captured at call time so a switch mid-handler doesn't confuse the log.
 
 What the profile system does NOT protect against:
 

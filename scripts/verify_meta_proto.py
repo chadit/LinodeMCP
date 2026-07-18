@@ -18,7 +18,7 @@ Two independent classifiers do the static analysis (no handler is executed):
           serialize_list_response, or proto_to_canonical_dict.
 
 A tool is a STRAGGLER when either side is not proto. The gate passes iff the
-current straggler set is a subset of docs/meta-proto-baseline.txt: a NEW
+current straggler set is a subset of docs/contracts/meta-proto-baseline.txt: a NEW
 straggler fails, and a straggler that got fixed must be dropped from the
 baseline (the file only shrinks). Regenerate with --update-baseline.
 
@@ -34,11 +34,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import _baselines
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _GO_DIR = _REPO_ROOT / "go"
 _PY_SRC = _REPO_ROOT / "python" / "src"
 
-_STRAGGLER_BASELINE = _REPO_ROOT / "docs" / "meta-proto-baseline.txt"
+_STRAGGLER_BASELINE = _REPO_ROOT / "docs" / "contracts" / "meta-proto-baseline.txt"
 
 
 def _dump_go() -> dict[str, str]:
@@ -89,17 +91,8 @@ def _stragglers(go: dict[str, str], py: dict[str, str]) -> list[str]:
 
 
 def _load_baseline(path: Path) -> set[str]:
-    """Read the ratchet baseline into a set, skipping comments and blanks."""
-    if not path.exists():
-        return set()
-
-    entries: set[str] = set()
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        stripped = raw.strip()
-        if stripped and not stripped.startswith("#"):
-            entries.add(stripped)
-
-    return entries
+    """Read the baseline's entries with "  # accepted ..." annotations stripped."""
+    return _baselines.read_entries(path)
 
 
 _STRAGGLER_HEADER = (
@@ -118,8 +111,11 @@ def _say(line: str) -> None:
 
 def _update_baseline(stragglers: list[str]) -> int:
     """Rewrite the baseline to the current set and report the count."""
-    _STRAGGLER_BASELINE.write_text(
-        _STRAGGLER_HEADER + "\n".join(sorted(stragglers)) + "\n", encoding="utf-8"
+    _baselines.write_baseline(
+        _STRAGGLER_BASELINE,
+        _STRAGGLER_HEADER,
+        stragglers,
+        _baselines.read_baseline(_STRAGGLER_BASELINE),
     )
     _say(f"baseline updated: {len(stragglers)} meta straggler(s)")
     return 0

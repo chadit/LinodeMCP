@@ -12,6 +12,29 @@
       "args": { "linode_id": 123, "interface_id": 9, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/linode/instances/123/interfaces/9" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "interface_id": 9,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123/interfaces/9": {}
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_interface_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/linode/instances/123/interfaces/9"
+        },
+        "current_state": {},
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

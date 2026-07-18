@@ -12,12 +12,13 @@ import (
 // manifestPath points at the shared cross-language tool manifest. The file
 // lives at the repo root so both implementations read the same source of
 // truth; this test runs from go/internal/server, three levels below it.
-const manifestPath = "../../../docs/tools-manifest.txt"
+const manifestPath = "../../../docs/contracts/tools-manifest.txt"
 
-// loadManifest parses docs/tools-manifest.txt into the set of tool names.
-// Every listed tool must exist in BOTH implementations, so any tab-separated
-// annotation on a line (the retired go-only/py-only mechanism) is a fatal
-// failure. Comment lines (#) and blanks are skipped.
+// loadManifest parses docs/contracts/tools-manifest.txt into the set of tool names.
+// The manifest is the full canonical surface; per-language absences live in
+// docs/contracts/tool-parity-baseline.txt, so any tab-separated annotation on a
+// manifest line (the retired go-only/py-only mechanism) is a fatal failure.
+// Comment lines (#) and blanks are skipped.
 func loadManifest(t *testing.T) map[string]bool {
 	t.Helper()
 
@@ -61,14 +62,18 @@ func loadManifest(t *testing.T) map[string]bool {
 }
 
 // TestToolSurfaceMatchesManifest enforces cross-language tool-name parity:
-// the Go catalog must equal EXACTLY the manifest's names. A failure names
-// every missing and extra tool so drift is obvious. The Python twin
-// (tests/unit/test_tools_manifest.py) enforces the same full set, so a tool
-// cannot ship in one implementation without the other.
+// the Go catalog must equal the manifest's names minus the absences the
+// tool-parity baseline accepts for Go ("missing in go" entries, each
+// annotated with a tracking issue). A failure names every missing and extra
+// tool so drift is obvious. Extra tools are never excused: a tool cannot
+// register anywhere without entering the manifest. The Python twin
+// (tests/unit/test_tools_manifest.py) enforces the same contract for its
+// side, so a tool cannot ship in one implementation untracked.
 func TestToolSurfaceMatchesManifest(t *testing.T) {
 	t.Parallel()
 
 	expected := loadManifest(t)
+	absent := loadMissingInLanguage(t, "go")
 
 	srv := newCapabilityTestServer(t)
 	catalog := srv.ToolCatalog()
@@ -85,7 +90,7 @@ func TestToolSurfaceMatchesManifest(t *testing.T) {
 	var missing, extra []string
 
 	for name := range expected {
-		if !actual[name] {
+		if !actual[name] && !absent[name] {
 			missing = append(missing, name)
 		}
 	}
@@ -101,14 +106,14 @@ func TestToolSurfaceMatchesManifest(t *testing.T) {
 
 	if len(missing) > 0 {
 		t.Errorf(
-			"tools in docs/tools-manifest.txt but not registered by the Go server: %s",
+			"tools in docs/contracts/tools-manifest.txt but not registered by the Go server: %s",
 			strings.Join(missing, ", "),
 		)
 	}
 
 	if len(extra) > 0 {
 		t.Errorf(
-			"tools registered by the Go server but missing from docs/tools-manifest.txt: %s",
+			"tools registered by the Go server but missing from docs/contracts/tools-manifest.txt: %s",
 			strings.Join(extra, ", "),
 		)
 	}

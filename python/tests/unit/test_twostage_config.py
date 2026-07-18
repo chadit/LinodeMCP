@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from linodemcp.config import TwoStageConfig
+from linodemcp.linode import parse_instance
 from linodemcp.profiles import Capability
 from linodemcp.tools.linode_instance_write import handle_linode_instance_delete
 from linodemcp.twostage import (
@@ -73,7 +74,9 @@ def test_settings_defaults_match_builtin() -> None:
 async def test_config_ttl_override_drives_plan_lifetime(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = {"id": 123, "status": "running"}
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {"id": 123, "status": "running"}
+    )
     sample_config.two_stage = TwoStageConfig(default_plan_ttl_seconds=60)
 
     store = PlanStore()
@@ -93,7 +96,9 @@ async def test_config_ttl_override_drives_plan_lifetime(
 async def test_config_per_tool_ttl_override(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = {"id": 123, "status": "running"}
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {"id": 123, "status": "running"}
+    )
     sample_config.two_stage = TwoStageConfig(
         tool_ttl_seconds={"linode_instance_delete": 120}
     )
@@ -115,7 +120,9 @@ async def test_config_per_tool_ttl_override(
 async def test_config_opt_out_falls_through(
     sample_config: Config, mock_linode_client: AsyncMock
 ) -> None:
-    mock_linode_client.get_instance.return_value = {"id": 123, "status": "running"}
+    mock_linode_client.get_instance.return_value = parse_instance(
+        {"id": 123, "status": "running"}
+    )
     sample_config.two_stage = TwoStageConfig(opt_in={"linode_instance_delete": False})
 
     store = PlanStore()

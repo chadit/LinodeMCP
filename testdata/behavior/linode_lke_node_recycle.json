@@ -41,6 +41,37 @@
         "method": "POST",
         "path": "/lke/clusters/12345/nodes/node-1/recycle"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "node_id": "node-1",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345/nodes/node-1": {
+          "id": "",
+          "instance_id": 0,
+          "status": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_node_recycle",
+        "would_execute": {
+          "method": "POST",
+          "path": "/lke/clusters/12345/nodes/node-1/recycle"
+        },
+        "current_state": {
+          "id": "",
+          "instance_id": 0,
+          "status": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

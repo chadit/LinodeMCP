@@ -27,6 +27,49 @@
       "args": { "linode_id": 123, "address": "203.0.113.5", "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/linode/instances/123/ips/203.0.113.5" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "address": "203.0.113.5",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123/ips/203.0.113.5": {
+          "address": "",
+          "gateway": "",
+          "linode_id": 0,
+          "prefix": 0,
+          "public": false,
+          "rdns": "",
+          "region": "",
+          "subnet_mask": "",
+          "type": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_ip_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/linode/instances/123/ips/203.0.113.5"
+        },
+        "current_state": {
+          "address": "",
+          "gateway": "",
+          "linode_id": 0,
+          "prefix": 0,
+          "public": false,
+          "rdns": "",
+          "region": "",
+          "subnet_mask": "",
+          "type": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

@@ -17,6 +17,77 @@
       "args": { "vpc_id": 5, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/vpcs/5" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "vpc_id": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /vpcs/5": {
+          "created": "",
+          "description": "",
+          "id": 5,
+          "label": "prod-vpc",
+          "region": "",
+          "subnets": null,
+          "updated": ""
+        },
+        "GET /vpcs/5/subnets": {
+          "data": [
+            {
+              "id": 71,
+              "label": "subnet-a",
+              "ipv4": "10.0.0.0/24",
+              "linodes": [
+                {
+                  "id": 9,
+                  "interfaces": [
+                    {
+                      "id": 81,
+                      "active": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_vpc_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/vpcs/5"
+        },
+        "current_state": {
+          "created": "",
+          "description": "",
+          "id": 5,
+          "label": "prod-vpc",
+          "region": "",
+          "subnets": null,
+          "updated": ""
+        },
+        "dependencies": [
+          {
+            "kind": "vpc_subnet",
+            "id": 71,
+            "label": "subnet-a",
+            "action": "cascade_deleted",
+            "note": "1 attached Linode interface(s)"
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "1 Linode interface(s) across 1 subnet(s) will be detached."
+        ]
+      }
     }
   ]
 }

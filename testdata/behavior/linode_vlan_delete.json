@@ -52,6 +52,48 @@
         "method": "DELETE",
         "path": "/networking/vlans/us-east/my-vlan"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "region_id": "us-east",
+        "label": "my-vlan",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /networking/vlans": {
+          "data": [
+            {
+              "label": "my-vlan",
+              "linodes": [
+                5
+              ],
+              "region": "us-east"
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_vlan_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/networking/vlans/us-east/my-vlan"
+        },
+        "current_state": {
+          "label": "my-vlan",
+          "linodes": [
+            5
+          ],
+          "region": "us-east"
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

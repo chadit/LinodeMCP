@@ -42,6 +42,124 @@
         "path": "/linode/instances/5/rebuild",
         "body": { "image": "linode/ubuntu22.04", "root_pass": "SecurePass123" }
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 5,
+        "image": "linode/ubuntu22.04",
+        "root_pass": "SecurePass123",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/5": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "linode/ubuntu24.04",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-01",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-2",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "GET /linode/instances/0/disks": {},
+        "GET /linode/instances/5/disks": {
+          "data": [
+            {
+              "id": 7,
+              "label": "boot",
+              "size": 25600,
+              "filesystem": "ext4"
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_rebuild",
+        "would_execute": {
+          "method": "POST",
+          "path": "/linode/instances/5/rebuild"
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "linode/ubuntu24.04",
+          "ipv4": [],
+          "ipv6": "",
+          "label": "web-01",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [],
+          "type": "g6-standard-2",
+          "updated": "",
+          "watchdog_enabled": false
+        },
+        "dependencies": [],
+        "side_effects": [
+          "Disk \"boot\" (25600 MB, ext4) is erased and recreated from the new image."
+        ],
+        "warnings": [
+          "Rebuild replaces the current image \"linode/ubuntu24.04\", destroys all data, and resets the root password."
+        ]
+      }
     }
   ]
 }

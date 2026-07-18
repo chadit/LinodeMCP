@@ -12,6 +12,124 @@
       "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/nodebalancers/5/configs/7" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/5/configs": {
+          "data": [
+            {
+              "algorithm": "",
+              "check": "",
+              "check_attempts": 0,
+              "check_body": "",
+              "check_interval": 0,
+              "check_passive": false,
+              "check_path": "",
+              "check_timeout": 0,
+              "cipher_suite": "",
+              "id": 7,
+              "nodebalancer_id": 5,
+              "nodes_status": {
+                "down": 0,
+                "up": 0
+              },
+              "port": 80,
+              "protocol": "http",
+              "ssl_commonname": "",
+              "ssl_fingerprint": "",
+              "stickiness": ""
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        },
+        "GET /nodebalancers/5/configs/7": {
+          "algorithm": "",
+          "check": "",
+          "check_attempts": 0,
+          "check_body": "",
+          "check_interval": 0,
+          "check_passive": false,
+          "check_path": "",
+          "check_timeout": 0,
+          "cipher_suite": "",
+          "id": 7,
+          "nodebalancer_id": 5,
+          "nodes_status": {
+            "down": 0,
+            "up": 0
+          },
+          "port": 80,
+          "protocol": "http",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "stickiness": ""
+        },
+        "GET /nodebalancers/5/configs/7/nodes": {
+          "data": [
+            {
+              "id": 51,
+              "label": "backend-1",
+              "address": "192.168.1.10:80",
+              "mode": "accept",
+              "status": "UP"
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_config_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/nodebalancers/5/configs/7"
+        },
+        "current_state": {
+          "algorithm": "",
+          "check": "",
+          "check_attempts": 0,
+          "check_body": "",
+          "check_interval": 0,
+          "check_passive": false,
+          "check_path": "",
+          "check_timeout": 0,
+          "cipher_suite": "",
+          "id": 7,
+          "nodebalancer_id": 5,
+          "nodes_status": {
+            "down": 0,
+            "up": 0
+          },
+          "port": 80,
+          "protocol": "http",
+          "ssl_commonname": "",
+          "ssl_fingerprint": "",
+          "stickiness": ""
+        },
+        "dependencies": [
+          {
+            "kind": "nodebalancer_node",
+            "id": 51,
+            "label": "backend-1",
+            "action": "cascade_deleted",
+            "note": "backend 192.168.1.10:80 (accept)"
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this config removes 1 backend node(s) from the rotation."
+        ]
+      }
     }
   ]
 }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
+import httpx
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import (
@@ -10,13 +11,16 @@ from linodemcp.genpb.linode.mcp.v1 import (
     instance_pb2,
     volume_pb2,
 )
+from linodemcp.linode import APIError, NetworkError
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
+    WALK_PAGE_SIZE,
     DryRunDetails,
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    walk_page_items,
 )
 from linodemcp.tools.proto_enum import enum_value_names, optional_enum_error
 from linodemcp.tools.proto_response import (
@@ -638,6 +642,57 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
+def _config_references_disk(config: dict[str, Any], disk_id: int) -> bool:
+    """Report whether any device slot of the config points at the disk."""
+    devices = config.get("devices")
+    if not isinstance(devices, dict):
+        return False
+    slots = cast("dict[str, Any]", devices).values()
+    return any(
+        isinstance(slot, dict)
+        and cast("dict[str, Any]", slot).get("disk_id") == disk_id
+        for slot in slots
+    )
+
+
+async def _instance_disk_delete_dependency_walk(
+    client: RetryableClient, linode_id: int, disk_id: int
+) -> DryRunDetails:
+    """Phase 2 Tier A walk for instance disk delete. Lists the instance's
+    config profiles and surfaces those that reference the disk, since
+    deleting it leaves the referencing config's device slot empty.
+    Best-effort: a failed config list becomes a warning, not an error.
+    Mirrors the Go instanceDiskDeleteDependencyWalk.
+    """
+    try:
+        page = await client.list_instance_configs(linode_id, 1, WALK_PAGE_SIZE)
+    except (APIError, NetworkError, httpx.HTTPError) as exc:
+        return {"warnings": [f"Could not list instance configs: {exc}"]}
+
+    dependencies = [
+        {
+            "kind": "instance_config",
+            "id": config.get("id"),
+            "label": str(config.get("label", "")),
+            "action": "removed",
+            "note": (
+                "References this disk; its device slot is cleared when the "
+                "disk is deleted."
+            ),
+        }
+        for config in walk_page_items(page)
+        if _config_references_disk(config, disk_id)
+    ]
+
+    details: DryRunDetails = {}
+    if dependencies:
+        details["dependencies"] = dependencies
+        details["warnings"] = [
+            "Config profiles reference this disk; deleting it leaves those slots empty."
+        ]
+    return details
+
+
 async def _instance_disk_delete_two_stage(
     arguments: dict[str, Any], cfg: Config, linode_id: int, disk_id: int
 ) -> list[TextContent] | None:
@@ -661,6 +716,9 @@ async def _instance_disk_delete_two_stage(
             instance_pb2.InstanceDiskDeleteResponse(),
         )
 
+    async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+        return await _instance_disk_delete_dependency_walk(client, linode_id, disk_id)
+
     return await run_two_stage_destroy(
         cfg,
         arguments,
@@ -670,6 +728,7 @@ async def _instance_disk_delete_two_stage(
         fetch_state=_ts_fetch,
         execute=_ts_call,
         hash_ignore=hash_ignore_fields("Disk"),
+        dependency_walk=_ts_walk,
     )
 
 
@@ -693,6 +752,11 @@ async def handle_linode_instance_disk_delete(
         async def _fetch(client: RetryableClient) -> Any:
             return await client.get_instance_disk(linode_id, disk_id)
 
+        async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+            return await _instance_disk_delete_dependency_walk(
+                client, linode_id, disk_id
+            )
+
         return await execute_dry_run(
             cfg,
             arguments,
@@ -700,6 +764,7 @@ async def handle_linode_instance_disk_delete(
             "DELETE",
             f"/linode/instances/{linode_id}/disks/{disk_id}",
             _fetch,
+            _walk,
         )
 
     confirm = arguments.get("confirm", False)

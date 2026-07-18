@@ -12,6 +12,35 @@
       "args": { "linode_id": 123, "config_id": 7, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/linode/instances/123/configs/7" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "linode_id": 123,
+        "config_id": 7,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/123/configs/7": {
+          "id": 0,
+          "label": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_config_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/linode/instances/123/configs/7"
+        },
+        "current_state": {
+          "id": 0,
+          "label": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

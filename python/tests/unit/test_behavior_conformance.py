@@ -8,10 +8,22 @@ credentials. The Go runner
 so a handler whose validation, coercion, error text, or outgoing HTTP request
 drifts from the other language fails one of the two runners.
 
-Outcome contract per case: ``expect_error`` is the bare validation message
-(this runner strips Python's ``Error: `` framing before comparing), or
-``expect_request`` is the method, path, and JSON body of the one HTTP call
-the handler must make (``api_response`` is served back as the canned reply).
+Outcome contract per case, exactly one of: ``expect_error`` is the bare
+validation message (this runner strips Python's ``Error: `` framing before
+comparing); ``expect_request`` is the method, path, and JSON body of the one
+HTTP call the handler must make; ``expect_result`` is the successful
+response content, compared as parsed JSON so formatting is irrelevant.
+
+The fake API answers from ``api_responses`` when present: keys are
+"METHOD /path" with the query string stripped (per-language pagination
+params must not fragment the routing), values are the JSON bodies to serve.
+A request with no matching key fails the case, but an unused key does not:
+implementations may fetch equivalent data from different endpoints, and the
+contract these fixtures pin is the OUTPUT, not the fetch pattern. Without
+``api_responses`` the single ``api_response`` (or ``{}``) answers every
+request. A case whose args include ``dry_run: true`` additionally asserts
+every captured request is a GET: a dry run may read whatever it needs for
+its preview but must never mutate.
 """
 
 from __future__ import annotations
@@ -58,6 +70,31 @@ def _behavior_config() -> Config:
     )
 
 
+def _resolve_response(
+    api_responses: dict[str, Any] | None,
+    api_response: Any,
+    method: str,
+    url: str,
+    unmatched: list[str],
+) -> tuple[int, Any]:
+    """Pick the fake reply for one request.
+
+    Routed mode (``api_responses``) matches on "METHOD /path" with the query
+    string stripped, mirroring the Go runner. A miss is recorded in
+    ``unmatched`` so the test fails loudly, and served as a 404.
+    """
+    if api_responses is None:
+        return 200, api_response
+
+    path = url.removeprefix(_FAKE_API_URL).split("?", 1)[0]
+    key = f"{method} {path}"
+    if key not in api_responses:
+        unmatched.append(key)
+        return 404, {}
+
+    return 200, api_responses[key]
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("tool", "case_name", "case"),
@@ -69,15 +106,20 @@ async def test_behavior_conformance(
 ) -> None:
     """One shared fixture case must produce its contracted outcome."""
     captured: list[tuple[str, str, Any]] = []
+    unmatched: list[str] = []
     api_response = case.get("api_response", {})
+    api_responses: dict[str, Any] | None = case.get("api_responses")
 
     async def _fake_request(
         _self: httpx.AsyncClient, method: str, url: str, **kwargs: Any
     ) -> httpx.Response:
         captured.append((method, url, kwargs.get("json")))
+        status, body = _resolve_response(
+            api_responses, api_response, method, url, unmatched
+        )
         return httpx.Response(
-            200,
-            json=api_response,
+            status,
+            json=body,
             request=httpx.Request(method, url),
         )
 
@@ -92,6 +134,18 @@ async def test_behavior_conformance(
     assert len(result) == 1, f"{tool}/{case_name}: expected one content item"
     text: str = result[0].text
 
+    assert not unmatched, (
+        f"{tool}/{case_name}: requests with no api_responses entry: "
+        f"{', '.join(unmatched)}"
+    )
+
+    if case["args"].get("dry_run") is True:
+        non_get = sorted({method for method, _, _ in captured if method != "GET"})
+        assert not non_get, (
+            f"{tool}/{case_name}: dry-run issued {', '.join(non_get)}; "
+            "only GET is allowed"
+        )
+
     expect_error = case.get("expect_error")
     if expect_error is not None:
         assert text == f"Error: {expect_error}", (
@@ -99,6 +153,15 @@ async def test_behavior_conformance(
             f"want {'Error: ' + expect_error!r}"
         )
         assert captured == [], f"{tool}/{case_name}: no HTTP call expected"
+        return
+
+    expect_result = case.get("expect_result")
+    if expect_result is not None:
+        assert not text.startswith("Error:"), f"{tool}/{case_name}: unexpected {text!r}"
+        assert json.loads(text) == expect_result, (
+            f"{tool}/{case_name}: result mismatch\ngot:\n{text}\n"
+            f"want:\n{json.dumps(expect_result, indent=2)}"
+        )
         return
 
     expect_request = case["expect_request"]

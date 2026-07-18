@@ -596,13 +596,6 @@ async def handle_linode_instance_config_delete(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_instance_config_delete tool request."""
-    confirm = arguments.get("confirm")
-    if not isinstance(confirm, bool) or not confirm:
-        return error_response(
-            "This is irreversible. The configuration profile will be permanently "
-            "deleted. Set confirm=true to proceed."
-        )
-
     linode_id, error = required_int_id(arguments, "linode_id")
     if linode_id is None:
         return error_response(error)
@@ -610,6 +603,8 @@ async def handle_linode_instance_config_delete(
     if config_id is None:
         return error_response(error)
 
+    # Dry-run is checked before confirm so a preview never demands the
+    # confirmation flag, matching the Go destroy flow's branch order.
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> dict[str, Any]:
@@ -622,6 +617,13 @@ async def handle_linode_instance_config_delete(
             "DELETE",
             f"/linode/instances/{linode_id}/configs/{config_id}",
             _fetch,
+        )
+
+    confirm = arguments.get("confirm")
+    if not isinstance(confirm, bool) or not confirm:
+        return error_response(
+            "This is irreversible. The configuration profile will be permanently "
+            "deleted. Set confirm=true to proceed."
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
@@ -680,19 +682,22 @@ async def handle_linode_instance_config_interface_delete(
         return error_response(error)
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_config_interface(
+                linode_id, config_id, interface_id
+            )
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_instance_config_interface_delete",
-            arguments.get("environment", ""),
             "DELETE",
             (
                 f"/linode/instances/{linode_id}/configs/{config_id}/"
                 f"interfaces/{interface_id}"
             ),
-            None,
-            side_effects=[
-                f"Interface {interface_id} will be deleted from configuration "
-                f"profile {config_id} for Linode {linode_id}."
-            ],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:
@@ -765,15 +770,17 @@ async def handle_linode_instance_interface_delete(
         return error_response(error)
 
     if is_dry_run(arguments):
-        return build_dry_run_response(
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_instance_interface(linode_id, interface_id)
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_instance_interface_delete",
-            arguments.get("environment", ""),
             "DELETE",
             f"/linode/instances/{linode_id}/interfaces/{interface_id}",
-            None,
-            side_effects=[
-                f"Interface {interface_id} will be deleted from Linode {linode_id}."
-            ],
+            _fetch,
         )
 
     if arguments.get("confirm") is not True:

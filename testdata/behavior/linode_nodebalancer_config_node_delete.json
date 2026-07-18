@@ -27,6 +27,48 @@
       "args": { "nodebalancer_id": 5, "config_id": 7, "node_id": 9, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/nodebalancers/5/configs/7/nodes/9" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "node_id": 9,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/5/configs/7/nodes/9": {
+          "address": "",
+          "config_id": 0,
+          "id": 0,
+          "label": "",
+          "mode": "",
+          "nodebalancer_id": 0,
+          "status": "",
+          "weight": 0
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_config_node_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/nodebalancers/5/configs/7/nodes/9"
+        },
+        "current_state": {
+          "address": "",
+          "config_id": 0,
+          "id": 0,
+          "label": "",
+          "mode": "",
+          "nodebalancer_id": 0,
+          "status": "",
+          "weight": 0
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

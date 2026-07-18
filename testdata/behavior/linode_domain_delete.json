@@ -12,6 +12,90 @@
       "args": { "domain_id": 5, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/domains/5" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "domain_id": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /domains/5": {
+          "axfr_ips": [],
+          "created": "",
+          "description": "",
+          "domain": "example.com",
+          "expire_sec": 0,
+          "group": "",
+          "id": 5,
+          "master_ips": [],
+          "refresh_sec": 0,
+          "retry_sec": 0,
+          "soa_email": "",
+          "status": "active",
+          "tags": [],
+          "ttl_sec": 0,
+          "type": "master",
+          "updated": ""
+        },
+        "GET /domains/5/records": {
+          "data": [
+            {
+              "id": 41,
+              "type": "NS",
+              "name": "example.com",
+              "target": "ns1.linode.com"
+            },
+            {
+              "id": 42,
+              "type": "A",
+              "name": "www",
+              "target": "203.0.113.10"
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 2
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_domain_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/domains/5"
+        },
+        "current_state": {
+          "axfr_ips": [],
+          "created": "",
+          "description": "",
+          "domain": "example.com",
+          "expire_sec": 0,
+          "group": "",
+          "id": 5,
+          "master_ips": [],
+          "refresh_sec": 0,
+          "retry_sec": 0,
+          "soa_email": "",
+          "status": "active",
+          "tags": [],
+          "ttl_sec": 0,
+          "type": "master",
+          "updated": ""
+        },
+        "dependencies": [
+          {
+            "kind": "ns_record",
+            "label": "ns1.linode.com",
+            "action": "cascade_deleted",
+            "note": "NS record for example.com"
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this domain destroys 2 DNS record(s), including 1 NS record(s)."
+        ]
+      }
     }
   ]
 }

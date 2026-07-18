@@ -1,0 +1,50 @@
+name: Baseline Guard
+
+# Diff-aware direction check for the docs/contracts/*-baseline.txt ratchets. `make
+# check` runs against committed state only, so it cannot tell that a baseline
+# GREW; that needs a reference point (the PR base, or the previous tip on a
+# push). This workflow supplies it: any ADDED baseline entry must carry an
+# "accepted YYYY-MM-DD <reason>" annotation or the job fails. It runs outside
+# `make check` on purpose; local runs use `make baseline-guard`.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: baseline growth needs annotations
+    runs-on: ubuntu-latest
+    steps:
+      # Full history so the base rev (PR merge parent / push predecessor)
+      # is reachable for `git show`.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      # For a pull_request event the checkout is the merge commit, whose
+      # first parent is the base branch tip; for a push the event carries
+      # the previous tip. An all-zero before (branch creation) has nothing
+      # to diff against and the script skips unknown revs on its own.
+      - name: Resolve base rev
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "rev=HEAD^1" >> "$GITHUB_OUTPUT"
+          else
+            echo "rev=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check baseline direction
+        run: python3 scripts/verify_baseline_direction.py "${{ steps.base.outputs.rev }}"

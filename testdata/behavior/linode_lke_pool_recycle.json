@@ -41,6 +41,47 @@
         "method": "POST",
         "path": "/lke/clusters/12345/pools/7/recycle"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345/pools/7": {
+          "autoscaler": null,
+          "cluster_id": 0,
+          "count": 0,
+          "disks": null,
+          "id": 0,
+          "nodes": null,
+          "tags": null,
+          "type": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_pool_recycle",
+        "would_execute": {
+          "method": "POST",
+          "path": "/lke/clusters/12345/pools/7/recycle"
+        },
+        "current_state": {
+          "autoscaler": null,
+          "cluster_id": 0,
+          "count": 0,
+          "disks": null,
+          "id": 0,
+          "nodes": null,
+          "tags": null,
+          "type": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

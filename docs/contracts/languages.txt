@@ -1,0 +1,20 @@
+# Registry of the languages that implement the LinodeMCP tool surface.
+# One language per line: <name>\t<working-dir>\t<dump command>.
+#
+# The dump command runs from <working-dir> (relative to the repo root) and
+# must print the language's tool surface as a JSON array of records:
+#   [{"name": ..., "capability": ..., "params": {param: json-type},
+#     "required": [...]}, ...]
+# scripts/verify_tool_parity.py runs every dumper listed here and diffs the
+# surfaces, so registering a language is what turns the parity gates on for
+# it. A newly registered language with no tools yet fails the gate with one
+# "missing in <name>" line per manifest tool; accept them into
+# docs/contracts/tool-parity-baseline.txt with tracking annotations and drive the list
+# to zero (see docs/adding-a-language.md, and `make parity-todo` for the
+# remaining-work view).
+#
+# Line order matters: the first language that implements a tool is the
+# reference its contract is compared against, so keep the most complete
+# implementation first.
+go	go	go run ./cmd/parity-dump
+python	python	.venv/bin/python -m linodemcp.parity_dump

@@ -4,6 +4,6 @@
 # proto conversion. Ratchet: convert a handler to proto on both sides,
 # then remove its line; never add a line by hand. Regenerate:
 #   python scripts/verify_read_proto.py --update-baseline
-linode_networking_reserved_ip_get	missing	proto
-linode_networking_reserved_ip_list	missing	proto
-linode_networking_reserved_ip_type_list	missing	proto
+linode_networking_reserved_ip_get	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_list	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
+linode_networking_reserved_ip_type_list	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038

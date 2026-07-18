@@ -12,6 +12,63 @@
       "args": { "group_id": 123, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/placement/groups/123" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "group_id": 123,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /placement/groups/123": {
+          "id": 123,
+          "is_compliant": false,
+          "label": "pg-1",
+          "members": [
+            {
+              "is_compliant": true,
+              "linode_id": 9
+            }
+          ],
+          "placement_group_policy": "",
+          "placement_group_type": "anti_affinity:local",
+          "region": "us-east"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_placement_group_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/placement/groups/123"
+        },
+        "current_state": {
+          "id": 123,
+          "is_compliant": false,
+          "label": "pg-1",
+          "members": [
+            {
+              "is_compliant": true,
+              "linode_id": 9
+            }
+          ],
+          "placement_group_policy": "",
+          "placement_group_type": "anti_affinity:local",
+          "region": "us-east"
+        },
+        "dependencies": [
+          {
+            "kind": "instance",
+            "id": 9,
+            "action": "detached",
+            "note": "Linode is removed from the placement group; the instance is not deleted."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this placement group detaches 1 Linode(s); the instances are not deleted."
+        ]
+      }
     }
   ]
 }

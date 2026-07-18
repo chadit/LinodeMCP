@@ -1,0 +1,22 @@
+# Tools whose GET route paginates in the Linode API spec but whose input
+# contract has no page/page_size. Ratchet: add pagination to the tool in
+# every language (proto first) and remove its line; never add a line by
+# hand (regenerate instead, then attach the required annotation).
+# Regenerate with:
+#   python3 scripts/verify_pagination.py --update-baseline
+# Spec side comes from docs/contracts/api-pagination-baseline.txt
+# (scripts/verify_sync_pagination.py owns that snapshot).
+linode_domain_list: GET /domains unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_domain_record_list: GET /domains/{domainId}/records unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_firewall_list: GET /networking/firewalls unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_image_list: GET /images unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_instance_disk_list: GET /linode/instances/{linodeId}/disks unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_instance_list: GET /linode/instances unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_nodebalancer_list: GET /nodebalancers unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_sshkey_list: GET /profile/sshkeys unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_stackscript_list: GET /linode/stackscripts unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_volume_list: GET /volumes unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_vpc_ip_all_list: GET /vpcs/ips unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_vpc_ip_list: GET /vpcs/{vpcId}/ips unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_vpc_list: GET /vpcs unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
+linode_vpc_subnet_list: GET /vpcs/{vpcId}/subnets unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md

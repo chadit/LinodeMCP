@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import instance_pb2
+from linodemcp.linode import instance_preview_state
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
@@ -135,7 +136,7 @@ async def handle_linode_instance_backup_create(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         return await execute_dry_run(
             cfg,
@@ -299,7 +300,7 @@ async def handle_linode_instance_backups_enable(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         return await execute_dry_run(
             cfg,
@@ -353,7 +354,7 @@ async def _instance_backups_cancel_two_stage(
         return None
 
     async def _ts_fetch(client: RetryableClient) -> Any:
-        return await client.get_instance(iid)
+        return instance_preview_state(await client.get_instance(iid))
 
     async def _ts_call(client: RetryableClient) -> dict[str, Any]:
         await client.cancel_instance_backups(iid)
@@ -395,7 +396,7 @@ async def handle_linode_instance_backups_cancel(
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_instance(iid)
+            return instance_preview_state(await client.get_instance(iid))
 
         return await execute_dry_run(
             cfg,

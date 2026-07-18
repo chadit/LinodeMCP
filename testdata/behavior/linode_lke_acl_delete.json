@@ -30,6 +30,46 @@
         "method": "DELETE",
         "path": "/lke/clusters/12345/control_plane_acl"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345/control_plane_acl": {
+          "acl": {
+            "enabled": true,
+            "addresses": {
+              "ipv4": [
+                "203.0.113.1/32"
+              ],
+              "ipv6": []
+            }
+          }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_acl_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/lke/clusters/12345/control_plane_acl"
+        },
+        "current_state": {
+          "addresses": {
+            "ipv4": [
+              "203.0.113.1/32"
+            ],
+            "ipv6": []
+          },
+          "enabled": true
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

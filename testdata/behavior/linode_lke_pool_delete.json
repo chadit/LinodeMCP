@@ -22,6 +22,86 @@
       "args": { "cluster_id": 12345, "pool_id": 7, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/lke/clusters/12345/pools/7" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /lke/clusters/12345/pools/7": {
+          "autoscaler": null,
+          "cluster_id": 0,
+          "count": 2,
+          "disks": null,
+          "id": 7,
+          "nodes": [
+            {
+              "id": "7-a",
+              "instance_id": 101,
+              "status": "ready"
+            },
+            {
+              "id": "7-b",
+              "instance_id": 102,
+              "status": "ready"
+            }
+          ],
+          "tags": null,
+          "type": "g6-standard-2"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_lke_pool_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/lke/clusters/12345/pools/7"
+        },
+        "current_state": {
+          "autoscaler": null,
+          "cluster_id": 0,
+          "count": 2,
+          "disks": null,
+          "id": 7,
+          "nodes": [
+            {
+              "id": "7-a",
+              "instance_id": 101,
+              "status": "ready"
+            },
+            {
+              "id": "7-b",
+              "instance_id": 102,
+              "status": "ready"
+            }
+          ],
+          "tags": null,
+          "type": "g6-standard-2"
+        },
+        "dependencies": [
+          {
+            "kind": "instance",
+            "id": 101,
+            "label": "7-a",
+            "action": "cascade_deleted",
+            "note": "Backing Linode for this pool node."
+          },
+          {
+            "kind": "instance",
+            "id": 102,
+            "label": "7-b",
+            "action": "cascade_deleted",
+            "note": "Backing Linode for this pool node."
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this pool destroys 2 node(s) and their backing Linodes; running workloads are lost."
+        ]
+      }
     }
   ]
 }

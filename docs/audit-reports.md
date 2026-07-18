@@ -4,7 +4,7 @@ Named queries against the audit log, defined in config and invoked by name. Repo
 
 The runner is the `linode_audit_report` MCP tool (capability `CapMeta`, available in every profile). Reports resolve at call time, so editing the config file takes effect on the next call. No server restart needed.
 
-For the event schema, sinks, and redaction model, see [audit-log.md](./audit-log.md).
+For the event schema and redaction model, see [audit-log.md](./audit-log.md); for sinks and retention, [audit-operations.md](./audit-operations.md).
 
 ## Why reports
 

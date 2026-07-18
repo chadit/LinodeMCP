@@ -27,6 +27,82 @@
         "method": "DELETE",
         "path": "/nodebalancers/5"
       }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "nodebalancer_id": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /nodebalancers/5": {
+          "client_conn_throttle": 0,
+          "created": "",
+          "hostname": "nb-5.linode.com",
+          "id": 5,
+          "ipv4": "",
+          "ipv6": "",
+          "label": "lb-1",
+          "region": "us-east",
+          "tags": [],
+          "transfer": {
+            "in": 0,
+            "out": 0,
+            "total": 0
+          },
+          "updated": ""
+        },
+        "GET /nodebalancers/5/configs": {
+          "data": [
+            {
+              "id": 7,
+              "port": 80,
+              "protocol": "http",
+              "nodebalancer_id": 5
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_nodebalancer_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/nodebalancers/5"
+        },
+        "current_state": {
+          "client_conn_throttle": 0,
+          "created": "",
+          "hostname": "nb-5.linode.com",
+          "id": 5,
+          "ipv4": "",
+          "ipv6": "",
+          "label": "lb-1",
+          "region": "us-east",
+          "tags": [],
+          "transfer": {
+            "in": 0,
+            "out": 0,
+            "total": 0
+          },
+          "updated": ""
+        },
+        "dependencies": [
+          {
+            "kind": "nodebalancer_config",
+            "id": 7,
+            "action": "cascade_deleted",
+            "note": "http config on port 80"
+          }
+        ],
+        "side_effects": [],
+        "warnings": [
+          "Deleting this NodeBalancer destroys 1 config(s) and their backend node lists."
+        ]
+      }
     }
   ]
 }

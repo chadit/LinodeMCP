@@ -17,6 +17,48 @@
       "args": { "client_id": 5, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/longview/clients/5" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "client_id": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /longview/clients/5": {
+          "apps": {
+            "apache": false,
+            "mysql": false,
+            "nginx": false
+          },
+          "created": "",
+          "id": 0,
+          "label": "",
+          "updated": ""
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_longview_client_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/longview/clients/5"
+        },
+        "current_state": {
+          "apps": {
+            "apache": false,
+            "mysql": false,
+            "nginx": false
+          },
+          "created": "",
+          "id": 0,
+          "label": "",
+          "updated": ""
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
     }
   ]
 }

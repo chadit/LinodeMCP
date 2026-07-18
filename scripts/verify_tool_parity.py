@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """Cross-language tool-parity verifier.
 
-Dumps the Go and Python tool registries and compares, per tool, the
-observable contract that a client or model sees: capability tier, the set of
-input parameters, each parameter's JSON-Schema type, and the required set.
+Dumps every language's tool registry and compares, per tool, the observable
+contract that a client or model sees: capability tier, the set of input
+parameters, each parameter's JSON-Schema type, and the required set.
 Descriptions are intentionally ignored, since wording is allowed to differ.
 
-Run it directly, via ``make tool-parity`` (root Makefile), or as a pre-commit
-hook. Exits non-zero and prints every divergence when the two implementations
-disagree, so a tool cannot drift in shape between Go and Python.
+The languages come from docs/contracts/languages.txt: one dumper command per
+implementation, each printing the same JSON record shape (see
+go/cmd/parity-dump and python -m linodemcp.parity_dump). Registering a
+language there is what turns this gate on for it, so a freshly added
+language immediately fails with one "missing in <language>" line per tool it
+has not implemented yet. Those absences are accepted into the baseline with
+a tracking annotation and driven to zero; `make parity-todo` renders the
+per-language remaining-work view.
 
-The Go surface comes from ``go run ./cmd/parity-dump`` (built with a throwaway
-config; tool registration makes no network calls). The Python surface comes
-from importing ``linodemcp``'s registry, so this must run under the Python
-venv interpreter (the Makefile and pre-commit hook do that).
+Run it directly, via ``make tool-parity`` (root Makefile), or as a pre-commit
+hook. Exits non-zero and prints every divergence when the implementations
+disagree, so a tool cannot drift in shape between languages.
 """
 
 from __future__ import annotations
@@ -24,53 +28,73 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import _baselines
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_GO_DIR = _REPO_ROOT / "go"
-_PY_SRC = _REPO_ROOT / "python" / "src"
+_LANGUAGES = _REPO_ROOT / "docs" / "contracts" / "languages.txt"
+_BASELINE = _REPO_ROOT / "docs" / "contracts" / "tool-parity-baseline.txt"
+
+_ABSENCE_MARK = ": missing in "
+
+_BASELINE_HEADER = (
+    "# Accepted (known) cross-language tool-parity divergences. Ratchet:\n"
+    "# fix one and remove its line; never add a line by hand (regenerate\n"
+    "# instead, then attach the required annotation). Regenerate with:\n"
+    "#   python scripts/verify_tool_parity.py --update-baseline\n"
+    '# Every "missing in <language>" entry MUST carry an annotation naming\n'
+    "# when it was accepted and the tracking issue that will close it:\n"
+    "#   <entry>  # accepted YYYY-MM-DD <tracking-issue URL>\n"
+)
 
 
-def _dump_go() -> dict[str, dict[str, Any]]:
-    """Run the Go dumper and return {tool_name: normalized_record}."""
+def _load_languages() -> list[tuple[str, Path, list[str]]]:
+    """Parse docs/contracts/languages.txt into (name, cwd, argv) triples in file order.
+
+    File order matters: the first language that implements a tool is the
+    reference its contract is diffed against.
+    """
+    languages: list[tuple[str, Path, list[str]]] = []
+
+    for raw in _LANGUAGES.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        parts = stripped.split("\t")
+        expected_fields = 3
+        if len(parts) != expected_fields:
+            msg = (
+                f"docs/contracts/languages.txt line {raw!r}"
+                " is not <name>\\t<dir>\\t<command>"
+            )
+            raise SystemExit(msg)
+
+        name, workdir, command = parts
+        languages.append((name, _REPO_ROOT / workdir, command.split()))
+
+    if not languages:
+        msg = "docs/contracts/languages.txt registers no languages"
+        raise SystemExit(msg)
+
+    return languages
+
+
+def _dump_surface(name: str, cwd: Path, argv: list[str]) -> dict[str, dict[str, Any]]:
+    """Run one language's dumper and return {tool_name: normalized_record}."""
     result = subprocess.run(
-        ["go", "run", "./cmd/parity-dump"],
-        cwd=_GO_DIR,
+        argv,
+        cwd=cwd,
         capture_output=True,
         text=True,
         check=False,
     )
     if result.returncode != 0:
         sys.stderr.write(result.stderr)
-        msg = f"go dumper failed (exit {result.returncode})"
+        msg = f"{name} dumper failed (exit {result.returncode})"
         raise SystemExit(msg)
 
     records = json.loads(result.stdout)
     return {rec["name"]: _normalize(rec) for rec in records}
-
-
-def _dump_python() -> dict[str, dict[str, Any]]:
-    """Import the Python registry and return {tool_name: normalized_record}."""
-    if str(_PY_SRC) not in sys.path:
-        sys.path.insert(0, str(_PY_SRC))
-
-    from linodemcp.server import get_tool_registry  # noqa: PLC0415
-
-    out: dict[str, dict[str, Any]] = {}
-    for entry in get_tool_registry():
-        schema: dict[str, Any] = entry.tool.inputSchema or {}
-        properties: dict[str, Any] = schema.get("properties", {})
-        params: dict[str, str] = {}
-        for pname, prop in properties.items():
-            ptype = prop.get("type", "") if isinstance(prop, dict) else ""
-            params[pname] = ptype if isinstance(ptype, str) else ""
-        out[entry.name] = _normalize(
-            {
-                "name": entry.name,
-                "capability": entry.capability.name,
-                "params": params,
-                "required": schema.get("required", []),
-            }
-        )
-    return out
 
 
 # Go's mcp-go only offers WithNumber (emits "number"); Python uses "integer".
@@ -97,97 +121,141 @@ def _normalize(rec: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _compare(go: dict[str, dict[str, Any]], py: dict[str, dict[str, Any]]) -> list[str]:
-    """Return a sorted list of human-readable divergence lines."""
+def _compare(
+    surfaces: dict[str, dict[str, dict[str, Any]]], order: list[str]
+) -> list[str]:
+    """Return human-readable divergence lines across every language.
+
+    Absences are reported per language against the union surface, so a tool
+    only one implementation registers still names every language that lacks
+    it. Contract fields are diffed against the first registered language
+    that has the tool.
+    """
     problems: list[str] = []
 
-    problems.extend(
-        f"{name}: registered in Go but not Python" for name in sorted(set(go) - set(py))
-    )
-    problems.extend(
-        f"{name}: registered in Python but not Go" for name in sorted(set(py) - set(go))
-    )
+    union: set[str] = set()
+    for tools in surfaces.values():
+        union |= set(tools)
 
-    for name in sorted(set(go) & set(py)):
-        problems.extend(_compare_one(name, go[name], py[name]))
+    for tool in sorted(union):
+        present = [lang for lang in order if tool in surfaces[lang]]
+        problems.extend(
+            f"{tool}{_ABSENCE_MARK.rstrip()} {lang}"
+            for lang in order
+            if tool not in surfaces[lang]
+        )
+
+        reference = present[0]
+        for lang in present[1:]:
+            problems.extend(
+                _compare_one(
+                    tool,
+                    reference,
+                    surfaces[reference][tool],
+                    lang,
+                    surfaces[lang][tool],
+                )
+            )
 
     return problems
 
 
-def _compare_one(name: str, go: dict[str, Any], py: dict[str, Any]) -> list[str]:
-    """Compare a single tool's capability, params, types, and required set."""
+def _compare_one(
+    name: str,
+    ref_lang: str,
+    ref: dict[str, Any],
+    other_lang: str,
+    other: dict[str, Any],
+) -> list[str]:
+    """Compare one tool's capability, params, types, and required set."""
     out: list[str] = []
 
-    if go["capability"] != py["capability"]:
+    if ref["capability"] != other["capability"]:
         out.append(
-            f"{name}: capability Go={go['capability']} Python={py['capability']}"
+            f"{name}: capability {ref_lang}={ref['capability']} "
+            f"{other_lang}={other['capability']}"
         )
 
-    go_params, py_params = go["params"], py["params"]
+    ref_params, other_params = ref["params"], other["params"]
 
     out.extend(
-        f"{name}: param '{param}' in Go but not Python"
-        for param in sorted(set(go_params) - set(py_params))
+        f"{name}: param '{param}' in {ref_lang} but not {other_lang}"
+        for param in sorted(set(ref_params) - set(other_params))
     )
     out.extend(
-        f"{name}: param '{param}' in Python but not Go"
-        for param in sorted(set(py_params) - set(go_params))
+        f"{name}: param '{param}' in {other_lang} but not {ref_lang}"
+        for param in sorted(set(other_params) - set(ref_params))
     )
     out.extend(
         f"{name}: param '{param}' type "
-        f"Go={go_params[param] or '?'} Python={py_params[param] or '?'}"
-        for param in sorted(set(go_params) & set(py_params))
-        if go_params[param] != py_params[param]
+        f"{ref_lang}={ref_params[param] or '?'} "
+        f"{other_lang}={other_params[param] or '?'}"
+        for param in sorted(set(ref_params) & set(other_params))
+        if ref_params[param] != other_params[param]
     )
 
-    if go["required"] != py["required"]:
-        out.append(f"{name}: required Go={go['required']} Python={py['required']}")
+    if ref["required"] != other["required"]:
+        out.append(
+            f"{name}: required {ref_lang}={ref['required']} "
+            f"{other_lang}={other['required']}"
+        )
 
     return out
 
 
-_BASELINE = _REPO_ROOT / "docs" / "tool-parity-baseline.txt"
+def _is_absence(entry: str) -> bool:
+    """Report whether a divergence entry records a per-language absence."""
+    return _ABSENCE_MARK in entry
 
 
-def _load_baseline() -> set[str]:
-    """Read the accepted-divergence baseline (one line per known divergence)."""
-    if not _BASELINE.exists():
-        return set()
-    lines: set[str] = set()
-    for raw in _BASELINE.read_text(encoding="utf-8").splitlines():
-        stripped = raw.strip()
-        if stripped and not stripped.startswith("#"):
-            lines.add(stripped)
-    return lines
+def _report_unannotated(pending: list[str]) -> None:
+    """Explain the annotation an accepted absence entry must carry."""
+    print(f"\nabsence entries missing a tracking annotation ({len(pending)}):")
+    for entry in pending:
+        print(f"  {entry}")
+    print(
+        "\nEach accepted absence documents who will close it. Append to the"
+        " line in docs/contracts/tool-parity-baseline.txt:"
+        "\n  <entry>  # accepted YYYY-MM-DD <tracking-issue URL>"
+    )
 
 
 def main() -> int:
-    go = _dump_go()
-    py = _dump_python()
-    current = set(_compare(go, py))
-    baseline = _load_baseline()
+    languages = _load_languages()
+    order = [name for name, _, _ in languages]
+    surfaces = {name: _dump_surface(name, cwd, argv) for name, cwd, argv in languages}
+
+    union: set[str] = set()
+    for tools in surfaces.values():
+        union |= set(tools)
+
+    current = set(_compare(surfaces, order))
+    stored = _baselines.read_baseline(_BASELINE)
+    baseline = set(stored)
 
     # The gate is a ratchet: the baseline can only shrink. New divergences
     # (not in the baseline) and stale baseline entries (fixed, so no longer
     # diverging) both fail, so the file stays accurate and the count drops.
+    # Accepted absences additionally require a tracking annotation, so a
+    # language-specific gap is a visible commitment rather than silent debt.
     if "--update-baseline" in sys.argv:
-        _BASELINE.write_text(
-            "# Accepted (known) Go/Python tool-parity divergences. Ratchet:\n"
-            "# fix one and remove its line; never add a line by hand. Regenerate\n"
-            "# with: python scripts/verify_tool_parity.py --update-baseline\n"
-            + "\n".join(sorted(current))
-            + "\n",
-            encoding="utf-8",
-        )
+        _baselines.write_baseline(_BASELINE, _BASELINE_HEADER, current, stored)
         print(f"baseline updated: {len(current)} accepted divergence(s)")
+
+        pending = _baselines.unannotated(filter(_is_absence, current), stored)
+        if pending:
+            _report_unannotated(pending)
+
         return 0
 
     new = sorted(current - baseline)
     fixed = sorted(baseline - current)
+    pending = _baselines.unannotated(filter(_is_absence, current & baseline), stored)
 
-    if not new and not fixed:
+    if not new and not fixed and not pending:
         print(
-            f"tool parity OK: {len(go)} tools, "
+            f"tool parity OK: {len(union)} tools across "
+            f"{len(order)} language(s), "
             f"{len(baseline)} known divergence(s) unchanged"
         )
         return 0
@@ -201,6 +269,9 @@ def main() -> int:
         for line in fixed:
             print(f"  {line}")
         print("\nRun: python scripts/verify_tool_parity.py --update-baseline")
+    if pending:
+        _report_unannotated(pending)
+
     return 1
 
 

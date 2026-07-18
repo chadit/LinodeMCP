@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import ipaddress
 import json
+import keyword
 import logging
 from typing import TYPE_CHECKING, Any, TypedDict, cast
 
@@ -105,6 +106,52 @@ def is_dry_run(arguments: dict[str, Any]) -> bool:
     return value is True
 
 
+# One page bounds a dependency-walk list fetch, mirroring the Go walk's
+# dependencyWalkPageSize: a resource with more dependents than this is rare,
+# and a preview notes possible truncation instead of paging exhaustively.
+WALK_PAGE_SIZE = 100
+
+
+def walk_page_items(page: Any) -> list[dict[str, Any]]:
+    """Extract the data[] items from a raw paginated walk response."""
+    if not isinstance(page, dict):
+        return []
+    raw_items = cast("dict[str, Any]", page).get("data", [])
+    if not isinstance(raw_items, list):
+        return []
+    items = cast("list[object]", raw_items)
+    return [cast("dict[str, Any]", item) for item in items if isinstance(item, dict)]
+
+
+def preview_state_str(state: Any, field: str) -> str:
+    """Read a string field from a fetched preview state.
+
+    Instance previews serialize their state through instance_preview_state
+    (a plain dict mirroring Go's struct marshal), while other resources still
+    pass their dataclass through, so walks read fields through this accessor
+    instead of committing to one shape.
+    """
+    if isinstance(state, dict):
+        value = cast("dict[str, Any]", state).get(field, "")
+        return value if isinstance(value, str) else ""
+    return str(getattr(state, field, "") or "")
+
+
+def keyword_escape_dict_factory(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """dict_factory for dataclasses.asdict that restores wire field names.
+
+    A dataclass field cannot be named after a Python keyword, so models
+    escape them with a trailing underscore (Transfer.in_ for the API's
+    "in"). Go marshals the real name, and a dry-run current_state must match
+    it byte for byte, so the escape is stripped at this serialization
+    boundary.
+    """
+    return {
+        (key[:-1] if key.endswith("_") and keyword.iskeyword(key[:-1]) else key): value
+        for key, value in pairs
+    }
+
+
 def _dataclass_json_default(obj: Any) -> Any:
     """json.dumps ``default`` that serializes Linode dataclass models (e.g.
     the ``Instance`` returned by ``get_instance``) as plain dicts. Without
@@ -112,7 +159,7 @@ def _dataclass_json_default(obj: Any) -> Any:
     "Object of type X is not JSON serializable".
     """
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return dataclasses.asdict(obj)
+        return dataclasses.asdict(obj, dict_factory=keyword_escape_dict_factory)
     msg = f"Object of type {type(obj).__name__} is not JSON serializable"
     raise TypeError(msg)
 

@@ -17,6 +17,194 @@
       "args": { "instance_id": 5, "confirm": true, "confirm_bypass_dry_run": true },
       "api_response": {},
       "expect_request": { "method": "DELETE", "path": "/linode/instances/5" }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "instance_id": 5,
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /linode/instances/5": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "linode/ubuntu24.04",
+          "ipv4": [
+            "203.0.113.10"
+          ],
+          "ipv6": "2600:3c03::f03c:91ff:fe24:3a2f/128",
+          "label": "web-01",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [
+            "prod"
+          ],
+          "type": "g6-standard-2",
+          "updated": "",
+          "watchdog_enabled": true
+        },
+        "GET /linode/instances/5/volumes": {
+          "data": [
+            {
+              "id": 11,
+              "label": "data-vol",
+              "size": 50,
+              "linode_id": 5,
+              "region": "us-east"
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        },
+        "GET /linode/instances/5/ips": {
+          "ipv4": {
+            "public": [
+              {
+                "address": "203.0.113.10",
+                "type": "ipv4",
+                "public": true
+              }
+            ],
+            "private": [],
+            "reserved": [
+              {
+                "address": "203.0.113.99",
+                "type": "ipv4",
+                "public": true,
+                "reserved": true
+              }
+            ],
+            "shared": []
+          },
+          "ipv6": {}
+        },
+        "GET /linode/instances/5/firewalls": {
+          "data": [
+            {
+              "id": 21,
+              "label": "edge-fw",
+              "status": "enabled"
+            }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        },
+        "GET /linode/types/g6-standard-2": {
+          "id": "g6-standard-2",
+          "label": "Linode 4GB",
+          "price": {
+            "hourly": 0.036,
+            "monthly": 24.0
+          }
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_instance_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/linode/instances/5"
+        },
+        "current_state": {
+          "alerts": {
+            "cpu": 0,
+            "io": 0,
+            "network_in": 0,
+            "network_out": 0,
+            "transfer_quota": 0
+          },
+          "backups": {
+            "available": false,
+            "enabled": false,
+            "last_successful": null,
+            "schedule": {
+              "day": "",
+              "window": ""
+            }
+          },
+          "created": "",
+          "group": "",
+          "hypervisor": "",
+          "id": 5,
+          "image": "linode/ubuntu24.04",
+          "ipv4": [
+            "203.0.113.10"
+          ],
+          "ipv6": "2600:3c03::f03c:91ff:fe24:3a2f/128",
+          "label": "web-01",
+          "region": "us-east",
+          "specs": {
+            "disk": 0,
+            "gpus": 0,
+            "memory": 0,
+            "transfer": 0,
+            "vcpus": 0
+          },
+          "status": "running",
+          "tags": [
+            "prod"
+          ],
+          "type": "g6-standard-2",
+          "updated": "",
+          "watchdog_enabled": true
+        },
+        "dependencies": [
+          {
+            "kind": "volume",
+            "id": 11,
+            "label": "data-vol",
+            "action": "detached",
+            "note": "50GB volume stays; billing continues."
+          },
+          {
+            "kind": "public_ip",
+            "label": "203.0.113.10",
+            "action": "released"
+          },
+          {
+            "kind": "firewall",
+            "id": 21,
+            "label": "edge-fw",
+            "action": "removed",
+            "note": "Firewall stays; this instance is removed from its device list."
+          }
+        ],
+        "side_effects": [],
+        "billing_delta": {
+          "monthly_change_usd": "-24.00",
+          "note": "Instance billing stops. Attached volume billing continues."
+        },
+        "warnings": [
+          "Instance is currently running. Delete will not pause for a graceful shutdown."
+        ]
+      }
     }
   ]
 }

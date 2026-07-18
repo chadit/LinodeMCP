@@ -1,0 +1,41 @@
+# LinodeMCP
+
+> A Model Context Protocol (MCP) server for the Linode API, shipped as two implementations (Go and Python) that are wire-identical by construction: input schemas, output shapes, and enums all derive from one protobuf contract, and a trust-and-safety layer (profiles, dry-run previews, two-stage destructive writes, audit log) is built into the server itself.
+
+The proto contract lives in `proto/linode/mcp/v1`. Go lives in `go/`, Python in `python/`. Gate files under `docs/contracts/` pin the shared tool surface and ratchet the remaining conversion work; `make check` runs every gate for every registered language.
+
+## Documentation
+
+- [README](README.md): what the server is, install, quick start, project layout, design decisions
+- [Docs index](docs/README.md): map of every docs page and machine contract
+- [Profiles](docs/profiles.md): permission model: which tools the AI client can see and call, capability tags, config schema, token-scope validation
+- [Profile recipes](docs/profile-recipes.md): copy-paste profile configs for common postures
+- [Dry-run and confirm](docs/dry-run.md): preview any mutator; destructive calls must be previewed or explicitly waived; pre-check and yolo
+- [Two-stage writes](docs/two-stage-writes.md): plan a destructive call, review it, apply by id; refused if the resource drifted
+- [State drift](docs/state-drift.md): what counts as drift and how to read each refusal code
+- [Audit log](docs/audit-log.md): event schema, redaction, the query tools, and investigative patterns
+- [Audit operations](docs/audit-operations.md): sinks, retention, the config block, recovery, and failure modes
+- [Audit reports](docs/audit-reports.md): named audit queries defined in config; the filter grammar
+- [Host integrations](docs/host-integrations/README.md): wiring Claude Code, Claude Desktop, and other MCP hosts
+- [CLI and server modes](docs/cli.md): bare invocation runs the MCP stdio server; the CLI verbs run and exit
+- [Observability](docs/observability.md): Prometheus metrics, health endpoints, OTLP tracing
+- [Release process](docs/release-process.md): maintainer runbook for cutting a release
+- [Verifying releases](docs/verifying-releases.md): checking checksums, signatures, SBOMs, and SLSA provenance
+- [Cross-language parity](docs/parity.md): how a change in one language reaches the others; tool add/change/remove playbooks and the accepted-absence flow
+- [Adding a language](docs/adding-a-language.md): checklist and gates for a new language implementation
+
+## Machine contracts
+
+Gate-read files, never hand-edited. Each file's header comment names its rules and regenerate command.
+
+- [tools-manifest.txt](docs/contracts/tools-manifest.txt): the full tool surface, one name per line
+- [tools-capabilities.txt](docs/contracts/tools-capabilities.txt): capability tier for every tool
+- [languages.txt](docs/contracts/languages.txt): registry of language implementations and their surface-dump commands
+- Baseline ratchets (`docs/contracts/*-baseline.txt`, `docs/contracts/behavior-exempt.txt`): remaining-work and accepted-divergence lists, one per gate; the [docs index](docs/README.md) holds the full table
+
+## Optional
+
+- [Git hooks](docs/git-hooks.md): pre-commit setup for local checks
+- [Deprecated routes](docs/deprecated-routes.md): removed tools and routes with their replacements
+- [Claude Code commands](docs/host-integrations/claude-code/commands/profile.md): slash-command wrappers (profile, audit, two-stage) for Claude Code
+- [Claude Desktop commands](docs/host-integrations/claude-desktop/commands/profile.md): shell wrappers and conversation patterns for Claude Desktop

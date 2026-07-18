@@ -1638,7 +1638,10 @@ func profilePhoneNumberVerifySideEffects(ctx context.Context) (DryRunDetails, er
 // tagDeleteDependencyWalk is the Tier A walk for linode_tag_delete. Deleting a
 // tag removes it from every object that carries it; those objects are not
 // deleted, so each is surfaced as a "removed" dependency. State-only: the
-// tagged objects come from the destroy FetchState (ListTaggedObjects).
+// tagged objects come from the destroy FetchState (ListTaggedObjects), a
+// single page. The warning count still comes from the page envelope's results
+// field (the API's total across all pages), so a truncated first page cannot
+// understate the blast radius; a second warning says how many were itemized.
 func tagDeleteDependencyWalk(ctx context.Context, _ *linode.Client, state any) (DryRunDetails, error) {
 	var details DryRunDetails
 
@@ -1672,10 +1675,17 @@ func tagDeleteDependencyWalk(ctx context.Context, _ *linode.Client, state any) (
 		details.Dependencies = append(details.Dependencies, dependency)
 	}
 
-	if len(resp.Data) > 0 {
+	if itemized := len(details.Dependencies); itemized > 0 {
+		total := max(resp.Results, itemized)
+
 		details.Warnings = append(details.Warnings, fmt.Sprintf(
-			"Deleting this tag removes it from %d tagged object(s); the objects are not deleted.", len(resp.Data),
+			"Deleting this tag removes it from %d tagged object(s); the objects are not deleted.", total,
 		))
+		if total > itemized {
+			details.Warnings = append(details.Warnings, fmt.Sprintf(
+				"Only the first %d tagged object(s) are itemized in this preview.", itemized,
+			))
+		}
 	}
 
 	return details, nil

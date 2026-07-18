@@ -28,7 +28,7 @@ Usage: verify_sync_enums.py [--spec PATH] [--go-lists PATH] [--update-baseline]
                      (CI/offline test)
   --go-lists PATH    read the Go hand-lists from a JSON file instead of running
                      cmd/hand-list-dump (CI/offline test)
-  --update-baseline  rewrite docs/enum-sync-baseline.txt from the current diff
+  --update-baseline  rewrite docs/contracts/enum-sync-baseline.txt from the current diff
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ from urllib.parse import urlparse
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROTO_DIR = REPO_ROOT / "proto" / "linode" / "mcp" / "v1"
 GO_DIR = REPO_ROOT / "go"
-BASELINE = REPO_ROOT / "docs" / "enum-sync-baseline.txt"
+BASELINE = REPO_ROOT / "docs" / "contracts" / "enum-sync-baseline.txt"
 
 SPEC_URL = (
     "https://raw.githubusercontent.com/linode/linode-api-openapi/main/openapi.json"
