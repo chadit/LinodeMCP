@@ -205,6 +205,32 @@ func (o *Observability) newPrometheusReader(ctx context.Context, bindHost string
 	return exporter, nil
 }
 
+// RequestDurationBoundaries returns the pinned bucket boundaries for
+// linodemcp.request.duration.seconds. Every language declares the same
+// values; testdata/observability/duration_buckets.json is the shared
+// fixture each language's tests assert against, because the exported
+// Prometheus _bucket series must match across implementations.
+func RequestDurationBoundaries() []float64 {
+	return []float64{
+		requestDurationBucket1, requestDurationBucket2, requestDurationBucket3,
+		requestDurationBucket4, requestDurationBucket5, requestDurationBucket6,
+		requestDurationBucket7, requestDurationBucket8, requestDurationBucket9,
+		requestDurationBucket10, requestDurationBucket11, requestDurationBucket12,
+	}
+}
+
+// APIRequestDurationBoundaries returns the pinned bucket boundaries for
+// linodemcp.api.request.duration.seconds; same cross-language contract as
+// RequestDurationBoundaries.
+func APIRequestDurationBoundaries() []float64 {
+	return []float64{
+		apiDurationBucket1, apiDurationBucket2, apiDurationBucket3,
+		apiDurationBucket4, apiDurationBucket5, apiDurationBucket6,
+		apiDurationBucket7, apiDurationBucket8, apiDurationBucket9,
+		apiDurationBucket10,
+	}
+}
+
 // createCustomMetrics creates LinodeMCP-specific metrics on the instance.
 func (o *Observability) createCustomMetrics(mp metric.MeterProvider) error {
 	meter := mp.Meter("github.com/chadit/LinodeMCP")
@@ -224,12 +250,7 @@ func (o *Observability) createCustomMetrics(mp metric.MeterProvider) error {
 		"linodemcp.request.duration.seconds",
 		metric.WithDescription("Duration of MCP requests in seconds"),
 		metric.WithUnit("s"),
-		metric.WithExplicitBucketBoundaries(
-			requestDurationBucket1, requestDurationBucket2, requestDurationBucket3,
-			requestDurationBucket4, requestDurationBucket5, requestDurationBucket6,
-			requestDurationBucket7, requestDurationBucket8, requestDurationBucket9,
-			requestDurationBucket10, requestDurationBucket11, requestDurationBucket12,
-		),
+		metric.WithExplicitBucketBoundaries(RequestDurationBoundaries()...),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create duration histogram: %w", err)
@@ -257,12 +278,7 @@ func (o *Observability) createCustomMetrics(mp metric.MeterProvider) error {
 		"linodemcp.api.request.duration.seconds",
 		metric.WithDescription("Duration of Linode API requests in seconds"),
 		metric.WithUnit("s"),
-		metric.WithExplicitBucketBoundaries(
-			apiDurationBucket1, apiDurationBucket2, apiDurationBucket3,
-			apiDurationBucket4, apiDurationBucket5, apiDurationBucket6,
-			apiDurationBucket7, apiDurationBucket8, apiDurationBucket9,
-			apiDurationBucket10,
-		),
+		metric.WithExplicitBucketBoundaries(APIRequestDurationBoundaries()...),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create API duration histogram: %w", err)

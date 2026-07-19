@@ -1,0 +1,23 @@
+# Environment variables the linodemcp binaries read, one per line, sorted.
+# This is the COMPLETE env-read surface for every registered language:
+# scripts/verify_env_parity.py extracts the env-lookup literals from each
+# implementation's source and fails unless every language reads exactly this
+# set. Adding a line here means implementing the same read in every language
+# in the same change; removing a read means removing it everywhere and
+# deleting the line.
+#
+# Observability (metrics, tracing, health) has no env overrides on purpose:
+# those knobs live in the config file only, so one config parses to one
+# behavior in every language and in every shell.
+LINODEMCP_AUDIT_REDACT_PII
+LINODEMCP_AUDIT_RETENTION_DAYS
+LINODEMCP_AUDIT_SQLITE_BUSY_TIMEOUT_MS
+LINODEMCP_AUDIT_SQLITE_ENABLED
+LINODEMCP_AUDIT_SQLITE_PATH
+LINODEMCP_CONFIG_PATH
+LINODEMCP_LINODE_API_URL
+LINODEMCP_LINODE_TOKEN
+LINODEMCP_LOG_LEVEL
+LINODEMCP_SERVER_NAME
+LINODEMCP_VERSION
+XDG_STATE_HOME

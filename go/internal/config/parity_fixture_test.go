@@ -14,7 +14,8 @@ import (
 // reads a shared key differently from the other implementation fails here
 // instead of surfacing later as a config-file incompatibility.
 func TestSharedConfigParityFixture(t *testing.T) {
-	// Blank the env overrides both loaders honor so a developer shell with
+	// Blank the env overrides both loaders honor (the docs/contracts/env-vars.txt
+	// surface; observability has none by design) so a developer shell with
 	// LINODEMCP_* set cannot change what the fixture parses to. t.Setenv also
 	// restores prior values on cleanup, and its presence (as direct calls, not
 	// in a loop, which paralleltest cannot see through) is why this test runs
@@ -23,12 +24,6 @@ func TestSharedConfigParityFixture(t *testing.T) {
 	t.Setenv("LINODEMCP_LOG_LEVEL", "")
 	t.Setenv("LINODEMCP_LINODE_API_URL", "")
 	t.Setenv("LINODEMCP_LINODE_TOKEN", "")
-	t.Setenv("LINODEMCP_METRICS_ENABLED", "")
-	t.Setenv("LINODEMCP_METRICS_PORT", "")
-	t.Setenv("LINODEMCP_TRACING_ENABLED", "")
-	t.Setenv("LINODEMCP_TRACING_ENDPOINT", "")
-	t.Setenv("LINODEMCP_TRACING_SAMPLE_RATE", "")
-	t.Setenv("LINODEMCP_HEALTH_ENABLED", "")
 
 	cfg, err := config.Load(filepath.Join("..", "..", "..", "testdata", "config", "parity.yml"))
 	if err != nil {

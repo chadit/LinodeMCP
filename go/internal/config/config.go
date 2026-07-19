@@ -501,8 +501,6 @@ func setObservabilityDefaults(cfg *Config) {
 
 func applyEnvironmentOverrides(cfg *Config) {
 	applyServerOverrides(cfg)
-	applyObservabilityOverrides(cfg)
-	applyOTELOverrides(cfg)
 	applyLinodeOverrides(cfg)
 	applyAuditOverrides(cfg)
 }
@@ -545,63 +543,10 @@ func applyServerOverrides(cfg *Config) {
 	}
 }
 
-func applyObservabilityOverrides(cfg *Config) {
-	// Metrics overrides
-	if v := os.Getenv("LINODEMCP_METRICS_ENABLED"); v != "" {
-		cfg.Observability.Metrics.Enabled = v == boolTrue || v == "1"
-	}
-
-	if v := os.Getenv("LINODEMCP_METRICS_PORT"); v != "" {
-		if port, err := strconv.Atoi(v); err == nil {
-			cfg.Observability.Metrics.Prometheus.Port = port
-		}
-	}
-
-	// Tracing overrides
-	if v := os.Getenv("LINODEMCP_TRACING_ENABLED"); v != "" {
-		cfg.Observability.Tracing.Enabled = v == boolTrue || v == "1"
-	}
-
-	if v := os.Getenv("LINODEMCP_TRACING_ENDPOINT"); v != "" {
-		cfg.Observability.Tracing.Endpoint = v
-	}
-
-	if v := os.Getenv("LINODEMCP_TRACING_SAMPLE_RATE"); v != "" {
-		if rate, err := strconv.ParseFloat(v, 64); err == nil && rate >= 0 && rate <= 1 {
-			cfg.Observability.Tracing.SampleRate = rate
-		}
-	}
-
-	// Health overrides
-	if v := os.Getenv("LINODEMCP_HEALTH_ENABLED"); v != "" {
-		cfg.Observability.Health.Enabled = v == boolTrue || v == "1"
-	}
-}
-
-func applyOTELOverrides(cfg *Config) {
-	if v := os.Getenv("OTEL_TRACES_EXPORTER"); v != "" {
-		cfg.Observability.Tracing.Enabled = v != "none" && v != "console"
-	}
-
-	if v := os.Getenv("OTEL_METRICS_EXPORTER"); v != "" {
-		cfg.Observability.Metrics.Enabled = v != "none" && v != "console"
-	}
-
-	// OTEL_SERVICE_NAME is handled directly by the OTEL SDK
-
-	if envVar := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); envVar != "" {
-		if cfg.Observability.Tracing.Endpoint == "" {
-			cfg.Observability.Tracing.Endpoint = envVar
-		}
-	}
-
-	if v := os.Getenv("OTEL_TRACES_SAMPLER_ARG"); v != "" {
-		if rate, err := strconv.ParseFloat(v, 64); err == nil && rate >= 0 && rate <= 1 {
-			cfg.Observability.Tracing.SampleRate = rate
-		}
-	}
-}
-
+// Observability has no env overrides on purpose: metrics, tracing, and
+// health are tuned in the config file only, in every language, so the
+// env-read surface stays identical across implementations (pinned by
+// docs/contracts/env-vars.txt and the env-parity gate).
 func applyLinodeOverrides(cfg *Config) {
 	if cfg.Environments == nil {
 		cfg.Environments = make(map[string]EnvironmentConfig)

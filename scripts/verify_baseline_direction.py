@@ -21,6 +21,11 @@ divergence someone chose to accept, and `--update-baseline` writes those lines
 with no annotation it could attach. So they are exempt from this guard; see
 _SNAPSHOT_BASELINES.
 
+behavior-exempt.txt is guarded too, though it is not a ratchet: an entry
+there removes a tool from behavior-fixture coverage permanently, so a NEW
+exemption needs the same dated annotation as accepted ratchet growth. See
+_ANNOTATED_EXTRAS.
+
 Runs in CI (.github/workflows/baseline-guard.yml) against the PR base or the
 push's previous tip, and locally via `make baseline-guard` (default base
 origin/main). Stdlib plus scripts/_baselines.py only, so no venv is needed.
@@ -51,14 +56,23 @@ _SNAPSHOT_BASELINES = frozenset(
     }
 )
 
+# Outside the *-baseline.txt glob but under the same growth rule: an entry in
+# behavior-exempt.txt removes a tool from behavior-fixture coverage for good,
+# which is a bigger commitment than any ratchet line. New exemptions must
+# carry the same dated annotation; verify_behavior reads only the tab-split
+# tool name, so the annotation is invisible to the gate itself.
+_ANNOTATED_EXTRAS = ("behavior-exempt.txt",)
+
 
 def _guarded_baselines(contracts: Path) -> list[Path]:
-    """Baseline files this guard checks: every ratchet, minus the drift snapshots."""
-    return [
+    """Files this guard checks: the ratchets minus snapshots, plus the exempt list."""
+    guarded = [
         path
         for path in sorted(contracts.glob("*-baseline.txt"))
         if path.name not in _SNAPSHOT_BASELINES
     ]
+    guarded.extend(contracts / name for name in _ANNOTATED_EXTRAS)
+    return guarded
 
 
 def _git_show(rev: str, rel_path: str) -> str | None:

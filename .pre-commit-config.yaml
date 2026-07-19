@@ -179,6 +179,51 @@ repos:
         language: system
         pass_filenames: false
 
+      # The stdlib-only offline gates (no venv needed). Same commit-stage
+      # placement as the gates above: `make check` at push runs them all
+      # anyway, but failing at commit time keeps the fix in the same change.
+      - id: tool-count
+        name: tool-count (README count vs tools-manifest)
+        entry: bash -c 'python3 scripts/verify_docs_tool_count.py'
+        files: ^(README\.md|docs/contracts/tools-manifest\.txt)$
+        language: system
+        pass_filenames: false
+
+      - id: dryrun
+        name: dryrun (dry_run advertised per capability tier)
+        entry: bash -c 'python3 scripts/verify_dryrun.py'
+        files: ^(go|python|proto)/|^docs/contracts/tools-capabilities\.txt$
+        language: system
+        pass_filenames: false
+
+      - id: pagination
+        name: pagination (list tools paginate per the spec snapshot)
+        entry: bash -c 'python3 scripts/verify_pagination.py'
+        files: ^(go|python|proto|testdata/behavior)/|^docs/contracts/(pagination-baseline|api-pagination-baseline)\.txt$
+        language: system
+        pass_filenames: false
+
+      - id: env-parity
+        name: env-parity (env-read surface matches the contract)
+        entry: bash -c 'python3 scripts/verify_env_parity.py'
+        files: ^(go|python)/|^docs/contracts/env-vars\.txt$
+        language: system
+        pass_filenames: false
+
+      - id: cli-surface
+        name: cli-surface (CLI verbs and flags match across languages)
+        entry: bash -c 'python3 scripts/verify_cli_surface.py'
+        files: ^go/(cmd/linodemcp|internal/cli)/|^python/src/linodemcp/(main\.py$|cli/)
+        language: system
+        pass_filenames: false
+
+      - id: docs-links
+        name: docs-links (internal doc links resolve)
+        entry: bash -c 'python3 scripts/verify_docs_links.py'
+        files: ^(README\.md$|docs/)
+        language: system
+        pass_filenames: false
+
       # mypy - language: system because it needs project venv dependencies
       - id: mypy
         name: mypy
@@ -189,8 +234,8 @@ repos:
         pass_filenames: false
 
       # THE pre-push gate: `make check` is the total superset (fmt, both
-      # languages' full lint incl. gosec/cairnlint/pyright, all tests, the
-      # six cross-language gates, lock-check, betterleaks, trivy, actionlint,
+      # languages' full lint incl. gosec/cairnlint/pyright, all tests, every
+      # cross-language gate, lock-check, betterleaks, trivy, actionlint,
       # and both builds incl. the hardened Go build). CI's single job runs
       # exactly this same target, so hook green == CI green by construction.
       # The old separate make-lint / uv-lock-check / make-build push hooks

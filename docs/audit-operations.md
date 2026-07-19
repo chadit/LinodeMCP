@@ -27,7 +27,7 @@ Rotation:
 
 Format: one JSON object per line, no trailing comma, newline-terminated. Compatible with Promtail's `pipeline_stages` → `json` parser.
 
-Failure mode: if the file is unwritable (permission, disk full), audit writes a warning to stderr with a `LINODEMCP_AUDIT_FAILED` prefix and continues serving. Tool calls do not fail because audit is unavailable. Note that on Claude Desktop the host may swallow stderr in some configurations; if audit reliability matters, also enable the SQLite sink and check `linode_audit_health` periodically.
+Failure mode: if the sink cannot be set up (permission, disk full), the server logs `audit JSONL sink unavailable; continuing without audit` to stderr, in the same words in every language and entry point, and keeps serving. Tool calls do not fail because audit is unavailable. Note that on Claude Desktop the host may swallow stderr in some configurations; if audit reliability matters, also enable the SQLite sink and check `linode_audit_health` periodically.
 
 ### SQLite (optional)
 
@@ -178,8 +178,9 @@ If sustained load measurably exceeds the budget, the design accommodates an asyn
 
 Audit never blocks tool calls. If a sink write fails:
 
-- JSONL write failure: warning to stderr with prefix `LINODEMCP_AUDIT_FAILED`, tool call continues, next write retries the same file
-- SQLite write failure: warning logged, JSONL remains the durable record, next write retries
+- JSONL sink unavailable at startup: `audit JSONL sink unavailable; continuing without audit` on stderr, tool calls continue
+- SQLite sink unavailable at startup: `audit SQLite sink unavailable; continuing with JSONL only` on stderr, JSONL remains the durable record
+- Write failure after startup: warning logged, the next write retries the same file
 - Both sinks fail: the event is lost, but the tool call still succeeds
 
 Audit is observability, not gatekeeping. Refusal and dry-run gating live elsewhere ([profiles](./profiles.md), [dry-run](./dry-run.md)).

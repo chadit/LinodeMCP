@@ -1,0 +1,29 @@
+{
+  "description": "Histogram bucket boundaries (seconds) for the two duration instruments, pinned identically in every language. Go's metrics.go and Python's observability package each declare these values and pass them at instrument creation; each language's unit test asserts its declared boundaries equal this fixture, so a one-sided change fails that language's suite. Exported Prometheus _bucket series depend on these, which is why they are contract, not tuning.",
+  "linodemcp.request.duration.seconds": [
+    0.001,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1,
+    2.5,
+    5,
+    10
+  ],
+  "linodemcp.api.request.duration.seconds": [
+    0.01,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1,
+    2.5,
+    5,
+    10,
+    30
+  ]
+}

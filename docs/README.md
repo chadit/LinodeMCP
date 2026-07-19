@@ -96,6 +96,7 @@ and exact regenerate command.
 | [tools-manifest.txt](./contracts/tools-manifest.txt) | The full tool surface: every tool any registered language implements, one name per line | Manifest gate tests in each language |
 | [tools-capabilities.txt](./contracts/tools-capabilities.txt) | Capability tier (`Read`/`Write`/`Destroy`/`Admin`/`Meta`) for every tool | Capability gate tests in each language |
 | [languages.txt](./contracts/languages.txt) | The registered language implementations: name, working dir, surface-dump command | `Makefile`, `scripts/verify_tool_parity.py` |
+| [env-vars.txt](./contracts/env-vars.txt) | The complete environment-variable surface every language reads (observability has none by design) | `scripts/verify_env_parity.py` |
 
 ### Ratchet baselines
 
@@ -104,7 +105,7 @@ and exact regenerate command.
 | [tool-parity-baseline.txt](./contracts/tool-parity-baseline.txt) | Accepted one-sided tools, each annotated with a tracking reason | `scripts/verify_tool_parity.py` |
 | [behavior-baseline.txt](./contracts/behavior-baseline.txt) | Tools with no shared behavior fixture yet | `scripts/verify_behavior.py` |
 | [behavior-dryrun-baseline.txt](./contracts/behavior-dryrun-baseline.txt) | Mutating tools whose fixture lacks a pinned dry-run preview case (Destroy stays at zero) | `scripts/verify_behavior.py` |
-| [behavior-exempt.txt](./contracts/behavior-exempt.txt) | Tools the behavior gate structurally cannot pin, with reasons (hand-curated) | `scripts/verify_behavior.py` |
+| [behavior-exempt.txt](./contracts/behavior-exempt.txt) | Tools the behavior gate structurally cannot pin, with reasons (hand-curated; new entries need the dated acceptance annotation) | `scripts/verify_behavior.py` |
 | [input-proto-baseline.txt](./contracts/input-proto-baseline.txt) | Tools whose input schema is not yet proto-generated on both sides | `scripts/verify_input_proto.py` |
 | [read-proto-baseline.txt](./contracts/read-proto-baseline.txt) | Read tools not yet proto-routed on both sides | `scripts/verify_read_proto.py` |
 | [write-proto-baseline.txt](./contracts/write-proto-baseline.txt) | Mutating tools not yet proto-routed on both sides | `scripts/verify_write_proto.py` |
@@ -115,3 +116,10 @@ and exact regenerate command.
 | [enum-sync-baseline.txt](./contracts/enum-sync-baseline.txt) | Enum drift against the Linode OpenAPI spec (network; runs on the sync schedule) | `scripts/verify_sync_enums.py` |
 | [api-defaults-baseline.txt](./contracts/api-defaults-baseline.txt) | Snapshot of API wire-body defaults at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_defaults.py` |
 | [api-pagination-baseline.txt](./contracts/api-pagination-baseline.txt) | Snapshot of paginated GET routes and their page_size bounds at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_pagination.py` |
+
+A few cross-language pins live as shared fixtures under `testdata/` rather
+than contracts files, because a language's own unit tests consume them:
+`testdata/config/parity.yml` (config parsing), `testdata/observability/duration_buckets.json`
+(histogram bucket boundaries), and `testdata/audit/event_fields.json` (the
+audit JSONL field set). Each language asserts against the same fixture, so a
+one-sided edit fails that language's suite.

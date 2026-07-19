@@ -1,0 +1,32 @@
+# Scheduled drift watch for the network sync gates. `make check` is strictly
+# offline, so nothing in the push or CI path ever compares the repo against
+# the LIVE Linode OpenAPI spec; the three sync gates exist for exactly that
+# comparison, and before this workflow they ran only when a human remembered
+# to. A red run here means upstream drifted (new enum values, changed
+# defaults, pagination or bounds changes): triage per docs/parity.md and
+# refresh the snapshot baselines with --update-baseline in a reviewed change.
+# This workflow only reads; it never commits or opens anything itself.
+#
+# The sync scripts are stdlib-only on purpose (see their module docstrings),
+# so the job needs no toolchain beyond the runner's python3.
+name: sync-drift
+
+on:
+  schedule:
+    # Mondays 06:23 UTC; off-peak, and a non-zero minute to dodge the
+    # top-of-hour scheduler crunch.
+    - cron: "23 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  sync-drift:
+    name: make sync (live-spec drift gates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: make sync
+        run: make sync

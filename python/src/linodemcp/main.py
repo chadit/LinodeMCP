@@ -35,6 +35,7 @@ from linodemcp.server import Server
 from linodemcp.tools import helpers as tool_helpers
 from linodemcp.tools.linode_audit_report import set_audit_reports
 from linodemcp.tools.linode_audit_summary import set_audit_sqlite_path
+from linodemcp.tools.version import version_response_dict
 from linodemcp.tui import run_tui
 from linodemcp.version import get_version_info
 
@@ -382,13 +383,15 @@ async def async_main() -> int:
     return 0
 
 
-def _print_version(stdout: TextIO) -> int:
-    """Write the version info (the same payload the ``version`` tool returns)
-    to ``stdout`` and return 0. Kept synchronous so ``linodemcp version`` does
-    not spin up the event loop or build a server. The stream is a parameter so
-    a test can assert on the captured output."""
-    info = get_version_info()
-    print(json.dumps(info.to_dict(), indent=2), file=stdout)
+def print_version(stdout: TextIO) -> int:
+    """Write the proto VersionResponse payload to ``stdout`` and return 0.
+
+    Uses the same ``version_response_dict()`` the version tool serializes, so
+    the CLI verb, the MCP tool, and the Go CLI all emit the field set
+    version.proto pins. Kept synchronous so ``linodemcp version`` does not
+    spin up the event loop or build a server. The stream is a parameter so a
+    test can assert on the captured output."""
+    print(json.dumps(version_response_dict(), indent=2), file=stdout)
     return 0
 
 
@@ -411,7 +414,7 @@ def _run_subcommand(sub: str, rest: list[str]) -> int:
         return run_audit_command(rest, sys.stdout, sys.stderr)
     if sub == "tui":
         return run_tui()
-    return _print_version(sys.stdout)
+    return print_version(sys.stdout)
 
 
 # Subcommands handled without starting the stdio server. ``serve`` is absent on

@@ -86,7 +86,9 @@ class TracingConfig:
     """
 
     enabled: bool = False
-    endpoint: str = "localhost:4317"
+    # Empty endpoint means no exporter (a noop tracer), same as Go's zero
+    # value; an export target is always an explicit operator choice.
+    endpoint: str = ""
     protocol: str = "grpc"
     insecure: bool = False
     sample_rate: float = 1.0
@@ -703,7 +705,7 @@ def _data_to_config(data: dict[str, Any]) -> Config:
     observability = ObservabilityConfig(
         tracing=TracingConfig(
             enabled=tracing_data.get("enabled", False),
-            endpoint=tracing_data.get("endpoint", "localhost:4317"),
+            endpoint=tracing_data.get("endpoint", ""),
             protocol=tracing_data.get("protocol", "grpc"),
             insecure=tracing_data.get("insecure", False),
             sample_rate=tracing_data.get("sampleRate", 1.0),

@@ -44,6 +44,38 @@ from linodemcp.config import (
 # config.DefaultBindHost fallback in newPrometheusReader/initHealth).
 _DEFAULT_BIND_HOST = "127.0.0.1"
 
+# Histogram bucket boundaries (seconds), identical in every language: the
+# exported Prometheus _bucket series derive from these, so they are contract,
+# not tuning. testdata/observability/duration_buckets.json is the shared
+# fixture; this module's unit test and Go's assert their declared values
+# against it, which is what makes a one-sided edit fail.
+REQUEST_DURATION_BOUNDARIES: tuple[float, ...] = (
+    0.001,
+    0.005,
+    0.01,
+    0.025,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1,
+    2.5,
+    5,
+    10,
+)
+API_REQUEST_DURATION_BOUNDARIES: tuple[float, ...] = (
+    0.01,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1,
+    2.5,
+    5,
+    10,
+    30,
+)
+
 
 class Observability:
     """Bundles tracing, metrics, logging, and health endpoints.
@@ -151,10 +183,18 @@ class Observability:
         level_map = {"debug": 10, "info": 20, "warning": 30, "error": 40}
         log_level = level_map.get(config.level.lower(), 20)
 
+        # show_locals=False because rich's default frame-locals dump echoes
+        # whatever the failing frame held, which can include config values
+        # and the API token; the message and exception text carry enough.
+        # It also keeps failure output near Go's one-line error style.
         renderer: Any = (
             structlog.processors.JSONRenderer()
             if config.format == "json"
-            else structlog.dev.ConsoleRenderer()
+            else structlog.dev.ConsoleRenderer(
+                exception_formatter=structlog.dev.RichTracebackFormatter(
+                    show_locals=False
+                )
+            )
         )
 
         structlog.configure(
@@ -175,12 +215,13 @@ class Observability:
 
     def _init_tracing(self, config: TracingConfig) -> None:
         try:
-            otlp_endpoint = os.getenv(
-                "OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"
-            )
-            endpoint = config.endpoint or otlp_endpoint
-            sampler_arg = os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")
-            sample_rate = config.sample_rate or float(sampler_arg)
+            # Config only, no OTEL_* env fallbacks: the env-read surface is
+            # pinned identical across languages (docs/contracts/env-vars.txt),
+            # and an empty endpoint means no exporter, matching Go's noop
+            # tracer. The `or 1.0` mirrors Go, which treats sample rate 0 as
+            # unset and coerces it to the default.
+            endpoint = config.endpoint
+            sample_rate = config.sample_rate or 1.0
 
             resource = Resource.create(
                 {"service.name": "linodemcp", "service.version": _get_version()}
@@ -256,6 +297,7 @@ class Observability:
                 "linodemcp.request.duration.seconds",
                 unit="s",
                 description="Duration of MCP requests in seconds",
+                explicit_bucket_boundaries_advisory=list(REQUEST_DURATION_BOUNDARIES),
             )
             self._errors_total = meter.create_counter(
                 "linodemcp.errors.total",
@@ -271,6 +313,9 @@ class Observability:
                 "linodemcp.api.request.duration.seconds",
                 unit="s",
                 description="Duration of Linode API requests in seconds",
+                explicit_bucket_boundaries_advisory=list(
+                    API_REQUEST_DURATION_BOUNDARIES
+                ),
             )
 
             if registry is not None:

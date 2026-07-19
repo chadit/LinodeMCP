@@ -41,11 +41,13 @@ def _normalized_platform(raw: str) -> str:
     return f"{os_name.lower()}/{_ARCH_ALIASES.get(arch, arch)}"
 
 
-async def handle_version(_arguments: dict[str, Any]) -> list[TextContent]:
-    """Handle version tool request.
+def version_response_dict() -> dict[str, Any]:
+    """The canonical VersionResponse payload as a dict.
 
-    Serializes the shared VersionResponse proto so the tool output carries the
-    same field set the Go `version` tool and the CLI subcommand emit.
+    The one construction of the version envelope: the tool handler and the
+    CLI ``version`` verb both serialize this proto message, so every path in
+    every language emits the field set version.proto pins (the shape the
+    testdata/conformance/version_response.json fixture locks).
     """
     info = get_version_info()
     message = version_pb2.VersionResponse(
@@ -55,8 +57,11 @@ async def handle_version(_arguments: dict[str, Any]) -> list[TextContent]:
         commit=info.git_commit,
         platform=_normalized_platform(info.platform),
     )
+    return proto_to_canonical_dict(message)
+
+
+async def handle_version(_arguments: dict[str, Any]) -> list[TextContent]:
+    """Handle version tool request."""
     return [
-        TextContent(
-            type="text", text=json.dumps(proto_to_canonical_dict(message), indent=2)
-        )
+        TextContent(type="text", text=json.dumps(version_response_dict(), indent=2))
     ]

@@ -62,7 +62,9 @@ def test_snapshot_exemption_matches_sync_scripts() -> None:
     assert expected == guard._SNAPSHOT_BASELINES
 
 
-def test_guarded_baselines_excludes_snapshots(tmp_path: Path) -> None:
+def test_guarded_baselines_excludes_snapshots_and_adds_exempt_list(
+    tmp_path: Path,
+) -> None:
     contracts = tmp_path / "contracts"
     contracts.mkdir()
     for name in (
@@ -75,7 +77,11 @@ def test_guarded_baselines_excludes_snapshots(tmp_path: Path) -> None:
 
     guarded = {path.name for path in guard._guarded_baselines(contracts)}
 
-    assert guarded == {"tool-parity-baseline.txt", "write-proto-baseline.txt"}
+    assert guarded == {
+        "tool-parity-baseline.txt",
+        "write-proto-baseline.txt",
+        "behavior-exempt.txt",
+    }
 
 
 def _write_ratchet(tmp_path: Path, body: str) -> Path:
@@ -115,5 +121,47 @@ def test_removal_is_never_flagged(
     monkeypatch.setattr(guard, "_REPO_ROOT", tmp_path)
     monkeypatch.setattr(guard, "_git_show", _fixed_git_show("# header\nold\ngone\n"))
     path = _write_ratchet(tmp_path, "old\n")
+
+    assert guard._check_file(path, "base") == []
+
+
+def _write_exempt(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "docs" / "contracts" / "behavior-exempt.txt"
+    path.parent.mkdir(parents=True)
+    path.write_text("# header\n" + body, encoding="utf-8")
+    return path
+
+
+_EXEMPT_BASE = "# header\nhello\tlocal greeting, no HTTP\n"
+
+
+def test_new_exempt_entry_without_annotation_is_flagged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A new behavior exemption is permanent coverage loss; it must be dated."""
+    monkeypatch.setattr(guard, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(guard, "_git_show", _fixed_git_show(_EXEMPT_BASE))
+    path = _write_exempt(
+        tmp_path,
+        "hello\tlocal greeting, no HTTP\nnew_tool\tstateful local data\n",
+    )
+
+    problems = guard._check_file(path, "base")
+
+    assert len(problems) == 1
+    assert "new_tool" in problems[0]
+    assert "MISSING ANNOTATION" in problems[0]
+
+
+def test_new_exempt_entry_with_annotation_is_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(guard, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(guard, "_git_show", _fixed_git_show(_EXEMPT_BASE))
+    path = _write_exempt(
+        tmp_path,
+        "hello\tlocal greeting, no HTTP\n"
+        "new_tool\tstateful local data  # accepted 2026-07-18 tracking reason\n",
+    )
 
     assert guard._check_file(path, "base") == []

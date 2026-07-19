@@ -7,6 +7,12 @@
 # conformance corpus. Adding a tool here requires a reason; prefer a fixture
 # whenever the tool makes an HTTP call or has shareable local validation.
 # Format: <tool>\t<reason>
+# NEW entries must also carry the baseline-guard acceptance annotation
+# (append: `  # accepted YYYY-MM-DD <reason or tracking-issue URL>`). The
+# guard diffs this file the same way it diffs the ratchets, because an
+# exemption is permanent coverage loss and deserves a dated commitment;
+# verify_behavior reads only the tab-split tool name, so the annotation
+# never changes what the gate exempts.
 hello	local greeting, no HTTP, output pinned by meta-proto gate
 version	local build info, values legitimately differ per language/build
 linode_audit_health	reads local audit sink state, output is runtime data

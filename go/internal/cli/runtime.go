@@ -143,7 +143,10 @@ func defaultCLIConfig() *config.Config {
 func attachAuditSink(ctx context.Context, srv *server.Server, cfg *config.Config, stderr io.Writer) func() {
 	jsonlSink, err := audit.NewJSONLSink(audit.ResolveDefaultAuditDir())
 	if err != nil {
-		writef(stderr, "audit log unavailable, continuing without audit: %v\n", err)
+		// Same wording as the server path (cmd/linodemcp/main.go) and the
+		// Python twin, so operators grep one phrase across languages and
+		// entry points; docs/audit-operations.md documents it verbatim.
+		writef(stderr, "audit JSONL sink unavailable; continuing without audit: %v\n", err)
 
 		return func() {}
 	}
@@ -187,7 +190,7 @@ func openCLISQLiteSink(
 
 	sink, err := audit.NewSQLiteSink(ctx, dbPath, cfg.Audit.SQLite.BusyTimeoutMS)
 	if err != nil {
-		writef(stderr, "audit database unavailable, using log only: %v\n", err)
+		writef(stderr, "audit SQLite sink unavailable; continuing with JSONL only: %v\n", err)
 
 		return nil
 	}

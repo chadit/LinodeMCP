@@ -85,18 +85,24 @@ After `save`, run `linodemcp profile use lke-admin-readall` to activate. The sav
 
 Restricting an AI session to a non-production environment is a strong guardrail. Even if the model invokes a destructive tool, the environment restriction means the call cannot land on the production Linode account.
 
+Token values are literal: the config loader performs no `${VAR}` environment
+expansion (in any language), so write the per-environment tokens into the
+file and keep it permissioned like the credential store it is. The one env
+override that exists, `LINODEMCP_LINODE_TOKEN`, targets only the `default`
+environment's token.
+
 ```yaml
 environments:
   default:
     label: "Production"
     linode:
       apiUrl: "https://api.linode.com/v4"
-      token: "${LINODEMCP_LINODE_TOKEN_PROD}"
+      token: "your-production-scoped-token"
   dev:
     label: "Dev"
     linode:
       apiUrl: "https://api.linode.com/v4"
-      token: "${LINODEMCP_LINODE_TOKEN_DEV}"
+      token: "your-dev-scoped-token"
 
 profiles:
   dev-only-compute-admin:
@@ -146,12 +152,12 @@ environments:
     label: "Default"
     linode:
       apiUrl: "https://api.linode.com/v4"
-      token: "${LINODEMCP_LINODE_TOKEN_DEFAULT}"
+      token: "your-default-token"
   experiment:
     label: "Experiment"
     linode:
       apiUrl: "https://api.linode.com/v4"
-      token: "${LINODEMCP_LINODE_TOKEN_EXPERIMENT}"
+      token: "your-experiment-scoped-token"
 
 profiles:
   experiment-read:

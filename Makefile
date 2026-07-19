@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination baseline-guard parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination env-parity cli-surface docs-links write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination baseline-guard parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check tool-parity tool-count dryrun pagination write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check tool-parity tool-count dryrun pagination env-parity cli-surface docs-links write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -170,11 +170,11 @@ messages:
 # the current API. Run on a cron / by the sync agent. --update-baseline records a
 # reviewed drift set after a human reconciles a real API change.
 sync-enums:
-	@python/.venv/bin/python scripts/verify_sync_enums.py
+	@python3 scripts/verify_sync_enums.py
 
 ## sync-defaults: LIVE-check wire-body defaults against the Linode API spec (scheduled agent; needs network)
 sync-defaults:
-	@python/.venv/bin/python scripts/verify_sync_defaults.py
+	@python3 scripts/verify_sync_defaults.py
 
 ## sync: Run all live API-drift checks (scheduled agent; needs network)
 sync: sync-enums sync-defaults sync-pagination
@@ -213,6 +213,26 @@ dryrun:
 # Known gaps ratchet down in docs/contracts/pagination-baseline.txt.
 pagination:
 	@python3 scripts/verify_pagination.py
+
+## env-parity: Verify every language reads exactly the contracted env vars
+# Offline and hard: docs/contracts/env-vars.txt pins the whole env surface,
+# and a variable read by one language but not another fails the gate. This
+# is what keeps one-sided env overrides from drifting back in.
+env-parity:
+	@python3 scripts/verify_env_parity.py
+
+## cli-surface: Verify the CLI verbs and flags match across languages
+# Offline and hard: extracts each language's verb set and per-verb flag
+# surface from source and diffs them, so a flag added to one CLI cannot
+# land without its twin.
+cli-surface:
+	@python3 scripts/verify_cli_surface.py
+
+## docs-links: Verify every internal link in README and docs/ resolves
+# Offline single-pass walk; a moved or deleted doc fails the gate instead
+# of leaving a dead link for the next reader to find.
+docs-links:
+	@python3 scripts/verify_docs_links.py
 
 ## sync-pagination: Diff the live spec's paginated-route set and bounds vs the snapshot
 # Network (live spec fetch), so scheduled-only like the other sync gates.
@@ -357,8 +377,10 @@ betterleaks:
 
 ## trivy: Run trivy security scan
 # Hard requirement, not skip-if-missing (same false-green trap as betterleaks).
-# Severity HIGH,CRITICAL and vuln,misconfig scanners are the canonical scan;
-# CI runs this exact target, so local and CI fail on the same findings.
+# All severities on purpose: accepted findings live as annotated entries in
+# .trivyignore.yaml, not behind a severity filter, and dotai's lint.sh runs
+# trivy unfiltered, so filtering here let the two scans disagree on the same
+# tree. CI runs this exact target, so local and CI fail on the same findings.
 # Trivy has no gitignore awareness, so gitignored paths are passed as skip
 # flags derived from git's own ignore computation at scan time (covers
 # .gitignore, .git/info/exclude, and the global excludes file with no
@@ -370,7 +392,7 @@ betterleaks:
 trivy:
 	@command -v trivy >/dev/null 2>&1 || { echo "[error] trivy required (install: https://trivy.dev/latest/getting-started/installation/)" >&2; exit 1; }
 	@echo "Running trivy security scan..."
-	@trivy fs --scanners vuln,misconfig --severity HIGH,CRITICAL --exit-code 1 \
+	@trivy fs --scanners vuln,misconfig --exit-code 1 \
 		$$(git ls-files --others --ignored --exclude-standard --directory | awk '{ print (sub(/\/$$/, "") ? "--skip-dirs=" : "--skip-files=") $$0 }') .
 
 ## actionlint: Lint GitHub Actions workflow files

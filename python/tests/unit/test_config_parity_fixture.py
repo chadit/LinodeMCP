@@ -17,7 +17,8 @@ _PARITY_FIXTURE = (
     Path(__file__).resolve().parents[3] / "testdata" / "config" / "parity.yml"
 )
 
-# Env overrides both loaders honor; blanked so a developer shell with
+# Env overrides both loaders honor (the docs/contracts/env-vars.txt surface;
+# observability has none by design); blanked so a developer shell with
 # LINODEMCP_* set cannot change what the fixture parses to. An empty value is
 # treated as unset by both loaders.
 _OVERRIDE_ENV_VARS = (
@@ -25,12 +26,6 @@ _OVERRIDE_ENV_VARS = (
     "LINODEMCP_LOG_LEVEL",
     "LINODEMCP_LINODE_API_URL",
     "LINODEMCP_LINODE_TOKEN",
-    "LINODEMCP_METRICS_ENABLED",
-    "LINODEMCP_METRICS_PORT",
-    "LINODEMCP_TRACING_ENABLED",
-    "LINODEMCP_TRACING_ENDPOINT",
-    "LINODEMCP_TRACING_SAMPLE_RATE",
-    "LINODEMCP_HEALTH_ENABLED",
 )
 
 

@@ -1,0 +1,23 @@
+{
+  "description": "The audit JSONL event's field names, pinned identically in every language. Go marshals audit.Event and Python serializes Event.to_dict(); each language's unit test compares its marshaled key set to this list, so a field renamed or added on one side fails that side's suite instead of silently forking the on-disk audit schema that linode_audit_* readers and external log pipelines consume.",
+  "fields": [
+    "args",
+    "args_redacted",
+    "credential_generation",
+    "environment",
+    "error",
+    "event_id",
+    "latency_ms",
+    "linodemcp_version",
+    "mode",
+    "plan_id",
+    "profile",
+    "result_summary",
+    "session_id",
+    "status",
+    "tool",
+    "tool_capability",
+    "ts",
+    "ts_unix_ns"
+  ]
+}

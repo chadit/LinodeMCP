@@ -85,8 +85,12 @@ With the default path that means `/healthz/live`, `/healthz/ready`, and
 
 Tracing is off by default. When enabled, spans export over OTLP to the
 configured `endpoint`, using `protocol: grpc` (default, collector port 4317)
-or `protocol: http`. `insecure: true` skips TLS for local collectors, and
-`sampleRate` sets the head-sampling fraction (1.0 traces everything).
+or `protocol: http`. With no `endpoint` configured the tracer is a noop in
+every language; an export target is always an explicit choice, and no
+environment variable can supply one (observability has no env overrides, see
+[contracts/env-vars.txt](./contracts/env-vars.txt)). `insecure: true` skips
+TLS for local collectors, and `sampleRate` sets the head-sampling fraction
+(1.0 traces everything).
 
 ## Related
 

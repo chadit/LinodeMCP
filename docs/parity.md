@@ -118,7 +118,7 @@ baseline entries).
 | `make check` | The gate. Both languages' lint and tests plus every cross-language gate; local green, hook green, and CI green are the same fact. |
 | `make parity-todo` | Per-language remaining-work report aggregated from the baselines. |
 | `make baseline-guard BASE=<rev>` | Diff-aware check that baseline growth carries annotations (CI runs it per change). |
-| `make tool-parity` / `behavior` / `input-proto` / `read-proto` / `write-proto` / `meta-proto` / `messages` / `pagination` / `dryrun` | Run one gate alone while iterating. |
+| `make tool-parity` / `behavior` / `input-proto` / `read-proto` / `write-proto` / `meta-proto` / `messages` / `pagination` / `dryrun` / `env-parity` / `cli-surface` / `docs-links` | Run one gate alone while iterating. |
 | `python scripts/<gate>.py --update-baseline` | Regenerate a ratchet after intentional work; annotations on surviving entries are preserved. |
 
 ## Where to look next

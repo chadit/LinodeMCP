@@ -1,5 +1,9 @@
 """Unit tests for version module."""
 
+import io
+import json
+
+from linodemcp.main import print_version
 from linodemcp.version import VERSION, get_version_info
 
 
@@ -57,3 +61,27 @@ def test_version_info_str() -> None:
     assert "0.1.0" in str_repr
     assert info.platform in str_repr
     assert info.git_commit in str_repr
+
+
+def test_cli_version_verb_emits_the_proto_field_set() -> None:
+    """The CLI ``version`` verb prints exactly the VersionResponse fields.
+
+    version.proto pins {version, api_version, build_date, commit, platform}
+    as the envelope every language and every path emits; the legacy
+    ``to_dict()`` shape (git_commit, git_branch, features) must never come
+    back on the CLI path.
+    """
+    stream = io.StringIO()
+    assert print_version(stream) == 0
+    payload = json.loads(stream.getvalue())
+
+    assert sorted(payload) == [
+        "api_version",
+        "build_date",
+        "commit",
+        "platform",
+        "version",
+    ]
+    os_name, _, arch = payload["platform"].partition("/")
+    assert os_name == os_name.lower()
+    assert arch not in {"x86_64", "aarch64", "i386", "i686"}
