@@ -104,8 +104,13 @@ environments:
     label: "Default"
     linode:
       apiUrl: "https://api.linode.com/v4"
-      token: "${LINODEMCP_LINODE_TOKEN}"
+      token: "your-linode-api-token"
 ```
+
+Token values are literal: the config loader performs no `${VAR}` expansion.
+Write the token into the file and keep the file's permissions tight, or
+omit it and set `LINODEMCP_LINODE_TOKEN` in the environment, which
+overrides the `default` environment's token.
 
 You can also set configuration through environment variables:
 

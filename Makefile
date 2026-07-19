@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination env-parity cli-surface docs-links write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination baseline-guard parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination baseline-guard parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check tool-parity tool-count dryrun pagination env-parity cli-surface docs-links write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -233,6 +233,13 @@ cli-surface:
 # of leaving a dead link for the next reader to find.
 docs-links:
 	@python3 scripts/verify_docs_links.py
+
+## metrics-surface: Verify instrument names and attribute keys match across languages
+# Offline and hard: dashboards and alerts key on these names, so a
+# one-sided rename forks every consumer. Bucket boundaries are pinned
+# separately by testdata/observability/duration_buckets.json.
+metrics-surface:
+	@python3 scripts/verify_metrics_surface.py
 
 ## sync-pagination: Diff the live spec's paginated-route set and bounds vs the snapshot
 # Network (live spec fetch), so scheduled-only like the other sync gates.

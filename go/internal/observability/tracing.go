@@ -26,8 +26,9 @@ const (
 )
 
 // initTracing constructs the tracer provider and stores the tracer on the
-// instance. Honors OTEL_* environment variables via the SDK's auto-config
-// when no endpoint is set in the local config.
+// instance. Config only: no OTEL_* or LINODEMCP_* env var influences
+// tracing (the env surface is pinned by docs/contracts/env-vars.txt), and
+// an empty endpoint means a noop tracer, never an implicit export target.
 func (o *Observability) initTracing(cfg config.TracingConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), tracingInitTimeout)
 	defer cancel()

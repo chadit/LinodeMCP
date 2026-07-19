@@ -224,6 +224,13 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: metrics-surface
+        name: metrics-surface (instrument names and labels match)
+        entry: bash -c 'python3 scripts/verify_metrics_surface.py'
+        files: ^(go/internal/observability/|python/src/linodemcp/observability/)
+        language: system
+        pass_filenames: false
+
       # mypy - language: system because it needs project venv dependencies
       - id: mypy
         name: mypy

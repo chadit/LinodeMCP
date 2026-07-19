@@ -70,10 +70,14 @@ jobs:
       # will auto-bump this on its scheduled run. See action README:
       # "We recommend you pin the version of Renovate to a full version
       # or a full checksum."
+      # No configurationFile on purpose: Renovate discovers the repo's
+      # renovate.json during the run, so there is exactly one config. A
+      # second file passed here once drifted stale (old syntax, old
+      # schedule) while the repo copy moved on, which split the source of
+      # truth and warned "Config needs migrating" on every run.
       - uses: renovatebot/github-action@dd5302ec17783b2fc721b19ae7209b57b1587765 # v46.1.17
         if: steps.secrets.outputs.skip != 'true'
         with:
-          configurationFile: renovate.json5
           token: ${{ secrets.RENOVATE_TOKEN }}
         env:
           LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
