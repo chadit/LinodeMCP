@@ -8,6 +8,5 @@
 linode_networking_reserved_ip_create: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_delete: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_get: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_list: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_type_list: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_update: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038

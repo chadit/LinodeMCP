@@ -2,6 +2,7 @@ package linode
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/netip"
@@ -14,6 +15,7 @@ import (
 
 const (
 	endpointNetworkingIPs         = "/networking/ips"
+	endpointNetworkingReservedIPs = "/networking/reserved/ips"
 	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
 	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
 	endpointNetworkingIPv4Share   = "/networking/ipv4/share"
@@ -31,6 +33,37 @@ const (
 	endpointNodeBalancerConfigs   = endpointNodeBalancers + "/%d/configs"
 	endpointNodeBalancerNodes     = endpointNodeBalancerConfigs + "/%d/nodes"
 )
+
+// httpListReservedIPsProto retrieves reserved public IPv4 addresses with their
+// raw API objects so the tool can preserve documented explicit null fields.
+func (c *Client) httpListReservedIPsProto(ctx context.Context, page, pageSize int) (*ReservedIPListPage, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := withPaginationQuery(endpointNetworkingReservedIPs, page, pageSize)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "ListReservedIPs", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var envelope struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if err := c.handleResponse(resp, &envelope); err != nil {
+		return nil, err
+	}
+
+	reservedIPs, err := decodeRawProtoItems(envelope.Data, "ListReservedIPs",
+		func() *linodev1.ReservedIPAddress { return &linodev1.ReservedIPAddress{} })
+	if err != nil {
+		return nil, err
+	}
+
+	return &ReservedIPListPage{ReservedIPs: reservedIPs, RawReservedIPs: envelope.Data}, nil
+}
 
 // DeleteNodeBalancerConfig deletes one config from a NodeBalancer.
 func (c *Client) httpDeleteNodeBalancerConfig(ctx context.Context, nodeBalancerID, configID int) error {

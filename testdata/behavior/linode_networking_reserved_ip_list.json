@@ -1,0 +1,138 @@
+{
+  "tool": "linode_networking_reserved_ip_list",
+  "description": "Reserved-IP list validates optional pagination, GETs the paginated collection, and preserves the complete IPv4 response shape including documented explicit nulls.",
+  "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "page": "first" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects page below one",
+      "args": { "page": 0 },
+      "expect_error": "page must be an integer greater than or equal to 1"
+    },
+    {
+      "name": "rejects non-integer page_size",
+      "args": { "page_size": "large" },
+      "expect_error": "page_size must be an integer"
+    },
+    {
+      "name": "rejects page_size below its range",
+      "args": { "page_size": 24 },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "rejects page_size above its range",
+      "args": { "page_size": 501 },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "lists a requested page of reserved IPs",
+      "args": { "page": 2, "page_size": 50 },
+      "api_response": { "data": [], "page": 2, "pages": 2, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/reserved/ips?page=2&page_size=50"
+      }
+    },
+    {
+      "name": "returns complete reserved IPs and preserves nulls",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "address": "192.0.2.10",
+            "assigned_entity": {
+              "id": 1234,
+              "label": "web-01",
+              "type": "linode",
+              "url": "/v4/linode/instances/1234"
+            },
+            "gateway": "192.0.2.1",
+            "interface_id": 456,
+            "linode_id": 1234,
+            "prefix": 24,
+            "public": true,
+            "rdns": "reserved.example.com",
+            "region": "us-east",
+            "reserved": true,
+            "subnet_mask": "255.255.255.0",
+            "tags": ["prod", "web"],
+            "type": "ipv4",
+            "vpc_nat_1_1": {
+              "address": "192.168.0.42",
+              "subnet_id": 101,
+              "vpc_id": 111
+            }
+          },
+          {
+            "address": "192.0.2.11",
+            "assigned_entity": null,
+            "gateway": null,
+            "interface_id": null,
+            "linode_id": null,
+            "prefix": 24,
+            "public": true,
+            "rdns": null,
+            "region": "us-east",
+            "reserved": true,
+            "subnet_mask": "255.255.255.0",
+            "tags": [],
+            "type": "ipv4",
+            "vpc_nat_1_1": null
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_result": {
+        "count": 2,
+        "reserved_ips": [
+          {
+            "address": "192.0.2.10",
+            "assigned_entity": {
+              "id": 1234,
+              "label": "web-01",
+              "type": "linode",
+              "url": "/v4/linode/instances/1234"
+            },
+            "gateway": "192.0.2.1",
+            "interface_id": 456,
+            "linode_id": 1234,
+            "prefix": 24,
+            "public": true,
+            "rdns": "reserved.example.com",
+            "region": "us-east",
+            "reserved": true,
+            "subnet_mask": "255.255.255.0",
+            "tags": ["prod", "web"],
+            "type": "ipv4",
+            "vpc_nat_1_1": {
+              "address": "192.168.0.42",
+              "subnet_id": 101,
+              "vpc_id": 111
+            }
+          },
+          {
+            "address": "192.0.2.11",
+            "assigned_entity": null,
+            "gateway": null,
+            "interface_id": null,
+            "linode_id": null,
+            "prefix": 24,
+            "public": true,
+            "rdns": null,
+            "region": "us-east",
+            "reserved": true,
+            "subnet_mask": "255.255.255.0",
+            "tags": [],
+            "type": "ipv4",
+            "vpc_nat_1_1": null
+          }
+        ]
+      }
+    }
+  ]
+}
