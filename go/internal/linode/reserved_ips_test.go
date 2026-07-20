@@ -1,6 +1,7 @@
 package linode_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -69,6 +70,45 @@ func TestClientListReservedIPsProtoAPIError(t *testing.T) {
 		w.WriteHeader(http.StatusForbidden)
 
 		if _, err := w.Write([]byte(`{"errors":[{"reason":"forbidden"}]}`)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	page, err := client.ListReservedIPsProto(t.Context(), 0, 0)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if page != nil {
+		t.Errorf("page = %v, want nil", page)
+	}
+}
+
+func TestClientListReservedIPsProtoRequestError(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient(":", "test-token", nil, linode.WithMaxRetries(0))
+
+	page, err := client.ListReservedIPsProto(t.Context(), 0, 0)
+	if _, ok := errors.AsType[*linode.NetworkError](err); !ok {
+		t.Fatalf("error type = %T, want *linode.NetworkError", err)
+	}
+
+	if page != nil {
+		t.Errorf("page = %v, want nil", page)
+	}
+}
+
+func TestClientListReservedIPsProtoDecodeError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if _, err := w.Write([]byte(`{"data":[{"prefix":"not-an-integer"}]}`)); err != nil {
 			t.Errorf("write response: %v", err)
 		}
 	}))

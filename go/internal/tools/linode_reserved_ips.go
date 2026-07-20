@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -108,7 +109,11 @@ func marshalReservedIPListResponse(page *linode.ReservedIPListPage) (*mcp.CallTo
 		count = int32(n)
 	}
 
-	data, err := json.MarshalIndent(reservedIPListJSON{Count: count, ReservedIPs: items}, "", "  ")
+	return marshalReservedIPListJSON(reservedIPListJSON{Count: count, ReservedIPs: items})
+}
+
+func marshalReservedIPListJSON(response reservedIPListJSON) (*mcp.CallToolResult, error) {
+	data, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal reserved IP list response: %w", err)
 	}
@@ -117,7 +122,11 @@ func marshalReservedIPListResponse(page *linode.ReservedIPListPage) (*mcp.CallTo
 }
 
 func reservedIPAddressResponse(reservedIP *linodev1.ReservedIPAddress, raw json.RawMessage) (reservedIPAddressJSON, error) {
-	data, err := MarshalProtoJSON(reservedIP)
+	return reservedIPAddressResponseWithMarshal(reservedIP, raw, MarshalProtoJSON)
+}
+
+func reservedIPAddressResponseWithMarshal(reservedIP *linodev1.ReservedIPAddress, raw json.RawMessage, marshal func(proto.Message) ([]byte, error)) (reservedIPAddressJSON, error) {
+	data, err := marshal(reservedIP)
 	if err != nil {
 		return reservedIPAddressJSON{}, err
 	}

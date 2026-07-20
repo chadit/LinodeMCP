@@ -164,3 +164,19 @@ func TestLinodeReservedIPListToolAPIError(t *testing.T) {
 		t.Errorf("result = %+v, want tool error containing Failed to retrieve items", result)
 	}
 }
+
+func TestLinodeReservedIPListToolConfigError(t *testing.T) {
+	t.Parallel()
+
+	_, _, handler := tools.NewLinodeReservedIPListTool(&config.Config{})
+
+	result, err := handler(t.Context(), createRequestWithArgs(t, nil))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	textContent, ok := result.Content[0].(mcp.TextContent)
+	if !result.IsError || !ok || textContent.Text == "" {
+		t.Errorf("result = %+v, want non-empty configuration error", result)
+	}
+}
