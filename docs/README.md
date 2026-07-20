@@ -97,6 +97,7 @@ and exact regenerate command.
 | [tools-capabilities.txt](./contracts/tools-capabilities.txt) | Capability tier (`Read`/`Write`/`Destroy`/`Admin`/`Meta`) for every tool | Capability gate tests in each language |
 | [languages.txt](./contracts/languages.txt) | The registered language implementations: name, working dir, surface-dump command | `Makefile`, `scripts/verify_tool_parity.py` |
 | [env-vars.txt](./contracts/env-vars.txt) | The complete environment-variable surface every language reads (observability has none by design) | `scripts/verify_env_parity.py` |
+| [coverage-floors.txt](./contracts/coverage-floors.txt) | Minimum total unit-test statement coverage per registered language (rise-only; the per-line half is `make diff-coverage`) | `scripts/verify_coverage_floor.py` |
 
 ### Ratchet baselines
 

@@ -21,7 +21,12 @@ concurrency:
 # (formatting, both languages' full lint incl. gosec/cairnlint/pyright, all
 # tests, the cross-language gates, betterleaks, trivy, actionlint, and both
 # builds incl. the hardened Go build) lives inside that target. The steps
-# before it only provision the environment; none of them run checks.
+# before it only provision the environment; none of them run checks. The one
+# step after it re-runs `make diff-coverage` with the event's true base:
+# inside `check` the gate diffs against origin/main, which is right locally
+# and on PRs but is HEAD itself on a push to main, so the re-run with the
+# push predecessor is what keeps direct pushes honest. It is still a make
+# target, so nothing here hand-copies a command.
 #
 # History: the previous 6-job layout hand-copied commands (mypy flags, gosec
 # flags, ruff scope, betterleaks flags, venv extras) and every CI failure for
@@ -32,7 +37,11 @@ jobs:
     name: make check (all gates)
     runs-on: ubuntu-latest
     steps:
+      # Full history so diff-coverage's base rev (PR merge parent / push
+      # predecessor) is reachable for `git diff`.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -64,6 +73,24 @@ jobs:
 
       - name: make check
         run: make check
+
+      # Re-run of the in-check diff-coverage gate with the event's true
+      # base (same resolution as baseline-guard: a PR checkout is the merge
+      # commit whose first parent is the base branch tip; a push carries
+      # the previous tip). On PRs this matches the in-check origin/main run;
+      # on pushes to main it is the run that actually diffs something. An
+      # all-zero before (branch creation) is skipped by the script itself.
+      - name: Resolve diff base
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "rev=HEAD^1" >> "$GITHUB_OUTPUT"
+          else
+            echo "rev=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: make diff-coverage (added lines need tests)
+        run: make diff-coverage BASE="${{ steps.base.outputs.rev }}"
 
       # pytest inside make check writes the HTML coverage report; publish it
       # for inspection. Not a gate; the coverage threshold already failed

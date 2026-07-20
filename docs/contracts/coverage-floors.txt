@@ -1,0 +1,26 @@
+# Coverage floors: the minimum total unit-test statement coverage each
+# registered language's suite must hold.
+# Owner: scripts/verify_coverage_floor.py (`make coverage-floor`, inside
+# `make check` after the two language suites).
+#
+# Direction: floors only RISE, and only because real tests pushed coverage
+# up (never padding; see the repo testing rules). Lowering a floor is a
+# reviewed human decision recorded in the commit that makes it, not
+# something a gate update does in passing.
+#
+# One line per language registered in languages.txt:
+#   <language> <minimum-percent>
+# The gate fails a registered language with no line here, and a line here
+# with no registered language, so this file and the registry cannot drift.
+#
+# go: computed from go/coverage.out over hand-written code only (the
+#     generated internal/genpb tree and the cmd/ entrypoint mains are
+#     excluded, matching the fmt/gosec generated-code exclusions).
+# python: enforced at test time by --cov-fail-under in python/pyproject.toml
+#     (with its [tool.coverage.run] omit list); the gate checks the
+#     pyproject value matches this line.
+#
+# The per-line companion is `make diff-coverage BASE=<rev>`: added lines
+# must be covered regardless of these aggregate floors.
+go 68.0
+python 85
