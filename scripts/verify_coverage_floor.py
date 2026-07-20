@@ -131,8 +131,11 @@ def _check_go(floor: float) -> list[str]:
     if percent < floor:
         return [
             f"go coverage {percent:.1f}% is below the contracted floor"
-            f" {floor:.1f}%; add tests for the uncovered code"
-            " (never lower the floor to pass)"
+            f" {floor:.1f}%; add tests for the uncovered code. Never lower"
+            " the floor to excuse untested NEW code; the one legitimate"
+            " lowering is a removal of well-covered code that drags the"
+            " average down, done as a visible human decision in"
+            " docs/contracts/coverage-floors.txt in the same change"
         ]
     return []
 
