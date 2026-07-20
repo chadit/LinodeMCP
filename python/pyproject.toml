@@ -88,6 +88,10 @@ addopts = [
     "--cov=linodemcp",
     "--cov-report=term-missing",
     "--cov-report=html",
+    # coverage.json feeds the diff-coverage gate (scripts/verify_diff_coverage.py);
+    # the fail-under value is mirrored in docs/contracts/coverage-floors.txt and
+    # the coverage-floor gate fails when the two drift apart.
+    "--cov-report=json",
     "--cov-fail-under=85",
 ]
 

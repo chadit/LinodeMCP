@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination baseline-guard parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination baseline-guard parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -245,6 +245,29 @@ metrics-surface:
 # Network (live spec fetch), so scheduled-only like the other sync gates.
 sync-pagination:
 	@python3 scripts/verify_sync_pagination.py
+
+## coverage-floor: Verify each language's total unit-test coverage meets its contracted floor
+# Offline, rides in `check` right after the two language suites: go-check's
+# test run writes go/coverage.out and this parses it (hand-written code only;
+# generated genpb and the cmd/ mains are excluded). Python's floor is enforced
+# at test time by pytest --cov-fail-under, so here the contract and pyproject
+# are checked for agreement. Floors live in docs/contracts/coverage-floors.txt
+# and only rise. Per-line enforcement is the diff-coverage target below.
+coverage-floor:
+	@python3 scripts/verify_coverage_floor.py
+
+## diff-coverage: Verify source lines added since BASE (default origin/main) are covered by tests
+# In `check`, and so in the pre-push hook and CI: reads the artifacts the
+# test targets just wrote (go/coverage.out, python/coverage.json) and fails
+# on any added or untracked source line no test executed. BASE defaults to
+# origin/main, which locally means "everything not yet pushed"; when the rev
+# is unreachable (tarball checkout, shallow clone) the script skips loudly
+# rather than failing unrelated work. CI re-runs it after `make check` with
+# the event's true base (PR merge parent / push predecessor), which matters
+# on pushes to main where origin/main already equals HEAD and the in-check
+# run sees an empty diff.
+diff-coverage:
+	@python3 scripts/verify_diff_coverage.py "$(BASE)"
 
 ## lint: Run all linters (fmt-check, go-lint, python-lint, scripts-lint, betterleaks, trivy, actionlint)
 lint: proto fmt-check go-lint python-lint scripts-lint betterleaks trivy actionlint

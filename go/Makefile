@@ -38,9 +38,12 @@ run: build
 	@./bin/linodemcp
 
 ## test: Run unit tests with coverage
+# -coverprofile instead of bare -cover: the root coverage-floor and
+# diff-coverage gates parse go/coverage.out, so every test run refreshes
+# the artifact they read (gitignored via *.out).
 test: _ensure-hooks
 	@echo "Running unit tests..."
-	@go test -race -cover ./...
+	@go test -race -coverprofile=coverage.out ./...
 
 ## test-race: Run tests with race detector
 test-race: _ensure-hooks
@@ -52,7 +55,7 @@ test-all: _ensure-hooks
 
 ## clean: Clean build artifacts
 clean:
-	@rm -rf bin/ dist/ coverage.txt coverage.html *.coverprofile
+	@rm -rf bin/ dist/ coverage.txt coverage.html coverage.out *.coverprofile
 
 ## lint: Run golangci-lint, gosec, and cairnlint
 lint: _ensure-hooks
