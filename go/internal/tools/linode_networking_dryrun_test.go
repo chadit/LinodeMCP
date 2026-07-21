@@ -175,7 +175,7 @@ func TestLinodeNodeBalancerCreateToolDryRunRejectsInvalidIPv4(t *testing.T) {
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyRegion: regionUSEast,
-		keyIPv4:   "2001:db8::1",
+		keyIPv4:   networkingIPv6AddressFixture,
 		keyDryRun: true,
 	}))
 	if err != nil {

@@ -199,7 +199,7 @@ func TestLinodeInstanceConfigCreateToolSuccessfulCreation(t *testing.T) {
 		RunLevel:    envKeyDefault,
 		VirtMode:    "paravirt",
 		Helpers:     &linode.ConfigHelpers{Distro: &distro},
-		Interfaces:  []linode.ConfigInterface{{Purpose: "public"}},
+		Interfaces:  []linode.ConfigInterface{{Purpose: keyInterfacePublic}},
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

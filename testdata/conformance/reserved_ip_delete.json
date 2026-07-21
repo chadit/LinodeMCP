@@ -1,0 +1,12 @@
+{
+  "message": "linode.mcp.v1.ReservedIPDeleteResponse",
+  "description": "Reserved IP delete: a stable confirmation for an empty API response.",
+  "input": {
+    "message": "Reserved IP 192.0.2.10 unreserved successfully",
+    "address": "192.0.2.10"
+  },
+  "canonical": {
+    "message": "Reserved IP 192.0.2.10 unreserved successfully",
+    "address": "192.0.2.10"
+  }
+}

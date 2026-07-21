@@ -4,5 +4,4 @@
 # never add a line by hand. Regenerate:
 #   python scripts/verify_write_proto.py --update-baseline
 linode_networking_reserved_ip_create	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_delete	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_update	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038

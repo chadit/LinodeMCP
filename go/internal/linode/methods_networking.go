@@ -65,6 +65,56 @@ func (c *Client) httpListReservedIPsProto(ctx context.Context, page, pageSize in
 	return &ReservedIPListPage{ReservedIPs: reservedIPs, RawReservedIPs: envelope.Data}, nil
 }
 
+// httpGetReservedIPRaw retrieves one reserved public IPv4 address while
+// preserving documented explicit nulls and empty arrays from the API response.
+func (c *Client) httpGetReservedIPRaw(ctx context.Context, address string) (json.RawMessage, error) {
+	addr, err := netip.ParseAddr(address)
+	if err != nil || !addr.Is4() {
+		return nil, ErrIPv4AddressInvalid
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointNetworkingReservedIPs + "/" + url.PathEscape(address)
+
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: "GetReservedIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var reservedIP json.RawMessage
+	if err := c.handleResponse(resp, &reservedIP); err != nil {
+		return nil, err
+	}
+
+	return reservedIP, nil
+}
+
+// httpDeleteReservedIP permanently unreserves one public IPv4 address.
+func (c *Client) httpDeleteReservedIP(ctx context.Context, address string) error {
+	addr, err := netip.ParseAddr(address)
+	if err != nil || !addr.Is4() {
+		return ErrIPv4AddressInvalid
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointNetworkingReservedIPs + "/" + url.PathEscape(address)
+
+	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return &NetworkError{Operation: "DeleteReservedIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return c.handleResponse(resp, nil)
+}
+
 // DeleteNodeBalancerConfig deletes one config from a NodeBalancer.
 func (c *Client) httpDeleteNodeBalancerConfig(ctx context.Context, nodeBalancerID, configID int) error {
 	if nodeBalancerID <= 0 {

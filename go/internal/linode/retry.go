@@ -3,6 +3,7 @@ package linode
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -3219,6 +3220,30 @@ func (c *Client) ListReservedIPsProto(ctx context.Context, page, pageSize int) (
 	})
 
 	return reservedIPs, err
+}
+
+// GetReservedIPRaw retrieves one reserved public IPv4 address with automatic
+// retry on transient failures while preserving its raw JSON shape.
+func (c *Client) GetReservedIPRaw(ctx context.Context, address string) (json.RawMessage, error) {
+	var reservedIP json.RawMessage
+
+	err := c.executeWithRetry(ctx, "GetReservedIP", func() error {
+		var retryErr error
+
+		reservedIP, retryErr = c.httpGetReservedIPRaw(ctx, address)
+
+		return retryErr
+	})
+
+	return reservedIP, err
+}
+
+// DeleteReservedIP permanently unreserves one public IPv4 address without
+// retrying the destructive DELETE request.
+func (c *Client) DeleteReservedIP(ctx context.Context, address string) error {
+	return c.executeWithoutRetry(ctx, "DeleteReservedIP", func() error {
+		return c.httpDeleteReservedIP(ctx, address)
+	})
 }
 
 // ListVLANs retrieves all VLANs with automatic retry on transient failures.

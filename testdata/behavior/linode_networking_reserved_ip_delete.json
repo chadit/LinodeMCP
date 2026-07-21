@@ -1,0 +1,103 @@
+{
+  "tool": "linode_networking_reserved_ip_delete",
+  "description": "Reserved-IP delete validates the IPv4 address and explicit confirmation, returns a stable success response, previews safely, and DELETEs the address without query or body when authorized.",
+  "cases": [
+    {
+      "name": "rejects missing confirmation without mutation",
+      "args": { "address": "192.0.2.10" },
+      "expect_error": "This permanently unreserves the IP and it cannot be recovered. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects false confirmation without mutation",
+      "args": { "address": "192.0.2.10", "confirm": false },
+      "expect_error": "This permanently unreserves the IP and it cannot be recovered. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects non-boolean confirmation without mutation",
+      "args": { "address": "192.0.2.10", "confirm": "yes" },
+      "expect_error": "This permanently unreserves the IP and it cannot be recovered. Set confirm=true to proceed."
+    },
+    {
+      "name": "confirm alone is blocked by the destroy gate",
+      "args": { "address": "192.0.2.10", "confirm": true },
+      "expect_error": "linode_networking_reserved_ip_delete is destructive. Either:\n  1. Call with dry_run: true first to preview, then call again with\n     confirm: true, confirmed_dry_run: true\n  2. Call with confirm: true, confirm_bypass_dry_run: true to skip preview\n  3. Use yolo: true (only if profile allows)"
+    },
+    {
+      "name": "rejects invalid IPv4 without mutation",
+      "args": { "address": "2001:db8::10", "confirm": true, "confirm_bypass_dry_run": true },
+      "expect_error": "address must be a valid IPv4 address"
+    },
+    {
+      "name": "unreserves the address with no query or body",
+      "args": { "address": "192.0.2.10", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": {},
+      "expect_request": {
+        "method": "DELETE",
+        "path": "/networking/reserved/ips/192.0.2.10"
+      }
+    },
+    {
+      "name": "returns a stable success response",
+      "args": { "address": "192.0.2.10", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_responses": {
+        "DELETE /networking/reserved/ips/192.0.2.10": {}
+      },
+      "expect_result": {
+        "address": "192.0.2.10",
+        "message": "Reserved IP 192.0.2.10 unreserved successfully"
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": {
+        "address": "192.0.2.10",
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /networking/reserved/ips/192.0.2.10": {
+          "address": "192.0.2.10",
+          "assigned_entity": null,
+          "gateway": "192.0.2.1",
+          "interface_id": null,
+          "linode_id": null,
+          "prefix": 24,
+          "public": true,
+          "rdns": null,
+          "region": "us-east",
+          "reserved": true,
+          "subnet_mask": "255.255.255.0",
+          "tags": [],
+          "type": "ipv4",
+          "vpc_nat_1_1": null
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_networking_reserved_ip_delete",
+        "would_execute": {
+          "method": "DELETE",
+          "path": "/networking/reserved/ips/192.0.2.10"
+        },
+        "current_state": {
+          "address": "192.0.2.10",
+          "assigned_entity": null,
+          "gateway": "192.0.2.1",
+          "interface_id": null,
+          "linode_id": null,
+          "prefix": 24,
+          "public": true,
+          "rdns": null,
+          "region": "us-east",
+          "reserved": true,
+          "subnet_mask": "255.255.255.0",
+          "tags": [],
+          "type": "ipv4",
+          "vpc_nat_1_1": null
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

@@ -64,7 +64,6 @@ linode_managed_service_update: scopes go=[] python=['account:read_write']  # acc
 linode_managed_sshkey_get: scopes go=[] python=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
 linode_managed_stats_get: scopes go=[] python=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
 linode_networking_reserved_ip_create: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_delete: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_get: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_type_list: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_update: missing in go  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038

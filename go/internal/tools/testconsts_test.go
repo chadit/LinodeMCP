@@ -17,6 +17,7 @@ const (
 	ipv6RangeEscaped           = "2001:0db8::%2F64"
 	ipv6RangeRouteTarget       = "2001:0db8::1"
 	reservedIPv4Fixture        = "192.0.2.141"
+	reservedIPAddressFixture   = "192.0.2.10"
 	nodeBalancerLabelFixture   = "web-lb"
 	keyIPv6Range               = "range"
 	tokenTest                  = "test-token"
