@@ -88,6 +88,7 @@ const (
 	categoryDomains       = "domains"
 	categoryFirewall      = "firewall"
 	categoryImages        = "images"
+	categoryIPs           = "ips"
 	categoryLinodes       = "linodes"
 	categoryLKE           = "lke"
 	categoryLongview      = "longview"
@@ -161,6 +162,8 @@ func scopeCategory(toolName string) string {
 		return categoryAccount
 	case "linode_profile_token_list", "linode_profile_token_delete", "linode_profile_token_update":
 		return categoryTokens
+	case "linode_networking_reserved_ip_list":
+		return categoryIPs
 	}
 
 	// Order matters: longer prefixes first.
@@ -210,6 +213,7 @@ func scopeMatrix() map[string][2]Scope {
 		categoryDomains:       {ScopeDomainsReadOnly, ScopeDomainsReadWrite},
 		categoryFirewall:      {ScopeFirewallReadOnly, ScopeFirewallReadWrite},
 		categoryImages:        {ScopeImagesReadOnly, ScopeImagesReadWrite},
+		categoryIPs:           {ScopeIPsReadOnly, ScopeIPsReadWrite},
 		categoryLinodes:       {ScopeLinodesReadOnly, ScopeLinodesReadWrite},
 		categoryLKE:           {ScopeLKEReadOnly, ScopeLKEReadWrite},
 		categoryLongview:      {ScopeLongviewReadOnly, ScopeLongviewReadWrite},

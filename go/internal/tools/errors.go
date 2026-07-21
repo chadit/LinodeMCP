@@ -20,6 +20,7 @@ var (
 	ErrInterfaceIDRequired = errors.New("interface_id is required")
 	ErrDiskIDRequired      = errors.New("disk_id is required")
 	ErrDiskIDInvalid       = errors.New("disk_id must be a valid integer")
+	errReservedIPListShape = errors.New("reserved IP list response shape mismatch")
 )
 
 // Sentinel errors for image share group validation.

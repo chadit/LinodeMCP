@@ -1,5 +1,18 @@
 package linode
 
+import (
+	"encoding/json"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
+)
+
+// ReservedIPListPage contains the typed reserved-IP elements and their raw API
+// objects. The raw objects retain documented explicit nulls for tool output.
+type ReservedIPListPage struct {
+	ReservedIPs    []*linodev1.ReservedIPAddress
+	RawReservedIPs []json.RawMessage
+}
+
 // Firewall represents a Linode Cloud Firewall.
 type Firewall struct {
 	ID      int           `json:"id"`

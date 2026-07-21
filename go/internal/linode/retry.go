@@ -3205,6 +3205,22 @@ func (c *Client) ListFirewallsProto(ctx context.Context) ([]*linodev1.Firewall, 
 	return firewalls, err
 }
 
+// ListReservedIPsProto retrieves reserved public IPv4 addresses with automatic
+// retry on transient failures.
+func (c *Client) ListReservedIPsProto(ctx context.Context, page, pageSize int) (*ReservedIPListPage, error) {
+	var reservedIPs *ReservedIPListPage
+
+	err := c.executeWithRetry(ctx, "ListReservedIPs", func() error {
+		var retryErr error
+
+		reservedIPs, retryErr = c.httpListReservedIPsProto(ctx, page, pageSize)
+
+		return retryErr
+	})
+
+	return reservedIPs, err
+}
+
 // ListVLANs retrieves all VLANs with automatic retry on transient failures.
 func (c *Client) ListVLANs(ctx context.Context, page, pageSize int) (*PaginatedResponse[VLAN], error) {
 	var vlans *PaginatedResponse[VLAN]
