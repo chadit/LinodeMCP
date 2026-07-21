@@ -35,7 +35,10 @@
 //     (and its nested func-lit bodies), record all called function names.
 //
 //  4. Classify each handler by transitive reachability:
-//     - Reaching "MarshalProtoToolResponse" on any path => proto.
+//     - Reaching "MarshalProtoToolResponse" or "MarshalProtoJSON" on any path
+//     => proto. Passing MarshalProtoJSON into a reachable helper also counts.
+//     This covers handlers that preserve documented JSON nulls after canonical
+//     proto serialization before wrapping the MCP result.
 //     - Reaching "RunDestructiveActionWithID" with a DestructiveActionByID
 //     literal that sets SuccessProto => proto (the wrapper routes the body
 //     through the proto marshaller); without SuccessProto it builds the legacy
@@ -77,6 +80,7 @@ const (
 
 	// sink function names.
 	sinkProto          = "MarshalProtoToolResponse"
+	sinkProtoJSON      = "MarshalProtoJSON"
 	sinkLegacy         = "MarshalToolResponse"
 	sinkMarshalDestroy = "marshalDestroySuccess"
 	sinkWithID         = "RunDestructiveActionWithID"
@@ -714,9 +718,11 @@ func buildCallGraph(files []*ast.File) packageCallGraph {
 	return graph
 }
 
-// collectCalls walks a function body and collects all outgoing calls. For
-// RunDestructiveAction calls it additionally inspects the DestructiveAction
-// literal's Success closure to determine proto vs. map output.
+// collectCalls walks a function body and collects all outgoing calls. It also
+// records MarshalProtoJSON when passed as a helper argument because the helper
+// invokes that canonical serializer indirectly. For RunDestructiveAction calls
+// it additionally inspects the DestructiveAction literal's Success closure to
+// determine proto vs. map output.
 func collectCalls(body *ast.BlockStmt) []callRecord {
 	var records []callRecord
 
@@ -729,6 +735,13 @@ func collectCalls(body *ast.BlockStmt) []callRecord {
 		name := callExprName(callExpr)
 		if name == "" {
 			return true
+		}
+
+		for _, arg := range callExpr.Args {
+			ident, isIdent := arg.(*ast.Ident)
+			if isIdent && ident.Name == sinkProtoJSON {
+				records = append(records, callRecord{name: sinkProtoJSON})
+			}
 		}
 
 		if name == sinkRunDestructive {
@@ -1130,10 +1143,11 @@ func walkInputReachability(name string, graph packageCallGraph, visited map[stri
 //
 // It computes two independent reachability flags over the whole transitive
 // call graph, then applies proto-wins. Proto wins because reaching
-// MarshalProtoToolResponse anywhere means the success body is proto; the legacy
-// signals (MarshalToolResponse, the destroy wrappers, a map Success closure)
-// only ever sit on error or dry-run branches once proto is present. The two
-// flags are computed together so iteration order never decides the result.
+// MarshalProtoToolResponse or MarshalProtoJSON anywhere means the success body
+// is proto; the legacy signals (MarshalToolResponse, the destroy wrappers, a map
+// Success closure) only ever sit on error or dry-run branches once proto is
+// present. The two flags are computed together so iteration order never decides
+// the result.
 func classify(handlerName string, graph packageCallGraph, visited map[string]bool) string {
 	reach := &reachability{}
 	walkReachability(handlerName, graph, visited, reach)
@@ -1169,7 +1183,7 @@ func walkReachability(name string, graph packageCallGraph, visited map[string]bo
 
 	for _, rec := range graph[name] {
 		switch rec.name {
-		case sinkProto:
+		case sinkProto, sinkProtoJSON:
 			reach.proto = true
 
 		case sinkLegacy, sinkMarshalDestroy:

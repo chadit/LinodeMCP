@@ -5,5 +5,4 @@
 # then remove its line; never add a line by hand. Regenerate:
 #   python scripts/verify_read_proto.py --update-baseline
 linode_networking_reserved_ip_get	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_list	review	proto  # accepted 2026-07-20 https://github.com/chadit/LinodeMCP/issues/740 classifier cannot yet see the null-preserving handler as proto-routed
 linode_networking_reserved_ip_type_list	missing	proto  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
