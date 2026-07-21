@@ -17,3 +17,14 @@ func TestRequiredScopesReservedIPList(t *testing.T) {
 		t.Errorf("RequiredScopes() = %v, want %v", got, want)
 	}
 }
+
+func TestRequiredScopesReservedIPDelete(t *testing.T) {
+	t.Parallel()
+
+	want := []profiles.Scope{"reserved-ips:read_write"}
+
+	got := profiles.RequiredScopes("linode_networking_reserved_ip_delete", profiles.CapDestroy)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("RequiredScopes() = %v, want %v", got, want)
+	}
+}

@@ -5,7 +5,6 @@
 # Regenerate:
 #   python scripts/verify_behavior.py --update-baseline
 linode_networking_reserved_ip_create  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_delete  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_get  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_type_list  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_update  # accepted 2026-07-16 https://github.com/chadit/LinodeMCP-Issue/issues/1038

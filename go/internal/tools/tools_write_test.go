@@ -4980,7 +4980,7 @@ func TestLinodeNodeBalancerCreateToolValidation(t *testing.T) {
 		},
 		{
 			name:         "invalid IPv4",
-			args:         map[string]any{keyRegion: regionUSEast, keyIPv4: "2001:db8::1", keyConfirm: true},
+			args:         map[string]any{keyRegion: regionUSEast, keyIPv4: networkingIPv6AddressFixture, keyConfirm: true},
 			wantContains: "ipv4 must be a valid IPv4 address",
 		},
 		{

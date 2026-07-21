@@ -661,6 +661,7 @@ CONFORMANCE_MESSAGES: dict[str, type[Message]] = {
         region_pb2.RegionAvailabilityListResponse
     ),
     "linode.mcp.v1.RegionListResponse": region_pb2.RegionListResponse,
+    "linode.mcp.v1.ReservedIPDeleteResponse": ip_pb2.ReservedIPDeleteResponse,
     "linode.mcp.v1.SSHKey": sshkey_pb2.SSHKey,
     "linode.mcp.v1.SSHKeyDeleteResponse": sshkey_pb2.SSHKeyDeleteResponse,
     "linode.mcp.v1.SSHKeyListResponse": sshkey_pb2.SSHKeyListResponse,

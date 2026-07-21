@@ -1342,7 +1342,19 @@ func twoStageMultiArgCases() []twoStageMultiArgCase {
 				return h
 			},
 			args:      map[string]any{keyLinodeID: float64(123), keyAddress: "203.0.113.7"},
-			baseState: map[string]any{keyAddress: "203.0.113.7", keyType: keyIPv4, "public": true},
+			baseState: map[string]any{keyAddress: "203.0.113.7", keyType: keyIPv4, keyInterfacePublic: true},
+		},
+		{
+			name: "reserved_ip_delete",
+			handlerOf: func(cfg *config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				_, _, h := tools.NewLinodeReservedIPDeleteTool(cfg)
+
+				return h
+			},
+			args: map[string]any{keyAddress: reservedIPAddressFixture},
+			baseState: map[string]any{
+				keyAddress: reservedIPAddressFixture, "assigned_entity": nil, keyInterfacePublic: true, "tags": []any{}, keyType: keyIPv4,
+			},
 		},
 		{
 			name: "instance_password_reset",

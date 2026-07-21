@@ -14851,7 +14851,7 @@ func TestLinodeImagesListToolFilterByDeprecated(t *testing.T) {
 	}
 	_, _, handler := tools.NewLinodeImageListTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{"deprecated": "true"})
+	req := createRequestWithArgs(t, map[string]any{"deprecated": boolStringTrue})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {

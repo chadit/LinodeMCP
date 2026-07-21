@@ -364,6 +364,7 @@ func conformanceMessages5() map[string]func() proto.Message {
 		"linode.mcp.v1.Region":                          func() proto.Message { return &linodev1.Region{} },
 		"linode.mcp.v1.RegionAvailabilityListResponse":  func() proto.Message { return &linodev1.RegionAvailabilityListResponse{} },
 		"linode.mcp.v1.RegionListResponse":              func() proto.Message { return &linodev1.RegionListResponse{} },
+		"linode.mcp.v1.ReservedIPDeleteResponse":        func() proto.Message { return &linodev1.ReservedIPDeleteResponse{} },
 		"linode.mcp.v1.SSHKey":                          func() proto.Message { return &linodev1.SSHKey{} },
 		"linode.mcp.v1.SSHKeyDeleteResponse":            func() proto.Message { return &linodev1.SSHKeyDeleteResponse{} },
 		"linode.mcp.v1.SSHKeyListResponse":              func() proto.Message { return &linodev1.SSHKeyListResponse{} },

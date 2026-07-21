@@ -31,7 +31,7 @@ func TestVolumeCloneToolRegisteredAsWrite(t *testing.T) {
 		}
 
 		raw := string(info.RawInputSchema)
-		for _, key := range []string{"volume_id", "label", "confirm", "dry_run"} {
+		for _, key := range []string{"volume_id", "label", keyConfirm, "dry_run"} {
 			if !strings.Contains(raw, key) {
 				t.Errorf("info.RawInputSchema missing key %v", key)
 			}

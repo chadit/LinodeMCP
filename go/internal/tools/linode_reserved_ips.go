@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/netip"
+	"net/url"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/proto"
@@ -14,13 +16,74 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
+	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
 const (
-	linodeReservedIPListToolName = "linode_networking_reserved_ip_list"
-	reservedIPListPageSizeMin    = 25
-	reservedIPListPageSizeMax    = 500
+	linodeReservedIPListToolName   = "linode_networking_reserved_ip_list"
+	linodeReservedIPDeleteToolName = "linode_networking_reserved_ip_delete"
+	reservedIPListPageSizeMin      = 25
+	reservedIPListPageSizeMax      = 500
 )
+
+// NewLinodeReservedIPDeleteTool creates a tool for permanently unreserving a
+// public IPv4 address.
+func NewLinodeReservedIPDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	tool := mcp.NewToolWithRawSchema(
+		linodeReservedIPDeleteToolName,
+		"Permanently unreserves a public IPv4 address and stops billing. Pass dry_run=true to preview without deleting."+twoStageNote,
+		toolschemas.Schema("linode.mcp.v1.ReservedIPDeleteInput"),
+	)
+
+	handler := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return handleReservedIPDeleteRequest(ctx, &request, cfg)
+	}
+
+	return tool, profiles.CapDestroy, handler
+}
+
+func handleReservedIPDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	address, validationMessage := reservedIPv4AddressFromTool(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	return RunDestructiveAction(ctx, request, cfg, &DestructiveAction{
+		ToolName:       linodeReservedIPDeleteToolName,
+		Method:         httpMethodDelete,
+		Path:           endpointReservedIPToolPath + "/" + url.PathEscape(address),
+		ConfirmMessage: "This permanently unreserves the IP and it cannot be recovered. Set confirm=true to proceed.",
+		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
+			return c.GetReservedIPRaw(ctx, address)
+		},
+		Execute: func(ctx context.Context, c *linode.Client) error {
+			return c.DeleteReservedIP(ctx, address)
+		},
+		Success: func() proto.Message {
+			return &linodev1.ReservedIPDeleteResponse{
+				Message: fmt.Sprintf("Reserved IP %s unreserved successfully", address),
+				Address: address,
+			}
+		},
+		HashIgnore: twostage.HashIgnoreFields("ReservedIP"),
+	})
+}
+
+const endpointReservedIPToolPath = "/networking/reserved/ips"
+
+func reservedIPv4AddressFromTool(args map[string]any) (string, string) {
+	address, ok := args["address"].(string)
+	if !ok || address == "" {
+		return "", "address is required"
+	}
+
+	addr, err := netip.ParseAddr(address)
+	if err != nil || !addr.Is4() {
+		return "", "address must be a valid IPv4 address"
+	}
+
+	return address, ""
+}
 
 // NewLinodeReservedIPListTool creates a tool for listing reserved public IPv4
 // addresses on the account.

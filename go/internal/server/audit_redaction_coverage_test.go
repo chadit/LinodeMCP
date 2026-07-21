@@ -109,7 +109,7 @@ func TestRedactionCoversSensitivePIIArgNames(t *testing.T) {
 
 	// Case-insensitive substrings that flag an arg name as potentially
 	// carrying PII. Conservative scope per the spec.
-	piiSubstrings := []string{"tax", "address", "phone", "dob", "card", "cvv"}
+	piiSubstrings := []string{"tax", keyAddress, "phone", "dob", "card", "cvv"}
 
 	// Arg names that match a PII substring but are NOT personally
 	// identifying. Each entry needs a justification because the
@@ -125,7 +125,7 @@ func TestRedactionCoversSensitivePIIArgNames(t *testing.T) {
 	//     interface (linode_instance_config_interface_add). Operational
 	//     network addressing, not PII.
 	knownSafePII := map[string]struct{}{
-		"address":      {},
+		keyAddress:     {},
 		"addresses":    {},
 		"ipam_address": {},
 	}

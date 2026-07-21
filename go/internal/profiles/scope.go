@@ -59,6 +59,9 @@ const (
 	ScopeObjectStorageReadOnly  Scope = "object_storage:read_only"
 	ScopeObjectStorageReadWrite Scope = "object_storage:read_write"
 
+	ScopeReservedIPsReadOnly  Scope = "reserved-ips:read_only"
+	ScopeReservedIPsReadWrite Scope = "reserved-ips:read_write"
+
 	ScopeStackScriptsReadOnly  Scope = "stackscripts:read_only"
 	ScopeStackScriptsReadWrite Scope = "stackscripts:read_write"
 
@@ -94,6 +97,7 @@ const (
 	categoryLongview      = "longview"
 	categoryNodeBalancers = "nodebalancers"
 	categoryObjectStorage = "object_storage"
+	categoryReservedIPs   = "reserved-ips"
 	categoryStackScripts  = "stackscripts"
 	categoryTokens        = "tokens"
 	categoryVolumes       = "volumes"
@@ -164,6 +168,8 @@ func scopeCategory(toolName string) string {
 		return categoryTokens
 	case "linode_networking_reserved_ip_list":
 		return categoryIPs
+	case "linode_networking_reserved_ip_delete":
+		return categoryReservedIPs
 	}
 
 	// Order matters: longer prefixes first.
@@ -203,7 +209,7 @@ func scopeCategory(toolName string) string {
 	return ""
 }
 
-// scopeMatrix is built fresh per call (cheap, 12 entries) so we avoid a
+// scopeMatrix is built fresh per call (cheap, 13 entries) so we avoid a
 // package-level global the gochecknoglobals linter would flag. The two
 // entries per row are [read-only, read-write]. Order matters: index 0
 // is read-only.
@@ -219,6 +225,7 @@ func scopeMatrix() map[string][2]Scope {
 		categoryLongview:      {ScopeLongviewReadOnly, ScopeLongviewReadWrite},
 		categoryNodeBalancers: {ScopeNodeBalancersReadOnly, ScopeNodeBalancersReadWrite},
 		categoryObjectStorage: {ScopeObjectStorageReadOnly, ScopeObjectStorageReadWrite},
+		categoryReservedIPs:   {ScopeReservedIPsReadOnly, ScopeReservedIPsReadWrite},
 		categoryStackScripts:  {ScopeStackScriptsReadOnly, ScopeStackScriptsReadWrite},
 		categoryTokens:        {ScopeTokensReadOnly, ScopeTokensReadWrite},
 		categoryVolumes:       {ScopeVolumesReadOnly, ScopeVolumesReadWrite},

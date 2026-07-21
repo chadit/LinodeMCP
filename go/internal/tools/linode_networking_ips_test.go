@@ -1064,7 +1064,7 @@ func TestLinodeNetworkingIPAssignToolArgs(t *testing.T) {
 		"missing assignments": {keyRegion: regionUSEast, keyConfirm: true},
 		"invalid assignments": {keyRegion: regionUSEast, keyAssignments: invalidJSON, keyConfirm: true},
 		"empty assignments":   {keyRegion: regionUSEast, keyAssignments: databaseJSONArray, keyConfirm: true},
-		"missing address":     {keyRegion: regionUSEast, keyAssignments: `[{"linode_id":123}]`, keyConfirm: true},
+		caseMissingAddress:    {keyRegion: regionUSEast, keyAssignments: `[{"linode_id":123}]`, keyConfirm: true},
 		"invalid linode_id":   {keyRegion: regionUSEast, keyAssignments: `[{"address":"198.51.100.5","linode_id":0}]`, keyConfirm: true},
 	} {
 		t.Run(name, func(t *testing.T) {
