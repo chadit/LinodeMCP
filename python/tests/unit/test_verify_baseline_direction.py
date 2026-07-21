@@ -1,10 +1,13 @@
-"""Offline tests for the baseline growth guard's snapshot exemption.
+"""Offline tests for the baseline growth guard.
 
 verify_baseline_direction.py guards ratchet baselines: an ADDED entry must
-carry an acceptance annotation. Two files under the same glob are regenerated
-drift snapshots (api-defaults, enum-sync) whose added lines never carry an
-annotation, so they are exempt. These tests pin that exemption and prove the
-guard still flags real unannotated growth on the ratchet files.
+carry an acceptance annotation citing a tracking-issue URL, because a
+ratchet entry is a promise to come back. Two files under the same glob are
+regenerated drift snapshots (api-defaults, enum-sync) whose added lines
+never carry an annotation, so they are exempt, and behavior-exempt.txt may
+carry a free-text reason since a permanent exemption has no follow-up to
+track. These tests pin the exemptions, the URL requirement, and the guard's
+flagging of real unannotated growth.
 """
 
 from __future__ import annotations
@@ -105,14 +108,33 @@ def test_unannotated_growth_is_flagged(
     assert "MISSING ANNOTATION" in problems[0]
 
 
-def test_annotated_growth_is_accepted(
+def test_growth_annotated_with_issue_url_is_accepted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(guard, "_REPO_ROOT", tmp_path)
     monkeypatch.setattr(guard, "_git_show", _fixed_git_show("# header\nold\n"))
-    path = _write_ratchet(tmp_path, "old\nnew  # accepted 2026-01-01 tracking reason\n")
+    path = _write_ratchet(
+        tmp_path,
+        "old\nnew  # accepted 2026-01-01"
+        " https://github.com/chadit/LinodeMCP-Issue/issues/999 catch-up\n",
+    )
 
     assert guard._check_file(path, "base") == []
+
+
+def test_ratchet_growth_with_free_text_reason_is_flagged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dated reason with no issue URL is a promise with no home."""
+    monkeypatch.setattr(guard, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(guard, "_git_show", _fixed_git_show("# header\nold\n"))
+    path = _write_ratchet(tmp_path, "old\nnew  # accepted 2026-01-01 tracking reason\n")
+
+    problems = guard._check_file(path, "base")
+
+    assert len(problems) == 1
+    assert "new" in problems[0]
+    assert "MISSING TRACKING-ISSUE URL" in problems[0]
 
 
 def test_removal_is_never_flagged(

@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -179,10 +179,14 @@ sync-defaults:
 ## sync: Run all live API-drift checks (scheduled agent; needs network)
 sync: sync-enums sync-defaults sync-pagination
 
-## baseline-guard: Verify baseline growth vs BASE (default origin/main) carries annotations
-# Diff-aware, so it lives outside `check` (which reads committed state only):
-# the growth direction needs a reference rev. CI runs the same script against
-# the PR base / push predecessor (.github/workflows/baseline-guard.yml).
+## baseline-guard: Verify baseline growth vs BASE (default origin/main) carries issue-linked annotations
+# Diff-aware but cheap (git show plus file parses, no artifacts), so it rides
+# EARLY in `check` (cheap-fails-first: a bad annotation fails in seconds, not
+# after ten minutes of tests) and therefore in the pre-push hook. Same layout
+# as diff-coverage: BASE defaults to origin/main, which is right locally and
+# on PRs; an unreachable rev skips loudly. CI additionally runs the script
+# with the event's true base (.github/workflows/baseline-guard.yml), which
+# matters on pushes to main where origin/main already equals HEAD.
 BASE ?= origin/main
 baseline-guard:
 	@python3 scripts/verify_baseline_direction.py "$(BASE)"

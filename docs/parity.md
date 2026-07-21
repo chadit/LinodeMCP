@@ -73,7 +73,11 @@ is allowed, but never silent:
 3. Annotate each new line: `<entry>  # accepted YYYY-MM-DD <tracking-issue
    URL>`. The parity gate hard-requires the annotation on absences, and the
    baseline guard (`make baseline-guard` locally, `baseline-guard.yml` in CI)
-   fails any added baseline line that lacks one.
+   fails any added baseline line that lacks one or whose annotation cites no
+   tracking-issue URL. A dated free-text reason is not enough on a ratchet:
+   the entry is a promise to come back, and the issue is where that promise
+   lives. Only `behavior-exempt.txt` accepts a reason without a URL, since a
+   permanent exemption has no follow-up to track.
 4. The catch-up work stays visible in `make parity-todo` until the twin
    lands, at which point the gate fails on the stale line and the entry
    comes out.
@@ -117,7 +121,7 @@ baseline entries).
 |---|---|
 | `make check` | The gate. Both languages' lint and tests plus every cross-language gate; local green, hook green, and CI green are the same fact. |
 | `make parity-todo` | Per-language remaining-work report aggregated from the baselines. |
-| `make baseline-guard BASE=<rev>` | Diff-aware check that baseline growth carries annotations (CI runs it per change). |
+| `make baseline-guard BASE=<rev>` | Baseline growth must carry issue-linked annotations. Runs inside `make check` against origin/main; CI re-runs it with the event's true base. |
 | `make diff-coverage BASE=<rev>` | Added (and untracked) source lines must be covered by tests. Runs inside `make check` against origin/main; CI re-runs it with the event's true base. |
 | `make tool-parity` / `behavior` / `input-proto` / `read-proto` / `write-proto` / `meta-proto` / `messages` / `pagination` / `dryrun` / `env-parity` / `cli-surface` / `docs-links` / `metrics-surface` / `coverage-floor` | Run one gate alone while iterating. |
 | `python scripts/<gate>.py --update-baseline` | Regenerate a ratchet after intentional work; annotations on surviving entries are preserved. |

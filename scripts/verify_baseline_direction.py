@@ -7,7 +7,16 @@ cannot see that a baseline GREW; the growth direction needs a reference point.
 This guard supplies it: given a base git rev, it diffs each baseline's entry set
 and fails when a change ADDS an entry without a valid acceptance annotation:
 
-    <entry>  # accepted YYYY-MM-DD <reason or tracking-issue URL>
+    <entry>  # accepted YYYY-MM-DD <tracking-issue URL, plus optional context>
+
+On the ratchet baselines the annotation MUST cite a tracking-issue URL
+(https://.../issues/<n>): a ratchet entry is a promise to come back, and a
+free-text reason gives that promise no home. One shipped reading "needs
+classifier review" with nowhere to follow up, and both the human and the
+automated pair review passed it because this guard was green; conventions
+that matter get enforced here, not in prose. behavior-exempt.txt is the one
+annotated file where free text stays valid, because a permanent exemption
+carries no follow-up work to track.
 
 Growth stays possible (landing one language ahead of the others is a real
 workflow), but only as a visible, dated commitment that review can see in
@@ -23,12 +32,16 @@ _SNAPSHOT_BASELINES.
 
 behavior-exempt.txt is guarded too, though it is not a ratchet: an entry
 there removes a tool from behavior-fixture coverage permanently, so a NEW
-exemption needs the same dated annotation as accepted ratchet growth. See
-_ANNOTATED_EXTRAS.
+exemption needs the same dated annotation as accepted ratchet growth (with
+a free-text reason allowed in place of an issue URL). See _ANNOTATED_EXTRAS.
 
-Runs in CI (.github/workflows/baseline-guard.yml) against the PR base or the
-push's previous tip, and locally via `make baseline-guard` (default base
-origin/main). Stdlib plus scripts/_baselines.py only, so no venv is needed.
+Runs inside `make check` (and so the pre-push hook) against origin/main,
+which is the right base locally and on PRs; an unreachable base rev skips
+loudly rather than failing unrelated work. CI additionally runs it with the
+event's true base (.github/workflows/baseline-guard.yml: the PR merge
+parent, or the push's previous tip), which matters on pushes to main where
+origin/main already equals HEAD and the in-check run sees an empty diff.
+Stdlib plus scripts/_baselines.py only, so no venv is needed.
 """
 
 from __future__ import annotations
@@ -129,12 +142,23 @@ def _check_file(path: Path, base_rev: str) -> list[str]:
         return []
 
     bad = set(_baselines.unannotated(added, current))
+    # Ratchet acceptances must point at a tracking issue; the extras list
+    # (behavior-exempt.txt) documents permanent exemptions, so a free-text
+    # reason remains valid there.
+    bad_url: set[str] = set()
+    if path.name not in _ANNOTATED_EXTRAS:
+        bad_url = set(_baselines.missing_issue_url(added, current))
+
     problems: list[str] = []
     for entry in added:
-        marker = "MISSING ANNOTATION" if entry in bad else "ok (annotated)"
+        marker = "ok (annotated)"
+        if entry in bad:
+            marker = "MISSING ANNOTATION"
+        elif entry in bad_url:
+            marker = "MISSING TRACKING-ISSUE URL"
         problems.append(f"  {rel}: + {entry}  [{marker}]")
 
-    if not bad:
+    if not bad and not bad_url:
         return []
     return problems
 
@@ -166,7 +190,12 @@ def main() -> int:
     print(
         "\nEvery ADDED baseline entry must carry an acceptance annotation so"
         " the growth is a visible, dated commitment:"
-        "\n  <entry>  # accepted YYYY-MM-DD <reason or tracking-issue URL>"
+        "\n  <entry>  # accepted YYYY-MM-DD <tracking-issue URL, plus"
+        " optional context>"
+        "\nRatchet acceptances must cite a tracking issue (https://.../"
+        "issues/<n>); a promise to come back needs a home. behavior-exempt"
+        ".txt may carry a free-text reason instead (permanent exemptions"
+        " have no follow-up to track)."
         "\nFix the divergence instead if it was not meant to be accepted."
     )
     return 1

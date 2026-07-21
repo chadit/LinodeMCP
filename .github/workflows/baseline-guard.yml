@@ -1,11 +1,13 @@
 name: Baseline Guard
 
-# Diff-aware direction check for the docs/contracts/*-baseline.txt ratchets. `make
-# check` runs against committed state only, so it cannot tell that a baseline
-# GREW; that needs a reference point (the PR base, or the previous tip on a
-# push). This workflow supplies it: any ADDED baseline entry must carry an
-# "accepted YYYY-MM-DD <reason>" annotation or the job fails. It runs outside
-# `make check` on purpose; local runs use `make baseline-guard`.
+# Diff-aware direction check for the docs/contracts/*-baseline.txt ratchets:
+# any ADDED baseline entry must carry an "accepted YYYY-MM-DD <tracking-issue
+# URL>" annotation or the job fails (behavior-exempt.txt alone may use a
+# free-text reason). `make check` also runs the same script against
+# origin/main, so the pre-push hook catches this locally; this workflow
+# supplies the event's TRUE base (the PR merge parent, or the previous tip on
+# a push), which matters on pushes to main where origin/main already equals
+# HEAD and the in-check run sees an empty diff.
 
 on:
   push:

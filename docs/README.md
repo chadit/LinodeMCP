@@ -86,8 +86,10 @@ also carries an `llms.txt` with this same map, one line per page.
 Gate-consumed files, all under `docs/contracts/`. `make check` reads every one
 of these by exact path, so moving or renaming one means a coordinated sweep of
 its consumers. Baselines are ratchets: fixing an item removes its line, and
-lines are never added by hand. Each file's header comment holds its full rules
-and exact regenerate command.
+lines are never added by hand. An accepted line carries a dated annotation
+citing a tracking-issue URL, and the baseline guard fails growth without one
+(`behavior-exempt.txt` alone may use a free-text reason). Each file's header
+comment holds its full rules and exact regenerate command.
 
 ### Registries
 

@@ -29,9 +29,19 @@ if TYPE_CHECKING:
 ANNOTATION_SEPARATOR = "  # "
 
 # What a valid acceptance annotation looks like: the word "accepted", an ISO
-# date, and at least one non-space character of reason (a tracking-issue URL
-# is the recommended reason).
+# date, and at least one non-space character after it. What that trailing
+# text must contain depends on the file: ratchet baselines require a
+# tracking-issue URL (see ISSUE_URL_PATTERN), the behavior-exempt list may
+# carry a free-text reason.
 ANNOTATION_PATTERN = re.compile(r"^accepted \d{4}-\d{2}-\d{2} \S")
+
+# A ratchet acceptance is a promise to come back, and a promise with no
+# issue has no home: free-text reasons pass review once and then rot, which
+# is how "needs classifier review" shipped with nowhere to follow up. The
+# guard therefore requires a resolvable issue URL inside ratchet
+# annotations. Host-agnostic on purpose; the /issues/<n> path is the issue
+# semantics being pinned, not a specific forge.
+ISSUE_URL_PATTERN = re.compile(r"https://\S+/issues/\d+")
 
 
 def split_annotation(line: str) -> tuple[str, str | None]:
@@ -88,6 +98,25 @@ def unannotated(
     for entry in entries:
         note = annotations.get(entry)
         if note is None or not ANNOTATION_PATTERN.match(note):
+            bad.append(entry)
+
+    return sorted(bad)
+
+
+def missing_issue_url(
+    entries: Iterable[str], annotations: Mapping[str, str | None]
+) -> list[str]:
+    """Sorted entries whose well-formed annotation cites no tracking issue.
+
+    Only entries that already pass the ``unannotated`` check land here, so
+    each entry appears in at most one failure bucket and the guard's output
+    names the one thing to fix.
+    """
+    bad: list[str] = []
+    for entry in entries:
+        note = annotations.get(entry)
+        well_formed = note is not None and ANNOTATION_PATTERN.match(note)
+        if well_formed and not ISSUE_URL_PATTERN.search(note or ""):
             bad.append(entry)
 
     return sorted(bad)
