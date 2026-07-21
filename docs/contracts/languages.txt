@@ -4,7 +4,10 @@
 # The dump command runs from <working-dir> (relative to the repo root) and
 # must print the language's tool surface as a JSON array of records:
 #   [{"name": ..., "capability": ..., "params": {param: json-type},
-#     "required": [...]}, ...]
+#     "required": [...], "scopes": [...]}, ...]
+# "scopes" is the tool's required OAuth scope strings at its capability
+# (empty for Meta tools); the parity gate diffs it and fails a dump whose
+# surface carries no scopes at all, so the field cannot silently vanish.
 # scripts/verify_tool_parity.py runs every dumper listed here and diffs the
 # surfaces, so registering a language is what turns the parity gates on for
 # it. A newly registered language with no tools yet fails the gate with one

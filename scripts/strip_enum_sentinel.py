@@ -41,13 +41,12 @@ def _strip(node: object) -> bool:
         node_dict = cast("dict[str, Any]", node)
         enum = node_dict.get("enum")
         if isinstance(enum, list) and SENTINEL in enum:
-            enum_list = cast("list[Any]", enum)
-            node_dict["enum"] = [v for v in enum_list if v != SENTINEL]
+            node_dict["enum"] = [v for v in enum if v != SENTINEL]
             changed = True
         for value in node_dict.values():
             changed = _strip(value) or changed
     elif isinstance(node, list):
-        for value in cast("list[Any]", node):
+        for value in node:
             changed = _strip(value) or changed
     return changed
 

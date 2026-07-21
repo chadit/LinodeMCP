@@ -195,9 +195,11 @@ def spec_enum(doc: dict[str, Any], field: str, path_substr: str) -> set[str]:
 
 def load_spec(spec_path: str | None) -> dict[str, Any]:
     if spec_path:
-        return json.loads(Path(spec_path).read_text(encoding="utf-8"))
+        spec: dict[str, Any] = json.loads(Path(spec_path).read_text(encoding="utf-8"))
+        return spec
     with urllib.request.urlopen(SPEC_URL, timeout=60) as resp:  # noqa: S310 - fixed HTTPS URL
-        return json.loads(resp.read().decode("utf-8"))
+        live_spec: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+        return live_spec
 
 
 class StalenessVerificationError(RuntimeError):
@@ -299,7 +301,8 @@ def _fetch_staleness_source(url: str, label: str) -> str:
         with urllib.request.urlopen(  # noqa: S310 - fixed HTTPS URLs
             request, timeout=60
         ) as response:
-            return response.read().decode("utf-8")
+            body: str = response.read().decode("utf-8")
+            return body
     except (OSError, UnicodeError) as exc:
         raise StalenessVerificationError(f"{label} fetch failed: {exc}") from exc
 

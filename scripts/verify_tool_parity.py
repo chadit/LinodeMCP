@@ -3,8 +3,12 @@
 
 Dumps every language's tool registry and compares, per tool, the observable
 contract that a client or model sees: capability tier, the set of input
-parameters, each parameter's JSON-Schema type, and the required set.
-Descriptions are intentionally ignored, since wording is allowed to differ.
+parameters, each parameter's JSON-Schema type, the required set, and the
+required OAuth scopes. Descriptions are intentionally ignored, since wording
+is allowed to differ. Scopes are compared because the tool-to-scope mapping
+is hand-written per language and nothing else diffs it: a one-sided scope
+change would make the same profile allow a tool in one language and deny it
+in the other, silently.
 
 The languages come from docs/contracts/languages.txt: one dumper command per
 implementation, each printing the same JSON record shape (see
@@ -110,7 +114,7 @@ def _canon_type(typ: str) -> str:
 
 
 def _normalize(rec: dict[str, Any]) -> dict[str, Any]:
-    """Sort the required list and canonicalize param types for comparison."""
+    """Sort the list fields and canonicalize param types for comparison."""
     params = {
         name: _canon_type(str(typ)) for name, typ in (rec.get("params") or {}).items()
     }
@@ -118,6 +122,7 @@ def _normalize(rec: dict[str, Any]) -> dict[str, Any]:
         "capability": rec["capability"],
         "params": params,
         "required": sorted(rec.get("required") or []),
+        "scopes": sorted(rec.get("scopes") or []),
     }
 
 
@@ -200,6 +205,11 @@ def _compare_one(
             f"{other_lang}={other['required']}"
         )
 
+    if ref["scopes"] != other["scopes"]:
+        out.append(
+            f"{name}: scopes {ref_lang}={ref['scopes']} {other_lang}={other['scopes']}"
+        )
+
     return out
 
 
@@ -220,10 +230,27 @@ def _report_unannotated(pending: list[str]) -> None:
     )
 
 
+def _require_scope_signal(surfaces: dict[str, dict[str, dict[str, Any]]]) -> None:
+    """Fail when a language's dump carries no scopes at all.
+
+    Per-tool empty scopes are legitimate (Meta tools touch no Linode API),
+    but a whole surface without a single scope means the dumper stopped
+    emitting the field, and comparing empty-to-empty would pass silently.
+    """
+    for lang, tools in surfaces.items():
+        if not any(rec["scopes"] for rec in tools.values()):
+            msg = (
+                f"{lang} dump carries no scopes for any tool;"
+                " its parity dumper stopped emitting the scopes field"
+            )
+            raise SystemExit(msg)
+
+
 def main() -> int:
     languages = _load_languages()
     order = [name for name, _, _ in languages]
     surfaces = {name: _dump_surface(name, cwd, argv) for name, cwd, argv in languages}
+    _require_scope_signal(surfaces)
 
     union: set[str] = set()
     for tools in surfaces.values():

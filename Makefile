@@ -102,7 +102,7 @@ scripts-lint:
 	@echo "Running ruff check on scripts/..."
 	@python/.venv/bin/ruff check scripts/
 
-## tool-parity: Verify Go/Python tool-surface parity (capability, params, required)
+## tool-parity: Verify Go/Python tool-surface parity (capability, params, required, scopes)
 # Runs the Go dumper (go run) and imports the Python registry (needs the venv),
 # then diffs the two against docs/contracts/tool-parity-baseline.txt. Fails on any new
 # divergence or any baseline entry that is now fixed (the baseline only shrinks).

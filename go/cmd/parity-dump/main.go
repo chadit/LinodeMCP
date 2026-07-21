@@ -1,8 +1,9 @@
-// Command parity-dump prints the Go tool surface (name, capability, and a
-// normalized input-schema view) as JSON on stdout. The cross-language parity
-// checker (scripts/verify_tool_parity.py) runs this, dumps the Python registry
-// the same way, and diffs the two so a tool cannot drift in capability, param
-// name, param type, or required set between the implementations.
+// Command parity-dump prints the Go tool surface (name, capability, required
+// OAuth scopes, and a normalized input-schema view) as JSON on stdout. The
+// cross-language parity checker (scripts/verify_tool_parity.py) runs this,
+// dumps the Python registry the same way, and diffs the two so a tool cannot
+// drift in capability, param name, param type, required set, or scope
+// requirements between the implementations.
 //
 // This is a dev/CI tool, not part of the served binary. It builds the registry
 // with a throwaway config; no network calls happen during tool registration.
@@ -16,6 +17,7 @@ import (
 	"strings"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/server"
 )
 
@@ -27,6 +29,11 @@ type toolDump struct {
 	Capability string            `json:"capability"`
 	Params     map[string]string `json:"params"`
 	Required   []string          `json:"required"`
+	// Scopes is what profiles.RequiredScopes returns for the tool at its
+	// registered capability: the OAuth scope strings the active token must
+	// carry. Scope enforcement is per-language hand-written mapping code,
+	// so without this field a one-sided scope change passes every gate.
+	Scopes []string `json:"scopes"`
 }
 
 func main() {
@@ -69,11 +76,21 @@ func main() {
 		params, required := schemaParams(&info)
 		sort.Strings(required)
 
+		requiredScopes := profiles.RequiredScopes(info.Name, info.Capability)
+
+		scopes := make([]string, 0, len(requiredScopes))
+		for _, scope := range requiredScopes {
+			scopes = append(scopes, string(scope))
+		}
+
+		sort.Strings(scopes)
+
 		dumps = append(dumps, toolDump{
 			Name:       info.Name,
 			Capability: strings.TrimPrefix(info.Capability.String(), "Cap"),
 			Params:     params,
 			Required:   required,
+			Scopes:     scopes,
 		})
 	}
 

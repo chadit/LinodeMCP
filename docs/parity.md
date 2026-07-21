@@ -91,7 +91,7 @@ Edit the proto message, run `make proto`, and both languages advertise the
 new schema automatically. What does not move automatically is hand-written
 validation around it: error messages and rejection behavior are pinned by
 the behavior fixtures, so update the fixture case and both languages must
-match it. **tool-parity** catches param/type/required drift;
+match it. **tool-parity** catches param/type/required and OAuth-scope drift;
 **input-proto** catches a language quietly reverting to a hand-built schema.
 
 ### Changing output or behavior
