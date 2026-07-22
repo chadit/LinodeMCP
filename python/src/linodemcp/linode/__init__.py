@@ -2586,8 +2586,11 @@ class Client:
         )
         try:
             response = await self.make_request("GET", endpoint)
-            data: list[dict[str, Any]] = response.json()
-            return data
+            data: Any = response.json()
+            if not isinstance(data, list):
+                msg = "config interface list response must be an array"
+                raise TypeError(msg)
+            return cast("list[dict[str, Any]]", data)
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceConfigInterfaces", e) from e
 
