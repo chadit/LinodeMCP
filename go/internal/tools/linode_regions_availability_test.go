@@ -202,7 +202,7 @@ func TestLinodeRegionAvailabilityGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true, keyNotInProto: valNotInProto}}}); err != nil {
+		if err := json.NewEncoder(w).Encode([]map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true, keyNotInProto: valNotInProto}}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))

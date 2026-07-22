@@ -99,6 +99,25 @@
           }
         ]
       }
+    },
+    {
+      "name": "rejects a page envelope after the API call",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_responses": {
+        "GET /linode/instances/123/configs/456/interfaces": {
+          "data": [{ "id": 202, "purpose": "vpc" }],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a boolean response after the API call",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_response": false,
+      "expect_api_error": "response"
     }
   ]
 }

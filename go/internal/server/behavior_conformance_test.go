@@ -27,9 +27,12 @@ type behaviorFixture struct {
 }
 
 // behaviorCase drives one dispatch. Exactly one outcome field is set:
-// ExpectError (a local validation failure, bare message text), ExpectRequest
-// (the one HTTP call the handler must make), or ExpectResult (the successful
-// response content, compared as parsed JSON so formatting is irrelevant).
+// ExpectError (an exact local validation failure that forbids HTTP calls),
+// ExpectAPIError (a shared substring in an error after at least one HTTP call),
+// ExpectRequest (the one HTTP call the handler must make), or ExpectResult (the
+// successful response content, compared as parsed JSON so formatting is
+// irrelevant). ExpectAPIError uses a substring so language-specific error
+// framing stays outside the shared contract.
 //
 // The fake API answers from APIResponses when present: a map keyed
 // "METHOD /path" (no query string, so per-language pagination params don't
@@ -43,13 +46,14 @@ type behaviorFixture struct {
 // captured request is a GET: a dry run may read whatever it needs to build
 // its preview but must never mutate.
 type behaviorCase struct {
-	Name          string                     `json:"name"`
-	Args          map[string]any             `json:"args"`
-	APIResponse   json.RawMessage            `json:"api_response"`
-	APIResponses  map[string]json.RawMessage `json:"api_responses"`
-	ExpectError   string                     `json:"expect_error"`
-	ExpectRequest *behaviorRequest           `json:"expect_request"`
-	ExpectResult  json.RawMessage            `json:"expect_result"`
+	Name           string                     `json:"name"`
+	Args           map[string]any             `json:"args"`
+	APIResponse    json.RawMessage            `json:"api_response"`
+	APIResponses   map[string]json.RawMessage `json:"api_responses"`
+	ExpectAPIError string                     `json:"expect_api_error"`
+	ExpectError    string                     `json:"expect_error"`
+	ExpectRequest  *behaviorRequest           `json:"expect_request"`
+	ExpectResult   json.RawMessage            `json:"expect_result"`
 }
 
 // behaviorRequest is the expected outgoing HTTP call: method, path (with any
@@ -229,7 +233,9 @@ func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 
 	switch {
 	case testCase.ExpectError != "":
-		checkBehaviorError(t, isError, text, testCase.ExpectError)
+		checkBehaviorError(t, isError, text, captured, testCase.ExpectError)
+	case testCase.ExpectAPIError != "":
+		checkBehaviorAPIError(t, isError, text, captured, testCase.ExpectAPIError)
 	case testCase.ExpectResult != nil:
 		checkBehaviorResult(t, isError, text, testCase.ExpectResult)
 	default:
@@ -277,9 +283,9 @@ func checkBehaviorResult(t *testing.T, isError bool, text string, want json.RawM
 }
 
 // checkBehaviorError asserts a local validation failure with the exact bare
-// message. Go emits the message unwrapped; the Python runner strips its
-// "Error: " prefix so both compare against the same fixture text.
-func checkBehaviorError(t *testing.T, isError bool, text, want string) {
+// message and no HTTP request. Go emits the message unwrapped; the Python
+// runner adds an "Error: " prefix before comparing with the fixture text.
+func checkBehaviorError(t *testing.T, isError bool, text string, captured []capturedRequest, want string) {
 	t.Helper()
 
 	if !isError {
@@ -288,6 +294,28 @@ func checkBehaviorError(t *testing.T, isError bool, text, want string) {
 
 	if text != want {
 		t.Errorf("error text = %q, want %q", text, want)
+	}
+
+	if len(captured) != 0 {
+		t.Errorf("captured %d requests, want 0", len(captured))
+	}
+}
+
+// checkBehaviorAPIError asserts an error containing the shared failure reason
+// after the handler made at least one HTTP request.
+func checkBehaviorAPIError(t *testing.T, isError bool, text string, captured []capturedRequest, want string) {
+	t.Helper()
+
+	if !isError {
+		t.Fatalf("isError = false, want true (text %q)", text)
+	}
+
+	if !strings.Contains(text, want) {
+		t.Errorf("error text = %q, want substring %q", text, want)
+	}
+
+	if len(captured) == 0 {
+		t.Fatal("captured 0 requests, want at least 1")
 	}
 }
 

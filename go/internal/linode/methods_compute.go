@@ -204,13 +204,11 @@ func (c *Client) httpListRegionsAvailabilityProto(ctx context.Context) ([]*linod
 
 // httpGetRegionAvailabilityProto retrieves compute type availability for one
 // region as proto RegionAvailability messages for the proto-backed read path.
-// The endpoint returns the same {data:[...]} page envelope as the cross-region
-// list, so listProtoElements decodes each element the same way, keeping the
-// per-region get and the list byte-identical element-for-element.
+// The endpoint returns a bare top-level array rather than a paginated envelope.
 func (c *Client) httpGetRegionAvailabilityProto(ctx context.Context, regionID string) ([]*linodev1.RegionAvailability, error) {
 	endpoint := fmt.Sprintf(endpointRegionAvailability, url.PathEscape(regionID))
 
-	return listProtoElements(ctx, c, "GetRegionAvailability", endpoint,
+	return listProtoElementsBare(ctx, c, "GetRegionAvailability", endpoint,
 		func() *linodev1.RegionAvailability { return &linodev1.RegionAvailability{} })
 }
 

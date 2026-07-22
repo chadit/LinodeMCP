@@ -1,12 +1,60 @@
 {
   "tool": "linode_region_availability_get",
-  "description": "Per-region availability. Both missing and invalid region_id error texts diverge (see report), so only the success GET is pinned.",
+  "description": "Per-region availability returns the documented bare-array response and rejects every non-array JSON root after the GET.",
   "cases": [
     {
       "name": "gets availability for one region",
       "args": { "region_id": "us-east" },
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/regions/us-east/availability" }
+      "api_responses": {
+        "GET /regions/us-east/availability": [
+          { "available": true, "plan": "g6-standard-1", "region": "us-east" }
+        ]
+      },
+      "expect_result": {
+        "count": 1,
+        "region_availabilities": [
+          { "available": true, "plan": "g6-standard-1", "region": "us-east" }
+        ]
+      }
+    },
+    {
+      "name": "rejects a page envelope after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": {
+        "GET /regions/us-east/availability": {
+          "data": [
+            { "available": true, "plan": "g6-standard-1", "region": "us-east" }
+          ],
+          "page": 1,
+          "pages": 1,
+          "results": 1
+        }
+      },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects null after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": { "GET /regions/us-east/availability": null },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a boolean after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": { "GET /regions/us-east/availability": false },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a string after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": { "GET /regions/us-east/availability": "not an array" },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a number after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": { "GET /regions/us-east/availability": 1 },
+      "expect_api_error": "response"
     }
   ]
 }
