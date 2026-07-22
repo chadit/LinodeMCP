@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-var errResponseBodyNotJSONArray = errors.New("response body is not a JSON array")
+var (
+	errResponseBodyNotJSONArray  = errors.New("response body is not a JSON array")
+	errResponseBodyNotJSONObject = errors.New("response body is not a JSON object")
+)
 
 // ErrCircuitOpen is returned when the circuit breaker is open and rejecting
 // requests. Callers can check this sentinel to distinguish "we never tried"

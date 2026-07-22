@@ -1,16 +1,112 @@
 {
   "tool": "linode_instance_firewall_update",
-  "description": "Firewall assignment replace: PUTs the firewall_ids body (no query when pagination is unset). Local rejection texts (missing linode_id, missing firewall_ids, confirm) diverge, so only the success request is fixtured (see report).",
+  "description": "Firewall assignment replace: PUTs the firewall_ids body and requires the documented paginated response envelope. Local rejection texts (missing linode_id, missing firewall_ids, confirm) diverge.",
   "cases": [
     {
       "name": "replaces firewall assignments with the firewall_ids body",
       "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
-      "api_response": { "data": [] },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": {
         "method": "PUT",
         "path": "/linode/instances/123/firewalls",
         "body": { "firewall_ids": [1, 2] }
       }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": [],
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects a null API response",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": null,
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": "unexpected",
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": 123,
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": true,
+      "expect_api_error": true
+    },
+    {
+      "name": "returns firewalls from the page envelope",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": [{ "id": 1, "label": "web" }], "page": 1, "pages": 1, "results": 1 },
+      "expect_result": { "count": 1, "firewalls": [{ "id": 1, "label": "web", "status": "", "tags": [], "created": "", "updated": "" }] }
+    },
+    {
+      "name": "rejects object data in the page envelope",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": {} },
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects string data in the page envelope",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": "unexpected" },
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects numeric data in the page envelope",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": 123 },
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects boolean data in the page envelope",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": true },
+      "expect_api_error": true
+    },
+    {
+      "name": "accepts null data as an empty page",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": null, "page": 1, "pages": 1, "results": 0 },
+      "expect_result": { "count": 0, "firewalls": [] }
+    },
+    {
+      "name": "rejects an array element in page data",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": [[]] },
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects a null element in page data",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": [null] },
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects a string element in page data",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": ["unexpected"] },
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects a numeric element in page data",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": [123] },
+      "expect_api_error": true
+    },
+    {
+      "name": "rejects a boolean element in page data",
+      "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
+      "api_response": { "data": [true] },
+      "expect_api_error": true
     },
     {
       "name": "requires confirm",

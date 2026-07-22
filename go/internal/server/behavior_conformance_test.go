@@ -27,9 +27,10 @@ type behaviorFixture struct {
 }
 
 // behaviorCase drives one dispatch. Exactly one outcome field is set:
-// ExpectError (a local validation failure, bare message text), ExpectRequest
-// (the one HTTP call the handler must make), or ExpectResult (the successful
-// response content, compared as parsed JSON so formatting is irrelevant).
+// ExpectError (a local validation failure, bare message text), ExpectAPIError
+// (a response-handling failure after at least one HTTP call), ExpectRequest (the
+// one HTTP call the handler must make), or ExpectResult (the successful response
+// content, compared as parsed JSON so formatting is irrelevant).
 //
 // The fake API answers from APIResponses when present: a map keyed
 // "METHOD /path" (no query string, so per-language pagination params don't
@@ -43,13 +44,14 @@ type behaviorFixture struct {
 // captured request is a GET: a dry run may read whatever it needs to build
 // its preview but must never mutate.
 type behaviorCase struct {
-	Name          string                     `json:"name"`
-	Args          map[string]any             `json:"args"`
-	APIResponse   json.RawMessage            `json:"api_response"`
-	APIResponses  map[string]json.RawMessage `json:"api_responses"`
-	ExpectError   string                     `json:"expect_error"`
-	ExpectRequest *behaviorRequest           `json:"expect_request"`
-	ExpectResult  json.RawMessage            `json:"expect_result"`
+	Name           string                     `json:"name"`
+	Args           map[string]any             `json:"args"`
+	APIResponse    json.RawMessage            `json:"api_response"`
+	APIResponses   map[string]json.RawMessage `json:"api_responses"`
+	ExpectError    string                     `json:"expect_error"`
+	ExpectAPIError bool                       `json:"expect_api_error"`
+	ExpectRequest  *behaviorRequest           `json:"expect_request"`
+	ExpectResult   json.RawMessage            `json:"expect_result"`
 }
 
 // behaviorRequest is the expected outgoing HTTP call: method, path (with any
@@ -230,10 +232,26 @@ func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 	switch {
 	case testCase.ExpectError != "":
 		checkBehaviorError(t, isError, text, testCase.ExpectError)
+	case testCase.ExpectAPIError:
+		checkBehaviorAPIError(t, isError, text, captured)
 	case testCase.ExpectResult != nil:
 		checkBehaviorResult(t, isError, text, testCase.ExpectResult)
 	default:
 		checkBehaviorRequest(t, isError, text, captured, testCase.ExpectRequest)
+	}
+}
+
+// checkBehaviorAPIError asserts that response handling failed after the tool
+// reached the fake API. Error text is deliberately language-specific.
+func checkBehaviorAPIError(t *testing.T, isError bool, text string, captured []capturedRequest) {
+	t.Helper()
+
+	if !isError {
+		t.Fatalf("isError = false, want true (text %q)", text)
+	}
+
+	if len(captured) == 0 {
+		t.Fatal("captured 0 requests, want at least 1")
 	}
 }
 

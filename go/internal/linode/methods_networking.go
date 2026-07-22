@@ -1299,7 +1299,7 @@ func (c *Client) httpUpdateNodeBalancerFirewallsProto(ctx context.Context, nodeB
 
 	defer drainClose(resp)
 
-	return decodeProtoElementsBareOrData(resp, c, "UpdateNodeBalancerFirewalls",
+	return decodeProtoElements(resp, c, "UpdateNodeBalancerFirewalls",
 		func() *linodev1.Firewall { return &linodev1.Firewall{} })
 }
 

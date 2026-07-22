@@ -10,8 +10,9 @@ drifts from the other language fails one of the two runners.
 
 Outcome contract per case, exactly one of: ``expect_error`` is the bare
 validation message (this runner strips Python's ``Error: `` framing before
-comparing); ``expect_request`` is the method, path, and JSON body of the one
-HTTP call the handler must make; ``expect_result`` is the successful
+comparing); ``expect_api_error`` asserts response handling failed after at
+least one HTTP call; ``expect_request`` is the method, path, and JSON body of
+the one HTTP call the handler must make; ``expect_result`` is the successful
 response content, compared as parsed JSON so formatting is irrelevant.
 
 The fake API answers from ``api_responses`` when present: keys are
@@ -153,6 +154,13 @@ async def test_behavior_conformance(
             f"want {'Error: ' + expect_error!r}"
         )
         assert captured == [], f"{tool}/{case_name}: no HTTP call expected"
+        return
+
+    if case.get("expect_api_error") is True:
+        assert text.startswith(("Error:", "Failed to ")), (
+            f"{tool}/{case_name}: expected error, got {text!r}"
+        )
+        assert captured, f"{tool}/{case_name}: expected at least one HTTP call"
         return
 
     expect_result = case.get("expect_result")
