@@ -122,6 +122,31 @@ For a new language, these need **two** things, and the second is easy to forget:
    enrollment step with no gate to remind you. If you skip it, the scheduled sync gate
    silently never checks your language's hand-lists. Do it when you add the language.
 
+## The scope mapping is also hand-written
+
+Every language carries a per-tool OAuth scope mapping (`go/internal/profiles/scope.go`,
+`python/src/linodemcp/profiles/scope.py`): a name-prefix table, a documented-scopeless
+list, and a small override table for routes whose documented scope the prefix table
+cannot derive. A new language must mirror all three, and two gates hold it in place:
+
+1. **The parity dumper must emit `scopes`.** `tool-parity` diffs the resolved scope list
+   per tool across languages, so a mapping that disagrees with the reference language
+   fails per-commit. A dumper that stops emitting the field entirely also fails (the
+   gate refuses a surface with zero scopes).
+2. **Port the scope completeness test.** Cross-language parity cannot see a family that
+   every language forgot together, so each language pins its own registry: every
+   non-meta tool resolves at least one scope or sits on the documented scopeless list
+   (see `go/internal/server/scope_completeness_test.go` and
+   `python/tests/unit/test_scope_completeness.py`). This test is per-language by design;
+   a new language ships one alongside its mapping.
+
+There is no sync-gate enrollment step here: the scheduled `sync-scopes` gate compares
+Python's mapping against the live spec's per-operation security blocks (routed through
+`docs/contracts/tool-routes.txt`), and `tool-parity` pins every other language equal to
+Python, so the docs comparison covers the new language transitively. New tools DO need a
+`tool-routes.txt` line, whatever language adds them; the gate fails loudly when one is
+missing.
+
 ## The endgame (so you know these hand-lists are temporary)
 
 The North Star is nothing handwritten. The permanent fix for the three hand-lists is
@@ -145,6 +170,7 @@ and runs on a cron, not on every change.
 | `messages` | per-commit | confirm-text parity |
 | baseline guard | per-change (CI only) | baseline growth without an `accepted YYYY-MM-DD` annotation; `make check` reads committed state and cannot see direction, so this one check is diff-aware |
 | `sync-enums` / `sync-defaults` | scheduled | proto enums plus hand-list value **sets** plus defaults vs the live Linode API, and every language's set vs every other |
+| `sync-scopes` | scheduled | the per-tool OAuth scope mapping vs the live spec's per-operation security blocks; catches all languages drifting from the docs together, which `tool-parity` cannot see |
 
 A new language is fully enrolled when it passes every per-commit gate *and* is registered
 in the scheduled `sync-enums` hand-list map.
@@ -160,5 +186,7 @@ in the scheduled `sync-enums` hand-list map.
   language, and every accepted absence carries its tracking annotation.
 - The new language is registered in `HAND_LIST_SPEC_MAP` (or protovalidate has landed and
   the hand-lists are gone).
+- The new language has its scope mapping (prefix table, scopeless list, overrides), its
+  parity dumper emits `scopes`, and its scope completeness test passes.
 - Tool surface, capabilities, and manifest match; no hand-written input schemas or output
   shapes anywhere in the new language.

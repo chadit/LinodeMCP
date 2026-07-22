@@ -75,13 +75,6 @@ class Scope(StrEnum):
     StackScriptsReadOnly = "stackscripts:read_only"
     StackScriptsReadWrite = "stackscripts:read_write"
 
-    # The two tokens scopes are split across concatenation in the Go side
-    # to dodge gosec G101 (hardcoded-credentials regex). Python's lint
-    # stack does not have the same trigger; we keep the plain literals
-    # here but document the cross-language note.
-    TokensReadOnly = "tokens:read_only"
-    TokensReadWrite = "tokens:read_write"
-
     UsersReadOnly = "users:read_only"
     UsersReadWrite = "users:read_write"
 
@@ -166,16 +159,30 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
                 "linode_managed_",
                 "linode_tag_",
                 "linode_support_ticket_",
+                # The whole profile subtree is account-gated in the API
+                # docs, including /profile/tokens which the docs gate
+                # with account:* rather than a dedicated tokens scope.
+                "linode_profile_",
             ),
             _CAT_ACCOUNT,
         ),
         (("linode_database_", "linode_databases_"), _CAT_DATABASES),
         (("linode_object_storage_",), _CAT_OBJECT_STORAGE),
         (("linode_networking_reserved_ip_",), _CAT_RESERVED_IPS),
+        # The /networking/ips, /networking/ipv4, and /networking/ipv6
+        # routes all sit on ips:* scopes. Reserved-ip tools never reach
+        # this row: the longer reserved-ip prefix above wins first.
+        (
+            (
+                "linode_networking_ip_",
+                "linode_networking_ipv4_",
+                "linode_ipv6_",
+            ),
+            _CAT_IPS,
+        ),
         (("linode_lke_",), _CAT_LKE),
         (("linode_longview_",), _CAT_LONGVIEW),
         (("linode_nodebalancer_", "linode_nodebalancers_"), _CAT_NODEBALANCERS),
-        (("linode_firewall_settings_",), _CAT_ACCOUNT),
         (("linode_firewall_", "linode_firewalls_"), _CAT_FIREWALL),
         (("linode_domain_", "linode_domains_"), _CAT_DOMAINS),
         (("linode_volume_", "linode_volumes_"), _CAT_VOLUMES),
@@ -193,8 +200,10 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
                 "linode_placement_group_",
                 "linode_placement_groups_",
                 "linode_region_",
-                "linode_kernel_",
                 "linode_type_",
+                # VLANs live under /networking/vlans but the API gates
+                # them with linodes:* scopes.
+                "linode_vlan_",
             ),
             _CAT_LINODES,
         ),
@@ -208,13 +217,6 @@ def _scope_category(tool_name: str) -> str | None:
     ``linode_instance_backup_*`` routes via the instance/linodes path
     rather than getting shadowed by a broader rule.
     """
-    if tool_name in (
-        "linode_profile_get",
-        "linode_account_get",
-        "linode_firewall_settings_get",
-    ):
-        return _CAT_ACCOUNT
-
     # The API's security metadata intentionally splits this route family:
     # create and collection-list use ips:*, while get, update, type-list,
     # and delete use reserved-ips:*. Keep only the two collection overrides
@@ -247,6 +249,64 @@ def _scope_for(category: str, capability: Capability) -> Scope | None:
     return pair[1]
 
 
+def _is_scopeless_route(tool_name: str) -> bool:
+    """Report whether the tool's route is documented with no OAuth scope.
+
+    Two flavors collapse to the same empty return: public catalog routes
+    that need no authentication at all (kernels, database engines and
+    types), and token-only routes documented with an empty scope list,
+    meaning any authenticated token may call them (betas, maintenance
+    policies). Listing them explicitly separates "documented as
+    scopeless" from "forgot to map", which the scope completeness test
+    relies on.
+    """
+    return tool_name in (
+        "linode_kernel_get",
+        "linode_kernel_list",
+        "linode_database_engine_get",
+        "linode_database_engine_list",
+        "linode_database_type_get",
+        "linode_database_type_list",
+        "linode_network_transfer_price_list",
+        "linode_beta_get",
+        "linode_beta_list",
+        "linode_maintenance_policy_list",
+    )
+
+
+def _scope_overrides() -> dict[str, list[Scope]]:
+    """Pin tools whose documented scope can't come from the matrix.
+
+    Each entry mirrors the security block of the underlying operation in
+    the Linode OpenAPI spec, which splits these routes away from the
+    rest of their family.
+
+    Two documented quirks are deliberately NOT mirrored here.
+    GET /managed/contacts/{contactId} documents account:read_write on a
+    read: encoding that would make the read-only builtin profiles carry
+    a write scope and flip the missing-token elevation policy for
+    everyone on the default profile. GET /placement/groups documents
+    placement:read_only, a scope the spec's own OAuth catalog never
+    defines, so tokens may not be able to carry it at all. Both tools
+    stay on their family derivation until the upstream docs and the
+    grantable scope set agree.
+    """
+    return {
+        # PUT /networking/firewalls/settings is documented as
+        # account:read_write while GET on the same route stays
+        # firewall:read_only.
+        "linode_firewall_settings_update": [Scope.AccountReadWrite],
+        # GET .../instances/{id}/credentials is documented as
+        # databases:read_only on both engines even though the tools
+        # register as mutators (they expose secrets, so the server
+        # gates them behind a stronger capability).
+        "linode_database_mysql_instance_credentials_get": [Scope.DatabasesReadOnly],
+        "linode_database_postgresql_instance_credentials_get": [
+            Scope.DatabasesReadOnly
+        ],
+    }
+
+
 def _additional_scopes(tool_name: str) -> list[Scope]:
     """Return secondary scopes a tool needs beyond its primary category.
 
@@ -261,6 +321,16 @@ def _additional_scopes(tool_name: str) -> list[Scope]:
     ):
         return [Scope.ImagesReadOnly]
     if tool_name == "linode_lke_cluster_create":
+        return [Scope.LinodesReadWrite]
+    if tool_name in (
+        # Assigning or sharing addresses targets Linodes, so the API
+        # documents linodes:read_write alongside ips:read_write.
+        "linode_networking_ip_assign",
+        "linode_networking_ip_share",
+        "linode_networking_ipv4_assign",
+        "linode_networking_ipv4_share",
+        "linode_ipv6_range_create",
+    ):
         return [Scope.LinodesReadWrite]
     return []
 
@@ -278,10 +348,18 @@ def required_scopes(tool_name: str, capability: Capability) -> list[Scope]:
 
     Unknown tool names return an empty list too. The Phase 6.4 loader
     treats unknown names as best effort rather than a hard failure so a
-    forgotten mapping degrades gracefully into a logged warning.
+    forgotten mapping degrades gracefully into a logged warning. The
+    scope completeness test closes the remaining gap: every registered
+    tool must resolve to a non-empty scope list or sit on the documented
+    scopeless list, so a forgotten mapping fails tests instead of
+    shipping as silently unrestricted.
     """
-    if capability == Capability.Meta:
+    if capability == Capability.Meta or _is_scopeless_route(tool_name):
         return []
+
+    override = _scope_overrides().get(tool_name)
+    if override is not None:
+        return override
 
     category = _scope_category(tool_name)
     if category is None:

@@ -368,11 +368,14 @@ def test_storage_admin_includes_backups_but_not_other_compute() -> None:
     assert "linode_instance_create" not in storage_tools
 
 
-def test_linode_kernels_list_requires_linodes_read_scope() -> None:
-    """Kernels list requires the Linodes read token scope."""
-    assert required_scopes("linode_kernel_list", Capability.Read) == [
-        Scope.LinodesReadOnly
-    ]
+def test_linode_kernels_list_requires_no_scope() -> None:
+    """Kernels list is a public catalog route and needs no token scope.
+
+    The OpenAPI spec declares no security requirement for GET
+    /linode/kernels, so the mapping deliberately returns nothing while
+    the tool stays in the compute profile category.
+    """
+    assert required_scopes("linode_kernel_list", Capability.Read) == []
     assert categories("linode_kernel_list") == ["compute"]
 
 
@@ -502,9 +505,11 @@ def test_database_tools_require_database_read_scope() -> None:
         "linode_database_mysql_instance_ssl_get", Capability.Read
     ) == [Scope.DatabasesReadOnly]
     assert categories("linode_database_mysql_instance_ssl_get") == ["databases"]
+    # Credential reads are documented as databases:read_only even though
+    # the tools register as mutators; _scope_overrides mirrors the spec.
     assert required_scopes(
         "linode_database_mysql_instance_credentials_get", Capability.Write
-    ) == [Scope.DatabasesReadWrite]
+    ) == [Scope.DatabasesReadOnly]
     assert categories("linode_database_mysql_instance_credentials_get") == ["databases"]
     assert required_scopes(
         "linode_database_mysql_instance_resume", Capability.Write
@@ -525,7 +530,7 @@ def test_database_tools_require_database_read_scope() -> None:
     assert categories("linode_database_postgresql_instance_update") == ["databases"]
     assert required_scopes(
         "linode_database_postgresql_instance_credentials_get", Capability.Write
-    ) == [Scope.DatabasesReadWrite]
+    ) == [Scope.DatabasesReadOnly]
     assert categories("linode_database_postgresql_instance_credentials_get") == [
         "databases"
     ]

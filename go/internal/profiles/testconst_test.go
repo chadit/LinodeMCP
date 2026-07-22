@@ -16,4 +16,13 @@ const (
 	toolLinodeInstanceConfigList = "linode_instance_config_list"
 	toolInstanceDelete           = "linode_instance_delete"
 	profileNameCustom            = "my-custom"
+
+	toolDatabaseEngineGet           = "linode_database_engine_get"
+	toolDatabaseEngineList          = "linode_database_engine_list"
+	toolDatabaseTypeGet             = "linode_database_type_get"
+	toolDatabaseTypeList            = "linode_database_type_list"
+	toolDatabaseMySQLConfigGet      = "linode_database_mysql_config_get"
+	toolDatabaseMySQLInstanceList   = "linode_database_mysql_instance_list"
+	toolDatabaseMySQLInstanceDelete = "linode_database_mysql_instance_delete"
+	toolDatabaseMySQLCredentialsGet = "linode_database_mysql_instance_credentials_get"
 )

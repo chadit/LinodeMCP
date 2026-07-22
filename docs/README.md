@@ -100,6 +100,7 @@ comment holds its full rules and exact regenerate command.
 | [languages.txt](./contracts/languages.txt) | The registered language implementations: name, working dir, surface-dump command | `Makefile`, `scripts/verify_tool_parity.py` |
 | [env-vars.txt](./contracts/env-vars.txt) | The complete environment-variable surface every language reads (observability has none by design) | `scripts/verify_env_parity.py` |
 | [coverage-floors.txt](./contracts/coverage-floors.txt) | Minimum total unit-test statement coverage per registered language (rise-only; the per-line half is `make diff-coverage`) | `scripts/verify_coverage_floor.py` |
+| [tool-routes.txt](./contracts/tool-routes.txt) | Which Linode API operation (method plus path template) each tool calls; checked from both sides against the registry and the live spec | `scripts/verify_sync_scopes.py` |
 
 ### Ratchet baselines
 
@@ -118,6 +119,7 @@ comment holds its full rules and exact regenerate command.
 | [pagination-baseline.txt](./contracts/pagination-baseline.txt) | Tools whose spec route paginates but whose input has no page/page_size yet | `scripts/verify_pagination.py` |
 | [enum-sync-baseline.txt](./contracts/enum-sync-baseline.txt) | Enum drift against the Linode OpenAPI spec (network; runs on the sync schedule) | `scripts/verify_sync_enums.py` |
 | [api-defaults-baseline.txt](./contracts/api-defaults-baseline.txt) | Snapshot of API wire-body defaults at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_defaults.py` |
+| [scope-sync-baseline.txt](./contracts/scope-sync-baseline.txt) | Accepted deviations between the per-tool OAuth scope mapping and the spec's per-operation security blocks, each annotated with its tracking issue (network; runs on the sync schedule) | `scripts/verify_sync_scopes.py` |
 | [api-pagination-baseline.txt](./contracts/api-pagination-baseline.txt) | Snapshot of paginated GET routes and their page_size bounds at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_pagination.py` |
 
 A few cross-language pins live as shared fixtures under `testdata/` rather

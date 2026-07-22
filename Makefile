@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination baseline-guard parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-scopes baseline-guard parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -176,8 +176,18 @@ sync-enums:
 sync-defaults:
 	@python3 scripts/verify_sync_defaults.py
 
+## sync-scopes: LIVE-check per-tool OAuth scopes against the Linode API spec (scheduled agent; needs network + venv)
+# The tool-parity gate pins every language's scope mapping equal to Python's;
+# this proves Python's mapping still matches the spec's per-operation security
+# blocks, so all languages transitively track the docs. Routes come from
+# docs/contracts/tool-routes.txt; accepted deviations live annotated in
+# docs/contracts/scope-sync-baseline.txt. Unlike the other sync gates this one
+# needs the venv, because the tool dump comes from the Python registry.
+sync-scopes: python-install-dev
+	@python3 scripts/verify_sync_scopes.py
+
 ## sync: Run all live API-drift checks (scheduled agent; needs network)
-sync: sync-enums sync-defaults sync-pagination
+sync: sync-enums sync-defaults sync-pagination sync-scopes
 
 ## baseline-guard: Verify baseline growth vs BASE (default origin/main) carries issue-linked annotations
 # Diff-aware but cheap (git show plus file parses, no artifacts), so it rides

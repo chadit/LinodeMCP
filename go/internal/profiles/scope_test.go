@@ -8,38 +8,18 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 )
 
+// TestRequiredScopesForTagCreate pins POST /tags to account:read_write
+// alone, matching the operation's documented OAuth scope. Access to the
+// entities being tagged is enforced by the API through grants at request
+// time, not through extra token scopes, so the old cross-category union
+// overstated what the token must carry.
 func TestRequiredScopesForTagCreate(t *testing.T) {
 	t.Parallel()
 
-	t.Run("read", func(t *testing.T) {
-		t.Parallel()
-
-		want := []profiles.Scope{
-			profiles.ScopeAccountReadOnly,
-			profiles.ScopeDomainsReadOnly,
-			profiles.ScopeLinodesReadOnly,
-			profiles.ScopeNodeBalancersReadOnly,
-			profiles.ScopeVolumesReadOnly,
-		}
-		if !reflect.DeepEqual(profiles.RequiredScopes("linode_tag_create", profiles.CapRead), want) {
-			t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_tag_create", profiles.CapRead), want)
-		}
-	})
-
-	t.Run("write", func(t *testing.T) {
-		t.Parallel()
-
-		want := []profiles.Scope{
-			profiles.ScopeAccountReadWrite,
-			profiles.ScopeDomainsReadWrite,
-			profiles.ScopeLinodesReadWrite,
-			profiles.ScopeNodeBalancersReadWrite,
-			profiles.ScopeVolumesReadWrite,
-		}
-		if !reflect.DeepEqual(profiles.RequiredScopes("linode_tag_create", profiles.CapWrite), want) {
-			t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_tag_create", profiles.CapWrite), want)
-		}
-	})
+	want := []profiles.Scope{profiles.ScopeAccountReadWrite}
+	if !reflect.DeepEqual(profiles.RequiredScopes("linode_tag_create", profiles.CapWrite), want) {
+		t.Errorf("got %v, want %v", profiles.RequiredScopes("linode_tag_create", profiles.CapWrite), want)
+	}
 }
 
 // TestRequiredScopesMetaReturnsNil locks in the spec contract that
@@ -209,16 +189,18 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
 		},
 		{
+			// The API gates /profile/tokens with account scopes, not a
+			// dedicated tokens scope.
 			name:       "profile tokens read",
 			toolName:   "linode_profile_token_list",
 			capability: profiles.CapRead,
-			want:       []profiles.Scope{profiles.ScopeTokensReadOnly},
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
 		{
 			name:       "profile token update",
 			toolName:   "linode_profile_token_update",
 			capability: profiles.CapAdmin,
-			want:       []profiles.Scope{profiles.ScopeTokensReadWrite},
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
 		},
 		{
 			name:       "profile devices read",
@@ -267,6 +249,230 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 				t.Errorf("got = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestRequiredScopesReconciledFamilies pins the families the scope
+// parity gate found diverging between Go and Python: databases, managed,
+// support tickets, placement groups, tags, the profile subtree, and the
+// firewall-settings split. Each expectation comes from the security
+// block of the underlying operation in the Linode OpenAPI spec.
+func TestRequiredScopesReconciledFamilies(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		toolName   string
+		capability profiles.Capability
+		want       []profiles.Scope
+	}{
+		{
+			name:       "profile token create",
+			toolName:   "linode_profile_token_create",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
+		{
+			name:       "profile app list",
+			toolName:   "linode_profile_app_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
+		{
+			name:       "profile login get",
+			toolName:   "linode_profile_login_get",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
+		{
+			name:       "managed service list",
+			toolName:   "linode_managed_service_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
+		{
+			name:       "managed service create",
+			toolName:   "linode_managed_service_create",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
+		{
+			name:       "managed credential get is admin gated",
+			toolName:   "linode_managed_credential_get",
+			capability: profiles.CapAdmin,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
+		{
+			name:       "support ticket list",
+			toolName:   "linode_support_ticket_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
+		{
+			name:       "support ticket create",
+			toolName:   "linode_support_ticket_create",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
+		{
+			name:       "support ticket reply list",
+			toolName:   "linode_support_ticket_reply_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
+		{
+			name:       "tag object list",
+			toolName:   "linode_tag_object_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
+		{
+			name:       "database mysql instance list",
+			toolName:   toolDatabaseMySQLInstanceList,
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeDatabasesReadOnly},
+		},
+		{
+			name:       "database postgresql instance create",
+			toolName:   "linode_database_postgresql_instance_create",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeDatabasesReadWrite},
+		},
+		{
+			name:       "database mysql instance delete",
+			toolName:   toolDatabaseMySQLInstanceDelete,
+			capability: profiles.CapDestroy,
+			want:       []profiles.Scope{profiles.ScopeDatabasesReadWrite},
+		},
+		{
+			name:       "database mysql config read",
+			toolName:   toolDatabaseMySQLConfigGet,
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeDatabasesReadOnly},
+		},
+		{
+			name:       "placement group get",
+			toolName:   "linode_placement_group_get",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeLinodesReadOnly},
+		},
+		{
+			name:       "placement group create",
+			toolName:   "linode_placement_group_create",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeLinodesReadWrite},
+		},
+		{
+			name:       "placement group assign",
+			toolName:   "linode_placement_group_assign",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeLinodesReadWrite},
+		},
+		{
+			// The API documents placement:read_only for this one route,
+			// but its own OAuth catalog never defines that scope, so the
+			// tool stays on the family's linodes derivation. See
+			// scopeOverrides for the full rationale.
+			name:       "placement group list stays on linodes",
+			toolName:   "linode_placement_group_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeLinodesReadOnly},
+		},
+		{
+			// The API documents account:read_write for this read; the
+			// mapping deliberately keeps account:read_only so read-only
+			// profiles stay tokenless-friendly. See scopeOverrides.
+			name:       "managed contact get stays read only",
+			toolName:   "linode_managed_contact_get",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+		},
+		{
+			name:       "firewall settings read stays in firewall",
+			toolName:   "linode_firewall_settings_get",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeFirewallReadOnly},
+		},
+		{
+			name:       "networking ip list",
+			toolName:   "linode_networking_ip_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeIPsReadOnly},
+		},
+		{
+			name:       "networking ip update",
+			toolName:   "linode_networking_ip_update",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeIPsReadWrite},
+		},
+		{
+			// The docs list this route as "ips:read", an upstream typo:
+			// the scope catalog only defines read_only and read_write,
+			// so the family's read_only applies.
+			name:       "ipv6 range get",
+			toolName:   "linode_ipv6_range_get",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeIPsReadOnly},
+		},
+		{
+			name:       "ipv6 pool list",
+			toolName:   "linode_ipv6_pool_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeIPsReadOnly},
+		},
+		{
+			name:       "vlan list",
+			toolName:   "linode_vlan_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeLinodesReadOnly},
+		},
+		{
+			name:       "vlan delete",
+			toolName:   "linode_vlan_delete",
+			capability: profiles.CapDestroy,
+			want:       []profiles.Scope{profiles.ScopeLinodesReadWrite},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := profiles.RequiredScopes(tt.toolName, tt.capability)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRequiredScopesIPAssignmentNeedsLinodesWrite locks in the dual
+// scope on address assignment and sharing: those operations target
+// Linodes, so the API documents linodes:read_write alongside
+// ips:read_write.
+func TestRequiredScopesIPAssignmentNeedsLinodesWrite(t *testing.T) {
+	t.Parallel()
+
+	cases := []string{
+		"linode_networking_ip_assign",
+		"linode_networking_ip_share",
+		"linode_networking_ipv4_assign",
+		"linode_networking_ipv4_share",
+		"linode_ipv6_range_create",
+	}
+
+	for _, tool := range cases {
+		got := profiles.RequiredScopes(tool, profiles.CapWrite)
+
+		gotEls := slices.Clone(got)
+		wantEls := []profiles.Scope{profiles.ScopeIPsReadWrite, profiles.ScopeLinodesReadWrite}
+
+		slices.Sort(gotEls)
+		slices.Sort(wantEls)
+
+		if !slices.Equal(gotEls, wantEls) {
+			t.Errorf("RequiredScopes(%s) = %v, want %v (any order)", tool, got, wantEls)
+		}
 	}
 }
 
@@ -444,22 +650,79 @@ func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
 	}
 }
 
-// TestScopeCatalogTokensNotFlaggedAsCredentials documents the rationale
-// for the split-literal form of ScopeTokensReadOnly / ScopeTokensReadWrite
-// in scope.go: a single-string assignment of "tokens:read_write" trips
-// gosec G101. Concatenation at the literal level keeps the constant
-// value identical while making the source line invisible to the regex.
-// This test pins the resolved values so a refactor that "tidies up" the
-// concatenation gets flagged.
-func TestScopeCatalogTokensNotFlaggedAsCredentials(t *testing.T) {
+// TestRequiredScopesScopelessRoutes pins the tools whose documented
+// routes carry no OAuth scope requirement: kernels, database engines
+// and types are public catalog data (no authentication at all), and
+// betas plus maintenance policies accept any authenticated token. An
+// empty return here is deliberate, and the scope completeness test in
+// internal/server keeps this list as the only sanctioned source of
+// empty scopes for non-meta tools.
+func TestRequiredScopesScopelessRoutes(t *testing.T) {
 	t.Parallel()
 
-	if profiles.Scope("tokens:read_only") != profiles.ScopeTokensReadOnly {
-		t.Errorf("got %v, want %v", profiles.Scope("tokens:read_only"), profiles.ScopeTokensReadOnly)
+	cases := []string{
+		"linode_kernel_get",
+		"linode_kernel_list",
+		toolDatabaseEngineGet,
+		toolDatabaseEngineList,
+		toolDatabaseTypeGet,
+		toolDatabaseTypeList,
+		"linode_network_transfer_price_list",
+		"linode_beta_get",
+		"linode_beta_list",
+		"linode_maintenance_policy_list",
 	}
 
-	if profiles.Scope("tokens:read_write") != profiles.ScopeTokensReadWrite {
-		t.Errorf("got %v, want %v", profiles.Scope("tokens:read_write"), profiles.ScopeTokensReadWrite)
+	for _, tool := range cases {
+		if got := profiles.RequiredScopes(tool, profiles.CapRead); got != nil {
+			t.Errorf("RequiredScopes(%s) = %v, want nil", tool, got)
+		}
+	}
+}
+
+// TestRequiredScopesDocumentedQuirks pins the per-tool overrides where
+// the API documents a scope the category matrix cannot derive: the
+// firewall-settings update that hops to account, and database
+// credential reads that only need read_only despite registering as
+// mutators.
+func TestRequiredScopesDocumentedQuirks(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		toolName   string
+		capability profiles.Capability
+		want       []profiles.Scope
+	}{
+		{
+			name:       "firewall settings update is account gated",
+			toolName:   "linode_firewall_settings_update",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
+		},
+		{
+			name:       "mysql credentials get only needs databases read",
+			toolName:   toolDatabaseMySQLCredentialsGet,
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeDatabasesReadOnly},
+		},
+		{
+			name:       "postgresql credentials get only needs databases read",
+			toolName:   "linode_database_postgresql_instance_credentials_get",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeDatabasesReadOnly},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := profiles.RequiredScopes(tt.toolName, tt.capability)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

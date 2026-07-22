@@ -7,8 +7,9 @@
 # refresh the snapshot baselines with --update-baseline in a reviewed change.
 # This workflow only reads; it never commits or opens anything itself.
 #
-# The sync scripts are stdlib-only on purpose (see their module docstrings),
-# so the job needs no toolchain beyond the runner's python3.
+# The sync scripts are stdlib-only on purpose (see their module docstrings).
+# sync-scopes additionally dumps the Python tool registry, so the job builds
+# the venv first; everything else runs on the runner's bare python3.
 name: sync-drift
 
 on:
@@ -27,6 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: build python venv (sync-scopes dumps the tool registry)
+        run: make python-install-dev
 
       - name: make sync
         run: make sync

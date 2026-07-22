@@ -38,16 +38,11 @@ def test_meta_returns_empty() -> None:
         ("linode_volume_create", Capability.Write, [Scope.VolumesReadWrite]),
         ("linode_volume_list", Capability.Read, [Scope.VolumesReadOnly]),
         ("linode_volume_type_list", Capability.Read, [Scope.VolumesReadOnly]),
-        (
-            "linode_database_engine_list",
-            Capability.Read,
-            [Scope.DatabasesReadOnly],
-        ),
-        (
-            "linode_database_type_list",
-            Capability.Read,
-            [Scope.DatabasesReadOnly],
-        ),
+        # Database engines and types are public catalog routes: the
+        # OpenAPI spec declares no security requirement for them, so no
+        # scope is required.
+        ("linode_database_engine_list", Capability.Read, []),
+        ("linode_database_type_list", Capability.Read, []),
         ("linode_domain_delete", Capability.Destroy, [Scope.DomainsReadWrite]),
         ("linode_domain_import", Capability.Write, [Scope.DomainsReadWrite]),
         ("linode_lke_cluster_regenerate", Capability.Write, [Scope.LKEReadWrite]),
@@ -111,7 +106,9 @@ def test_meta_returns_empty() -> None:
         ),
         ("linode_firewall_create", Capability.Write, [Scope.FirewallReadWrite]),
         ("linode_instance_firewall_apply", Capability.Write, [Scope.LinodesReadWrite]),
-        ("linode_firewall_settings_get", Capability.Read, [Scope.AccountReadOnly]),
+        # The API splits this pair: GET stays firewall:read_only while
+        # PUT hops to account:read_write.
+        ("linode_firewall_settings_get", Capability.Read, [Scope.FirewallReadOnly]),
         ("linode_firewall_settings_update", Capability.Write, [Scope.AccountReadWrite]),
         ("linode_account_get", Capability.Read, [Scope.AccountReadOnly]),
         (
@@ -205,8 +202,8 @@ def test_meta_returns_empty() -> None:
             [Scope.AccountReadWrite],
         ),
         ("linode_profile_get", Capability.Read, [Scope.AccountReadOnly]),
-        ("linode_database_engine_get", Capability.Read, [Scope.DatabasesReadOnly]),
-        ("linode_database_type_get", Capability.Read, [Scope.DatabasesReadOnly]),
+        ("linode_database_engine_get", Capability.Read, []),
+        ("linode_database_type_get", Capability.Read, []),
         (
             "linode_database_mysql_instance_create",
             Capability.Write,
@@ -262,10 +259,18 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.DatabasesReadWrite],
         ),
+        # Credential reads are documented as databases:read_only even
+        # though the tools register as mutators; the override in
+        # _scope_overrides mirrors the spec.
         (
             "linode_database_postgresql_instance_credentials_get",
             Capability.Write,
-            [Scope.DatabasesReadWrite],
+            [Scope.DatabasesReadOnly],
+        ),
+        (
+            "linode_database_mysql_instance_credentials_get",
+            Capability.Write,
+            [Scope.DatabasesReadOnly],
         ),
         (
             "linode_database_postgresql_instance_list",
@@ -380,6 +385,26 @@ def test_lke_cluster_create_needs_lke_write_and_linodes_write() -> None:
     assert set(got) == {Scope.LKEReadWrite, Scope.LinodesReadWrite}
 
 
+@pytest.mark.parametrize(
+    "tool_name",
+    [
+        "linode_networking_ip_assign",
+        "linode_networking_ip_share",
+        "linode_networking_ipv4_assign",
+        "linode_networking_ipv4_share",
+        "linode_ipv6_range_create",
+    ],
+)
+def test_ip_assignment_needs_linodes_write(tool_name: str) -> None:
+    """Address assignment and sharing carry a dual scope.
+
+    Those operations target Linodes, so the API documents
+    linodes:read_write alongside ips:read_write.
+    """
+    got = required_scopes(tool_name, Capability.Write)
+    assert set(got) == {Scope.IPsReadWrite, Scope.LinodesReadWrite}
+
+
 def test_unknown_tool_returns_empty() -> None:
     """Unknown tool names degrade into the warn path, not a hard fail.
 
@@ -486,6 +511,149 @@ def test_ssh_and_monitor_are_account_scoped(
     assert required_scopes(tool_name, capability) == [expected]
 
 
+@pytest.mark.parametrize(
+    "tool_name",
+    [
+        "linode_kernel_get",
+        "linode_kernel_list",
+        "linode_database_engine_get",
+        "linode_database_engine_list",
+        "linode_database_type_get",
+        "linode_database_type_list",
+        "linode_network_transfer_price_list",
+        "linode_beta_get",
+        "linode_beta_list",
+        "linode_maintenance_policy_list",
+    ],
+)
+def test_scopeless_routes_return_empty(tool_name: str) -> None:
+    """Documented scopeless routes require no token scope.
+
+    Kernels, database engines, and database types are public catalog
+    routes (no authentication at all); betas and maintenance policies
+    accept any authenticated token. The empty return is deliberate, and
+    the scope completeness test keeps this list as the only sanctioned
+    source of empty scopes for non-meta tools.
+    """
+    assert required_scopes(tool_name, Capability.Read) == []
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "capability", "expected"),
+    [
+        # The API gates /profile/tokens with account scopes, not a
+        # dedicated tokens scope.
+        ("linode_profile_token_list", Capability.Read, [Scope.AccountReadOnly]),
+        (
+            "linode_profile_token_update",
+            Capability.Admin,
+            [Scope.AccountReadWrite],
+        ),
+        (
+            "linode_profile_token_create",
+            Capability.Write,
+            [Scope.AccountReadWrite],
+        ),
+        ("linode_profile_app_list", Capability.Read, [Scope.AccountReadOnly]),
+        ("linode_profile_login_get", Capability.Read, [Scope.AccountReadOnly]),
+        (
+            "linode_profile_preferences_get",
+            Capability.Read,
+            [Scope.AccountReadOnly],
+        ),
+        (
+            "linode_profile_preferences_update",
+            Capability.Write,
+            [Scope.AccountReadWrite],
+        ),
+        (
+            "linode_profile_tfa_enable",
+            Capability.Admin,
+            [Scope.AccountReadWrite],
+        ),
+        (
+            "linode_profile_phone_number_delete",
+            Capability.Destroy,
+            [Scope.AccountReadWrite],
+        ),
+        (
+            "linode_profile_security_question_list",
+            Capability.Read,
+            [Scope.AccountReadOnly],
+        ),
+        ("linode_profile_device_list", Capability.Read, [Scope.AccountReadOnly]),
+        ("linode_support_ticket_list", Capability.Read, [Scope.AccountReadOnly]),
+        (
+            "linode_support_ticket_create",
+            Capability.Write,
+            [Scope.AccountReadWrite],
+        ),
+        (
+            "linode_support_ticket_reply_list",
+            Capability.Read,
+            [Scope.AccountReadOnly],
+        ),
+        # POST /tags documents account:read_write alone; entity access
+        # is enforced by the API through grants at request time, not
+        # extra token scopes.
+        ("linode_tag_create", Capability.Write, [Scope.AccountReadWrite]),
+        ("linode_tag_object_list", Capability.Read, [Scope.AccountReadOnly]),
+        (
+            "linode_managed_service_list",
+            Capability.Read,
+            [Scope.AccountReadOnly],
+        ),
+        (
+            "linode_managed_credential_get",
+            Capability.Admin,
+            [Scope.AccountReadWrite],
+        ),
+        # The API documents account:read_write for this read; the
+        # mapping deliberately keeps account:read_only so read-only
+        # profiles stay tokenless-friendly. See _scope_overrides.
+        (
+            "linode_managed_contact_get",
+            Capability.Read,
+            [Scope.AccountReadOnly],
+        ),
+        ("linode_placement_group_get", Capability.Read, [Scope.LinodesReadOnly]),
+        (
+            "linode_placement_group_create",
+            Capability.Write,
+            [Scope.LinodesReadWrite],
+        ),
+        # The API documents placement:read_only for this one route, but
+        # its own OAuth catalog never defines that scope, so the tool
+        # stays on the family's linodes derivation. See _scope_overrides.
+        (
+            "linode_placement_group_list",
+            Capability.Read,
+            [Scope.LinodesReadOnly],
+        ),
+        ("linode_networking_ip_list", Capability.Read, [Scope.IPsReadOnly]),
+        ("linode_networking_ip_update", Capability.Write, [Scope.IPsReadWrite]),
+        # The docs list this route as "ips:read", an upstream typo: the
+        # scope catalog only defines read_only and read_write, so the
+        # family's read_only applies.
+        ("linode_ipv6_range_get", Capability.Read, [Scope.IPsReadOnly]),
+        ("linode_ipv6_pool_list", Capability.Read, [Scope.IPsReadOnly]),
+        ("linode_vlan_list", Capability.Read, [Scope.LinodesReadOnly]),
+        ("linode_vlan_delete", Capability.Destroy, [Scope.LinodesReadWrite]),
+    ],
+)
+def test_reconciled_families(
+    tool_name: str, capability: Capability, expected: list[Scope]
+) -> None:
+    """Families the scope parity gate found diverging between Go and Python.
+
+    Databases, managed, support tickets, placement groups, tags, the
+    profile subtree, and the firewall-settings split. Each expectation
+    comes from the security block of the underlying operation in the
+    Linode OpenAPI spec.
+    """
+    assert required_scopes(tool_name, capability) == expected
+
+
 def test_scope_string_values_match_linode_api() -> None:
     """Scope enum string values must match the Linode API verbatim.
 
@@ -495,7 +663,5 @@ def test_scope_string_values_match_linode_api() -> None:
     """
     assert Scope.LinodesReadOnly.value == "linodes:read_only"
     assert Scope.LinodesReadWrite.value == "linodes:read_write"
-    assert Scope.TokensReadOnly.value == "tokens:read_only"
-    assert Scope.TokensReadWrite.value == "tokens:read_write"
     assert Scope.ObjectStorageReadWrite.value == "object_storage:read_write"
     assert Scope.Wildcard.value == "*"
