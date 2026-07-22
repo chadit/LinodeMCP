@@ -8,11 +8,13 @@ credentials. The Go runner
 so a handler whose validation, coercion, error text, or outgoing HTTP request
 drifts from the other language fails one of the two runners.
 
-Outcome contract per case, exactly one of: ``expect_error`` is the bare
-validation message (this runner strips Python's ``Error: `` framing before
-comparing); ``expect_request`` is the method, path, and JSON body of the one
-HTTP call the handler must make; ``expect_result`` is the successful
-response content, compared as parsed JSON so formatting is irrelevant.
+Outcome contract per case, exactly one of: ``expect_error`` is the exact bare
+validation message and forbids an HTTP call; ``expect_api_error`` is a shared
+substring in an error produced after at least one HTTP call; ``expect_request``
+is the method, path, and JSON body of the one HTTP call the handler must make;
+``expect_result`` is the successful response content, compared as parsed JSON
+so formatting is irrelevant. Substring matching for ``expect_api_error`` keeps
+language-specific error framing outside the shared contract.
 
 The fake API answers from ``api_responses`` when present: keys are
 "METHOD /path" with the query string stripped (per-language pagination
@@ -153,6 +155,18 @@ async def test_behavior_conformance(
             f"want {'Error: ' + expect_error!r}"
         )
         assert captured == [], f"{tool}/{case_name}: no HTTP call expected"
+        return
+
+    expect_api_error = case.get("expect_api_error")
+    if expect_api_error is not None:
+        assert text.startswith(("Error: ", "Failed to ")), (
+            f"{tool}/{case_name}: expected an API error, got {text!r}"
+        )
+        assert expect_api_error in text, (
+            f"{tool}/{case_name}: error text {text!r} does not contain "
+            f"{expect_api_error!r}"
+        )
+        assert captured, f"{tool}/{case_name}: at least one HTTP call expected"
         return
 
     expect_result = case.get("expect_result")
