@@ -913,10 +913,7 @@ async def handle_linode_instance_config_interface_list(
         return error_response(error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        # The config-interface endpoint returns either a bare array or a {data}
-        # page envelope; normalize both to {data: items} for the helper.
-        raw = await client.list_instance_config_interfaces(linode_id, config_id)
-        items = raw if isinstance(raw, list) else raw.get("data", [])
+        items = await client.list_instance_config_interfaces(linode_id, config_id)
         return serialize_list_response(
             {"data": items},
             "interfaces",

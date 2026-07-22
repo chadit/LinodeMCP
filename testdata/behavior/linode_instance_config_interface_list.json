@@ -1,12 +1,104 @@
 {
   "tool": "linode_instance_config_interface_list",
-  "description": "Pins the config-interface list GET. linode_id/config_id rejection text diverges between languages (see report).",
+  "description": "Requires positive linode_id and config_id values, GETs the config-interface collection without query parameters or a body, and preserves complete interface fields and API ordering from the bare-array response.",
   "cases": [
     {
-      "name": "lists config interfaces",
-      "args": { "linode_id": 123, "config_id": 7 },
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/linode/instances/123/configs/7/interfaces" }
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects non-positive linode_id",
+      "args": { "linode_id": 0, "config_id": 456 },
+      "expect_error": "linode_id must be a positive integer"
+    },
+    {
+      "name": "rejects missing config_id",
+      "args": { "linode_id": 123 },
+      "expect_error": "config_id is required"
+    },
+    {
+      "name": "rejects non-positive config_id",
+      "args": { "linode_id": 123, "config_id": 0 },
+      "expect_error": "config_id must be a positive integer"
+    },
+    {
+      "name": "lists config interfaces with a plain GET",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_response": [
+        {
+          "id": 202,
+          "active": true,
+          "purpose": "vpc",
+          "label": "eth1",
+          "ipam_address": "10.0.0.1/24",
+          "primary": true,
+          "subnet_id": 55,
+          "vpc_id": 77,
+          "ipv4": { "nat_1_1": "192.0.2.10", "vpc": "10.0.0.5" },
+          "ip_ranges": ["2001:db8::/64", "203.0.113.0/24"]
+        },
+        {
+          "id": 101,
+          "active": false,
+          "purpose": "public",
+          "primary": false,
+          "ip_ranges": []
+        }
+      ],
+      "expect_request": {
+        "method": "GET",
+        "path": "/linode/instances/123/configs/456/interfaces"
+      }
+    },
+    {
+      "name": "returns complete config interfaces in API order",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_response": [
+        {
+          "id": 202,
+          "active": true,
+          "purpose": "vpc",
+          "label": "eth1",
+          "ipam_address": "10.0.0.1/24",
+          "primary": true,
+          "subnet_id": 55,
+          "vpc_id": 77,
+          "ipv4": { "nat_1_1": "192.0.2.10", "vpc": "10.0.0.5" },
+          "ip_ranges": ["2001:db8::/64", "203.0.113.0/24"]
+        },
+        {
+          "id": 101,
+          "active": false,
+          "purpose": "public",
+          "primary": false,
+          "ip_ranges": []
+        }
+      ],
+      "expect_result": {
+        "count": 2,
+        "interfaces": [
+          {
+            "id": 202,
+            "active": true,
+            "purpose": "vpc",
+            "label": "eth1",
+            "ipam_address": "10.0.0.1/24",
+            "primary": true,
+            "subnet_id": 55,
+            "vpc_id": 77,
+            "ipv4": { "nat_1_1": "192.0.2.10", "vpc": "10.0.0.5" },
+            "ip_ranges": ["2001:db8::/64", "203.0.113.0/24"]
+          },
+          {
+            "id": 101,
+            "active": false,
+            "purpose": "public",
+            "primary": false,
+            "ip_ranges": []
+          }
+        ]
+      }
     }
   ]
 }

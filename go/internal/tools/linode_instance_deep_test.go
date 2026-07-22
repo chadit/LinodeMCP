@@ -574,8 +574,9 @@ func TestLinodeInstanceConfigInterfacesListToolDefinition(t *testing.T) {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_instance_config_interface_list")
 	}
 
-	if tool.Description == "" {
-		t.Error("tool.Description is empty")
+	const wantDescription = "Lists interfaces assigned to a specific configuration profile on a Linode instance."
+	if tool.Description != wantDescription {
+		t.Errorf("tool.Description = %q, want %q", tool.Description, wantDescription)
 	}
 
 	if capability != profiles.CapRead {
@@ -586,10 +587,39 @@ func TestLinodeInstanceConfigInterfacesListToolDefinition(t *testing.T) {
 		t.Fatal("handler is nil")
 	}
 
-	rawSchema := string(tool.RawInputSchema)
+	var schema map[string]any
+	if err := json.Unmarshal(tool.RawInputSchema, &schema); err != nil {
+		t.Fatalf("unmarshal tool.RawInputSchema: %v", err)
+	}
+
+	if schema["additionalProperties"] != false {
+		t.Errorf("schema additionalProperties = %v, want false", schema["additionalProperties"])
+	}
+
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema properties = %T, want object", schema["properties"])
+	}
+
+	if len(properties) != 3 {
+		t.Errorf("schema properties = %v, want only environment, linode_id, and config_id", properties)
+	}
+
 	for _, key := range []string{keyLinodeID, keyConfigID} {
-		if !strings.Contains(rawSchema, key) {
-			t.Errorf("tool.RawInputSchema missing key %v", key)
+		property, ok := properties[key].(map[string]any)
+		if !ok {
+			t.Errorf("schema properties missing object key %v", key)
+
+			continue
+		}
+
+		if property["type"] != schemaTypeInteger {
+			t.Errorf("schema.Properties[%q].type = %v, want integer", key, property["type"])
+		}
+
+		required, requiredOK := schema["required"].([]any)
+		if !requiredOK || !slices.Contains(required, any(key)) {
+			t.Errorf("schema.Required missing key %v", key)
 		}
 	}
 }
@@ -614,9 +644,12 @@ func TestLinodeInstanceConfigInterfacesListToolValidation(t *testing.T) {
 		{name: caseSlashLinodeID, args: map[string]any{keyLinodeID: pathSeparatorValue, keyConfigID: "456"}, wantContains: errLinodeIDInteger},
 		{name: caseQueryLinodeID, args: map[string]any{keyLinodeID: shareGroupIDQueryValue, keyConfigID: "456"}, wantContains: errLinodeIDInteger},
 		{name: caseTraversalLinodeID, args: map[string]any{keyLinodeID: pathTraversalValue, keyConfigID: "456"}, wantContains: errLinodeIDInteger},
+		{name: caseZeroLinodeID, args: map[string]any{keyLinodeID: float64(0), keyConfigID: float64(456)}, wantContains: errLinodeIDMin},
+		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-123), keyConfigID: float64(456)}, wantContains: errLinodeIDMin},
 		{name: caseSlashConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathSeparatorValue}, wantContains: errConfigIDInteger},
 		{name: caseQueryConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: configIDQueryValue}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: pathTraversalValue}, wantContains: errConfigIDInteger},
+		{name: caseZeroConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(0)}, wantContains: errConfigIDMin},
 		{name: caseNegativeConfigID, args: map[string]any{keyLinodeID: float64(123), keyConfigID: float64(-456)}, wantContains: errConfigIDMin},
 	}
 	for _, tt := range validationTests {
@@ -647,7 +680,10 @@ func TestLinodeInstanceConfigInterfacesListToolValidation(t *testing.T) {
 func TestLinodeInstanceConfigInterfacesListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	interfaces := []linode.ConfigInterfaceResponse{{ID: 101, Active: true, Purpose: keyPublic}}
+	interfaces := []linode.ConfigInterfaceResponse{
+		{ID: 202, Active: true, Purpose: purposeVPC},
+		{ID: 101, Active: true, Purpose: keyPublic},
+	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -697,12 +733,31 @@ func TestLinodeInstanceConfigInterfacesListToolSuccess(t *testing.T) {
 		t.Fatal("ok = false, want true")
 	}
 
-	if !strings.Contains(textContent.Text, keyPublic) {
-		t.Errorf("textContent.Text does not contain %v", keyPublic)
+	var output struct {
+		Count      int `json:"count"`
+		Interfaces []struct {
+			ID      int    `json:"id"`
+			Purpose string `json:"purpose"`
+		} `json:"interfaces"`
+	}
+	if err := json.Unmarshal([]byte(textContent.Text), &output); err != nil {
+		t.Fatalf("unmarshal tool output: %v", err)
 	}
 
-	if !strings.Contains(textContent.Text, "101") {
-		t.Errorf("textContent.Text does not contain %v", "101")
+	if output.Count != 2 {
+		t.Errorf("output.Count = %v, want %v", output.Count, 2)
+	}
+
+	if len(output.Interfaces) != 2 {
+		t.Fatalf("len(output.Interfaces) = %v, want %v", len(output.Interfaces), 2)
+	}
+
+	if output.Interfaces[0].ID != 202 || output.Interfaces[1].ID != 101 {
+		t.Errorf("output interface order = [%d, %d], want [202, 101]", output.Interfaces[0].ID, output.Interfaces[1].ID)
+	}
+
+	if output.Interfaces[0].Purpose != purposeVPC || output.Interfaces[1].Purpose != keyPublic {
+		t.Errorf("output purposes = [%q, %q], want [%q, %q]", output.Interfaces[0].Purpose, output.Interfaces[1].Purpose, purposeVPC, keyPublic)
 	}
 }
 

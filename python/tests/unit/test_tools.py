@@ -1112,48 +1112,39 @@ async def test_linode_instance_config_interfaces_list_tool_definition() -> None:
 
     assert tool.name == "linode_instance_config_interface_list"
     assert capability == Capability.Read
+    assert tool.inputSchema["additionalProperties"] is False
+    assert set(tool.inputSchema["properties"]) == {
+        "environment",
+        "linode_id",
+        "config_id",
+    }
+    assert tool.inputSchema["properties"]["linode_id"]["type"] == "integer"
+    assert tool.inputSchema["properties"]["config_id"]["type"] == "integer"
     assert tool.inputSchema["required"] == ["linode_id", "config_id"]
 
 
 async def test_handle_linode_instance_config_interfaces_list(
     sample_config: Config,
 ) -> None:
-    """Test linode_instance_config_interface_list tool."""
-    mock_interfaces = {
-        "data": [{"id": 9, "purpose": "vlan"}],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
-    }
+    """The handler normalizes the bare-array response into the tool envelope.
 
-    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.list_instance_config_interfaces.return_value = mock_interfaces
-        mock_client.__aenter__.return_value = mock_client
-        mock_client.__aexit__.return_value = None
-        mock_client_class.return_value = mock_client
-
-        result = await handle_linode_instance_config_interface_list(
-            {"linode_id": 123, "config_id": 6}, sample_config
-        )
-
-    assert len(result) == 1
-    assert "vlan" in result[0].text
-    mock_client.list_instance_config_interfaces.assert_called_once_with(123, 6)
-
-
-async def test_handle_linode_instance_config_interfaces_list_bare_array(
-    sample_config: Config,
-) -> None:
-    """The handler normalizes the bare-array response shape into the envelope.
-
-    The /linode/instances/{id}/configs/{id}/interfaces endpoint returns a bare
-    JSON array (not a {data} page envelope) in some responses, so the handler
-    must wrap it before serializing the {count, interfaces} proto envelope.
+    The endpoint returns a bare JSON array, so the handler wraps it before
+    serializing the {count, interfaces} proto envelope.
     """
     mock_interfaces = [
-        {"id": 9, "active": True, "purpose": "vlan", "label": "eth1"},
-        {"id": 10, "active": True, "purpose": "public"},
+        {
+            "id": 202,
+            "active": True,
+            "purpose": "vpc",
+            "label": "eth1",
+            "ipam_address": "10.0.0.1/24",
+            "primary": True,
+            "subnet_id": 55,
+            "vpc_id": 77,
+            "ipv4": {"nat_1_1": "192.0.2.10", "vpc": "10.0.0.5"},
+            "ip_ranges": ["2001:db8::/64", "203.0.113.0/24"],
+        },
+        {"id": 101, "active": False, "purpose": "public", "primary": False},
     ]
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
@@ -1170,9 +1161,8 @@ async def test_handle_linode_instance_config_interfaces_list_bare_array(
     assert len(result) == 1
     payload = json.loads(result[0].text)
     assert payload["count"] == 2
-    assert [iface["id"] for iface in payload["interfaces"]] == [9, 10]
-    assert payload["interfaces"][0]["purpose"] == "vlan"
-    assert payload["interfaces"][0]["label"] == "eth1"
+    assert [iface["id"] for iface in payload["interfaces"]] == [202, 101]
+    assert payload["interfaces"][0] == mock_interfaces[0]
     mock_client.list_instance_config_interfaces.assert_called_once_with(123, 6)
 
 

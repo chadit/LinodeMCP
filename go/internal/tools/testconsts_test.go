@@ -105,6 +105,7 @@ const (
 	keyAssignments               = "assignments"
 	keyRegions                   = "regions"
 	keyType                      = "type"
+	schemaTypeInteger            = "integer"
 	keyServiceType               = "service_type"
 	keyEntityIDs                 = "entity_ids"
 	keyWidgets                   = "widgets"
