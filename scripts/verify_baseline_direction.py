@@ -65,6 +65,7 @@ _SNAPSHOT_BASELINES = frozenset(
     {
         "api-defaults-baseline.txt",
         "api-pagination-baseline.txt",
+        "api-response-shapes-baseline.txt",
         "enum-sync-baseline.txt",
     }
 )

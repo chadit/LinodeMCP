@@ -5,7 +5,7 @@
     {
       "name": "replaces firewall assignments with the firewall_ids body",
       "args": { "linode_id": 123, "firewall_ids": [1, 2], "confirm": true },
-      "api_response": { "data": [] },
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": {
         "method": "PUT",
         "path": "/linode/instances/123/firewalls",
