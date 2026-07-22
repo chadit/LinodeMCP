@@ -72,6 +72,18 @@ def _behavior_config() -> Config:
     )
 
 
+def _behavior_outcome_count(case: dict[str, Any]) -> int:
+    """Count usable outcome assertions, excluding empty error strings."""
+    return sum(
+        (
+            bool(case.get("expect_error")),
+            bool(case.get("expect_api_error")),
+            case.get("expect_request") is not None,
+            "expect_result" in case,
+        )
+    )
+
+
 def _resolve_response(
     api_responses: dict[str, Any] | None,
     api_response: Any,
@@ -107,6 +119,12 @@ async def test_behavior_conformance(
     tool: str, case_name: str, case: dict[str, Any]
 ) -> None:
     """One shared fixture case must produce its contracted outcome."""
+    outcome_count = _behavior_outcome_count(case)
+    assert outcome_count == 1, (
+        f"{tool}/{case_name}: {outcome_count} outcome fields set; "
+        "want exactly 1 non-empty outcome"
+    )
+
     captured: list[tuple[str, str, Any]] = []
     unmatched: list[str] = []
     api_response = case.get("api_response", {})
@@ -149,7 +167,7 @@ async def test_behavior_conformance(
         )
 
     expect_error = case.get("expect_error")
-    if expect_error is not None:
+    if expect_error:
         assert text == f"Error: {expect_error}", (
             f"{tool}/{case_name}: error text {text!r}, "
             f"want {'Error: ' + expect_error!r}"
@@ -158,7 +176,7 @@ async def test_behavior_conformance(
         return
 
     expect_api_error = case.get("expect_api_error")
-    if expect_api_error is not None:
+    if expect_api_error:
         assert text.startswith(("Error: ", "Failed to ")), (
             f"{tool}/{case_name}: expected an API error, got {text!r}"
         )
@@ -169,8 +187,8 @@ async def test_behavior_conformance(
         assert captured, f"{tool}/{case_name}: at least one HTTP call expected"
         return
 
-    expect_result = case.get("expect_result")
-    if expect_result is not None:
+    if "expect_result" in case:
+        expect_result = case["expect_result"]
         assert not text.startswith("Error:"), f"{tool}/{case_name}: unexpected {text!r}"
         assert json.loads(text) == expect_result, (
             f"{tool}/{case_name}: result mismatch\ngot:\n{text}\n"
@@ -193,3 +211,25 @@ async def test_behavior_conformance(
         assert body == expect_request["body"], (
             f"{tool}/{case_name}: body {body!r}, want {expect_request['body']!r}"
         )
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ({"expect_api_error": ""}, 0),
+        ({"expect_api_error": "response", "expect_result": False}, 2),
+        ({"expect_result": False}, 1),
+        ({"expect_result": None}, 1),
+        ({"expect_error": "", "expect_api_error": "", "expect_result": False}, 1),
+    ],
+    ids=[
+        "empty-api-error",
+        "multiple-outcomes",
+        "false-result",
+        "null-result",
+        "empty-errors-with-result",
+    ],
+)
+def test_behavior_outcome_count(case: dict[str, Any], expected: int) -> None:
+    """Outcome validation rejects empty and ambiguous fixture contracts."""
+    assert _behavior_outcome_count(case) == expected
