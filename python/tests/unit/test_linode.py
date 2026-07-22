@@ -3883,6 +3883,23 @@ async def test_list_instance_config_interfaces_rejects_non_array_response() -> N
     await client.close()
 
 
+async def test_list_instance_config_interfaces_rejects_non_object_items() -> None:
+    """List config interfaces rejects malformed elements instead of dropping them."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [{"id": 202, "purpose": "vpc"}, "invalid"]
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        with pytest.raises(TypeError, match="response items must be objects"):
+            await client.list_instance_config_interfaces(123, 6)
+
+    await client.close()
+
+
 @pytest.mark.parametrize(
     "arguments",
     [

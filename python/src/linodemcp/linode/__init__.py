@@ -2590,7 +2590,11 @@ class Client:
             if not isinstance(data, list):
                 msg = "config interface list response must be an array"
                 raise TypeError(msg)
-            return cast("list[dict[str, Any]]", data)
+            items = cast("list[object]", data)
+            if not all(isinstance(item, dict) for item in items):
+                msg = "config interface list response items must be objects"
+                raise TypeError(msg)
+            return cast("list[dict[str, Any]]", items)
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceConfigInterfaces", e) from e
 
