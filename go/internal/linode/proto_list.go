@@ -95,14 +95,9 @@ func listProtoElementsKeyed[T proto.Message](
 	return decodeProtoElementsKeyed[T](resp, client, operation, itemsKey, newElem)
 }
 
-// listProtoElementsBareOrData is listProtoElements for endpoints whose body is
-// either a top-level JSON array or a {data:[...]} page envelope. The legacy
-// config-interface endpoint /linode/instances/{id}/configs/{id}/interfaces
-// returns a bare array in some responses and the page envelope in others, so
-// this fetcher dispatches on the first non-space byte. The per-element decode
-// tail (DiscardUnknown protojson) is shared with the data[] path via
-// decodeProtoElementsBareOrData.
-func listProtoElementsBareOrData[T proto.Message](
+// listProtoElementsBare fetches endpoints whose response body is a top-level
+// JSON array rather than the standard {data:[...]} page envelope.
+func listProtoElementsBare[T proto.Message](
 	ctx context.Context,
 	client *Client,
 	operation, endpoint string,
@@ -118,7 +113,7 @@ func listProtoElementsBareOrData[T proto.Message](
 
 	defer drainClose(resp)
 
-	return decodeProtoElementsBareOrData[T](resp, client, operation, newElem)
+	return decodeProtoElementsBare[T](resp, client, operation, newElem)
 }
 
 // decodeProtoElements reads the {data:[...]} list envelope from resp and
@@ -134,11 +129,32 @@ func decodeProtoElements[T proto.Message](
 	return decodeProtoElementsKeyed[T](resp, client, operation, "data", newElem)
 }
 
+// decodeProtoElementsBare reads a top-level JSON array from resp, then
+// protojson-decodes each element the same way decodeProtoElementsKeyed does.
+func decodeProtoElementsBare[T proto.Message](
+	resp *http.Response,
+	client *Client,
+	operation string,
+	newElem func() T,
+) ([]T, error) {
+	rawItems := []json.RawMessage{}
+
+	if err := client.handleResponse(resp, &rawItems); err != nil {
+		return nil, err
+	}
+
+	if rawItems == nil {
+		return nil, fmt.Errorf("failed to unmarshal %s array: %w", operation, errResponseBodyNotJSONArray)
+	}
+
+	return decodeRawProtoItems[T](rawItems, operation, newElem)
+}
+
 // decodeProtoElementsBareOrData reads the list body from resp as either a
 // top-level JSON array or a {data:[...]} page envelope, then protojson-decodes
 // each element the same way decodeProtoElementsKeyed does. It buffers the body
-// to dispatch on the first non-space byte, so it matches the legacy
-// configInterfaceListResponse decoder that tolerates both shapes.
+// to dispatch on the first non-space byte for update endpoints that tolerate
+// both response shapes.
 func decodeProtoElementsBareOrData[T proto.Message](
 	resp *http.Response,
 	client *Client,
@@ -159,9 +175,8 @@ func decodeProtoElementsBareOrData[T proto.Message](
 	return decodeRawProtoItems[T](rawItems, operation, newElem)
 }
 
-// rawListItemsBareOrData extracts the raw element messages from a list body that
-// is either a top-level JSON array or a {data:[...]} page envelope, dispatching
-// on the first non-space byte. It keeps decodeProtoElementsBareOrData flat.
+// rawListItemsBareOrData extracts raw element messages from a top-level JSON
+// array or a {data:[...]} page envelope.
 func rawListItemsBareOrData(body json.RawMessage, operation string) ([]json.RawMessage, error) {
 	if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
 		var rawItems []json.RawMessage
@@ -219,8 +234,8 @@ func decodeProtoElementsKeyed[T proto.Message](
 
 // decodeRawProtoItems protojson-decodes each raw list element into a fresh proto
 // message with DiscardUnknown. It is the shared per-element decode tail of the
-// proto list fetchers (the data[] / custom-key path and the bare-or-data path),
-// so every fetcher decodes elements identically.
+// proto list fetchers (the data[] / custom-key, bare-only, and bare-or-data
+// paths), so every fetcher decodes elements identically.
 func decodeRawProtoItems[T proto.Message](
 	rawItems []json.RawMessage,
 	operation string,

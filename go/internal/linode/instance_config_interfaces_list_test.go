@@ -91,6 +91,39 @@ func TestClientListInstanceConfigInterfacesProtoContract(t *testing.T) {
 	}
 }
 
+func TestClientListInstanceConfigInterfacesProtoRejectsNonArrayResponse(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name string
+		body string
+	}{
+		{name: "page envelope", body: `{"data":[{"id":202,"purpose":"vpc"}],"page":1}`},
+		{name: "null", body: `null`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tcApplicationJSON)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			t.Cleanup(srv.Close)
+
+			client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+			got, err := client.ListInstanceConfigInterfacesProto(t.Context(), 123, 456)
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+
+			if got != nil {
+				t.Errorf("got = %v, want nil", got)
+			}
+		})
+	}
+}
+
 func TestClientListInstanceConfigInterfacesProtoRejectsInvalidIDs(t *testing.T) {
 	t.Parallel()
 

@@ -804,8 +804,7 @@ func (c *Client) httpListInstanceInterfaceFirewallsProto(ctx context.Context, li
 // httpListInstanceConfigInterfacesProto retrieves the legacy config-profile
 // network interfaces of one configuration profile as proto messages. It formats
 // both path ids into the endpoint exactly like httpListInstanceConfigInterfaces,
-// then reads through listProtoElementsBareOrData because the endpoint returns
-// either a bare array or a {data:[...]} page envelope.
+// then reads the endpoint's documented top-level array response.
 func (c *Client) httpListInstanceConfigInterfacesProto(ctx context.Context, linodeID, configID int) ([]*linodev1.ConfigInterfaceResponse, error) {
 	if linodeID <= 0 {
 		return nil, ErrLinodeIDPositive
@@ -819,7 +818,7 @@ func (c *Client) httpListInstanceConfigInterfacesProto(ctx context.Context, lino
 	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
 	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s/interfaces", encodedLinodeID, encodedConfigID)
 
-	return listProtoElementsBareOrData(ctx, c, "ListInstanceConfigInterfaces", endpoint,
+	return listProtoElementsBare(ctx, c, "ListInstanceConfigInterfaces", endpoint,
 		func() *linodev1.ConfigInterfaceResponse { return &linodev1.ConfigInterfaceResponse{} })
 }
 
