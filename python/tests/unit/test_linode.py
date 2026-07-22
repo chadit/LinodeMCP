@@ -3846,21 +3846,20 @@ async def test_list_instance_config_interfaces() -> None:
     """List Linode instance config interfaces sends GET to the exact route."""
     client = Client("https://api.linode.com/v4", "test-token")
 
+    interfaces = [
+        {"id": 202, "purpose": "vpc"},
+        {"id": 101, "purpose": "public"},
+    ]
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = {
-        "data": [{"id": 9, "purpose": "vlan"}],
-        "page": 1,
-        "pages": 1,
-        "results": 1,
-    }
+    mock_response.json.return_value = interfaces
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
         result = await client.list_instance_config_interfaces(123, 6)
 
-    assert result["data"][0]["purpose"] == "vlan"
+    assert result == interfaces
     mock_request.assert_called_once_with(
         "GET", "/linode/instances/123/configs/6/interfaces"
     )
@@ -3914,17 +3913,26 @@ async def test_list_instance_config_interfaces_wraps_http_errors() -> None:
 
 
 async def test_retryable_list_instance_config_interfaces_delegates_to_client() -> None:
-    """RetryableClient delegates Linode instance config interfaces list with retry."""
-    retryable = RetryableClient("https://api.linode.com/v4", "test-token")
+    """RetryableClient retries the idempotent config-interface GET."""
+    retryable = RetryableClient(
+        "https://api.linode.com/v4",
+        "test-token",
+        RetryConfig(max_retries=1, base_delay=0, jitter_enabled=False),
+    )
 
     with patch.object(
         retryable.client, "list_instance_config_interfaces", new_callable=AsyncMock
     ) as mock_list:
-        mock_list.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+        interfaces = [{"id": 9, "purpose": "vlan"}]
+        mock_list.side_effect = [
+            NetworkError("ListInstanceConfigInterfaces", httpx.HTTPError("boom")),
+            interfaces,
+        ]
         result = await retryable.list_instance_config_interfaces(123, 6)
 
-    assert result["data"] == []
-    mock_list.assert_awaited_once_with(123, 6)
+    assert result == interfaces
+    assert mock_list.await_count == 2
+    mock_list.assert_awaited_with(123, 6)
     await retryable.close()
 
 

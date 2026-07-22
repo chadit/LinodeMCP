@@ -2574,7 +2574,7 @@ class Client:
 
     async def list_instance_config_interfaces(
         self, linode_id: int, config_id: int
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
         """List interfaces for a Linode instance configuration profile."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         config_id = _validate_positive_path_int(config_id, "config_id")
@@ -2586,7 +2586,7 @@ class Client:
         )
         try:
             response = await self.make_request("GET", endpoint)
-            data: dict[str, Any] = response.json()
+            data: list[dict[str, Any]] = response.json()
             return data
         except httpx.HTTPError as e:
             raise NetworkError("ListInstanceConfigInterfaces", e) from e
@@ -11427,9 +11427,9 @@ class RetryableClient:
 
     async def list_instance_config_interfaces(
         self, linode_id: int, config_id: int
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
         """List Linode instance configuration profile interfaces with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        result: list[dict[str, Any]] = await self._execute_with_retry(
             self.client.list_instance_config_interfaces, linode_id, config_id
         )
         return result
