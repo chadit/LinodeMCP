@@ -37,7 +37,7 @@ def test_meta_returns_empty() -> None:
         ("linode_volume_clone", Capability.Write, [Scope.VolumesReadWrite]),
         ("linode_volume_create", Capability.Write, [Scope.VolumesReadWrite]),
         ("linode_volume_list", Capability.Read, [Scope.VolumesReadOnly]),
-        ("linode_volume_type_list", Capability.Read, [Scope.VolumesReadOnly]),
+        ("linode_volume_type_list", Capability.Read, []),
         # Database engines and types are public catalog routes: the
         # OpenAPI spec declares no security requirement for them, so no
         # scope is required.
@@ -56,7 +56,7 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.StackScriptsReadWrite],
         ),
-        ("linode_vpc_list", Capability.Read, [Scope.VPCReadOnly]),
+        ("linode_vpc_list", Capability.Read, []),
         ("linode_instance_config_get", Capability.Read, [Scope.LinodesReadOnly]),
         (
             "linode_instance_config_interface_get",
@@ -122,7 +122,7 @@ def test_meta_returns_empty() -> None:
         (
             "linode_account_oauth_client_thumbnail_get",
             Capability.Read,
-            [Scope.AccountReadOnly],
+            [],
         ),
         ("linode_account_invoice_get", Capability.Read, [Scope.AccountReadOnly]),
         ("linode_account_payment_get", Capability.Read, [Scope.AccountReadOnly]),
@@ -176,10 +176,12 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.AccountReadWrite],
         ),
+        # POST /account/promo-codes is documented with only
+        # account:read_only; _scope_overrides mirrors the spec.
         (
             "linode_account_promo_credit_add",
             Capability.Write,
-            [Scope.AccountReadWrite],
+            [Scope.AccountReadOnly],
         ),
         (
             "linode_account_service_transfer_create",
@@ -201,7 +203,9 @@ def test_meta_returns_empty() -> None:
             Capability.Write,
             [Scope.AccountReadWrite],
         ),
-        ("linode_profile_get", Capability.Read, [Scope.AccountReadOnly]),
+        # GET /profile is documented with an empty scope list: any
+        # authenticated token may read its own profile.
+        ("linode_profile_get", Capability.Read, []),
         ("linode_database_engine_get", Capability.Read, []),
         ("linode_database_type_get", Capability.Read, []),
         (
@@ -362,27 +366,38 @@ def test_image_sharegroup_members_add_needs_images_write() -> None:
     ]
 
 
-def test_instance_create_needs_linodes_write_and_images_read() -> None:
-    """Provisioning a Linode from an image requires images:read_only too.
+def test_instance_create_needs_only_linodes_write() -> None:
+    """Provisioning documents linodes:read_write alone.
 
-    Locks in the cross-category mapping. If a refactor drops the extras
-    table, this test catches it before token validation silently lets
-    under-scoped tokens through.
+    The API grants image access at request time; requiring
+    images:read_only here would deny tokens the API itself accepts.
+    Clone and rebuild carry the same single-scope contract.
     """
-    got = required_scopes("linode_instance_create", Capability.Write)
-    assert set(got) == {Scope.LinodesReadWrite, Scope.ImagesReadOnly}
+    for tool in (
+        "linode_instance_create",
+        "linode_instance_clone",
+        "linode_instance_rebuild",
+    ):
+        assert required_scopes(tool, Capability.Write) == [Scope.LinodesReadWrite]
 
 
-def test_instance_clone_needs_linodes_write_and_images_read() -> None:
-    """Cloning carries the same image dependency as creation."""
-    got = required_scopes("linode_instance_clone", Capability.Write)
-    assert set(got) == {Scope.LinodesReadWrite, Scope.ImagesReadOnly}
-
-
-def test_lke_cluster_create_needs_lke_write_and_linodes_write() -> None:
-    """LKE clusters provision Linodes under the hood."""
+def test_lke_cluster_create_needs_only_lke_write() -> None:
+    """LKE cluster creation documents lke:read_write alone."""
     got = required_scopes("linode_lke_cluster_create", Capability.Write)
-    assert set(got) == {Scope.LKEReadWrite, Scope.LinodesReadWrite}
+    assert got == [Scope.LKEReadWrite]
+
+
+def test_image_create_needs_images_write_and_linodes_read() -> None:
+    """Capturing an image reads the source disk, per the documented pair."""
+    got = required_scopes("linode_image_create", Capability.Write)
+    assert set(got) == {Scope.ImagesReadWrite, Scope.LinodesReadOnly}
+
+
+def test_volume_attach_detach_need_linodes_write() -> None:
+    """Attach and detach touch the target Linode, per the documented pair."""
+    for tool in ("linode_volume_attach", "linode_volume_detach"):
+        got = required_scopes(tool, Capability.Write)
+        assert set(got) == {Scope.VolumesReadWrite, Scope.LinodesReadWrite}
 
 
 @pytest.mark.parametrize(
@@ -443,70 +458,69 @@ def test_instance_subtools_route_to_linodes(tool_name: str) -> None:
         (
             "linode_monitor_dashboard_list",
             Capability.Read,
-            Scope.AccountReadOnly,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_service_dashboard_list",
             Capability.Read,
-            Scope.AccountReadOnly,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_service_get",
             Capability.Read,
-            Scope.AccountReadOnly,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_service_list",
             Capability.Read,
-            Scope.AccountReadOnly,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_alert_channel_list",
             Capability.Read,
-            Scope.AccountReadOnly,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_alert_definition_list",
             Capability.Read,
-            Scope.AccountReadOnly,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_service_alert_definition_list",
             Capability.Read,
-            Scope.AccountReadOnly,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_service_metric_definition_list",
             Capability.Read,
-            Scope.AccountReadOnly,
-        ),
-        (
-            "linode_monitor_service_metric_query",
-            Capability.Read,
-            Scope.AccountReadOnly,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_service_alert_definition_update",
             Capability.Write,
-            Scope.AccountReadWrite,
+            Scope.MonitorReadWrite,
         ),
+        # POST /monitor/services/{type}/token is documented with only
+        # monitor:read_only; _scope_overrides mirrors the spec.
         (
             "linode_monitor_service_token_create",
             Capability.Write,
-            Scope.AccountReadWrite,
+            Scope.MonitorReadOnly,
         ),
         (
             "linode_monitor_service_alert_definition_delete",
             Capability.Destroy,
-            Scope.AccountReadWrite,
+            Scope.MonitorReadWrite,
         ),
     ],
 )
-def test_ssh_and_monitor_are_account_scoped(
+def test_ssh_and_monitor_scopes(
     tool_name: str, capability: Capability, expected: Scope
 ) -> None:
-    """SSH-key and monitor tools live under /profile and /monitor, both
-    of which are gated by account-level access in the Linode API.
+    """SSH keys are account-gated; /monitor carries its own monitor:* scopes.
+
+    The metric-query tool is absent here on purpose: its route is
+    documented scopeless and lives in the scopeless-route test instead.
     """
     assert required_scopes(tool_name, capability) == [expected]
 
@@ -524,16 +538,39 @@ def test_ssh_and_monitor_are_account_scoped(
         "linode_beta_get",
         "linode_beta_list",
         "linode_maintenance_policy_list",
+        "linode_region_get",
+        "linode_region_list",
+        "linode_region_availability_get",
+        "linode_region_availability_list",
+        "linode_type_get",
+        "linode_type_list",
+        "linode_lke_type_list",
+        "linode_longview_type_list",
+        "linode_nodebalancer_type_list",
+        "linode_object_storage_type_list",
+        "linode_volume_type_list",
+        "linode_account_maintenance_list",
+        "linode_profile_get",
+        "linode_longview_subscription_get",
+        "linode_longview_subscription_list",
+        "linode_vpc_get",
+        "linode_vpc_list",
+        "linode_vpc_subnet_get",
+        "linode_vpc_subnet_list",
+        "linode_account_oauth_client_thumbnail_get",
+        "linode_monitor_service_metric_query",
     ],
 )
 def test_scopeless_routes_return_empty(tool_name: str) -> None:
     """Documented scopeless routes require no token scope.
 
-    Kernels, database engines, and database types are public catalog
-    routes (no authentication at all); betas and maintenance policies
-    accept any authenticated token. The empty return is deliberate, and
-    the scope completeness test keeps this list as the only sanctioned
-    source of empty scopes for non-meta tools.
+    Catalog, pricing, and region routes are public (no authentication at
+    all); betas, maintenance, the caller's own profile, Longview
+    subscription plans, VPC reads, the OAuth-client thumbnail, and the
+    metrics query accept any authenticated token per the spec. The empty
+    return is deliberate, and the scope completeness test keeps this
+    list as the only sanctioned source of empty scopes for non-meta
+    tools.
     """
     assert required_scopes(tool_name, Capability.Read) == []
 
@@ -582,6 +619,12 @@ def test_scopeless_routes_return_empty(tool_name: str) -> None:
             [Scope.AccountReadOnly],
         ),
         ("linode_profile_device_list", Capability.Read, [Scope.AccountReadOnly]),
+        # Event routes live under /account but the API gates them with
+        # events:* scopes; the seen-marker POST is documented with only
+        # events:read_only and _scope_overrides mirrors that.
+        ("linode_account_event_list", Capability.Read, [Scope.EventsReadOnly]),
+        ("linode_account_event_get", Capability.Read, [Scope.EventsReadOnly]),
+        ("linode_account_event_seen", Capability.Write, [Scope.EventsReadOnly]),
         ("linode_support_ticket_list", Capability.Read, [Scope.AccountReadOnly]),
         (
             "linode_support_ticket_create",
@@ -608,13 +651,14 @@ def test_scopeless_routes_return_empty(tool_name: str) -> None:
             Capability.Admin,
             [Scope.AccountReadWrite],
         ),
-        # The API documents account:read_write for this read; the
-        # mapping deliberately keeps account:read_only so read-only
-        # profiles stay tokenless-friendly. See _scope_overrides.
+        # GET /managed/contacts/{id} is documented account:read_write
+        # despite being a read (contacts hold PII); _scope_overrides
+        # mirrors the spec, and the elevation policy derives from
+        # capabilities so this write scope does not flip it.
         (
             "linode_managed_contact_get",
             Capability.Read,
-            [Scope.AccountReadOnly],
+            [Scope.AccountReadWrite],
         ),
         ("linode_placement_group_get", Capability.Read, [Scope.LinodesReadOnly]),
         (

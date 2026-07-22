@@ -21,7 +21,7 @@ import fnmatch
 import logging
 from typing import TYPE_CHECKING
 
-from linodemcp.profiles.builtin import builtin_profiles
+from linodemcp.profiles.builtin import builtin_profiles, has_mutating_tools
 from linodemcp.profiles.errors import (
     ActiveProfileDisabledError,
     ActiveProfileUnknownError,
@@ -78,6 +78,7 @@ def lookup_profile(
         allowed_tools=found.allowed_tools,
         allowed_environments=found.allowed_environments,
         required_token_scopes=found.required_token_scopes,
+        elevated=found.elevated,
         allow_yolo=found.allow_yolo,
         disabled=False,
     )
@@ -147,6 +148,10 @@ def _resolve_user_profile(
         allowed_tools=resolved_names,
         allowed_environments=entry.allowed_environments,
         required_token_scopes=entry.required_token_scopes,
+        # Derived from the resolved tool list, never from user config:
+        # the missing-token policy must reflect what the profile can
+        # actually mutate.
+        elevated=has_mutating_tools(registry, resolved_names),
         allow_yolo=entry.allow_yolo,
         disabled=False,
     )

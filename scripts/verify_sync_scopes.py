@@ -30,6 +30,10 @@ Drift classes reported, each one line, each baselineable:
   the documented scopes. Deliberate deviations live in the baseline with
   an annotation naming the tracking issue; see the scopeOverrides
   docstrings in the per-language mapping files for the rationale.
+- `<tool>: stale fixup, ...` - upstream changed a route whose documented
+  scope this script pins in _UPSTREAM_SCOPE_FIXUPS (typos and
+  non-grantable names); the entry must be dropped or updated so the
+  fixup can never mask a real upstream change.
 
 Deliberately NOT part of `make check`: it fetches the live OpenAPI spec,
 so it is non-deterministic and offline-hostile. Run on a cron / by the
@@ -66,6 +70,44 @@ SPEC_URL = (
 )
 
 _METHODS = ("get", "post", "put", "delete")
+
+# Documented scope values that cannot be encoded in the language
+# mappings, pinned with the exact upstream value so a fixup goes stale
+# loudly the moment the spec changes. Two classes only: malformed scope
+# strings (a permission level or category name that does not exist),
+# and names absent from every grantable-scope registry (the spec's own
+# OAuth catalog and the techdocs scope list); requiring one of those
+# would make profiles unsatisfiable for real tokens. Each entry maps
+# (METHOD, template) to (documented value, effective value): the
+# comparison substitutes the effective value only while the spec still
+# documents exactly the pinned value, and reports a stale-fixup drift
+# line otherwise.
+_UPSTREAM_SCOPE_FIXUPS: dict[tuple[str, str], tuple[list[str], list[str]]] = {
+    # "ips:read" is not a permission level; the family uses read_only.
+    ("GET", "/networking/ipv6/ranges/{p}"): (["ips:read"], ["ips:read_only"]),
+    # "linode" is a typo for the "linodes" category.
+    ("GET", "/linode/instances/{p}/interfaces/settings"): (
+        ["linode:read_only"],
+        ["linodes:read_only"],
+    ),
+    # "placement" appears in no grantable-scope registry; the rest of
+    # the placement-group family is documented under linodes:*.
+    ("GET", "/placement/groups"): (["placement:read_only"], ["linodes:read_only"]),
+    # "child_account" appears in no grantable-scope registry; the
+    # parent-account routes otherwise sit under account:*.
+    ("GET", "/account/child-accounts"): (
+        ["child_account:read_only"],
+        ["account:read_only"],
+    ),
+    ("GET", "/account/child-accounts/{p}"): (
+        ["child_account:read_only"],
+        ["account:read_only"],
+    ),
+    ("POST", "/account/child-accounts/{p}/token"): (
+        ["child_account:read_write"],
+        ["account:read_write"],
+    ),
+}
 
 _BASELINE_HEADER = (
     "# Accepted (known) deviations between the tool scope mapping and the\n"
@@ -170,6 +212,18 @@ def compare(
         if documented is None:
             problems.append(f"{name}: route {method} {template} not in spec")
             continue
+
+        fixup = _UPSTREAM_SCOPE_FIXUPS.get((method, template))
+        if fixup is not None:
+            pinned, effective = fixup
+            if documented == pinned:
+                documented = effective
+            else:
+                problems.append(
+                    f"{name}: stale fixup, doc changed from {pinned}"
+                    f" to {documented}; drop or update the fixup entry"
+                )
+                continue
 
         mapped = sorted(str(scope) for scope in record.get("scopes") or [])
         if mapped != documented:

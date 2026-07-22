@@ -21,7 +21,7 @@ func loaderCatalog() []profiles.ToolDescriptor {
 		{Name: toolAccount, Capability: profiles.CapRead},
 		{Name: toolInstancesList, Capability: profiles.CapRead},
 		{Name: "linode_instance_get", Capability: profiles.CapRead},
-		{Name: "linode_instance_create", Capability: profiles.CapWrite},
+		{Name: toolInstanceCreate, Capability: profiles.CapWrite},
 		{Name: toolInstanceDelete, Capability: profiles.CapDestroy},
 		{Name: toolVolumesList, Capability: profiles.CapRead},
 		{Name: toolVolumeCreate, Capability: profiles.CapWrite},
@@ -68,8 +68,8 @@ func TestResolveActiveProfileSelectsBuiltin(t *testing.T) {
 		t.Errorf("got.Name = %v, want %v", got.Name, profiles.BuiltinComputeAdmin)
 	}
 
-	if !slices.Contains(got.AllowedTools, "linode_instance_create") {
-		t.Errorf("got.AllowedTools does not contain %v", "linode_instance_create")
+	if !slices.Contains(got.AllowedTools, toolInstanceCreate) {
+		t.Errorf("got.AllowedTools does not contain %v", toolInstanceCreate)
 	}
 }
 

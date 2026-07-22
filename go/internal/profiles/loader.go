@@ -149,8 +149,12 @@ func resolveUserDefined(name string, userCfg *config.UserProfileConfig, registry
 		AllowedTools:        tools,
 		AllowedEnvironments: append([]string(nil), userCfg.AllowedEnvironments...),
 		RequiredTokenScopes: append([]string(nil), userCfg.RequiredTokenScopes...),
-		AllowYolo:           userCfg.AllowYolo,
-		Disabled:            false,
+		// Derived from the resolved tool list, never from user config:
+		// the missing-token policy must reflect what the profile can
+		// actually mutate.
+		Elevated:  hasMutatingTools(registry, tools),
+		AllowYolo: userCfg.AllowYolo,
+		Disabled:  false,
 	}
 }
 

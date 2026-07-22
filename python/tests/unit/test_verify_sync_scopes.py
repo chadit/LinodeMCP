@@ -166,6 +166,37 @@ def test_compare_flags_stale_route_entry() -> None:
     ]
 
 
+def test_compare_applies_upstream_fixup() -> None:
+    """A pinned fixup substitutes the effective value while doc matches.
+
+    GET /placement/groups documents placement:read_only, a scope no
+    grantable registry defines; the fixup maps it to the family's
+    linodes:read_only, so a mapping carrying that value is clean.
+    """
+    routes = gate.parse_routes("linode_placement_group_list: GET /placement/groups\n")
+    dump = [_record("linode_placement_group_list", "Read", ["linodes:read_only"])]
+    spec = _spec(
+        {"/{apiVersion}/placement/groups": {"get": _op(["placement:read_only"])}}
+    )
+    assert gate.compare(routes, dump, gate.spec_operations(spec)) == []
+
+
+def test_compare_reports_stale_upstream_fixup() -> None:
+    """A fixup whose pinned doc value no longer matches fails loudly.
+
+    If upstream fixes the placement scope, the fixup must be dropped
+    rather than silently rewriting the new documented value.
+    """
+    routes = gate.parse_routes("linode_placement_group_list: GET /placement/groups\n")
+    dump = [_record("linode_placement_group_list", "Read", ["linodes:read_only"])]
+    spec = _spec(
+        {"/{apiVersion}/placement/groups": {"get": _op(["linodes:read_only"])}}
+    )
+    problems = gate.compare(routes, dump, gate.spec_operations(spec))
+    assert len(problems) == 1
+    assert problems[0].startswith("linode_placement_group_list: stale fixup")
+
+
 def test_compare_flags_route_missing_from_spec() -> None:
     """A route upstream never documented is its own drift class."""
     routes, dump, spec = _base_fixture()

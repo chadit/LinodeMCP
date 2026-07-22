@@ -432,10 +432,26 @@ def builtin_profiles(catalog: Sequence[ToolDescriptor]) -> dict[str, Profile]:
             allowed_tools=allowed,
             allowed_environments=(),
             required_token_scopes=_compute_required_scopes(catalog, allowed),
+            elevated=has_mutating_tools(catalog, allowed),
             allow_yolo=blueprint.allow_yolo,
             disabled=blueprint.disabled,
         )
     return profiles
+
+
+def has_mutating_tools(
+    catalog: Sequence[ToolDescriptor], allowed_tools: Sequence[str]
+) -> bool:
+    """Return True when any allowed tool is Write, Destroy, or Admin.
+
+    Drives the profile ``elevated`` flag; scope suffixes cannot, because
+    the API documents write scopes on several read-only routes. Tools
+    the catalog doesn't know about contribute nothing, matching
+    ``_compute_required_scopes``.
+    """
+    cap_by_name = {tool.name: tool.capability for tool in catalog}
+    mutating = (Capability.Write, Capability.Destroy, Capability.Admin)
+    return any(cap_by_name.get(name) in mutating for name in allowed_tools)
 
 
 def builtin_catalog_json(catalog: Sequence[ToolDescriptor]) -> str:
@@ -454,6 +470,7 @@ def builtin_catalog_json(catalog: Sequence[ToolDescriptor]) -> str:
             "allowed_tools": list(profile.allowed_tools),
             "allowed_environments": list(profile.allowed_environments),
             "required_token_scopes": list(profile.required_token_scopes),
+            "elevated": profile.elevated,
             "allow_yolo": profile.allow_yolo,
             "disabled": profile.disabled,
         }

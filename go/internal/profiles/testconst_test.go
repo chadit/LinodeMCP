@@ -25,4 +25,5 @@ const (
 	toolDatabaseMySQLInstanceList   = "linode_database_mysql_instance_list"
 	toolDatabaseMySQLInstanceDelete = "linode_database_mysql_instance_delete"
 	toolDatabaseMySQLCredentialsGet = "linode_database_mysql_instance_credentials_get"
+	toolInstanceCreate              = "linode_instance_create"
 )

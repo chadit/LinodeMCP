@@ -19361,9 +19361,9 @@ def test_longview_tools_map_to_longview_scopes() -> None:
     assert required_scopes("linode_longview_client_list", Capability.Read) == [
         Scope.LongviewReadOnly
     ]
-    assert required_scopes("linode_longview_type_list", Capability.Read) == [
-        Scope.LongviewReadOnly
-    ]
+    # The Longview type list is a public pricing route: the spec
+    # documents no scope for it.
+    assert required_scopes("linode_longview_type_list", Capability.Read) == []
     assert required_scopes("linode_longview_client_create", Capability.Write) == [
         Scope.LongviewReadWrite
     ]

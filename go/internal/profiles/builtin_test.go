@@ -113,7 +113,7 @@ func syntheticCatalog() []profiles.ToolDescriptor {
 		{Name: "linode_database_mysql_instance_resume", Capability: profiles.CapWrite},
 		{Name: "linode_database_postgresql_instance_resume", Capability: profiles.CapWrite},
 		// Compute writes / destroys
-		{Name: "linode_instance_create", Capability: profiles.CapWrite},
+		{Name: toolInstanceCreate, Capability: profiles.CapWrite},
 		{Name: "linode_stackscript_create", Capability: profiles.CapWrite},
 		{Name: "linode_stackscript_delete", Capability: profiles.CapDestroy},
 		{Name: "linode_stackscript_update", Capability: profiles.CapWrite},
@@ -342,8 +342,8 @@ func TestComputeAdminIncludesInstanceWrites(t *testing.T) {
 	builtins := profiles.BuiltinProfiles(syntheticCatalog())
 	allowed := builtins[profiles.BuiltinComputeAdmin].AllowedTools
 
-	if !slices.Contains(allowed, "linode_instance_create") {
-		t.Errorf("allowed does not contain %v", "linode_instance_create")
+	if !slices.Contains(allowed, toolInstanceCreate) {
+		t.Errorf("allowed does not contain %v", toolInstanceCreate)
 	}
 
 	if !slices.Contains(allowed, "linode_instance_delete") {
@@ -369,8 +369,8 @@ func TestNetworkAdminExcludesComputeWrites(t *testing.T) {
 	builtins := profiles.BuiltinProfiles(syntheticCatalog())
 	allowed := builtins[profiles.BuiltinNetworkAdmin].AllowedTools
 
-	if slices.Contains(allowed, "linode_instance_create") {
-		t.Errorf("allowed should not contain %v", "linode_instance_create")
+	if slices.Contains(allowed, toolInstanceCreate) {
+		t.Errorf("allowed should not contain %v", toolInstanceCreate)
 	}
 
 	if slices.Contains(allowed, toolVolumeCreate) {

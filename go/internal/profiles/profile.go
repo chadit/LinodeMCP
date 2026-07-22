@@ -26,6 +26,15 @@ type Profile struct {
 	// Phase 2 declares them informationally; Phase 6 enforces them at
 	// profile load against the active token.
 	RequiredTokenScopes []string
+	// Elevated marks a profile that permits at least one mutating tool
+	// (Write, Destroy, or Admin capability). The missing-token policy
+	// reads it: elevated profiles refuse to start without a token,
+	// read-only ones warn and continue. Always derived from the tool
+	// catalog at construction or load, never set by user config; scope
+	// suffixes cannot stand in for it because the API documents write
+	// scopes on several read-only routes (kubeconfig, managed contacts,
+	// instance interfaces).
+	Elevated bool
 	// AllowYolo opts the profile into the yolo execution path. Built-in
 	// profiles other than emergency have this set to false.
 	AllowYolo bool

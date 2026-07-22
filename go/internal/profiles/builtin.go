@@ -379,10 +379,33 @@ func BuiltinProfiles(catalog []ToolDescriptor) map[string]Profile {
 	for name, p := range profiles {
 		p.AllowedTools = selectAllowed(catalog, elevatedCategories(name))
 		p.RequiredTokenScopes = computeRequiredScopes(catalog, p.AllowedTools)
+		p.Elevated = hasMutatingTools(catalog, p.AllowedTools)
 		profiles[name] = p
 	}
 
 	return profiles
+}
+
+// hasMutatingTools reports whether any allowed tool carries a Write,
+// Destroy, or Admin capability per the catalog. This drives the
+// Elevated flag; scope suffixes cannot, because the API documents
+// write scopes on several read-only routes. Tools the catalog doesn't
+// know about contribute nothing, matching computeRequiredScopes.
+func hasMutatingTools(catalog []ToolDescriptor, allowedTools []string) bool {
+	capByName := make(map[string]Capability, len(catalog))
+	for _, d := range catalog {
+		capByName[d.Name] = d.Capability
+	}
+
+	for _, name := range allowedTools {
+		switch capByName[name] {
+		case CapWrite, CapDestroy, CapAdmin:
+			return true
+		case CapRead, CapMeta, CapUnknown:
+		}
+	}
+
+	return false
 }
 
 // jsonEntry mirrors Profile's field shape with explicit JSON tags so the
@@ -395,6 +418,7 @@ type jsonEntry struct {
 	AllowedTools        []string `json:"allowed_tools"`
 	AllowedEnvironments []string `json:"allowed_environments"`
 	RequiredTokenScopes []string `json:"required_token_scopes"`
+	Elevated            bool     `json:"elevated"`
 	AllowYolo           bool     `json:"allow_yolo"`
 	Disabled            bool     `json:"disabled"`
 }

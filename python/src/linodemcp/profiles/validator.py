@@ -27,17 +27,20 @@ if TYPE_CHECKING:
 
 
 def profile_is_elevated(profile: ProfileModel) -> bool:
-    """Return True if the profile carries any write/destroy capability.
+    """Return True if the profile permits any mutating tool.
 
-    Judged by the presence of a ``:read_write`` suffix in any required
-    token scope. The missing-token policy uses this to decide whether
-    to fail load (elevated) or warn-and-continue (read-only).
+    Reads the capability-derived ``elevated`` flag, not scope suffixes:
+    the API documents ``:read_write`` scopes on several read-only routes
+    (kubeconfig, managed contacts, instance interfaces), so a read-only
+    profile's scope union can legitimately contain write scopes without
+    the profile being able to mutate anything. The missing-token policy
+    uses this to decide whether to fail load (elevated) or
+    warn-and-continue (read-only).
 
-    Profiles with no required scopes (e.g. a freshly-loaded user
-    profile with no allowed tools) are NOT elevated by this rule; spec
-    behavior is that such profiles can start without a token.
+    Profiles with no allowed tools are NOT elevated; spec behavior is
+    that such profiles can start without a token.
     """
-    return any(scope.endswith(":read_write") for scope in profile.required_token_scopes)
+    return profile.elevated
 
 
 class TokenNotConfiguredError(Exception):

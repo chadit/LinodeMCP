@@ -1,7 +1,5 @@
 package profiles
 
-import "strings"
-
 // Scope is a Linode OAuth/PAT scope string. The Linode API documents
 // scopes as "<resource>:<permission>" pairs (e.g. "linodes:read_only",
 // "volumes:read_write"). Personal access tokens carry their scopes as a
@@ -53,6 +51,9 @@ const (
 	ScopeMaintenanceReadOnly  Scope = "maintenance:read_only"
 	ScopeMaintenanceReadWrite Scope = "maintenance:read_write"
 
+	ScopeMonitorReadOnly  Scope = "monitor:read_only"
+	ScopeMonitorReadWrite Scope = "monitor:read_write"
+
 	ScopeNodeBalancersReadOnly  Scope = "nodebalancers:read_only"
 	ScopeNodeBalancersReadWrite Scope = "nodebalancers:read_write"
 
@@ -83,12 +84,14 @@ const (
 	categoryAccount       = "account"
 	categoryDatabases     = "databases"
 	categoryDomains       = "domains"
+	categoryEvents        = "events"
 	categoryFirewall      = "firewall"
 	categoryImages        = "images"
 	categoryIPs           = "ips"
 	categoryLinodes       = "linodes"
 	categoryLKE           = "lke"
 	categoryLongview      = "longview"
+	categoryMonitor       = "monitor"
 	categoryNodeBalancers = "nodebalancers"
 	categoryObjectStorage = "object_storage"
 	categoryReservedIPs   = "reserved-ips"
@@ -136,10 +139,9 @@ func RequiredScopes(toolName string, capability Capability) []Scope {
 		return nil
 	}
 
-	// Some tools span more than one category. linode_instance_create
-	// hits /linode/instances but also pulls images, so any token that
-	// wants to provision an image-deployed instance needs
-	// images:read_only too.
+	// Some tools span more than one category. Attaching a volume hits
+	// /volumes but also touches the target Linode, so the API documents
+	// linodes:read_write alongside volumes:read_write.
 	extras := additionalScopes(toolName)
 	if len(extras) == 0 {
 		return []Scope{scope}
@@ -163,83 +165,115 @@ func scopeCategory(toolName string) string {
 		return categoryIPs
 	case "linode_networking_reserved_ip_delete":
 		return categoryReservedIPs
+	case "linode_account_event_get", "linode_account_event_list":
+		// Event routes live under /account but the API gates them with
+		// events:* scopes, not account:*. The seen-marker tool is an
+		// override instead: the API wants events:read_only on a POST.
+		return categoryEvents
 	}
 
-	// Order matters: longer prefixes first.
-	switch {
-	case strings.HasPrefix(toolName, "linode_account_"):
-		return categoryAccount
-	case strings.HasPrefix(toolName, "linode_database_"):
-		return categoryDatabases
-	case strings.HasPrefix(toolName, "linode_object_storage_"):
-		return categoryObjectStorage
-	case strings.HasPrefix(toolName, "linode_lke_"):
-		return categoryLKE
-	case strings.HasPrefix(toolName, "linode_longview_"):
-		return categoryLongview
-	case strings.HasPrefix(toolName, "linode_nodebalancer_"):
-		return categoryNodeBalancers
-	case strings.HasPrefix(toolName, "linode_firewall_"):
-		return categoryFirewall
-	case strings.HasPrefix(toolName, "linode_domain_"):
-		return categoryDomains
-	case strings.HasPrefix(toolName, "linode_volume_"):
-		return categoryVolumes
-	case strings.HasPrefix(toolName, "linode_stackscript_"):
-		return categoryStackScripts
-	case strings.HasPrefix(toolName, "linode_vpc_"):
-		return categoryVPC
-	case strings.HasPrefix(toolName, "linode_image_"):
-		return categoryImages
-	case strings.HasPrefix(toolName, "linode_monitor_"),
-		strings.HasPrefix(toolName, "linode_sshkey_"):
-		// Monitor and SSH-key tools live under account-scoped endpoints.
-		return categoryAccount
-	case strings.HasPrefix(toolName, "linode_managed_"),
-		strings.HasPrefix(toolName, "linode_support_ticket_"),
-		strings.HasPrefix(toolName, "linode_tag_"),
-		strings.HasPrefix(toolName, "linode_profile_"):
-		// Managed services, support tickets, tags, and the whole
-		// profile subtree are account-gated in the API docs. That
-		// includes /profile/tokens, which the docs gate with account:*
-		// rather than a dedicated tokens scope.
-		return categoryAccount
-	case strings.HasPrefix(toolName, "linode_networking_ip_"),
-		strings.HasPrefix(toolName, "linode_networking_ipv4_"),
-		strings.HasPrefix(toolName, "linode_ipv6_"):
-		// The /networking/ips, /networking/ipv4, and /networking/ipv6
-		// routes all sit on ips:* scopes. The reserved-ip tools never
-		// reach here: their explicit cases above win first.
-		return categoryIPs
-	case strings.HasPrefix(toolName, "linode_instance_"),
-		strings.HasPrefix(toolName, "linode_placement_group_"),
-		strings.HasPrefix(toolName, "linode_region_"),
-		strings.HasPrefix(toolName, "linode_type_"),
-		strings.HasPrefix(toolName, "linode_vlan_"):
-		// VLANs live under /networking/vlans but the API gates them
-		// with linodes:* scopes.
-		return categoryLinodes
+	for _, rule := range scopePrefixTable() {
+		if hasAnyPrefix(toolName, rule.prefixes...) {
+			return rule.category
+		}
 	}
 
 	return ""
 }
 
+// prefixRule pairs tool-name prefixes with the scope category they
+// resolve to.
+type prefixRule struct {
+	prefixes []string
+	category string
+}
+
+// scopePrefixTable returns the prefix-to-category dispatch rules,
+// mirroring Python's _prefix_table. Built fresh per call so the slice
+// doesn't sit as a package-level global. Order matters: more specific
+// prefixes come first so they are never shadowed by a broader rule.
+func scopePrefixTable() []prefixRule {
+	return []prefixRule{
+		// Managed services, support tickets, tags, and the whole
+		// profile subtree are account-gated in the API docs. That
+		// includes /profile/tokens, which the docs gate with account:*
+		// rather than a dedicated tokens scope. SSH keys live under
+		// /profile too.
+		{
+			prefixes: []string{
+				"linode_account_", "linode_managed_", "linode_tag_",
+				"linode_support_ticket_", "linode_profile_", "linode_sshkey_",
+			},
+			category: categoryAccount,
+		},
+		{prefixes: []string{"linode_database_"}, category: categoryDatabases},
+		{prefixes: []string{"linode_object_storage_"}, category: categoryObjectStorage},
+		{prefixes: []string{"linode_lke_"}, category: categoryLKE},
+		{prefixes: []string{"linode_longview_"}, category: categoryLongview},
+		// The /monitor routes carry their own monitor:* scopes.
+		{prefixes: []string{"linode_monitor_"}, category: categoryMonitor},
+		{prefixes: []string{"linode_nodebalancer_"}, category: categoryNodeBalancers},
+		{prefixes: []string{"linode_firewall_"}, category: categoryFirewall},
+		{prefixes: []string{"linode_domain_"}, category: categoryDomains},
+		{prefixes: []string{"linode_volume_"}, category: categoryVolumes},
+		{prefixes: []string{"linode_stackscript_"}, category: categoryStackScripts},
+		{prefixes: []string{"linode_vpc_"}, category: categoryVPC},
+		{prefixes: []string{"linode_image_"}, category: categoryImages},
+		// The /networking/ips, /networking/ipv4, and /networking/ipv6
+		// routes all sit on ips:* scopes. The reserved-ip tools never
+		// reach here: their explicit cases in scopeCategory win first.
+		{
+			prefixes: []string{
+				"linode_networking_ip_", "linode_networking_ipv4_", "linode_ipv6_",
+			},
+			category: categoryIPs,
+		},
+		// VLANs live under /networking/vlans but the API gates them
+		// with linodes:* scopes.
+		{
+			prefixes: []string{
+				"linode_instance_", "linode_placement_group_",
+				"linode_region_", "linode_type_", "linode_vlan_",
+			},
+			category: categoryLinodes,
+		},
+	}
+}
+
 // isScopelessRoute reports whether a tool's underlying route is
 // documented with no OAuth scope requirement. Two flavors collapse to
-// the same empty return: public catalog routes that need no
-// authentication at all (kernels, database engines and types), and
-// token-only routes documented with an empty scope list, meaning any
-// authenticated token may call them (betas, maintenance policies).
-// Listing them explicitly separates "documented as scopeless" from
-// "forgot to map", which the scope completeness test relies on.
+// the same empty return: public routes with no security requirement at
+// all, and token-only routes documented with an empty scope list,
+// meaning any authenticated token may call them. Listing every such
+// tool explicitly separates "documented as scopeless" from "forgot to
+// map", which the scope completeness test relies on. The scheduled
+// sync-scopes gate keeps this list honest against the live spec.
 func isScopelessRoute(toolName string) bool {
 	switch toolName {
+	// Catalog and pricing routes: kernels, regions, instance types,
+	// per-service type/price lists, database engines and types.
 	case "linode_kernel_get", "linode_kernel_list",
+		"linode_region_get", "linode_region_list",
+		"linode_region_availability_get", "linode_region_availability_list",
+		"linode_type_get", "linode_type_list",
 		"linode_database_engine_get", "linode_database_engine_list",
 		"linode_database_type_get", "linode_database_type_list",
-		"linode_network_transfer_price_list",
-		"linode_beta_get", "linode_beta_list",
-		"linode_maintenance_policy_list":
+		"linode_lke_type_list", "linode_longview_type_list",
+		"linode_nodebalancer_type_list", "linode_object_storage_type_list",
+		"linode_volume_type_list", "linode_network_transfer_price_list":
+		return true
+	// Token-only or otherwise scopeless per the spec: betas,
+	// maintenance, the caller's own profile, Longview subscription
+	// plans, VPC reads, the OAuth-client thumbnail, and the metrics
+	// query endpoint.
+	case "linode_beta_get", "linode_beta_list",
+		"linode_maintenance_policy_list", "linode_account_maintenance_list",
+		"linode_profile_get",
+		"linode_longview_subscription_get", "linode_longview_subscription_list",
+		"linode_vpc_get", "linode_vpc_list",
+		"linode_vpc_subnet_get", "linode_vpc_subnet_list",
+		"linode_account_oauth_client_thumbnail_get",
+		"linode_monitor_service_metric_query":
 		return true
 	}
 
@@ -247,19 +281,19 @@ func isScopelessRoute(toolName string) bool {
 }
 
 // scopeOverrides pins tools whose documented OAuth scope cannot be
-// derived from the category matrix. Each entry mirrors the security
+// derived from the category matrix. Every entry mirrors the security
 // block of the underlying operation in the Linode OpenAPI spec, which
-// splits these routes away from the rest of their family.
+// splits these routes away from the rest of their family: reads that
+// demand a write scope, writes that only need a read scope, and routes
+// gated by a neighboring category. Because several reads here carry
+// :read_write, the missing-token elevation policy derives from tool
+// capabilities, not scope suffixes (see ProfileIsElevated).
 //
-// Two documented quirks are deliberately NOT mirrored here.
-// GET /managed/contacts/{contactId} documents account:read_write on a
-// read: encoding that would make the read-only builtin profiles carry a
-// write scope and flip the missing-token elevation policy for everyone
-// on the default profile. GET /placement/groups documents
-// placement:read_only, a scope the spec's own OAuth catalog never
-// defines, so tokens may not be able to carry it at all. Both tools
-// stay on their family derivation until the upstream docs and the
-// grantable scope set agree.
+// Documented scopes that CANNOT be encoded (typos like ips:read, and
+// names absent from every grantable-scope registry like
+// placement:read_only) are handled as pinned upstream fixups inside
+// scripts/verify_sync_scopes.py, not here; those tools stay on their
+// family derivation.
 func scopeOverrides() map[string][]Scope {
 	return map[string][]Scope{
 		// PUT /networking/firewalls/settings is documented as
@@ -272,6 +306,30 @@ func scopeOverrides() map[string][]Scope {
 		// gates them behind a stronger capability).
 		"linode_database_mysql_instance_credentials_get":      {ScopeDatabasesReadOnly},
 		"linode_database_postgresql_instance_credentials_get": {ScopeDatabasesReadOnly},
+		// Reads the API gates behind a write scope: managed contacts
+		// hold PII, kubeconfig grants cluster admin, and the instance
+		// interface and NodeBalancer node reads are documented that way
+		// upstream.
+		"linode_managed_contact_get":          {ScopeAccountReadWrite},
+		"linode_instance_interface_get":       {ScopeLinodesReadWrite},
+		"linode_instance_interface_list":      {ScopeLinodesReadWrite},
+		"linode_lke_kubeconfig_get":           {ScopeLKEReadWrite},
+		"linode_lke_node_get":                 {ScopeLKEReadWrite},
+		"linode_nodebalancer_config_node_get": {ScopeNodeBalancersReadWrite},
+		// The docs put this instance-interface read under the
+		// NodeBalancers scope; encoded as documented.
+		"linode_instance_interface_firewall_list": {ScopeNodeBalancersReadOnly},
+		// Writes the API documents with only a read scope.
+		"linode_account_event_seen":            {ScopeEventsReadOnly},
+		"linode_account_payment_method_delete": {ScopeAccountReadOnly},
+		"linode_account_promo_credit_add":      {ScopeAccountReadOnly},
+		"linode_monitor_service_token_create":  {ScopeMonitorReadOnly},
+		// Presigned URLs can mint upload/delete capability, so the API
+		// wants the write scope even though the tool registers as read.
+		"linode_object_storage_presigned_url_create": {ScopeObjectStorageReadWrite},
+		// VPC IP listings are documented under ips:*, not vpc:*.
+		"linode_vpc_ip_list":     {ScopeIPsReadOnly},
+		"linode_vpc_ip_all_list": {ScopeIPsReadOnly},
 	}
 }
 
@@ -284,12 +342,14 @@ func scopeMatrix() map[string][2]Scope {
 		categoryAccount:       {ScopeAccountReadOnly, ScopeAccountReadWrite},
 		categoryDatabases:     {ScopeDatabasesReadOnly, ScopeDatabasesReadWrite},
 		categoryDomains:       {ScopeDomainsReadOnly, ScopeDomainsReadWrite},
+		categoryEvents:        {ScopeEventsReadOnly, ScopeEventsReadWrite},
 		categoryFirewall:      {ScopeFirewallReadOnly, ScopeFirewallReadWrite},
 		categoryImages:        {ScopeImagesReadOnly, ScopeImagesReadWrite},
 		categoryIPs:           {ScopeIPsReadOnly, ScopeIPsReadWrite},
 		categoryLinodes:       {ScopeLinodesReadOnly, ScopeLinodesReadWrite},
 		categoryLKE:           {ScopeLKEReadOnly, ScopeLKEReadWrite},
 		categoryLongview:      {ScopeLongviewReadOnly, ScopeLongviewReadWrite},
+		categoryMonitor:       {ScopeMonitorReadOnly, ScopeMonitorReadWrite},
 		categoryNodeBalancers: {ScopeNodeBalancersReadOnly, ScopeNodeBalancersReadWrite},
 		categoryObjectStorage: {ScopeObjectStorageReadOnly, ScopeObjectStorageReadWrite},
 		categoryReservedIPs:   {ScopeReservedIPsReadOnly, ScopeReservedIPsReadWrite},
@@ -324,11 +384,13 @@ func scopeFor(category string, capability Capability) (Scope, bool) {
 // nil.
 func additionalScopes(toolName string) []Scope {
 	switch toolName {
-	case "linode_instance_create", "linode_instance_clone", "linode_instance_rebuild":
-		// Provisioning from an image requires images:read_only.
-		return []Scope{ScopeImagesReadOnly}
-	case "linode_lke_cluster_create":
-		// LKE clusters provision Linodes under the hood.
+	case "linode_image_create":
+		// Capturing an image reads the source disk, so the API
+		// documents linodes:read_only alongside images:read_write.
+		return []Scope{ScopeLinodesReadOnly}
+	case "linode_volume_attach", "linode_volume_detach":
+		// Attach and detach touch the target Linode, so the API
+		// documents linodes:read_write alongside volumes:read_write.
 		return []Scope{ScopeLinodesReadWrite}
 	case "linode_networking_ip_assign", "linode_networking_ip_share",
 		"linode_networking_ipv4_assign", "linode_networking_ipv4_share",

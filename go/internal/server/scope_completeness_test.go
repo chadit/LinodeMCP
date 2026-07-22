@@ -8,23 +8,43 @@ import (
 )
 
 // scopelessTools mirrors the documented scopeless list in
-// profiles.RequiredScopes: public catalog routes (kernels, database
-// engines and types, network transfer prices) plus token-only routes
-// documented with an empty scope list (betas, maintenance policies).
-// Keep the two lists in step; the test below fails in both directions
-// when they drift.
+// profiles.RequiredScopes: public catalog, pricing, and region routes
+// plus token-only routes documented with an empty scope list. Keep the
+// two lists in step; the test below fails in both directions when they
+// drift.
 func scopelessTools() map[string]bool {
 	return map[string]bool{
-		"linode_kernel_get":                  true,
-		"linode_kernel_list":                 true,
-		"linode_database_engine_get":         true,
-		"linode_database_engine_list":        true,
-		"linode_database_type_get":           true,
-		"linode_database_type_list":          true,
-		"linode_network_transfer_price_list": true,
-		"linode_beta_get":                    true,
-		"linode_beta_list":                   true,
-		"linode_maintenance_policy_list":     true,
+		"linode_kernel_get":                         true,
+		"linode_kernel_list":                        true,
+		"linode_region_get":                         true,
+		"linode_region_list":                        true,
+		"linode_region_availability_get":            true,
+		"linode_region_availability_list":           true,
+		"linode_type_get":                           true,
+		"linode_type_list":                          true,
+		"linode_database_engine_get":                true,
+		"linode_database_engine_list":               true,
+		"linode_database_type_get":                  true,
+		"linode_database_type_list":                 true,
+		"linode_lke_type_list":                      true,
+		"linode_longview_type_list":                 true,
+		"linode_nodebalancer_type_list":             true,
+		"linode_object_storage_type_list":           true,
+		"linode_volume_type_list":                   true,
+		"linode_network_transfer_price_list":        true,
+		"linode_beta_get":                           true,
+		"linode_beta_list":                          true,
+		"linode_maintenance_policy_list":            true,
+		"linode_account_maintenance_list":           true,
+		"linode_profile_get":                        true,
+		"linode_longview_subscription_get":          true,
+		"linode_longview_subscription_list":         true,
+		"linode_vpc_get":                            true,
+		"linode_vpc_list":                           true,
+		"linode_vpc_subnet_get":                     true,
+		"linode_vpc_subnet_list":                    true,
+		"linode_account_oauth_client_thumbnail_get": true,
+		"linode_monitor_service_metric_query":       true,
 	}
 }
 

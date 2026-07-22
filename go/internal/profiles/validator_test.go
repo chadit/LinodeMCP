@@ -235,3 +235,35 @@ func TestTokenKindString(t *testing.T) {
 		t.Errorf("profiles.TokenKindOAuth.String() = %v, want %v", profiles.TokenKindOAuth.String(), "OAuth")
 	}
 }
+
+// TestProfileIsElevatedReadsCapabilityFlag pins the elevation policy to
+// the capability-derived Elevated field. Scope suffixes must not drive
+// it: the API documents :read_write scopes on several read-only routes
+// (kubeconfig, managed contacts, instance interfaces), so a read-only
+// profile whose scope union contains write scopes still starts
+// tokenless with a warning.
+func TestProfileIsElevatedReadsCapabilityFlag(t *testing.T) {
+	t.Parallel()
+
+	if profiles.ProfileIsElevated(nil) {
+		t.Error("nil profile must not be elevated")
+	}
+
+	readOnly := profiles.Profile{
+		Name:                "readonly",
+		RequiredTokenScopes: []string{"account:read_write", "lke:read_write"},
+		Elevated:            false,
+	}
+	if profiles.ProfileIsElevated(&readOnly) {
+		t.Error("write scopes alone must not elevate a read-only profile")
+	}
+
+	mutating := profiles.Profile{
+		Name:                "writer",
+		RequiredTokenScopes: []string{"linodes:read_only"},
+		Elevated:            true,
+	}
+	if !profiles.ProfileIsElevated(&mutating) {
+		t.Error("a profile with mutating tools must be elevated")
+	}
+}

@@ -14,22 +14,42 @@ from linodemcp.profiles import Capability, required_scopes
 from linodemcp.server import get_tool_registry
 
 # Mirrors the documented scopeless list in _is_scopeless_route: public
-# catalog routes (kernels, database engines and types, network transfer
-# prices) plus token-only routes documented with an empty scope list
-# (betas, maintenance policies). Keep the two lists in step; the test
-# fails in both directions when they drift.
+# catalog, pricing, and region routes plus token-only routes documented
+# with an empty scope list. Keep the two lists in step; the test fails
+# in both directions when they drift.
 _SCOPELESS_TOOLS = frozenset(
     {
         "linode_kernel_get",
         "linode_kernel_list",
+        "linode_region_get",
+        "linode_region_list",
+        "linode_region_availability_get",
+        "linode_region_availability_list",
+        "linode_type_get",
+        "linode_type_list",
         "linode_database_engine_get",
         "linode_database_engine_list",
         "linode_database_type_get",
         "linode_database_type_list",
+        "linode_lke_type_list",
+        "linode_longview_type_list",
+        "linode_nodebalancer_type_list",
+        "linode_object_storage_type_list",
+        "linode_volume_type_list",
         "linode_network_transfer_price_list",
         "linode_beta_get",
         "linode_beta_list",
         "linode_maintenance_policy_list",
+        "linode_account_maintenance_list",
+        "linode_profile_get",
+        "linode_longview_subscription_get",
+        "linode_longview_subscription_list",
+        "linode_vpc_get",
+        "linode_vpc_list",
+        "linode_vpc_subnet_get",
+        "linode_vpc_subnet_list",
+        "linode_account_oauth_client_thumbnail_get",
+        "linode_monitor_service_metric_query",
     }
 )
 

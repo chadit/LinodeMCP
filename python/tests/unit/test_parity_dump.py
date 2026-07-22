@@ -21,8 +21,15 @@ def test_dump_records_carry_contract_fields_including_scopes() -> None:
     assert listing["scopes"] == ["ips:read_only"]
     assert "page" in listing["params"]
 
+    # Rebuild documents linodes:read_write alone; image access is
+    # grant-enforced by the API at request time.
     rebuild = by_name["linode_instance_rebuild"]
-    assert rebuild["scopes"] == ["images:read_only", "linodes:read_write"]
+    assert rebuild["scopes"] == ["linodes:read_write"]
+
+    # Attach carries the documented dual scope, proving multi-scope
+    # tools survive the dump's sort.
+    attach = by_name["linode_volume_attach"]
+    assert attach["scopes"] == ["linodes:read_write", "volumes:read_write"]
 
     assert by_name["version"]["scopes"] == []
 

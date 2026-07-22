@@ -66,6 +66,9 @@ class Scope(StrEnum):
     MaintenanceReadOnly = "maintenance:read_only"
     MaintenanceReadWrite = "maintenance:read_write"
 
+    MonitorReadOnly = "monitor:read_only"
+    MonitorReadWrite = "monitor:read_write"
+
     NodeBalancersReadOnly = "nodebalancers:read_only"
     NodeBalancersReadWrite = "nodebalancers:read_write"
 
@@ -92,12 +95,14 @@ class Scope(StrEnum):
 _CAT_ACCOUNT = "account"
 _CAT_DATABASES = "databases"
 _CAT_DOMAINS = "domains"
+_CAT_EVENTS = "events"
 _CAT_FIREWALL = "firewall"
 _CAT_IMAGES = "images"
 _CAT_IPS = "ips"
 _CAT_LINODES = "linodes"
 _CAT_LKE = "lke"
 _CAT_LONGVIEW = "longview"
+_CAT_MONITOR = "monitor"
 _CAT_NODEBALANCERS = "nodebalancers"
 _CAT_OBJECT_STORAGE = "object_storage"
 _CAT_RESERVED_IPS = "reserved-ips"
@@ -117,12 +122,14 @@ def _scope_matrix() -> dict[str, tuple[Scope, Scope]]:
         _CAT_ACCOUNT: (Scope.AccountReadOnly, Scope.AccountReadWrite),
         _CAT_DATABASES: (Scope.DatabasesReadOnly, Scope.DatabasesReadWrite),
         _CAT_DOMAINS: (Scope.DomainsReadOnly, Scope.DomainsReadWrite),
+        _CAT_EVENTS: (Scope.EventsReadOnly, Scope.EventsReadWrite),
         _CAT_FIREWALL: (Scope.FirewallReadOnly, Scope.FirewallReadWrite),
         _CAT_IMAGES: (Scope.ImagesReadOnly, Scope.ImagesReadWrite),
         _CAT_IPS: (Scope.IPsReadOnly, Scope.IPsReadWrite),
         _CAT_LINODES: (Scope.LinodesReadOnly, Scope.LinodesReadWrite),
         _CAT_LKE: (Scope.LKEReadOnly, Scope.LKEReadWrite),
         _CAT_LONGVIEW: (Scope.LongviewReadOnly, Scope.LongviewReadWrite),
+        _CAT_MONITOR: (Scope.MonitorReadOnly, Scope.MonitorReadWrite),
         _CAT_NODEBALANCERS: (
             Scope.NodeBalancersReadOnly,
             Scope.NodeBalancersReadWrite,
@@ -189,10 +196,10 @@ def _prefix_table() -> list[tuple[tuple[str, ...], str]]:
         (("linode_stackscript_", "linode_stackscripts_"), _CAT_STACKSCRIPTS),
         (("linode_vpc_", "linode_vpcs_"), _CAT_VPC),
         (("linode_images_", "linode_image_"), _CAT_IMAGES),
-        (
-            ("linode_monitor_", "linode_sshkey_", "linode_sshkeys_"),
-            _CAT_ACCOUNT,
-        ),
+        # The /monitor routes carry their own monitor:* scopes; SSH keys
+        # live under /profile, which is account-gated.
+        (("linode_monitor_",), _CAT_MONITOR),
+        (("linode_sshkey_", "linode_sshkeys_"), _CAT_ACCOUNT),
         (
             (
                 "linode_instance_",
@@ -227,6 +234,12 @@ def _scope_category(tool_name: str) -> str | None:
     ):
         return _CAT_IPS
 
+    # Event routes live under /account but the API gates them with
+    # events:* scopes, not account:*. The seen-marker tool is an override
+    # instead: the API wants events:read_only on a POST.
+    if tool_name in ("linode_account_event_get", "linode_account_event_list"):
+        return _CAT_EVENTS
+
     for prefixes, category in _prefix_table():
         if tool_name.startswith(prefixes):
             return category
@@ -252,44 +265,71 @@ def _scope_for(category: str, capability: Capability) -> Scope | None:
 def _is_scopeless_route(tool_name: str) -> bool:
     """Report whether the tool's route is documented with no OAuth scope.
 
-    Two flavors collapse to the same empty return: public catalog routes
-    that need no authentication at all (kernels, database engines and
-    types), and token-only routes documented with an empty scope list,
-    meaning any authenticated token may call them (betas, maintenance
-    policies). Listing them explicitly separates "documented as
+    Two flavors collapse to the same empty return: public routes with no
+    security requirement at all, and token-only routes documented with
+    an empty scope list, meaning any authenticated token may call them.
+    Listing every such tool explicitly separates "documented as
     scopeless" from "forgot to map", which the scope completeness test
-    relies on.
+    relies on. The scheduled sync-scopes gate keeps this list honest
+    against the live spec.
     """
     return tool_name in (
+        # Catalog and pricing routes: kernels, regions, instance types,
+        # per-service type/price lists, database engines and types.
         "linode_kernel_get",
         "linode_kernel_list",
+        "linode_region_get",
+        "linode_region_list",
+        "linode_region_availability_get",
+        "linode_region_availability_list",
+        "linode_type_get",
+        "linode_type_list",
         "linode_database_engine_get",
         "linode_database_engine_list",
         "linode_database_type_get",
         "linode_database_type_list",
+        "linode_lke_type_list",
+        "linode_longview_type_list",
+        "linode_nodebalancer_type_list",
+        "linode_object_storage_type_list",
+        "linode_volume_type_list",
         "linode_network_transfer_price_list",
+        # Token-only or otherwise scopeless per the spec: betas,
+        # maintenance, the caller's own profile, Longview subscription
+        # plans, VPC reads, the OAuth-client thumbnail, and the metrics
+        # query endpoint.
         "linode_beta_get",
         "linode_beta_list",
         "linode_maintenance_policy_list",
+        "linode_account_maintenance_list",
+        "linode_profile_get",
+        "linode_longview_subscription_get",
+        "linode_longview_subscription_list",
+        "linode_vpc_get",
+        "linode_vpc_list",
+        "linode_vpc_subnet_get",
+        "linode_vpc_subnet_list",
+        "linode_account_oauth_client_thumbnail_get",
+        "linode_monitor_service_metric_query",
     )
 
 
 def _scope_overrides() -> dict[str, list[Scope]]:
     """Pin tools whose documented scope can't come from the matrix.
 
-    Each entry mirrors the security block of the underlying operation in
-    the Linode OpenAPI spec, which splits these routes away from the
-    rest of their family.
+    Every entry mirrors the security block of the underlying operation
+    in the Linode OpenAPI spec, which splits these routes away from the
+    rest of their family: reads that demand a write scope, writes that
+    only need a read scope, and routes gated by a neighboring category.
+    Because several reads here carry :read_write, the missing-token
+    elevation policy derives from tool capabilities, not scope suffixes
+    (see profile_is_elevated).
 
-    Two documented quirks are deliberately NOT mirrored here.
-    GET /managed/contacts/{contactId} documents account:read_write on a
-    read: encoding that would make the read-only builtin profiles carry
-    a write scope and flip the missing-token elevation policy for
-    everyone on the default profile. GET /placement/groups documents
-    placement:read_only, a scope the spec's own OAuth catalog never
-    defines, so tokens may not be able to carry it at all. Both tools
-    stay on their family derivation until the upstream docs and the
-    grantable scope set agree.
+    Documented scopes that CANNOT be encoded (typos like ips:read, and
+    names absent from every grantable-scope registry like
+    placement:read_only) are handled as pinned upstream fixups inside
+    scripts/verify_sync_scopes.py, not here; those tools stay on their
+    family derivation.
     """
     return {
         # PUT /networking/firewalls/settings is documented as
@@ -304,6 +344,30 @@ def _scope_overrides() -> dict[str, list[Scope]]:
         "linode_database_postgresql_instance_credentials_get": [
             Scope.DatabasesReadOnly
         ],
+        # Reads the API gates behind a write scope: managed contacts
+        # hold PII, kubeconfig grants cluster admin, and the instance
+        # interface and NodeBalancer node reads are documented that way
+        # upstream.
+        "linode_managed_contact_get": [Scope.AccountReadWrite],
+        "linode_instance_interface_get": [Scope.LinodesReadWrite],
+        "linode_instance_interface_list": [Scope.LinodesReadWrite],
+        "linode_lke_kubeconfig_get": [Scope.LKEReadWrite],
+        "linode_lke_node_get": [Scope.LKEReadWrite],
+        "linode_nodebalancer_config_node_get": [Scope.NodeBalancersReadWrite],
+        # The docs put this instance-interface read under the
+        # NodeBalancers scope; encoded as documented.
+        "linode_instance_interface_firewall_list": [Scope.NodeBalancersReadOnly],
+        # Writes the API documents with only a read scope.
+        "linode_account_event_seen": [Scope.EventsReadOnly],
+        "linode_account_payment_method_delete": [Scope.AccountReadOnly],
+        "linode_account_promo_credit_add": [Scope.AccountReadOnly],
+        "linode_monitor_service_token_create": [Scope.MonitorReadOnly],
+        # Presigned URLs can mint upload/delete capability, so the API
+        # wants the write scope even though the tool registers as read.
+        "linode_object_storage_presigned_url_create": [Scope.ObjectStorageReadWrite],
+        # VPC IP listings are documented under ips:*, not vpc:*.
+        "linode_vpc_ip_list": [Scope.IPsReadOnly],
+        "linode_vpc_ip_all_list": [Scope.IPsReadOnly],
     }
 
 
@@ -314,13 +378,13 @@ def _additional_scopes(tool_name: str) -> list[Scope]:
     Linode from an image needs ``images:read_only`` alongside
     ``linodes:read_write``). Most tools return ``[]``.
     """
-    if tool_name in (
-        "linode_instance_create",
-        "linode_instance_clone",
-        "linode_instance_rebuild",
-    ):
-        return [Scope.ImagesReadOnly]
-    if tool_name == "linode_lke_cluster_create":
+    if tool_name == "linode_image_create":
+        # Capturing an image reads the source disk, so the API
+        # documents linodes:read_only alongside images:read_write.
+        return [Scope.LinodesReadOnly]
+    if tool_name in ("linode_volume_attach", "linode_volume_detach"):
+        # Attach and detach touch the target Linode, so the API
+        # documents linodes:read_write alongside volumes:read_write.
         return [Scope.LinodesReadWrite]
     if tool_name in (
         # Assigning or sharing addresses targets Linodes, so the API

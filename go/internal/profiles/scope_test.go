@@ -81,12 +81,6 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeVolumesReadOnly},
 		},
 		{
-			name:       "volume type list",
-			toolName:   toolVolumeTypeList,
-			capability: profiles.CapRead,
-			want:       []profiles.Scope{profiles.ScopeVolumesReadOnly},
-		},
-		{
 			name:       "domain delete",
 			toolName:   "linode_domain_delete",
 			capability: profiles.CapDestroy,
@@ -135,10 +129,10 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeStackScriptsReadWrite},
 		},
 		{
-			name:       "vpc list",
-			toolName:   "linode_vpc_list",
-			capability: profiles.CapRead,
-			want:       []profiles.Scope{profiles.ScopeVPCReadOnly},
+			name:       "vpc create",
+			toolName:   "linode_vpc_create",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeVPCReadWrite},
 		},
 		{
 			name:       "nodebalancer update",
@@ -161,12 +155,6 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 		{
 			name:       "account read",
 			toolName:   toolAccount,
-			capability: profiles.CapRead,
-			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
-		},
-		{
-			name:       "profile read",
-			toolName:   toolProfile,
 			capability: profiles.CapRead,
 			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
 		},
@@ -303,6 +291,28 @@ func TestRequiredScopesReconciledFamilies(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
 		},
 		{
+			// Event routes live under /account but the API gates them
+			// with events:* scopes.
+			name:       "account event list",
+			toolName:   "linode_account_event_list",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeEventsReadOnly},
+		},
+		{
+			name:       "account event get",
+			toolName:   "linode_account_event_get",
+			capability: profiles.CapRead,
+			want:       []profiles.Scope{profiles.ScopeEventsReadOnly},
+		},
+		{
+			// POST .../seen is documented with only events:read_only;
+			// scopeOverrides mirrors the spec.
+			name:       "account event seen",
+			toolName:   "linode_account_event_seen",
+			capability: profiles.CapWrite,
+			want:       []profiles.Scope{profiles.ScopeEventsReadOnly},
+		},
+		{
 			name:       "support ticket list",
 			toolName:   "linode_support_ticket_list",
 			capability: profiles.CapRead,
@@ -379,13 +389,14 @@ func TestRequiredScopesReconciledFamilies(t *testing.T) {
 			want:       []profiles.Scope{profiles.ScopeLinodesReadOnly},
 		},
 		{
-			// The API documents account:read_write for this read; the
-			// mapping deliberately keeps account:read_only so read-only
-			// profiles stay tokenless-friendly. See scopeOverrides.
-			name:       "managed contact get stays read only",
+			// GET /managed/contacts/{id} is documented account:read_write
+			// despite being a read (contacts hold PII); scopeOverrides
+			// mirrors the spec, and the elevation policy derives from
+			// capabilities so this write scope does not flip it.
+			name:       "managed contact get needs account write",
 			toolName:   "linode_managed_contact_get",
 			capability: profiles.CapRead,
-			want:       []profiles.Scope{profiles.ScopeAccountReadOnly},
+			want:       []profiles.Scope{profiles.ScopeAccountReadWrite},
 		},
 		{
 			name:       "firewall settings read stays in firewall",
@@ -483,72 +494,69 @@ func TestRequiredScopesIPAssignmentNeedsLinodesWrite(t *testing.T) {
 func TestRequiredScopesMultiCategory(t *testing.T) {
 	t.Parallel()
 
-	t.Run("instance_create needs linodes write plus images read", func(t *testing.T) {
+	t.Run("volume_attach needs volumes write plus linodes write", func(t *testing.T) {
 		t.Parallel()
 
-		got := profiles.RequiredScopes("linode_instance_create", profiles.CapWrite)
+		got := profiles.RequiredScopes("linode_volume_attach", profiles.CapWrite)
 		{
 			gotEls := slices.Clone(got)
 			wantEls := slices.Clone([]profiles.Scope{
+				profiles.ScopeVolumesReadWrite,
 				profiles.ScopeLinodesReadWrite,
-				profiles.ScopeImagesReadOnly,
 			})
 
 			slices.Sort(gotEls)
 			slices.Sort(wantEls)
 
 			if !slices.Equal(gotEls, wantEls) {
-				t.Errorf("got %v, want %v (any order)", got, []profiles.Scope{
-					profiles.ScopeLinodesReadWrite,
-					profiles.ScopeImagesReadOnly,
-				})
+				t.Errorf("got %v, want %v (any order)", got, wantEls)
 			}
 		}
 	})
 
-	t.Run("instance_clone needs linodes write plus images read", func(t *testing.T) {
+	t.Run("image_create needs images write plus linodes read", func(t *testing.T) {
 		t.Parallel()
 
-		got := profiles.RequiredScopes("linode_instance_clone", profiles.CapWrite)
+		got := profiles.RequiredScopes("linode_image_create", profiles.CapWrite)
 		{
 			gotEls := slices.Clone(got)
 			wantEls := slices.Clone([]profiles.Scope{
-				profiles.ScopeLinodesReadWrite,
-				profiles.ScopeImagesReadOnly,
+				profiles.ScopeImagesReadWrite,
+				profiles.ScopeLinodesReadOnly,
 			})
 
 			slices.Sort(gotEls)
 			slices.Sort(wantEls)
 
 			if !slices.Equal(gotEls, wantEls) {
-				t.Errorf("got %v, want %v (any order)", got, []profiles.Scope{
-					profiles.ScopeLinodesReadWrite,
-					profiles.ScopeImagesReadOnly,
-				})
+				t.Errorf("got %v, want %v (any order)", got, wantEls)
 			}
 		}
 	})
 
-	t.Run("lke_cluster_create needs lke write plus linodes write", func(t *testing.T) {
+	// Instance provisioning and LKE cluster creation document a single
+	// scope: image and Linode access is grant-enforced by the API at
+	// request time, so the old cross-category extras overstated what
+	// the token must carry.
+	t.Run("instance_create needs only linodes write", func(t *testing.T) {
+		t.Parallel()
+
+		for _, tool := range []string{
+			toolInstanceCreate, "linode_instance_clone", "linode_instance_rebuild",
+		} {
+			got := profiles.RequiredScopes(tool, profiles.CapWrite)
+			if !reflect.DeepEqual(got, []profiles.Scope{profiles.ScopeLinodesReadWrite}) {
+				t.Errorf("RequiredScopes(%s) = %v, want [linodes:read_write]", tool, got)
+			}
+		}
+	})
+
+	t.Run("lke_cluster_create needs only lke write", func(t *testing.T) {
 		t.Parallel()
 
 		got := profiles.RequiredScopes("linode_lke_cluster_create", profiles.CapWrite)
-		{
-			gotEls := slices.Clone(got)
-			wantEls := slices.Clone([]profiles.Scope{
-				profiles.ScopeLKEReadWrite,
-				profiles.ScopeLinodesReadWrite,
-			})
-
-			slices.Sort(gotEls)
-			slices.Sort(wantEls)
-
-			if !slices.Equal(gotEls, wantEls) {
-				t.Errorf("got %v, want %v (any order)", got, []profiles.Scope{
-					profiles.ScopeLKEReadWrite,
-					profiles.ScopeLinodesReadWrite,
-				})
-			}
+		if !reflect.DeepEqual(got, []profiles.Scope{profiles.ScopeLKEReadWrite}) {
+			t.Errorf("got %v, want [lke:read_write]", got)
 		}
 	})
 }
@@ -604,12 +612,11 @@ func TestRequiredScopesPrefixOrdering(t *testing.T) {
 	}
 }
 
-// TestRequiredScopesSSHAndMonitorAreAccountScoped verifies that the
-// SSH-key and monitor tools route to the account scope even though
-// their names don't include "account". SSH keys live under /profile,
-// and monitor service tokens live under /monitor; both are gated by
-// account-level access in the Linode API.
-func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
+// TestRequiredScopesSSHAndMonitorScopes verifies the two subtrees whose
+// names don't spell their category: SSH keys live under /profile, which
+// is account-gated, while the /monitor routes carry their own monitor:*
+// scopes per the API docs.
+func TestRequiredScopesSSHAndMonitorScopes(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -631,10 +638,24 @@ func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
 			want: profiles.ScopeAccountReadWrite,
 		},
 		{
+			name: "monitor dashboard list",
+			tool: "linode_monitor_dashboard_list",
+			cap:  profiles.CapRead,
+			want: profiles.ScopeMonitorReadOnly,
+		},
+		{
+			name: "monitor alert definition update",
+			tool: "linode_monitor_service_alert_definition_update",
+			cap:  profiles.CapWrite,
+			want: profiles.ScopeMonitorReadWrite,
+		},
+		{
+			// POST /monitor/services/{type}/token is documented with
+			// only monitor:read_only; scopeOverrides mirrors the spec.
 			name: "monitor service token write",
 			tool: "linode_monitor_service_token_create",
 			cap:  profiles.CapWrite,
-			want: profiles.ScopeAccountReadWrite,
+			want: profiles.ScopeMonitorReadOnly,
 		},
 	}
 
@@ -651,26 +672,48 @@ func TestRequiredScopesSSHAndMonitorAreAccountScoped(t *testing.T) {
 }
 
 // TestRequiredScopesScopelessRoutes pins the tools whose documented
-// routes carry no OAuth scope requirement: kernels, database engines
-// and types are public catalog data (no authentication at all), and
-// betas plus maintenance policies accept any authenticated token. An
-// empty return here is deliberate, and the scope completeness test in
-// internal/server keeps this list as the only sanctioned source of
-// empty scopes for non-meta tools.
+// routes carry no OAuth scope requirement. Catalog, pricing, and region
+// routes are public (no authentication at all); betas, maintenance, the
+// caller's own profile, Longview subscription plans, VPC reads, the
+// OAuth-client thumbnail, and the metrics query accept any
+// authenticated token per the spec. An empty return here is deliberate,
+// and the scope completeness test in internal/server keeps this list as
+// the only sanctioned source of empty scopes for non-meta tools.
 func TestRequiredScopesScopelessRoutes(t *testing.T) {
 	t.Parallel()
 
 	cases := []string{
 		"linode_kernel_get",
 		"linode_kernel_list",
+		"linode_region_get",
+		"linode_region_list",
+		"linode_region_availability_get",
+		"linode_region_availability_list",
+		"linode_type_get",
+		"linode_type_list",
 		toolDatabaseEngineGet,
 		toolDatabaseEngineList,
 		toolDatabaseTypeGet,
 		toolDatabaseTypeList,
+		"linode_lke_type_list",
+		"linode_longview_type_list",
+		"linode_nodebalancer_type_list",
+		"linode_object_storage_type_list",
+		"linode_volume_type_list",
 		"linode_network_transfer_price_list",
 		"linode_beta_get",
 		"linode_beta_list",
 		"linode_maintenance_policy_list",
+		"linode_account_maintenance_list",
+		"linode_profile_get",
+		"linode_longview_subscription_get",
+		"linode_longview_subscription_list",
+		"linode_vpc_get",
+		"linode_vpc_list",
+		"linode_vpc_subnet_get",
+		"linode_vpc_subnet_list",
+		"linode_account_oauth_client_thumbnail_get",
+		"linode_monitor_service_metric_query",
 	}
 
 	for _, tool := range cases {

@@ -6,72 +6,9 @@
 # Every entry MUST carry an annotation naming when it was accepted
 # and the tracking issue that will close it:
 #   <entry>  # accepted YYYY-MM-DD <tracking-issue URL>
-linode_account_child_account_get: scopes doc=['child_account:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_child_account_list: scopes doc=['child_account:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_child_account_token_create: scopes doc=['child_account:read_write'] mapped=['account:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_event_get: scopes doc=['events:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_event_list: scopes doc=['events:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_event_seen: scopes doc=['events:read_only'] mapped=['account:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_maintenance_list: scopes doc=[] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_oauth_client_thumbnail_get: scopes doc=[] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_payment_method_delete: scopes doc=['account:read_only'] mapped=['account:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_account_promo_credit_add: scopes doc=['account:read_only'] mapped=['account:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_image_create: scopes doc=['images:read_write', 'linodes:read_only'] mapped=['images:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_instance_clone: scopes doc=['linodes:read_write'] mapped=['images:read_only', 'linodes:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_instance_create: scopes doc=['linodes:read_write'] mapped=['images:read_only', 'linodes:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_instance_interface_firewall_list: scopes doc=['nodebalancers:read_only'] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_instance_interface_get: scopes doc=['linodes:read_write'] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_instance_interface_list: scopes doc=['linodes:read_write'] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_instance_interface_settings_get: scopes doc=['linode:read_only'] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_instance_rebuild: scopes doc=['linodes:read_write'] mapped=['images:read_only', 'linodes:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_ipv6_range_get: scopes doc=['ips:read'] mapped=['ips:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_lke_cluster_create: scopes doc=['lke:read_write'] mapped=['linodes:read_write', 'lke:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_lke_kubeconfig_get: scopes doc=['lke:read_write'] mapped=['lke:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_lke_node_get: scopes doc=['lke:read_write'] mapped=['lke:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_lke_type_list: scopes doc=[] mapped=['lke:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_longview_subscription_get: scopes doc=[] mapped=['longview:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_longview_subscription_list: scopes doc=[] mapped=['longview:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_longview_type_list: scopes doc=[] mapped=['longview:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_managed_contact_get: scopes doc=['account:read_write'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_alert_channel_list: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_alert_definition_list: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_dashboard_get: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_dashboard_list: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_alert_definition_create: scopes doc=['monitor:read_write'] mapped=['account:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_alert_definition_delete: scopes doc=['monitor:read_write'] mapped=['account:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_alert_definition_get: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_alert_definition_list: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_alert_definition_update: scopes doc=['monitor:read_write'] mapped=['account:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_dashboard_list: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_get: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_list: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_metric_definition_list: scopes doc=['monitor:read_only'] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_metric_query: scopes doc=[] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_monitor_service_token_create: scopes doc=['monitor:read_only'] mapped=['account:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
 linode_networking_reserved_ip_create: route POST /networking/reserved/ips not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_delete: route DELETE /networking/reserved/ips/{p} not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_get: route GET /networking/reserved/ips/{p} not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_list: route GET /networking/reserved/ips not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_type_list: route GET /networking/reserved/ips/types not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
 linode_networking_reserved_ip_update: route PUT /networking/reserved/ips/{p} not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_nodebalancer_config_node_get: scopes doc=['nodebalancers:read_write'] mapped=['nodebalancers:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_nodebalancer_type_list: scopes doc=[] mapped=['nodebalancers:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_object_storage_presigned_url_create: scopes doc=['object_storage:read_write'] mapped=['object_storage:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_object_storage_type_list: scopes doc=[] mapped=['object_storage:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_placement_group_list: scopes doc=['placement:read_only'] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_profile_get: scopes doc=[] mapped=['account:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_region_availability_get: scopes doc=[] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_region_availability_list: scopes doc=[] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_region_get: scopes doc=[] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_region_list: scopes doc=[] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_type_get: scopes doc=[] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_type_list: scopes doc=[] mapped=['linodes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_volume_attach: scopes doc=['linodes:read_write', 'volumes:read_write'] mapped=['volumes:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_volume_detach: scopes doc=['linodes:read_write', 'volumes:read_write'] mapped=['volumes:read_write']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_volume_type_list: scopes doc=[] mapped=['volumes:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_vpc_get: scopes doc=[] mapped=['vpc:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_vpc_ip_all_list: scopes doc=['ips:read_only'] mapped=['vpc:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_vpc_ip_list: scopes doc=['ips:read_only'] mapped=['vpc:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_vpc_list: scopes doc=[] mapped=['vpc:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_vpc_subnet_get: scopes doc=[] mapped=['vpc:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
-linode_vpc_subnet_list: scopes doc=[] mapped=['vpc:read_only']  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1056
