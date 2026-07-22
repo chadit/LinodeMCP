@@ -1,21 +1,136 @@
-{"$schema":"https://docs.renovatebot.com/renovate-schema.json","extends":["config:recommended","helpers:pinGitHubActionDigests"],"schedule":["before 6am"],"timezone":"UTC","labels":["dependencies"],"rebaseWhen":"conflicted","prConcurrentLimit":5,"osvVulnerabilityAlerts":true,"vulnerabilityAlerts":{"labels":["security"]},"platformAutomerge":true,"postUpdateOptions":["gomodTidy"],"lockFileMaintenance":{"enabled":true,"schedule":["before 6am"],"automerge":true},"packageRules":[{"matchManagers":["gomod"],"matchUpdateTypes":["minor","patch","digest","lockFileMaintenance"],"groupName":"go modules (non-major)"},{"matchManagers":["pep621"],"matchUpdateTypes":["minor","patch","digest","lockFileMaintenance"],"groupName":"python deps (non-major)"},{"matchManagers":["github-actions"],"matchUpdateTypes":["minor","patch","digest"],"groupName":"github actions (non-major)"},{"matchManagers":["pre-commit"],"matchUpdateTypes":["minor","patch","digest"],"groupName":"pre-commit hooks (non-major)"},{"description":"Auto-merge minor, patch, pin, and digest updates once CI passes. Major updates stay manual for review.","matchUpdateTypes":["minor","patch","pin","digest"],"automerge":true},{"description":"SLSA reusable workflows verify their own ref must be a version tag and fail when pinned to a digest. Keep them on tags (helpers:pinGitHubActionDigests would otherwise SHA-pin them); tag bumps stay enabled.","matchDepNames":["slsa-framework/slsa-github-generator"],"pinDigests":false}],"customManagers":[{
-      "customType":"regex",
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "UTC",
+  "labels": [
+    "dependencies"
+  ],
+  "rebaseWhen": "conflicted",
+  "prConcurrentLimit": 5,
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "labels": [
+      "security"
+    ]
+  },
+  "platformAutomerge": true,
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true
+  },
+  "packageRules": [
+    {
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "lockFileMaintenance"
+      ],
+      "groupName": "go modules (non-major)"
+    },
+    {
+      "description": "Renovate skips indirect gomod deps by default; enable them so the whole go.mod stays current, grouped with the other non-major go updates.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "indirect"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "enabled": true,
+      "groupName": "go modules (non-major)"
+    },
+    {
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "lockFileMaintenance"
+      ],
+      "groupName": "python deps (non-major)"
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "github actions (non-major)"
+    },
+    {
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest"
+      ],
+      "groupName": "pre-commit hooks (non-major)"
+    },
+    {
+      "description": "Auto-merge minor, patch, pin, and digest updates once CI passes. Major updates stay manual for review.",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "digest"
+      ],
+      "automerge": true
+    },
+    {
+      "description": "SLSA reusable workflows verify their own ref must be a version tag and fail when pinned to a digest. Keep them on tags (helpers:pinGitHubActionDigests would otherwise SHA-pin them); tag bumps stay enabled.",
+      "matchDepNames": [
+        "slsa-framework/slsa-github-generator"
+      ],
+      "pinDigests": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
       "managerFilePatterns": [
         "/(^|/)go\\.mod$/"
       ],
-      "matchStrings":["(?m)^go (?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)$"],
-      "datasourceTemplate":"golang-version",
-      "depNameTemplate":"go-toolchain",
-      "versioningTemplate":"go",
-      "extractVersionTemplate":"^(?<version>\\d+\\.\\d+)"
-    },{
-      "customType":"regex",
+      "matchStrings": [
+        "\\ngo (?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\n"
+      ],
+      "datasourceTemplate": "golang-version",
+      "depNameTemplate": "go-toolchain",
+      "versioningTemplate": "go",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+)"
+    },
+    {
+      "customType": "regex",
       "managerFilePatterns": [
         "/(^|/)pyproject\\.toml$/"
       ],
-      "matchStrings":["requires-python\\s*=\\s*\"\\s*>=\\s*(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\s*\""],
-      "datasourceTemplate":"python-version",
-      "depNameTemplate":"python",
-      "versioningTemplate":"python",
-      "extractVersionTemplate":"^(?<version>\\d+\\.\\d+)"
-    }]}
+      "matchStrings": [
+        "requires-python\\s*=\\s*\"\\s*>=\\s*(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)\\s*\""
+      ],
+      "datasourceTemplate": "python-version",
+      "depNameTemplate": "python",
+      "versioningTemplate": "python",
+      "extractVersionTemplate": "^(?<version>\\d+\\.\\d+)"
+    }
+  ]
+}

@@ -16,9 +16,12 @@ name: Renovate
 
 on:
   schedule:
-    # Daily at 04:00 UTC. Renovate can only act when it runs, so a daily
-    # run is what lets the config schedule and the OSV vulnerability
-    # alerts open fix PRs within a day instead of waiting for a weekly run.
+    # Daily at 04:00 UTC. This cron is the ONLY schedule: renovate.json
+    # must not carry its own "schedule" window on top of it. It did once
+    # ("before 6am"), and when GitHub's scheduler drift started firing
+    # this cron after 06:00 UTC, every run landed outside that window
+    # and became a green no-op for three weeks. Renovate acts whenever
+    # this workflow runs, however late the runner picks it up.
     - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
