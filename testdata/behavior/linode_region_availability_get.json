@@ -1,6 +1,6 @@
 {
   "tool": "linode_region_availability_get",
-  "description": "Per-region availability returns the documented bare-array response and rejects every non-array JSON root after the GET.",
+  "description": "Per-region availability returns the documented bare array and rejects every non-array root or non-object array element after the GET.",
   "cases": [
     {
       "name": "gets availability for one region",
@@ -55,6 +55,61 @@
       "args": { "region_id": "us-east" },
       "api_responses": { "GET /regions/us-east/availability": 1 },
       "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a null array element after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": {
+        "GET /regions/us-east/availability": [
+          { "available": true, "plan": "g6-standard-1", "region": "us-east" },
+          null
+        ]
+      },
+      "expect_api_error": "availability"
+    },
+    {
+      "name": "rejects a boolean array element after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": {
+        "GET /regions/us-east/availability": [
+          { "available": true, "plan": "g6-standard-1", "region": "us-east" },
+          true
+        ]
+      },
+      "expect_api_error": "availability"
+    },
+    {
+      "name": "rejects a string array element after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": {
+        "GET /regions/us-east/availability": [
+          { "available": true, "plan": "g6-standard-1", "region": "us-east" },
+          "invalid"
+        ]
+      },
+      "expect_api_error": "availability"
+    },
+    {
+      "name": "rejects a number array element after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": {
+        "GET /regions/us-east/availability": [
+          { "available": true, "plan": "g6-standard-1", "region": "us-east" },
+          1
+        ]
+      },
+      "expect_api_error": "availability"
+    },
+    {
+      "name": "rejects an array element after the API call",
+      "args": { "region_id": "us-east" },
+      "api_responses": {
+        "GET /regions/us-east/availability": [
+          { "available": true, "plan": "g6-standard-1", "region": "us-east" },
+          []
+        ]
+      },
+      "expect_api_error": "availability"
     }
   ]
 }

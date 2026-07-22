@@ -8147,6 +8147,31 @@ async def test_get_region_availability_rejects_non_array_response(
     await client.close()
 
 
+@pytest.mark.parametrize(
+    "invalid_item",
+    [None, True, "invalid", 1, []],
+    ids=["null", "boolean", "string", "number", "array"],
+)
+async def test_get_region_availability_rejects_non_object_items(
+    invalid_item: Any,
+) -> None:
+    """Region availability rejects malformed elements instead of dropping them."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = [
+        {"available": True, "plan": "g6-standard-1", "region": "us-east"},
+        invalid_item,
+    ]
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        with pytest.raises(TypeError, match="response items must be objects"):
+            await client.get_region_availability("us-east")
+
+    await client.close()
+
+
 async def test_get_region_availability_url_encodes_region_id() -> None:
     """Region availability escapes path separators before sending request."""
     client = Client("https://api.linode.com/v4", "test-token")
