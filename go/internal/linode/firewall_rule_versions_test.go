@@ -12,16 +12,12 @@ import (
 
 const endpointFirewallRuleVersions = "/networking/firewalls/123/history"
 
-// firewallRuleVersionsPageJSON is the {data:[...]} list shape the live history
-// endpoint returns: each element is a firewall-shaped snapshot plus a top-level
-// version that increments whenever the rules change.
-const firewallRuleVersionsPageJSON = `{"data":[` +
-	`{"id":123,"label":"web-firewall","status":"enabled","version":1,` +
-	`"created":"2025-01-01T00:00:00","updated":"2025-01-01T00:00:00","tags":[],` +
-	`"rules":{"inbound_policy":"ACCEPT","outbound_policy":"ACCEPT"}},` +
-	`{"id":123,"label":"web-firewall","status":"enabled","version":2,` +
+// firewallRuleVersionsObjectJSON is the documented history body: one
+// firewall-shaped object whose rules.version carries the rule version. There
+// is no {data:[...]} page and no top-level version on this route.
+const firewallRuleVersionsObjectJSON = `{"id":123,"label":"web-firewall","status":"enabled",` +
 	`"created":"2025-01-01T00:00:00","updated":"2025-01-02T00:00:00","tags":[],` +
-	`"rules":{"inbound_policy":"DROP","outbound_policy":"ACCEPT"}}]}`
+	`"rules":{"inbound_policy":"DROP","outbound_policy":"ACCEPT","version":2}}`
 
 func TestClientListFirewallRuleVersionsSuccess(t *testing.T) {
 	t.Parallel()
@@ -45,7 +41,7 @@ func TestClientListFirewallRuleVersionsSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if _, writeErr := w.Write([]byte(firewallRuleVersionsPageJSON)); writeErr != nil {
+		if _, writeErr := w.Write([]byte(firewallRuleVersionsObjectJSON)); writeErr != nil {
 			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
@@ -58,16 +54,84 @@ func TestClientListFirewallRuleVersionsSuccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(result) != 2 {
-		t.Fatalf("len(result) = %d, want %d", len(result), 2)
+	if len(result) != 1 {
+		t.Fatalf("len(result) = %d, want %d", len(result), 1)
 	}
 
-	if result[1].GetVersion() != 2 {
-		t.Errorf("result[1].Version = %v, want %v", result[1].GetVersion(), 2)
+	if result[0].GetId() != 123 || result[0].GetLabel() != "web-firewall" {
+		t.Errorf("snapshot = (%d, %q), want (123, \"web-firewall\")", result[0].GetId(), result[0].GetLabel())
 	}
 
-	if result[1].GetRules().GetInboundPolicy() != policyDrop {
-		t.Errorf("result[1].Rules.InboundPolicy = %v, want %v", result[1].GetRules().GetInboundPolicy(), policyDrop)
+	// The top-level version must be lifted out of rules.version, since the
+	// documented object carries it nowhere else.
+	if result[0].GetVersion() != 2 {
+		t.Errorf("result[0].Version = %v, want %v", result[0].GetVersion(), 2)
+	}
+
+	if result[0].GetRules().GetInboundPolicy() != policyDrop {
+		t.Errorf("result[0].Rules.InboundPolicy = %v, want %v", result[0].GetRules().GetInboundPolicy(), policyDrop)
+	}
+}
+
+func TestClientListFirewallRuleVersionsRejectsMistypedObject(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		// id must be numeric in the proto message; a string makes the proto
+		// decode itself fail rather than the shape check.
+		if _, writeErr := w.Write([]byte(`{"id":"not-a-number","rules":{}}`)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	if _, err := client.ListFirewallRuleVersionsProto(t.Context(), 123); err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+}
+
+func TestClientListFirewallRuleVersionsRejectsMistypedRuleVersion(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		// The proto decode discards the unknown rules.version, so only the
+		// version probe sees the mistyped value; its failure must surface.
+		if _, writeErr := w.Write([]byte(`{"id":123,"rules":{"version":"two"}}`)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	if _, err := client.ListFirewallRuleVersionsProto(t.Context(), 123); err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+}
+
+func TestClientListFirewallRuleVersionsRejectsPageEnvelope(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if _, writeErr := w.Write([]byte(`{"data":[` + firewallRuleVersionsObjectJSON + `],"page":1,"pages":1,"results":1}`)); writeErr != nil {
+			t.Errorf("unexpected error: %v", writeErr)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	_, err := client.ListFirewallRuleVersionsProto(t.Context(), 123)
+	if !errors.Is(err, linode.ErrFirewallHistoryNotObject) {
+		t.Fatalf("err = %v, want %v", err, linode.ErrFirewallHistoryNotObject)
 	}
 }
 
@@ -172,7 +236,7 @@ func TestClientListFirewallRuleVersionsRetriesTransientFailure(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if _, writeErr := w.Write([]byte(firewallRuleVersionsPageJSON)); writeErr != nil {
+		if _, writeErr := w.Write([]byte(firewallRuleVersionsObjectJSON)); writeErr != nil {
 			t.Errorf("unexpected error: %v", writeErr)
 		}
 	}))
@@ -185,7 +249,7 @@ func TestClientListFirewallRuleVersionsRetriesTransientFailure(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(result) != 2 {
+	if len(result) != 1 {
 		t.Fatalf("len(result) = %d, want %d", len(result), 2)
 	}
 

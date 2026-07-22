@@ -7,5 +7,4 @@
 #   python3 scripts/verify_response_shapes.py --update-baseline
 # Spec side comes from docs/contracts/api-response-shapes-baseline.txt
 # (scripts/verify_sync_response_shapes.py owns that snapshot).
-linode_firewall_rule_version_list: GET /networking/firewalls/{firewallId}/history fixture=envelope spec=object
-linode_region_availability_get: GET /regions/{regionId}/availability fixture=envelope spec=array
+

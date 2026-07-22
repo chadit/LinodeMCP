@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strconv"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
@@ -276,21 +278,62 @@ func (c *Client) httpListFirewallRulesProto(ctx context.Context, firewallID int)
 }
 
 // httpListFirewallRuleVersionsProto retrieves a Cloud Firewall's rule-version
-// history as proto messages for the proto-backed list path. GET
-// /networking/firewalls/{firewallId}/history returns a paginated {data:[...]}
-// list of version snapshots (each a firewall-shaped object plus a top-level
-// version), so listProtoElements decodes the data[] envelope element-for-element
-// the same way the Python client does.
+// history for the proto-backed list path. GET
+// /networking/firewalls/{firewallId}/history documents its 200 body as one
+// firewall-shaped object whose rules.version carries the rule version, not a
+// {data:[...]} page, so the decode reads that single object and surfaces it
+// as the one version snapshot. The snapshot's top-level version is lifted
+// out of rules.version because the proto FirewallRules message does not
+// carry it; the Python handler performs the identical lift.
 func (c *Client) httpListFirewallRuleVersionsProto(ctx context.Context, firewallID int) ([]*linodev1.FirewallRuleVersion, error) {
+	const operation = "ListFirewallRuleVersions"
+
 	if firewallID <= 0 {
 		return nil, ErrFirewallIDPositive
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
 	encodedFirewallID := url.PathEscape(strconv.Itoa(firewallID))
 	endpoint := endpointFirewalls + "/" + encodedFirewallID + "/history"
 
-	return listProtoElements(ctx, c, "ListFirewallRuleVersions", endpoint,
-		func() *linodev1.FirewallRuleVersion { return &linodev1.FirewallRuleVersion{} })
+	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: operation, Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var body json.RawMessage
+	if err := c.handleResponse(resp, &body); err != nil {
+		return nil, err
+	}
+
+	snapshot := &linodev1.FirewallRuleVersion{}
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, snapshot); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s object: %w", operation, err)
+	}
+
+	// A firewall id is always positive, so a zero id means the body was some
+	// other shape (a {data:[...]} page, an empty object) that DiscardUnknown
+	// would otherwise swallow into an empty snapshot.
+	if snapshot.GetId() == 0 {
+		return nil, fmt.Errorf("failed to unmarshal %s object: %w", operation, ErrFirewallHistoryNotObject)
+	}
+
+	var probe struct {
+		Rules struct {
+			Version int32 `json:"version"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s object: %w", operation, err)
+	}
+
+	snapshot.Version = probe.Rules.Version
+
+	return []*linodev1.FirewallRuleVersion{snapshot}, nil
 }
 
 // httpGetFirewallRuleVersionProto retrieves one rule-version snapshot and decodes

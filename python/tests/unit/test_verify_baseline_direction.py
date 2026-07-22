@@ -61,7 +61,13 @@ def test_snapshot_exemption_matches_sync_scripts() -> None:
     defaults = _load_script("verify_sync_defaults")
     enums = _load_script("verify_sync_enums")
     pagination = _load_script("verify_sync_pagination")
-    expected = {defaults.BASELINE.name, enums.BASELINE.name, pagination.BASELINE.name}
+    response_shapes = _load_script("verify_sync_response_shapes")
+    expected = {
+        defaults.BASELINE.name,
+        enums.BASELINE.name,
+        pagination.BASELINE.name,
+        response_shapes.BASELINE.name,
+    }
     assert expected == guard._SNAPSHOT_BASELINES
 
 
