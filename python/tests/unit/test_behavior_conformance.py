@@ -140,8 +140,8 @@ async def test_behavior_conformance(
         return httpx.Response(
             status,
             content=json.dumps(body).encode(),
-            headers={"content-type": "application/json"},
             request=httpx.Request(method, url),
+            headers={"content-type": "application/json"},
         )
 
     srv = Server(_behavior_config())

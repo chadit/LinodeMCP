@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-var errResponseBodyNotJSONArray = errors.New("response body is not a JSON array")
+var (
+	errResponseBodyNotJSONArray  = errors.New("response body is not a JSON array")
+	errResponseBodyNotJSONObject = errors.New("response body is not a JSON object")
+)
 
 // ErrFirewallHistoryNotObject rejects a firewall history body that is not the
 // documented firewall-shaped object, so a shape change upstream fails loudly

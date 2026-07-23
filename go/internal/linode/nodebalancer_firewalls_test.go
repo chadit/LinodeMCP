@@ -168,3 +168,33 @@ func TestClientListNodeBalancerFirewallsHTTPError(t *testing.T) {
 		t.Errorf("apiErr.Message = %v, want %v", apiErr.Message, errForbidden)
 	}
 }
+
+func TestClientUpdateNodeBalancerFirewallsProtoRejectsNullResponse(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if _, err := w.Write([]byte("null")); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.UpdateNodeBalancerFirewallsProto(
+		t.Context(),
+		123,
+		0,
+		0,
+		&linode.UpdateNodeBalancerFirewallsRequest{FirewallIDs: []int{456}},
+	)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if got != nil {
+		t.Errorf("got = %v, want nil", got)
+	}
+}

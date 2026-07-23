@@ -1,7 +1,6 @@
 package linode
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -150,61 +149,6 @@ func decodeProtoElementsBare[T proto.Message](
 	return decodeRawProtoItems[T](rawItems, operation, newElem)
 }
 
-// decodeProtoElementsBareOrData reads the list body from resp as either a
-// top-level JSON array or a {data:[...]} page envelope, then protojson-decodes
-// each element the same way decodeProtoElementsKeyed does. It buffers the body
-// to dispatch on the first non-space byte for update endpoints that tolerate
-// both response shapes.
-func decodeProtoElementsBareOrData[T proto.Message](
-	resp *http.Response,
-	client *Client,
-	operation string,
-	newElem func() T,
-) ([]T, error) {
-	var body json.RawMessage
-
-	if err := client.handleResponse(resp, &body); err != nil {
-		return nil, err
-	}
-
-	rawItems, err := rawListItemsBareOrData(body, operation)
-	if err != nil {
-		return nil, err
-	}
-
-	return decodeRawProtoItems[T](rawItems, operation, newElem)
-}
-
-// rawListItemsBareOrData extracts raw element messages from a top-level JSON
-// array or a {data:[...]} page envelope.
-func rawListItemsBareOrData(body json.RawMessage, operation string) ([]json.RawMessage, error) {
-	if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
-		var rawItems []json.RawMessage
-		if err := json.Unmarshal(trimmed, &rawItems); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal %s array: %w", operation, err)
-		}
-
-		return rawItems, nil
-	}
-
-	var envelope map[string]json.RawMessage
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal %s list envelope: %w", operation, err)
-	}
-
-	raw, ok := envelope["data"]
-	if !ok || len(raw) == 0 {
-		return nil, nil
-	}
-
-	var rawItems []json.RawMessage
-	if err := json.Unmarshal(raw, &rawItems); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal %s list envelope: %w", operation, err)
-	}
-
-	return rawItems, nil
-}
-
 // decodeProtoElementsKeyed reads the list envelope from resp under itemsKey and
 // protojson-decodes each element into a fresh proto message with DiscardUnknown.
 // itemsKey is "data" for the standard page envelope and "interfaces" for the
@@ -222,6 +166,14 @@ func decodeProtoElementsKeyed[T proto.Message](
 		return nil, err
 	}
 
+	if envelope == nil {
+		return nil, fmt.Errorf(
+			"failed to unmarshal %s list envelope: %w",
+			operation,
+			errResponseBodyNotJSONObject,
+		)
+	}
+
 	var rawItems []json.RawMessage
 	if raw, ok := envelope[itemsKey]; ok && len(raw) > 0 {
 		if err := json.Unmarshal(raw, &rawItems); err != nil {
@@ -234,8 +186,8 @@ func decodeProtoElementsKeyed[T proto.Message](
 
 // decodeRawProtoItems protojson-decodes each raw list element into a fresh proto
 // message with DiscardUnknown. It is the shared per-element decode tail of the
-// proto list fetchers (the data[] / custom-key, bare-only, and bare-or-data
-// paths), so every fetcher decodes elements identically.
+// proto list fetchers (the data[] / custom-key and bare-only paths), so every
+// fetcher decodes elements identically.
 func decodeRawProtoItems[T proto.Message](
 	rawItems []json.RawMessage,
 	operation string,
