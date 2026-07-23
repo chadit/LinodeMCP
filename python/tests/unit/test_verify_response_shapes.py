@@ -95,3 +95,40 @@ def test_mismatched_success_body_is_a_shape_violation(
     assert _violations_for_case(tmp_path, monkeypatch, case) == [
         "linode_widget_list: GET /widgets fixture=envelope spec=array"
     ]
+
+
+def test_case_bodies_skips_non_empty_error_outcomes() -> None:
+    routes = {"linode_widget_list": ("GET", "/widgets")}
+
+    assert (
+        gate._case_bodies(
+            "linode_widget_list",
+            {"api_response": {"data": []}, "expect_api_error": "response"},
+            routes,
+        )
+        == []
+    )
+    assert (
+        gate._case_bodies(
+            "linode_widget_list",
+            {"api_response": {"data": []}, "expect_error": "invalid input"},
+            routes,
+        )
+        == []
+    )
+
+
+def test_case_bodies_checks_success_with_empty_error_fields() -> None:
+    routes = {"linode_widget_list": ("GET", "/widgets")}
+    body = {"data": [{"id": 1}]}
+
+    assert gate._case_bodies(
+        "linode_widget_list",
+        {
+            "api_response": body,
+            "expect_error": "",
+            "expect_api_error": "",
+            "expect_result": {"widgets": [{"id": 1}]},
+        },
+        routes,
+    ) == [("GET", "/widgets", body)]

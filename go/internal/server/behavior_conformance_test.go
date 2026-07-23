@@ -71,6 +71,30 @@ type capturedRequest struct {
 	body   []byte
 }
 
+// behaviorOutcomeCount returns the number of usable outcome assertions set on
+// a case. Empty error strings do not assert anything and are therefore invalid.
+func behaviorOutcomeCount(testCase *behaviorCase) int {
+	var count int
+
+	if testCase.ExpectError != "" {
+		count++
+	}
+
+	if testCase.ExpectAPIError != "" {
+		count++
+	}
+
+	if testCase.ExpectRequest != nil {
+		count++
+	}
+
+	if testCase.ExpectResult != nil {
+		count++
+	}
+
+	return count
+}
+
 // decodeBehaviorResult extracts isError and the first content text from a
 // marshaled tools/call JSON-RPC response. Decoded through maps because the
 // MCP envelope uses camelCase keys (isError) that the repo's JSON tag lint
@@ -142,6 +166,63 @@ func TestBehaviorConformance(t *testing.T) {
 	}
 }
 
+func TestBehaviorOutcomeCount(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		testCase behaviorCase
+		want     int
+	}{
+		{name: "empty API error", testCase: behaviorCase{ExpectAPIError: ""}, want: 0},
+		{
+			name: "multiple outcomes",
+			testCase: behaviorCase{
+				ExpectAPIError: "response",
+				ExpectResult:   json.RawMessage(`false`),
+			},
+			want: 2,
+		},
+		{name: "false result", testCase: behaviorCase{ExpectResult: json.RawMessage(`false`)}, want: 1},
+		{
+			name: "empty errors with result",
+			testCase: behaviorCase{
+				ExpectError:    "",
+				ExpectAPIError: "",
+				ExpectResult:   json.RawMessage(`false`),
+			},
+			want: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := behaviorOutcomeCount(&tt.testCase); got != tt.want {
+				t.Errorf("behaviorOutcomeCount() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+
+	t.Run("unmarshaled null result", func(t *testing.T) {
+		t.Parallel()
+
+		var testCase behaviorCase
+		if err := json.Unmarshal([]byte(`{"expect_result":null}`), &testCase); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if testCase.ExpectResult == nil {
+			t.Fatal("ExpectResult = nil, want the JSON null literal")
+		}
+
+		if got := behaviorOutcomeCount(&testCase); got != 1 {
+			t.Errorf("behaviorOutcomeCount() = %d, want 1", got)
+		}
+	})
+}
+
 // resolveBehaviorResponse picks the body and status for one fake-API request.
 // Routed mode (api_responses) matches on "METHOD /path" with the query string
 // stripped; a miss serves 404 and reports notFound so the case fails loudly.
@@ -166,6 +247,10 @@ func resolveBehaviorResponse(testCase *behaviorCase, method, path string) (json.
 // runBehaviorCase dispatches one case and checks its expected outcome.
 func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 	t.Helper()
+
+	if count := behaviorOutcomeCount(testCase); count != 1 {
+		t.Fatalf("outcome fields set = %d, want exactly 1 non-empty outcome", count)
+	}
 
 	var (
 		captureMu sync.Mutex

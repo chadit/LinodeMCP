@@ -154,7 +154,7 @@ def _case_bodies(
     routes: dict[str, tuple[str, str]],
 ) -> list[tuple[str, str, Any]]:
     """(METHOD, path, body) entries this case serves with a resolvable route."""
-    if case.get("expect_error") is not None or case.get("expect_api_error") is not None:
+    if case.get("expect_error") or case.get("expect_api_error"):
         return []
 
     entries: list[tuple[str, str, Any]] = []
