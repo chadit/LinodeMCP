@@ -184,7 +184,6 @@ func TestBehaviorOutcomeCount(t *testing.T) {
 			want: 2,
 		},
 		{name: "false result", testCase: behaviorCase{ExpectResult: json.RawMessage(`false`)}, want: 1},
-		{name: "null result", testCase: behaviorCase{ExpectResult: json.RawMessage(`null`)}, want: 1},
 		{
 			name: "empty errors with result",
 			testCase: behaviorCase{
@@ -205,6 +204,23 @@ func TestBehaviorOutcomeCount(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("unmarshaled null result", func(t *testing.T) {
+		t.Parallel()
+
+		var testCase behaviorCase
+		if err := json.Unmarshal([]byte(`{"expect_result":null}`), &testCase); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if testCase.ExpectResult == nil {
+			t.Fatal("ExpectResult = nil, want the JSON null literal")
+		}
+
+		if got := behaviorOutcomeCount(&testCase); got != 1 {
+			t.Errorf("behaviorOutcomeCount() = %d, want 1", got)
+		}
+	})
 }
 
 // resolveBehaviorResponse picks the body and status for one fake-API request.

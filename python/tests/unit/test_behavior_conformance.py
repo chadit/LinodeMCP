@@ -177,6 +177,9 @@ async def test_behavior_conformance(
 
     expect_api_error = case.get("expect_api_error")
     if expect_api_error:
+        # Go receives an MCP isError bit; direct Python dispatch exposes only
+        # TextContent, so validate Python's local error framing before the
+        # shared, language-independent substring.
         assert text.startswith(("Error: ", "Failed to ")), (
             f"{tool}/{case_name}: expected an API error, got {text!r}"
         )
