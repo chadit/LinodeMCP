@@ -65,7 +65,7 @@ jobs:
           fi
           echo "skip=${skip}" >> "${GITHUB_OUTPUT}"
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: steps.secrets.outputs.skip != 'true'
 
       # renovatebot/github-action does not publish moving major-version
@@ -78,7 +78,7 @@ jobs:
       # second file passed here once drifted stale (old syntax, old
       # schedule) while the repo copy moved on, which split the source of
       # truth and warned "Config needs migrating" on every run.
-      - uses: renovatebot/github-action@dd5302ec17783b2fc721b19ae7209b57b1587765 # v46.1.17
+      - uses: renovatebot/github-action@3064367f740a1a91cca218698a63902689cce200 # v46.1.20
         if: steps.secrets.outputs.skip != 'true'
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
