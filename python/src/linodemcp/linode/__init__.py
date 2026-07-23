@@ -3910,7 +3910,11 @@ class Client:
             if not isinstance(data, list):
                 msg = "region availability response must be an array"
                 raise TypeError(msg)
-            return cast("list[dict[str, Any]]", data)
+            items = cast("list[object]", data)
+            if not all(isinstance(item, dict) for item in items):
+                msg = "region availability response items must be objects"
+                raise TypeError(msg)
+            return cast("list[dict[str, Any]]", items)
         except httpx.HTTPError as e:
             raise NetworkError("GetRegionAvailability", e) from e
 

@@ -25,11 +25,10 @@ can be resolved, the body's shape must match the snapshot:
 A case body is judged when its route is explicit (an api_responses key or an
 expect_request), or when the case has a single api_response and the tool has
 exactly one route in docs/contracts/tool-routes.txt. Empty bodies ({} or [])
-assert nothing about shape and are skipped, as are expect_error cases (the
-harness proves those never reach the API) and routes absent from the
-snapshot (the spec lags TechDocs, so absence is not a signal). Cases with
-``expect_api_error`` deliberately serve a response that the client must reject,
-so they do not assert the route's successful response shape and are skipped.
+assert nothing about shape and are skipped. Pre-request expect_error cases
+(which never reach the API) and post-request expect_api_error cases (which
+deliberately serve a rejected body) are also skipped. Routes absent from the
+snapshot are skipped too (the spec lags TechDocs, so absence is not a signal).
 
 Known gaps live in docs/contracts/response-shape-baseline.txt, a ratchet: fix
 the fixture in a shape-correct way (and every language along with it) and
