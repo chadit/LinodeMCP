@@ -1,6 +1,6 @@
 {
   "tool": "linode_firewall_rule_version_list",
-  "description": "Firewall rule version list GETs the firewall's history subresource. Both languages reject a non-positive firewall_id with the same text; the missing-id message diverges (see report).",
+  "description": "Firewall rule version list GETs the history subresource, which answers with one firewall-shaped object whose rules.version carries the rule version. Both languages surface it as the single snapshot with version lifted to the top level. Both reject a non-positive firewall_id with the same text; the missing-id message diverges (see report).",
   "cases": [
     {
       "name": "rejects a non-positive firewall_id",
@@ -8,10 +8,63 @@
       "expect_error": "firewall_id must be a positive integer"
     },
     {
-      "name": "lists firewall rule versions",
+      "name": "lists firewall rule versions with a plain GET",
       "args": { "firewall_id": 5 },
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "api_response": {
+        "id": 5,
+        "label": "web-firewall",
+        "status": "enabled",
+        "created": "2025-01-01T00:00:00",
+        "updated": "2025-01-02T00:00:00",
+        "tags": [],
+        "rules": {
+          "inbound": [],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT",
+          "version": 2
+        }
+      },
       "expect_request": { "method": "GET", "path": "/networking/firewalls/5/history" }
+    },
+    {
+      "name": "surfaces the object as one snapshot with rules.version lifted",
+      "args": { "firewall_id": 5 },
+      "api_response": {
+        "id": 5,
+        "label": "web-firewall",
+        "status": "enabled",
+        "created": "2025-01-01T00:00:00",
+        "updated": "2025-01-02T00:00:00",
+        "tags": ["edge"],
+        "rules": {
+          "inbound": [],
+          "inbound_policy": "DROP",
+          "outbound": [],
+          "outbound_policy": "ACCEPT",
+          "version": 2
+        }
+      },
+      "expect_result": {
+        "count": 1,
+        "firewall_rule_versions": [
+          {
+            "id": 5,
+            "label": "web-firewall",
+            "status": "enabled",
+            "version": 2,
+            "created": "2025-01-01T00:00:00",
+            "updated": "2025-01-02T00:00:00",
+            "tags": ["edge"],
+            "rules": {
+              "inbound": [],
+              "inbound_policy": "DROP",
+              "outbound": [],
+              "outbound_policy": "ACCEPT"
+            }
+          }
+        ]
+      }
     }
   ]
 }

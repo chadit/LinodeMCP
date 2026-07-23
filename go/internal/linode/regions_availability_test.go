@@ -45,12 +45,7 @@ func TestClientGetRegionAvailabilitySuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData:    availability,
-			keyPage:    1,
-			keyPages:   1,
-			keyResults: len(availability),
-		}); err != nil {
+		if err := json.NewEncoder(w).Encode(availability); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -94,9 +89,7 @@ func TestClientGetRegionAvailabilityValidSlugWithHyphen(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData: []linode.RegionAvailability{{Region: regionAvailabilityHyphenRegion, Plan: regionAvailabilityPlanStandard, Available: true}},
-		}); err != nil {
+		if err := json.NewEncoder(w).Encode([]linode.RegionAvailability{{Region: regionAvailabilityHyphenRegion, Plan: regionAvailabilityPlanStandard, Available: true}}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -132,7 +125,7 @@ func TestClientGetRegionAvailabilityEscapesRegionID(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(map[string]any{keyData: []linode.RegionAvailability{}}); err != nil {
+		if err := json.NewEncoder(w).Encode([]linode.RegionAvailability{}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -165,9 +158,7 @@ func TestClientGetRegionAvailabilityRetriesTransientError(t *testing.T) {
 
 		w.Header().Set("Content-Type", tcApplicationJSON)
 
-		if err := json.NewEncoder(w).Encode(map[string]any{
-			keyData: []linode.RegionAvailability{{Region: managedServiceRegion, Plan: regionAvailabilityPlanStandard, Available: true}},
-		}); err != nil {
+		if err := json.NewEncoder(w).Encode([]linode.RegionAvailability{{Region: managedServiceRegion, Plan: regionAvailabilityPlanStandard, Available: true}}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 	}))
@@ -186,6 +177,32 @@ func TestClientGetRegionAvailabilityRetriesTransientError(t *testing.T) {
 
 	if attempts != int32(2) {
 		t.Errorf("attempts = %v, want %v", attempts, int32(2))
+	}
+}
+
+func TestClientGetRegionAvailabilityRejectsPageEnvelope(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData:    []linode.RegionAvailability{{Region: managedServiceRegion, Plan: regionAvailabilityPlanStandard, Available: true}},
+			keyPage:    1,
+			keyPages:   1,
+			keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
+	// The route documents a bare array; a {data:[...]} page envelope is a
+	// contract change that must error instead of decoding to nothing.
+	if _, err := client.GetRegionAvailabilityProto(t.Context(), managedServiceRegion); err == nil {
+		t.Fatal("expected an error, got nil")
 	}
 }
 

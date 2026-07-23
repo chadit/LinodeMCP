@@ -8136,6 +8136,22 @@ async def test_get_region_availability_url_encodes_region_id() -> None:
     await client.close()
 
 
+async def test_get_region_availability_rejects_page_envelope() -> None:
+    """The per-region availability route documents a bare array, not a page."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    response = MagicMock()
+    response.json.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+
+        with pytest.raises(TypeError, match="must be an array"):
+            await client.get_region_availability("us-east")
+
+    await client.close()
+
+
 async def test_get_region_availability_wraps_http_error() -> None:
     """Region availability wraps client HTTP errors."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -11769,44 +11785,25 @@ async def test_upload_bucket_ssl() -> None:
 
 
 async def test_list_firewall_rule_versions() -> None:
-    """Test listing firewall rule versions."""
+    """The history route answers with one firewall object, not a data page."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
-        "data": [
-            {
-                "id": 12345,
-                "label": "my-firewall",
-                "status": "enabled",
-                "version": 1,
-                "created": "2025-01-01T00:00:00",
-                "updated": "2025-01-01T00:00:00",
-                "tags": [],
-                "rules": {
-                    "inbound": [],
-                    "outbound": [],
-                    "inbound_policy": "ACCEPT",
-                    "outbound_policy": "ACCEPT",
-                },
-            },
-            {
-                "id": 12345,
-                "label": "my-firewall",
-                "status": "enabled",
-                "version": 2,
-                "created": "2025-01-01T00:00:00",
-                "updated": "2025-01-02T00:00:00",
-                "tags": [],
-                "rules": {
-                    "inbound": [],
-                    "outbound": [],
-                    "inbound_policy": "ACCEPT",
-                    "outbound_policy": "ACCEPT",
-                },
-            },
-        ]
+        "id": 12345,
+        "label": "my-firewall",
+        "status": "enabled",
+        "created": "2025-01-01T00:00:00",
+        "updated": "2025-01-02T00:00:00",
+        "tags": [],
+        "rules": {
+            "inbound": [],
+            "outbound": [],
+            "inbound_policy": "ACCEPT",
+            "outbound_policy": "ACCEPT",
+            "version": 2,
+        },
     }
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
@@ -11814,13 +11811,29 @@ async def test_list_firewall_rule_versions() -> None:
 
         versions = await client.list_firewall_rule_versions(12345)
 
-        assert len(versions) == 2
+        assert len(versions) == 1
         assert versions[0].id == 12345
-        assert versions[1].id == 12345
         mock_request.assert_awaited_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
         assert call_args[0][1] == "/networking/firewalls/12345/history"
+
+    await client.close()
+
+
+async def test_list_firewall_rule_versions_rejects_page_envelope() -> None:
+    """A {data:[...]} page for the history route is outside the API contract."""
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"data": [{"id": 12345, "rules": {}}]}
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        with pytest.raises(TypeError, match="must be a firewall object"):
+            await client.list_firewall_rule_versions(12345)
 
     await client.close()
 
