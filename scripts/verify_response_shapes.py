@@ -27,7 +27,9 @@ expect_request), or when the case has a single api_response and the tool has
 exactly one route in docs/contracts/tool-routes.txt. Empty bodies ({} or [])
 assert nothing about shape and are skipped, as are expect_error cases (the
 harness proves those never reach the API) and routes absent from the
-snapshot (the spec lags TechDocs, so absence is not a signal).
+snapshot (the spec lags TechDocs, so absence is not a signal). Cases with
+``expect_api_error`` deliberately serve a response that the client must reject,
+so they do not assert the route's successful response shape and are skipped.
 
 Known gaps live in docs/contracts/response-shape-baseline.txt, a ratchet: fix
 the fixture in a shape-correct way (and every language along with it) and
@@ -153,7 +155,7 @@ def _case_bodies(
     routes: dict[str, tuple[str, str]],
 ) -> list[tuple[str, str, Any]]:
     """(METHOD, path, body) entries this case serves with a resolvable route."""
-    if case.get("expect_error") is not None:
+    if case.get("expect_error") is not None or case.get("expect_api_error") is not None:
         return []
 
     entries: list[tuple[str, str, Any]] = []
