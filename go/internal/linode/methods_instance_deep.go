@@ -665,7 +665,7 @@ func (c *Client) httpUpdateInstanceFirewallsProto(ctx context.Context, linodeID,
 
 	defer drainClose(resp)
 
-	return decodeProtoElementsBareOrData(resp, c, "UpdateInstanceFirewalls",
+	return decodeProtoElements(resp, c, "UpdateInstanceFirewalls",
 		func() *linodev1.Firewall { return &linodev1.Firewall{} })
 }
 

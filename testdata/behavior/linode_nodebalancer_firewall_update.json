@@ -1,6 +1,6 @@
 {
   "tool": "linode_nodebalancer_firewall_update",
-  "description": "Pins the firewall-update PUT body. Rejection paths diverge (confirm-vs-id order, firewall_ids error text) so success only (see report).",
+  "description": "Pins the firewall-update PUT body and requires the documented paginated response envelope. Rejection paths diverge (confirm-vs-id order, firewall_ids error text).",
   "cases": [
     {
       "name": "puts the firewall assignments body",
@@ -11,6 +11,102 @@
         "path": "/nodebalancers/5/firewalls",
         "body": { "firewall_ids": [10, 20] }
       }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": [],
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a null API response",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": null,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": "unexpected",
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": 123,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": true,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "returns firewalls from the page envelope",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": [{ "id": 10, "label": "web" }], "page": 1, "pages": 1, "results": 1 },
+      "expect_result": { "count": 1, "firewalls": [{ "id": 10, "label": "web", "status": "", "tags": [], "created": "", "updated": "" }] }
+    },
+    {
+      "name": "rejects object data in the page envelope",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": {} },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects string data in the page envelope",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": "unexpected" },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects numeric data in the page envelope",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": 123 },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects boolean data in the page envelope",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": true },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "accepts null data as an empty page",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": null, "page": 1, "pages": 1, "results": 0 },
+      "expect_result": { "count": 0, "firewalls": [] }
+    },
+    {
+      "name": "rejects an array element in page data",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": [[]] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a null element in page data",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": [null] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a string element in page data",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": ["unexpected"] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a numeric element in page data",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": [123] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a boolean element in page data",
+      "args": { "nodebalancer_id": 5, "firewall_ids": [10, 20], "confirm": true },
+      "api_response": { "data": [true] },
+      "expect_api_error": "element"
     },
     {
       "name": "requires confirm",

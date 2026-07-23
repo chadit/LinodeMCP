@@ -273,14 +273,25 @@ def serialize_list_response(
     message must be the proto list-response message whose repeated field is named
     key (e.g. InstanceListResponse with key "instances").
     """
-    page: dict[str, Any] = cast("dict[str, Any]", raw) if isinstance(raw, dict) else {}
+    if not isinstance(raw, dict):
+        msg = "list response must be an object"
+        raise TypeError(msg)
+
+    page = cast("dict[str, Any]", raw)
     data_value = page.get("data", [])
-    data_list: list[object] = (
-        cast("list[object]", data_value) if isinstance(data_value, list) else []
-    )
-    items: list[dict[str, Any]] = [
-        cast("dict[str, Any]", item) for item in data_list if isinstance(item, dict)
-    ]
+    if data_value is None:
+        data_list: list[object] = []
+    elif isinstance(data_value, list):
+        data_list = cast("list[object]", data_value)
+    else:
+        msg = "list response data must be an array"
+        raise TypeError(msg)
+
+    if any(not isinstance(item, dict) for item in data_list):
+        msg = "list response data elements must be objects"
+        raise TypeError(msg)
+
+    items = [cast("dict[str, Any]", item) for item in data_list]
 
     if item_filter is not None:
         items = [item for item in items if item_filter(item)]
