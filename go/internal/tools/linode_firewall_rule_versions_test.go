@@ -44,11 +44,10 @@ func TestLinodeFirewallRuleVersionsListToolDefinition(t *testing.T) {
 func TestLinodeFirewallRuleVersionsListToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	const page = `{"data":[` +
-		`{"id":123,"label":"web-firewall","status":"enabled","version":1,` +
-		`"rules":{"inbound_policy":"ACCEPT","outbound_policy":"ACCEPT"}},` +
-		`{"id":123,"label":"web-firewall","status":"enabled","version":2,` +
-		`"rules":{"inbound_policy":"DROP","outbound_policy":"ACCEPT"}}]}`
+	// The documented history body: one firewall-shaped object whose
+	// rules.version carries the rule version, not a {data:[...]} page.
+	const page = `{"id":123,"label":"web-firewall","status":"enabled",` +
+		`"rules":{"inbound_policy":"DROP","outbound_policy":"ACCEPT","version":2}}`
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -100,12 +99,12 @@ func TestLinodeFirewallRuleVersionsListToolSuccess(t *testing.T) {
 		t.Fatalf("unmarshal output: %v", err)
 	}
 
-	if out.Count != 2 {
-		t.Errorf("count = %d, want 2", out.Count)
+	if out.Count != 1 {
+		t.Errorf("count = %d, want 1", out.Count)
 	}
 
-	if len(out.FirewallRuleVersions) != 2 || out.FirewallRuleVersions[1].Version != 2 {
-		t.Errorf("firewall_rule_versions = %+v, want two snapshots ending at version 2", out.FirewallRuleVersions)
+	if len(out.FirewallRuleVersions) != 1 || out.FirewallRuleVersions[0].Version != 2 {
+		t.Errorf("firewall_rule_versions = %+v, want one snapshot at version 2", out.FirewallRuleVersions)
 	}
 }
 

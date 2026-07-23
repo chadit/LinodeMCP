@@ -14,6 +14,11 @@ var (
 	errResponseBodyNotJSONObject = errors.New("response body is not a JSON object")
 )
 
+// ErrFirewallHistoryNotObject rejects a firewall history body that is not the
+// documented firewall-shaped object, so a shape change upstream fails loudly
+// instead of decoding into an empty snapshot.
+var ErrFirewallHistoryNotObject = errors.New("firewall history response is not a firewall object")
+
 // ErrCircuitOpen is returned when the circuit breaker is open and rejecting
 // requests. Callers can check this sentinel to distinguish "we never tried"
 // from "we tried and the upstream failed".

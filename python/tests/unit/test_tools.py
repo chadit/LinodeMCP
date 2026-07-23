@@ -25622,49 +25622,30 @@ async def test_handle_linode_firewall_devices_list_with_pagination(
 async def test_handle_linode_firewall_rule_version_list(
     sample_config: Config,
 ) -> None:
-    """Rule version list returns the proto envelope with each snapshot's version."""
+    """The single history object becomes one snapshot with rules.version lifted."""
     from linodemcp.tools.linode_firewalls import (
         handle_linode_firewall_rule_version_list,
     )
 
-    page: dict[str, Any] = {
-        "data": [
-            {
-                "id": 7,
-                "label": "prod-fw",
-                "status": "enabled",
-                "version": 1,
-                "rules": {
-                    "inbound": [],
-                    "inbound_policy": "ACCEPT",
-                    "outbound": [],
-                    "outbound_policy": "ACCEPT",
-                },
-                "tags": [],
-                "created": "2024-01-01T00:00:00",
-                "updated": "2024-01-01T00:00:00",
-            },
-            {
-                "id": 7,
-                "label": "prod-fw",
-                "status": "enabled",
-                "version": 2,
-                "rules": {
-                    "inbound": [],
-                    "inbound_policy": "DROP",
-                    "outbound": [],
-                    "outbound_policy": "ACCEPT",
-                },
-                "tags": ["edge"],
-                "created": "2024-01-01T00:00:00",
-                "updated": "2024-01-02T00:00:00",
-            },
-        ]
+    history: dict[str, Any] = {
+        "id": 7,
+        "label": "prod-fw",
+        "status": "enabled",
+        "rules": {
+            "inbound": [],
+            "inbound_policy": "DROP",
+            "outbound": [],
+            "outbound_policy": "ACCEPT",
+            "version": 2,
+        },
+        "tags": ["edge"],
+        "created": "2024-01-01T00:00:00",
+        "updated": "2024-01-02T00:00:00",
     }
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = page
+        mock_client.get_raw.return_value = history
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -25674,12 +25655,33 @@ async def test_handle_linode_firewall_rule_version_list(
         )
 
     body = json.loads(result[0].text)
-    assert body["count"] == 2
-    assert body["firewall_rule_versions"][0]["version"] == 1
-    assert body["firewall_rule_versions"][1]["version"] == 2
-    assert body["firewall_rule_versions"][1]["rules"]["inbound_policy"] == "DROP"
-    assert body["firewall_rule_versions"][1]["tags"] == ["edge"]
+    assert body["count"] == 1
+    assert body["firewall_rule_versions"][0]["version"] == 2
+    assert body["firewall_rule_versions"][0]["rules"]["inbound_policy"] == "DROP"
+    assert body["firewall_rule_versions"][0]["tags"] == ["edge"]
     mock_client.get_raw.assert_awaited_once_with("/networking/firewalls/7/history")
+
+
+async def test_handle_linode_firewall_rule_version_list_rejects_page(
+    sample_config: Config,
+) -> None:
+    """A {data:[...]} page for the history route errors instead of emptying."""
+    from linodemcp.tools.linode_firewalls import (
+        handle_linode_firewall_rule_version_list,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_raw.return_value = {"data": [{"id": 7, "rules": {}}]}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_firewall_rule_version_list(
+            {"firewall_id": 7}, sample_config
+        )
+
+    assert result[0].text.startswith("Failed to ")
 
 
 @pytest.mark.parametrize(
