@@ -202,6 +202,8 @@ func TestLinodeRegionAvailabilityGetToolSuccess(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 
+		// The per-region availability route answers with a bare array, unlike
+		// the paginated cross-region list.
 		if err := json.NewEncoder(w).Encode([]map[string]any{{keyRegion: regionUSEast, "plan": "g6-standard-1", statusAvailable: true, keyNotInProto: valNotInProto}}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}

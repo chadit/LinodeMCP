@@ -4878,12 +4878,19 @@ class Client:
             raise NetworkError("ListFirewallDevices", e) from e
 
     async def list_firewall_rule_versions(self, firewall_id: int) -> list[Firewall]:
-        """List firewall rule versions (history)."""
+        """List firewall rule versions (history).
+
+        The history route answers with one firewall-shaped object, not a
+        {data:[...]} page, so the result is that object as the single entry.
+        """
         endpoint = f"/networking/firewalls/{firewall_id}/history"
         try:
             response = await self.make_request("GET", endpoint)
-            data = response.json()
-            return [self._parse_firewall(f) for f in data.get("data", [])]
+            data: Any = response.json()
+            if not isinstance(data, dict) or "rules" not in data:
+                msg = "firewall history response must be a firewall object"
+                raise TypeError(msg)
+            return [self._parse_firewall(cast("dict[str, Any]", data))]
         except httpx.HTTPError as e:
             raise NetworkError("ListFirewallRuleVersions", e) from e
 

@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-scopes baseline-guard parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes baseline-guard parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -187,7 +187,7 @@ sync-scopes: python-install-dev
 	@python3 scripts/verify_sync_scopes.py
 
 ## sync: Run all live API-drift checks (scheduled agent; needs network)
-sync: sync-enums sync-defaults sync-pagination sync-scopes
+sync: sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes
 
 ## baseline-guard: Verify baseline growth vs BASE (default origin/main) carries issue-linked annotations
 # Diff-aware but cheap (git show plus file parses, no artifacts), so it rides
@@ -220,6 +220,15 @@ tool-count:
 # The fixture half (a pinned preview case) ratchets in the behavior gate.
 dryrun:
 	@python3 scripts/verify_dryrun.py
+
+## response-shapes: Verify behavior fixtures serve each route's spec response shape
+# Offline; judges fixture bodies against the reviewed snapshot in
+# docs/contracts/api-response-shapes-baseline.txt (sync-response-shapes owns
+# that). A wrong-shaped fixture proves every language conforms to a contract
+# the API never had, which is how a cross-language decode divergence ships.
+# Known gaps ratchet down in docs/contracts/response-shape-baseline.txt.
+response-shapes:
+	@python3 scripts/verify_response_shapes.py
 
 ## pagination: Verify list tools paginate when their spec route paginates
 # Offline: judges the tool surface against the reviewed snapshot in
@@ -259,6 +268,11 @@ metrics-surface:
 # Network (live spec fetch), so scheduled-only like the other sync gates.
 sync-pagination:
 	@python3 scripts/verify_sync_pagination.py
+
+## sync-response-shapes: Diff the live spec's route response shapes vs the snapshot
+# Network (live spec fetch), so scheduled-only like the other sync gates.
+sync-response-shapes:
+	@python3 scripts/verify_sync_response_shapes.py
 
 ## coverage-floor: Verify each language's total unit-test coverage meets its contracted floor
 # Offline, rides in `check` right after the two language suites: go-check's

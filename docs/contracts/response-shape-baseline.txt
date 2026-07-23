@@ -1,0 +1,10 @@
+# Fixture cases whose served body shape diverges from the route's spec
+# response shape. Ratchet: correct the fixture body (and every language
+# implementation that depended on the wrong shape) and remove its line;
+# never add a line by hand (regenerate instead, then attach the required
+# annotation).
+# Regenerate with:
+#   python3 scripts/verify_response_shapes.py --update-baseline
+# Spec side comes from docs/contracts/api-response-shapes-baseline.txt
+# (scripts/verify_sync_response_shapes.py owns that snapshot).
+

@@ -1,19 +1,28 @@
 {
   "tool": "linode_region_availability_get",
-  "description": "Per-region availability returns the documented bare array and rejects every non-array root or non-object array element after the GET.",
+  "description": "Per-region availability preserves API ordering from the documented bare array and rejects every non-array root or non-object element after the GET.",
   "cases": [
     {
-      "name": "gets availability for one region",
+      "name": "gets availability with a plain GET",
       "args": { "region_id": "us-east" },
-      "api_responses": {
-        "GET /regions/us-east/availability": [
-          { "available": true, "plan": "g6-standard-1", "region": "us-east" }
-        ]
-      },
+      "api_response": [
+        { "available": true, "plan": "g6-standard-1", "region": "us-east" },
+        { "available": false, "plan": "g6-standard-2", "region": "us-east" }
+      ],
+      "expect_request": { "method": "GET", "path": "/regions/us-east/availability" }
+    },
+    {
+      "name": "returns complete availability in API order",
+      "args": { "region_id": "us-east" },
+      "api_response": [
+        { "available": true, "plan": "g6-standard-1", "region": "us-east" },
+        { "available": false, "plan": "g6-standard-2", "region": "us-east" }
+      ],
       "expect_result": {
-        "count": 1,
+        "count": 2,
         "region_availabilities": [
-          { "available": true, "plan": "g6-standard-1", "region": "us-east" }
+          { "available": true, "plan": "g6-standard-1", "region": "us-east" },
+          { "available": false, "plan": "g6-standard-2", "region": "us-east" }
         ]
       }
     },

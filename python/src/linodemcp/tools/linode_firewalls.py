@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote, urlencode
 
 from mcp.types import TextContent, Tool
@@ -142,9 +142,24 @@ async def handle_linode_firewall_rule_version_list(
         return error_response("firewall_id must be a valid integer")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
+        # The history route documents its 200 body as one firewall-shaped
+        # object whose rules.version carries the rule version, not a
+        # {data:[...]} page. Surface it as the single version snapshot, with
+        # the snapshot's top-level version lifted out of rules.version; the
+        # Go client performs the identical lift.
         raw = await client.get_raw(f"/networking/firewalls/{fw_id}/history")
+        if not isinstance(raw, dict) or "rules" not in raw:
+            msg = "firewall history response must be a firewall object"
+            raise TypeError(msg)
+        history = cast("dict[str, Any]", raw)
+        snapshot: dict[str, Any] = dict(history)
+        rules = history.get("rules")
+        if isinstance(rules, dict):
+            version = cast("dict[str, Any]", rules).get("version")
+            if isinstance(version, int):
+                snapshot["version"] = version
         return serialize_list_response(
-            raw,
+            {"data": [snapshot]},
             "firewall_rule_versions",
             firewall_pb2.FirewallRuleVersionListResponse(),
         )
