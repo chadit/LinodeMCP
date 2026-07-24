@@ -118,7 +118,7 @@ def load_spec(spec_path: str | None) -> dict[str, Any]:
     if spec_path:
         doc: dict[str, Any] = json.loads(Path(spec_path).read_text(encoding="utf-8"))
         return doc
-    with urllib.request.urlopen(SPEC_URL, timeout=60) as resp:  # noqa: S310 - fixed HTTPS URL
+    with urllib.request.urlopen(SPEC_URL, timeout=60) as resp:
         fetched: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
         return fetched
 

@@ -210,10 +210,12 @@ select = [
 ]
 
 ignore = [
+    "ISC004",  # Intentional multiline strings in collection literals
     "TRY003",  # Avoid specifying long messages outside exception class
     "TRY300",  # Consider moving statement to else block (stylistic)
     "TRY401",  # Redundant exception object in logging.exception
     "PLR0913", # Too many arguments to function call
+    "PLR0917", # Too many positional arguments (public/client signatures)
     "EM101",   # Exception message string literals
     "EM102",   # Exception message f-strings
 ]
