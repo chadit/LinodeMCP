@@ -816,7 +816,7 @@ func (c *Client) httpListInstanceConfigInterfacesProto(ctx context.Context, lino
 
 	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
 	encodedConfigID := url.PathEscape(strconv.Itoa(configID))
-	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/configs/%s/interfaces", encodedLinodeID, encodedConfigID)
+	endpoint := fmt.Sprintf("/linode/instances/%s/configs/%s/interfaces", encodedLinodeID, encodedConfigID)
 
 	return listProtoElementsBare(ctx, c, "ListInstanceConfigInterfaces", endpoint,
 		func() *linodev1.ConfigInterfaceResponse { return &linodev1.ConfigInterfaceResponse{} })
