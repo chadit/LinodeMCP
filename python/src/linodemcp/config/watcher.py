@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-OnChangeCallback = Callable[["Config"], None | Awaitable[None]]
+OnChangeCallback = Callable[["Config"], Awaitable[None] | None]
 
 # Default polling cadence. 5 seconds balances responsiveness with
 # filesystem load.
