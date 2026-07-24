@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -374,27 +373,26 @@ def test_go_instance_interface_list_dynamic_get_evidence() -> None:
         "/linode/instances/{p}/interfaces",
     )
 
-    function_match = re.search(
-        r"(?ms)^func \(c \*Client\) httpListInstanceInterfacesProto\b.*?^}$",
-        methods,
-    )
-    assert function_match is not None
-    function = function_match.group()
-
     assert 'endpointInstanceDeep = "/linode/instances"' in methods
+
+    declaration = "func (c *Client) httpListInstanceInterfacesProto"
+    _, separator, function_tail = methods.partition(declaration)
+    assert separator
+    function, _, _ = function_tail.partition("\nfunc ")
+    assert "encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))" in function
+    normalized_function = " ".join(function.split())
     assert (
         'fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID)'
-        in function
+        in normalized_function
     )
     assert (
         'listProtoElementsKeyed(ctx, c, "ListInstanceInterfaces", endpoint, '
-        '"interfaces",' in function
+        '"interfaces",' in normalized_function
     )
 
-    helper_match = re.search(
-        r"(?ms)^func listProtoElementsKeyed\[.*?^}$",
-        proto_list,
-    )
-    assert helper_match is not None
-    helper = helper_match.group()
-    assert "client.makeRequest(ctx, http.MethodGet, endpoint, nil)" in helper
+    helper_declaration = "func listProtoElementsKeyed"
+    _, helper_separator, helper_tail = proto_list.partition(helper_declaration)
+    assert helper_separator
+    helper, _, _ = helper_tail.partition("\nfunc ")
+    normalized_helper = " ".join(helper.split())
+    assert "client.makeRequest(ctx, http.MethodGet, endpoint, nil)" in normalized_helper
