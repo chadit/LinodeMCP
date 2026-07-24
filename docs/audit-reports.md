@@ -269,13 +269,15 @@ Run the daily-destroys audit report.
 
 The model calls `linode_audit_report` with `name: "daily-destroys"` and renders the response.
 
-From the command line (when the audit CLI subcommand ships):
+From the command line:
 
 ```bash
 linodemcp audit report daily-destroys
 ```
 
-Until that ships, query the report results inside a Claude session, or read the JSONL log directly with `jq` (see audit-log.md's quick-start section).
+The subcommand wraps the same tool through the same dispatch, so the output
+is the report's JSON response, ready to pipe into `jq`. An unknown report
+name is the tool's error and exits 1.
 
 ## What reports cannot do today
 
