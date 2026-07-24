@@ -143,8 +143,10 @@ def test_compare_flags_scope_mismatch() -> None:
     routes, dump, spec = _base_fixture()
     dump[0]["scopes"] = ["account:read_write"]
     assert gate.compare(routes, dump, gate.spec_operations(spec)) == [
-        "linode_tag_list: scopes doc=['account:read_only']"
-        " mapped=['account:read_write']"
+        (
+            "linode_tag_list: scopes doc=['account:read_only']"
+            " mapped=['account:read_write']"
+        )
     ]
 
 

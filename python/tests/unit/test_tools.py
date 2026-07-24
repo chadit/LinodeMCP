@@ -18962,8 +18962,10 @@ async def test_vpc_subnet_delete_dry_run_surfaces_linode_dependencies(
         # renders a coroutine repr here instead of "prod-vpc", so this also guards
         # against that regression.
         assert body["warnings"] == [
-            '2 Linode(s) have interfaces in subnet "web-subnet" '
-            '(VPC "prod-vpc") and will be detached.'
+            (
+                '2 Linode(s) have interfaces in subnet "web-subnet" '
+                '(VPC "prod-vpc") and will be detached.'
+            )
         ]
         mock_client.get_vpc.assert_awaited_once_with(123)
         mock_client.delete_vpc_subnet.assert_not_called()
@@ -27245,8 +27247,10 @@ async def test_account_tag_delete_dry_run_counts_beyond_first_page(
     body = json.loads(result[0].text)
     assert len(body["dependencies"]) == 1
     assert body["warnings"] == [
-        "Deleting this tag removes it from 150 tagged object(s); "
-        "the objects are not deleted.",
+        (
+            "Deleting this tag removes it from 150 tagged object(s); "
+            "the objects are not deleted."
+        ),
         "Only the first 1 tagged object(s) are itemized in this preview.",
     ]
 

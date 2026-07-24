@@ -811,14 +811,18 @@ def _instance_disk_clone_side_effects(state: Any) -> DryRunDetails:
         size = disk.get("size", 0)
         return {
             "side_effects": [
-                f"Disk {label!r} ({size} MB) is cloned to a new disk on the "
-                f"same instance, consuming {size} MB of additional storage."
+                (
+                    f"Disk {label!r} ({size} MB) is cloned to a new disk on the "
+                    f"same instance, consuming {size} MB of additional storage."
+                )
             ]
         }
     return {
         "side_effects": [
-            "A copy of the disk is created on the same instance, consuming "
-            "additional storage."
+            (
+                "A copy of the disk is created on the same instance, consuming "
+                "additional storage."
+            )
         ]
     }
 
@@ -988,8 +992,10 @@ async def handle_linode_instance_disk_password_reset(
         async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
             return {
                 "side_effects": [
-                    f"The root password for disk {disk_id} on instance "
-                    f"{linode_id} will be reset."
+                    (
+                        f"The root password for disk {disk_id} on instance "
+                        f"{linode_id} will be reset."
+                    )
                 ],
                 "warnings": ["Existing disk root password access will be replaced."],
             }

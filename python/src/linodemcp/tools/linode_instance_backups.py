@@ -190,18 +190,24 @@ def _backup_restore_side_effects(target_id: int, overwrite: bool) -> DryRunDetai
     if overwrite:
         return {
             "side_effects": [
-                f"All existing disks and configs on target instance {target_id} "
-                "are destroyed and replaced by the backup."
+                (
+                    f"All existing disks and configs on target instance {target_id} "
+                    "are destroyed and replaced by the backup."
+                )
             ],
             "warnings": [
-                f"overwrite=true: existing data on target instance {target_id} "
-                "is permanently lost."
+                (
+                    f"overwrite=true: existing data on target instance {target_id} "
+                    "is permanently lost."
+                )
             ],
         }
     return {
         "side_effects": [
-            f"The backup is restored onto target instance {target_id}; the "
-            "restore fails if its disks or configs collide."
+            (
+                f"The backup is restored onto target instance {target_id}; the "
+                "restore fails if its disks or configs collide."
+            )
         ]
     }
 

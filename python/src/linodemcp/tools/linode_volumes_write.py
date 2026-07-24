@@ -229,8 +229,10 @@ def _volume_attach_side_effects(volume_id: int, linode_id: int) -> DryRunDetails
     """
     return {
         "side_effects": [
-            f"Volume {volume_id} attaches to instance {linode_id}; the volume "
-            "must be in the same region as the instance."
+            (
+                f"Volume {volume_id} attaches to instance {linode_id}; the volume "
+                "must be in the same region as the instance."
+            )
         ]
     }
 
@@ -318,8 +320,10 @@ def _volume_detach_side_effects(state: Any) -> DryRunDetails:
         }
     return {
         "side_effects": [
-            f"Volume detaches from instance {attached}; its data is preserved "
-            "and billing continues."
+            (
+                f"Volume detaches from instance {attached}; its data is preserved "
+                "and billing continues."
+            )
         ]
     }
 
@@ -607,8 +611,10 @@ async def _volume_delete_dependency_walk(
         }
     ]
     details["warnings"] = [
-        "Volume is currently attached to an instance; "
-        "it will be detached as part of deletion."
+        (
+            "Volume is currently attached to an instance; "
+            "it will be detached as part of deletion."
+        )
     ]
     return details
 

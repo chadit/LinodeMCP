@@ -363,8 +363,10 @@ async def _nodebalancer_config_delete_dependency_walk(
     if dependencies:
         details["dependencies"] = dependencies
         details["warnings"] = [
-            f"Deleting this config removes {len(dependencies)} backend "
-            "node(s) from the rotation."
+            (
+                f"Deleting this config removes {len(dependencies)} backend "
+                "node(s) from the rotation."
+            )
         ]
     return details
 
@@ -653,8 +655,10 @@ async def _nodebalancer_delete_dependency_walk(
     if dependencies:
         details["dependencies"] = dependencies
         details["warnings"] = [
-            f"Deleting this NodeBalancer destroys {len(dependencies)} config(s) "
-            "and their backend node lists."
+            (
+                f"Deleting this NodeBalancer destroys {len(dependencies)} config(s) "
+                "and their backend node lists."
+            )
         ]
     return details
 

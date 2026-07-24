@@ -102,8 +102,10 @@ async def handle_linode_profile_preferences_update(
         async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
             return {
                 "side_effects": [
-                    "The OAuth client's profile preferences are replaced with "
-                    "the supplied values."
+                    (
+                        "The OAuth client's profile preferences are replaced with "
+                        "the supplied values."
+                    )
                 ]
             }
 
@@ -164,8 +166,10 @@ async def handle_linode_profile_tfa_enable(
             "/profile/tfa-enable",
             None,
             side_effects=[
-                "A new two-factor authentication secret is generated; it must "
-                "be confirmed before two-factor authentication becomes active."
+                (
+                    "A new two-factor authentication secret is generated; it must "
+                    "be confirmed before two-factor authentication becomes active."
+                )
             ],
         )
 

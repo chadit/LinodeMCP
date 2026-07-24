@@ -149,9 +149,11 @@ async def handle_linode_placement_group_create(
             "/placement/groups",
             None,
             side_effects=[
-                f"A new placement group {label!r} "
-                f"({placement_group_type}, {placement_group_policy} policy) "
-                f"will be created in region {region}."
+                (
+                    f"A new placement group {label!r} "
+                    f"({placement_group_type}, {placement_group_policy} policy) "
+                    f"will be created in region {region}."
+                )
             ],
         )
 
@@ -216,8 +218,10 @@ def _placement_group_delete_dependency_walk(group_state: Any) -> DryRunDetails:
     if dependencies:
         details["dependencies"] = dependencies
         details["warnings"] = [
-            f"Deleting this placement group detaches {len(dependencies)} "
-            "Linode(s); the instances are not deleted."
+            (
+                f"Deleting this placement group detaches {len(dependencies)} "
+                "Linode(s); the instances are not deleted."
+            )
         ]
     return details
 

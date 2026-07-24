@@ -241,8 +241,10 @@ def _validate_service_transfer_token(value: object) -> tuple[str | None, str | N
     if value != value.strip() or "/" in value or "?" in value or ".." in value:
         return (
             None,
-            "token must not contain path separators, "
-            "query separators, or traversal segments",
+            (
+                "token must not contain path separators, "
+                "query separators, or traversal segments"
+            ),
         )
     return value, None
 
@@ -320,8 +322,10 @@ async def handle_linode_account_user_create(
             "/account/users",
             None,
             side_effects=[
-                f"A new account user {username!r} will be created "
-                f"with restricted={restricted}."
+                (
+                    f"A new account user {username!r} will be created "
+                    f"with restricted={restricted}."
+                )
             ],
             request_body=body,
         )
@@ -1272,8 +1276,10 @@ async def handle_linode_account_event_seen(
         async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
             return {
                 "side_effects": [
-                    "The specified account event and all earlier events are "
-                    "marked as seen."
+                    (
+                        "The specified account event and all earlier events are "
+                        "marked as seen."
+                    )
                 ]
             }
 
@@ -1562,8 +1568,10 @@ async def handle_linode_account_oauth_client_create(
             None,
             request_body={"label": label, "redirect_uri": redirect_uri},
             side_effects=[
-                "A new account OAuth client is created. The returned client "
-                "secret is shown once and cannot be retrieved later."
+                (
+                    "A new account OAuth client is created. The returned client "
+                    "secret is shown once and cannot be retrieved later."
+                )
             ],
         )
 
@@ -1649,8 +1657,10 @@ async def handle_linode_account_payment_method_create(
             None,
             request_body={**request_body, "data": {"redacted": True}},
             side_effects=[
-                "A new account payment method is created and may become the "
-                "default payment method."
+                (
+                    "A new account payment method is created and may become the "
+                    "default payment method."
+                )
             ],
         )
 
@@ -1765,8 +1775,10 @@ async def handle_linode_account_cancel(
                 "The Linode account is closed and all of its resources are removed."
             ],
             warnings=[
-                "Account cancellation is permanent and irreversible; every "
-                "resource on the account is destroyed and access is lost."
+                (
+                    "Account cancellation is permanent and irreversible; every "
+                    "resource on the account is destroyed and access is lost."
+                )
             ],
         )
 
@@ -2387,8 +2399,10 @@ async def handle_linode_account_oauth_client_secret_reset(
             f"/account/oauth-clients/{quote(client_id, safe='')}/reset-secret",
             None,
             side_effects=[
-                "The OAuth client secret is reset. The replacement secret is "
-                "shown once and cannot be retrieved later."
+                (
+                    "The OAuth client secret is reset. The replacement secret is "
+                    "shown once and cannot be retrieved later."
+                )
             ],
         )
 
@@ -3228,8 +3242,10 @@ def _tag_delete_dependency_walk(state: Any) -> DryRunDetails:
             total = max(total, raw_results)
 
         warnings = [
-            f"Deleting this tag removes it from {total} tagged "
-            "object(s); the objects are not deleted."
+            (
+                f"Deleting this tag removes it from {total} tagged "
+                "object(s); the objects are not deleted."
+            )
         ]
         if total > len(dependencies):
             warnings.append(

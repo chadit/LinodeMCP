@@ -267,7 +267,7 @@ def load_spec(path: str | None) -> dict[str, Any]:
     if path is not None:
         loaded: dict[str, Any] = json.loads(Path(path).read_text(encoding="utf-8"))
         return loaded
-    with urllib.request.urlopen(SPEC_URL, timeout=60) as resp:  # noqa: S310 - fixed HTTPS URL
+    with urllib.request.urlopen(SPEC_URL, timeout=60) as resp:
         fetched: dict[str, Any] = json.load(resp)
     return fetched
 

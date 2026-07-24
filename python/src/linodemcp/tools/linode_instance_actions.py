@@ -376,14 +376,18 @@ def _instance_rescue_side_effects_walk(state: Any) -> DryRunDetails:
     """
     details: DryRunDetails = {
         "side_effects": [
-            "The instance reboots into rescue mode; its normal boot "
-            "configuration is bypassed until you reboot out of rescue mode."
+            (
+                "The instance reboots into rescue mode; its normal boot "
+                "configuration is bypassed until you reboot out of rescue mode."
+            )
         ]
     }
     if preview_state_str(state, "status") == "running":
         details["warnings"] = [
-            "Instance is currently running; entering rescue mode reboots it, "
-            "causing downtime."
+            (
+                "Instance is currently running; entering rescue mode reboots it, "
+                "causing downtime."
+            )
         ]
     return details
 
@@ -459,8 +463,10 @@ def _instance_password_reset_side_effects_walk(state: Any) -> DryRunDetails:
     }
     if preview_state_str(state, "status") == "running":
         details["warnings"] = [
-            "Instance is currently running; the reset shuts it down and "
-            "reboots it, causing downtime."
+            (
+                "Instance is currently running; the reset shuts it down and "
+                "reboots it, causing downtime."
+            )
         ]
     return details
 

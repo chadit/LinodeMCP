@@ -315,8 +315,10 @@ async def _vpc_delete_dependency_walk(
         details["dependencies"] = dependencies
     if attached_interfaces > 0:
         details["warnings"] = [
-            f"{attached_interfaces} Linode interface(s) across "
-            f"{len(subnets)} subnet(s) will be detached."
+            (
+                f"{attached_interfaces} Linode interface(s) across "
+                f"{len(subnets)} subnet(s) will be detached."
+            )
         ]
     return details
 
@@ -608,8 +610,10 @@ async def _vpc_subnet_delete_dependency_walk(
     subnet_label = str(subnet.get("label", ""))
     details["dependencies"] = dependencies
     details["warnings"] = [
-        f'{len(dependencies)} Linode(s) have interfaces in subnet "{subnet_label}" '
-        f'(VPC "{vpc_label}") and will be detached.'
+        (
+            f'{len(dependencies)} Linode(s) have interfaces in subnet "{subnet_label}" '
+            f'(VPC "{vpc_label}") and will be detached.'
+        )
     ]
     return details
 

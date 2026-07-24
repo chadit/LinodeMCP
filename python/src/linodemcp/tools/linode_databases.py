@@ -842,8 +842,10 @@ async def handle_linode_database_mysql_instance_create(
             "/databases/mysql/instances",
             None,
             side_effects=[
-                f"A MySQL Managed Database {payload['label']!r} will be "
-                "created or restored."
+                (
+                    f"A MySQL Managed Database {payload['label']!r} will be "
+                    "created or restored."
+                )
             ],
             warnings=["Creating a Managed Database can incur billing."],
             request_body=payload,
@@ -888,8 +890,10 @@ async def handle_linode_database_postgresql_instance_create(
             "/databases/postgresql/instances",
             None,
             side_effects=[
-                f"A PostgreSQL Managed Database {payload['label']!r} will be "
-                "created or restored."
+                (
+                    f"A PostgreSQL Managed Database {payload['label']!r} will be "
+                    "created or restored."
+                )
             ],
             warnings=["Creating a Managed Database can incur billing."],
             request_body=payload,
@@ -1328,8 +1332,10 @@ async def handle_linode_database_mysql_instance_patch(
             patch_path,
             None,
             side_effects=[
-                f"Pending patches will be applied to MySQL Managed Database "
-                f"instance {instance_id}."
+                (
+                    f"Pending patches will be applied to MySQL Managed Database "
+                    f"instance {instance_id}."
+                )
             ],
         )
 
@@ -1367,8 +1373,10 @@ async def handle_linode_database_postgresql_instance_patch(
             patch_path,
             None,
             side_effects=[
-                f"Pending patches will be applied to PostgreSQL Managed Database "
-                f"instance {instance_id}."
+                (
+                    f"Pending patches will be applied to PostgreSQL Managed Database "
+                    f"instance {instance_id}."
+                )
             ],
         )
 

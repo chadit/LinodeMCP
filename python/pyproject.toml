@@ -45,7 +45,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "ruff>=0.15.20",
+    "ruff>=0.16.0",
     "mypy>=2.1.0",
     "types-PyYAML>=6.0.12",
     "build>=1.5.0",
@@ -214,6 +214,7 @@ ignore = [
     "TRY300",  # Consider moving statement to else block (stylistic)
     "TRY401",  # Redundant exception object in logging.exception
     "PLR0913", # Too many arguments to function call
+    "PLR0917", # Too many positional arguments (same design judgment as PLR0913)
     "EM101",   # Exception message string literals
     "EM102",   # Exception message f-strings
 ]

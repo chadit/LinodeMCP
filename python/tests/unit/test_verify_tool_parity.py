@@ -63,8 +63,10 @@ def test_scope_divergence_produces_one_named_line() -> None:
     problems = gate._compare_one("linode_example_list", "go", ref, "python", other)
 
     assert problems == [
-        "linode_example_list: scopes go=['ips:read_only']"
-        " python=['reserved-ips:read_only']"
+        (
+            "linode_example_list: scopes go=['ips:read_only']"
+            " python=['reserved-ips:read_only']"
+        )
     ]
 
 
