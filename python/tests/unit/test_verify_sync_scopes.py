@@ -143,8 +143,10 @@ def test_compare_flags_scope_mismatch() -> None:
     routes, dump, spec = _base_fixture()
     dump[0]["scopes"] = ["account:read_write"]
     assert gate.compare(routes, dump, gate.spec_operations(spec)) == [
-        "linode_tag_list: scopes doc=['account:read_only']"
-        " mapped=['account:read_write']"
+        (
+            "linode_tag_list: scopes doc=['account:read_only']"
+            " mapped=['account:read_write']"
+        )
     ]
 
 
@@ -350,3 +352,47 @@ def test_live_contract_files_are_coherent() -> None:
     # renamed tool cannot leave an orphaned baseline entry behind.
     baseline_tools = {entry.split(":", 1)[0] for entry in stored}
     assert baseline_tools <= set(routes)
+
+
+def test_go_instance_interface_list_dynamic_get_evidence() -> None:
+    """The Go source keeps the dynamic GET evidence behind the route contract."""
+    routes = gate.parse_routes(
+        (REPO_ROOT / "docs" / "contracts" / "tool-routes.txt").read_text(
+            encoding="utf-8"
+        )
+    )
+    methods = (
+        REPO_ROOT / "go" / "internal" / "linode" / "methods_instance_deep.go"
+    ).read_text(encoding="utf-8")
+    proto_list = (REPO_ROOT / "go" / "internal" / "linode" / "proto_list.go").read_text(
+        encoding="utf-8"
+    )
+
+    assert routes["linode_instance_interface_list"] == (
+        "GET",
+        "/linode/instances/{p}/interfaces",
+    )
+
+    assert 'endpointInstanceDeep = "/linode/instances"' in methods
+
+    declaration = "func (c *Client) httpListInstanceInterfacesProto"
+    _, separator, function_tail = methods.partition(declaration)
+    assert separator
+    function, _, _ = function_tail.partition("\nfunc ")
+    assert "encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))" in function
+    normalized_function = " ".join(function.split())
+    assert (
+        'fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID)'
+        in normalized_function
+    )
+    assert (
+        'listProtoElementsKeyed(ctx, c, "ListInstanceInterfaces", endpoint, '
+        '"interfaces",' in normalized_function
+    )
+
+    helper_declaration = "func listProtoElementsKeyed"
+    _, helper_separator, helper_tail = proto_list.partition(helper_declaration)
+    assert helper_separator
+    helper, _, _ = helper_tail.partition("\nfunc ")
+    normalized_helper = " ".join(helper.split())
+    assert "client.makeRequest(ctx, http.MethodGet, endpoint, nil)" in normalized_helper

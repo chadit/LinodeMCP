@@ -1,12 +1,123 @@
 {
   "tool": "linode_instance_interface_list",
-  "description": "Pins the instance-interface list GET. linode_id rejection text diverges between languages (see report).",
+  "description": "Pins the documented keyed instance-interface list response, including accepted empty shapes and rejected response, member, and element shapes.",
   "cases": [
     {
       "name": "lists interfaces",
       "args": { "linode_id": 123 },
       "api_response": { "interfaces": [] },
       "expect_request": { "method": "GET", "path": "/linode/instances/123/interfaces" }
+    },
+    {
+      "name": "returns documented keyed interfaces",
+      "args": { "linode_id": 123 },
+      "api_response": {
+        "interfaces": [
+          { "id": 789, "mac_address": "22:00:AB:CD:EF:01" }
+        ]
+      },
+      "expect_result": {
+        "count": 1,
+        "interfaces": [
+          { "id": 789, "mac_address": "22:00:AB:CD:EF:01" }
+        ]
+      }
+    },
+    {
+      "name": "accepts a missing interfaces member",
+      "args": { "linode_id": 123 },
+      "api_response": {},
+      "expect_result": { "count": 0, "interfaces": [] }
+    },
+    {
+      "name": "accepts a null interfaces member",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": null },
+      "expect_result": { "count": 0, "interfaces": [] }
+    },
+    {
+      "name": "rejects an object interfaces member",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": {} },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a string interfaces member",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": "invalid" },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a numeric interfaces member",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": 1 },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a boolean interfaces member",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": false },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a top-level array response",
+      "args": { "linode_id": 123 },
+      "api_response": [],
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level null response",
+      "args": { "linode_id": 123 },
+      "api_responses": { "GET /linode/instances/123/interfaces": null },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level string response",
+      "args": { "linode_id": 123 },
+      "api_response": "invalid",
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level numeric response",
+      "args": { "linode_id": 123 },
+      "api_response": 1,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level boolean response",
+      "args": { "linode_id": 123 },
+      "api_response": false,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects an array interface element",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": [[]] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a null interface element",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": [null] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a string interface element",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": ["invalid"] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a numeric interface element",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": [1] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a boolean interface element",
+      "args": { "linode_id": 123 },
+      "api_response": { "interfaces": [false] },
+      "expect_api_error": "element"
     }
   ]
 }
