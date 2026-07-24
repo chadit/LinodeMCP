@@ -76,9 +76,11 @@ async def handle_linode_lke_cluster_create(
             "/lke/clusters",
             None,
             side_effects=[
-                f"A new LKE cluster {arguments.get('label', '')!r} will be created "
-                f"in region {arguments.get('region', '')} running Kubernetes "
-                f"{arguments.get('k8s_version', '')}."
+                (
+                    f"A new LKE cluster {arguments.get('label', '')!r} will be created "
+                    f"in region {arguments.get('region', '')} running Kubernetes "
+                    f"{arguments.get('k8s_version', '')}."
+                )
             ],
             warnings=[
                 "Billing for the cluster's node pools starts immediately on creation."
@@ -263,8 +265,10 @@ async def _lke_cluster_delete_dependency_walk(
         details["dependencies"] = dependencies
     if total_nodes > 0:
         details["warnings"] = [
-            f"Deleting this cluster destroys {len(pools)} node pool(s) "
-            f"and {total_nodes} node(s); running workloads are lost."
+            (
+                f"Deleting this cluster destroys {len(pools)} node pool(s) "
+                f"and {total_nodes} node(s); running workloads are lost."
+            )
         ]
     return details
 
@@ -719,8 +723,10 @@ def _lke_pool_delete_dependency_walk(pool_state: Any) -> DryRunDetails:
         details["dependencies"] = dependencies
     if count > 0:
         details["warnings"] = [
-            f"Deleting this pool destroys {count} node(s) and their backing "
-            "Linodes; running workloads are lost."
+            (
+                f"Deleting this pool destroys {count} node(s) and their backing "
+                "Linodes; running workloads are lost."
+            )
         ]
     return details
 
@@ -934,8 +940,10 @@ def _lke_node_delete_dependency_walk(node_state: Any) -> DryRunDetails:
             }
         ]
     details["warnings"] = [
-        "Deleting this node removes it from its pool; the pool node count "
-        "drops by one and scheduled workloads reschedule."
+        (
+            "Deleting this node removes it from its pool; the pool node count "
+            "drops by one and scheduled workloads reschedule."
+        )
     ]
     return details
 
@@ -1345,15 +1353,19 @@ def _lke_acl_update_side_effects(acl: Any) -> DryRunDetails:
     if enabled is True:
         return {
             "side_effects": [
-                "The control-plane ACL is enabled; only the listed addresses "
-                "may reach the Kubernetes API."
+                (
+                    "The control-plane ACL is enabled; only the listed addresses "
+                    "may reach the Kubernetes API."
+                )
             ]
         }
     if enabled is False:
         return {
             "side_effects": [
-                "The control-plane ACL is disabled; the Kubernetes API becomes "
-                "reachable from any address."
+                (
+                    "The control-plane ACL is disabled; the Kubernetes API becomes "
+                    "reachable from any address."
+                )
             ]
         }
     return {"side_effects": ["The cluster control-plane ACL address list is updated."]}

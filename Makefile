@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes baseline-guard parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes baseline-guard tool-float parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -200,6 +200,14 @@ sync: sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes
 BASE ?= origin/main
 baseline-guard:
 	@python3 scripts/verify_baseline_direction.py "$(BASE)"
+
+## tool-float: Verify gate tooling floats at latest (app deps pin; tools do not)
+# Cheap line scans over pyproject's dev group, the Makefiles, ci-setup.sh, and
+# workflow run commands, so it rides early in `check` beside baseline-guard.
+# A capped or pinned gate tool fails unless its module carries a reasoned
+# entry in the script's deliberate-pin allowlist (currently only buf).
+tool-float:
+	@python3 scripts/verify_tool_float.py
 
 ## parity-todo: Report per-language remaining work from the parity baselines
 # Read-only aggregation of docs/contracts/languages.txt plus every ratchet baseline:

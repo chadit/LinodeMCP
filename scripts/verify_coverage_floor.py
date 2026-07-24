@@ -124,18 +124,22 @@ def _check_go(floor: float) -> list[str]:
     """Go arm: measured profile total against the contracted floor."""
     if not _GO_PROFILE.exists():
         return [
-            f"{_GO_PROFILE} is missing; run `make go-test` first"
-            " (the test target writes it)"
+            (
+                f"{_GO_PROFILE} is missing; run `make go-test` first"
+                " (the test target writes it)"
+            )
         ]
     percent = go_coverage_percent()
     if percent < floor:
         return [
-            f"go coverage {percent:.1f}% is below the contracted floor"
-            f" {floor:.1f}%; add tests for the uncovered code. Never lower"
-            " the floor to excuse untested NEW code; the one legitimate"
-            " lowering is a removal of well-covered code that drags the"
-            " average down, done as a visible human decision in"
-            " docs/contracts/coverage-floors.txt in the same change"
+            (
+                f"go coverage {percent:.1f}% is below the contracted floor"
+                f" {floor:.1f}%; add tests for the uncovered code. Never lower"
+                " the floor to excuse untested NEW code; the one legitimate"
+                " lowering is a removal of well-covered code that drags the"
+                " average down, done as a visible human decision in"
+                " docs/contracts/coverage-floors.txt in the same change"
+            )
         ]
     return []
 
@@ -145,9 +149,11 @@ def _check_python(floor: float) -> list[str]:
     configured = pyproject_fail_under()
     if configured != floor:
         return [
-            f"python floor mismatch: contract says {floor:g},"
-            f" pyproject --cov-fail-under says {configured:g};"
-            " keep the two identical"
+            (
+                f"python floor mismatch: contract says {floor:g},"
+                f" pyproject --cov-fail-under says {configured:g};"
+                " keep the two identical"
+            )
         ]
     return []
 
