@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -143,8 +144,10 @@ def test_compare_flags_scope_mismatch() -> None:
     routes, dump, spec = _base_fixture()
     dump[0]["scopes"] = ["account:read_write"]
     assert gate.compare(routes, dump, gate.spec_operations(spec)) == [
-        "linode_tag_list: scopes doc=['account:read_only']"
-        " mapped=['account:read_write']"
+        (
+            "linode_tag_list: scopes doc=['account:read_only']"
+            " mapped=['account:read_write']"
+        )
     ]
 
 
@@ -350,3 +353,48 @@ def test_live_contract_files_are_coherent() -> None:
     # renamed tool cannot leave an orphaned baseline entry behind.
     baseline_tools = {entry.split(":", 1)[0] for entry in stored}
     assert baseline_tools <= set(routes)
+
+
+def test_go_instance_interface_list_dynamic_get_evidence() -> None:
+    """The Go source keeps the dynamic GET evidence behind the route contract."""
+    routes = gate.parse_routes(
+        (REPO_ROOT / "docs" / "contracts" / "tool-routes.txt").read_text(
+            encoding="utf-8"
+        )
+    )
+    methods = (
+        REPO_ROOT / "go" / "internal" / "linode" / "methods_instance_deep.go"
+    ).read_text(encoding="utf-8")
+    proto_list = (REPO_ROOT / "go" / "internal" / "linode" / "proto_list.go").read_text(
+        encoding="utf-8"
+    )
+
+    assert routes["linode_instance_interface_list"] == (
+        "GET",
+        "/linode/instances/{p}/interfaces",
+    )
+
+    function_match = re.search(
+        r"(?ms)^func \(c \*Client\) httpListInstanceInterfacesProto\b.*?^}$",
+        methods,
+    )
+    assert function_match is not None
+    function = function_match.group()
+
+    assert 'endpointInstanceDeep = "/linode/instances"' in methods
+    assert (
+        'fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID)'
+        in function
+    )
+    assert (
+        'listProtoElementsKeyed(ctx, c, "ListInstanceInterfaces", endpoint, '
+        '"interfaces",' in function
+    )
+
+    helper_match = re.search(
+        r"(?ms)^func listProtoElementsKeyed\[.*?^}$",
+        proto_list,
+    )
+    assert helper_match is not None
+    helper = helper_match.group()
+    assert "client.makeRequest(ctx, http.MethodGet, endpoint, nil)" in helper

@@ -817,8 +817,11 @@ async def handle_linode_instance_interface_list(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         # The current-generation interfaces endpoint wraps the list under
         # "interfaces", not a {data} page envelope; rewrap it for the helper.
-        raw = await client.list_instance_interfaces(linode_id)
-        items: list[Any] = raw.get("interfaces") or []
+        raw: Any = await client.list_instance_interfaces(linode_id)
+        if not isinstance(raw, dict):
+            raise TypeError("list response must be an object")
+        envelope = cast("dict[str, Any]", raw)
+        items: Any = envelope.get("interfaces", [])
         return serialize_list_response(
             {"data": items},
             "interfaces",
@@ -1016,8 +1019,10 @@ async def handle_linode_instance_config_interface_update(
             ),
             None,
             side_effects=[
-                f"Interface {interface_id} on configuration profile {config_id} "
-                f"for Linode {linode_id} will be updated."
+                (
+                    f"Interface {interface_id} on configuration profile {config_id} "
+                    f"for Linode {linode_id} will be updated."
+                )
             ],
             request_body=fields,
         )
@@ -1235,8 +1240,10 @@ async def handle_linode_instance_config_interface_reorder(
             f"/linode/instances/{linode_id}/configs/{config_id}/interfaces/order",
             None,
             side_effects=[
-                f"Interfaces on configuration profile {config_id} for Linode "
-                f"{linode_id} will be reordered."
+                (
+                    f"Interfaces on configuration profile {config_id} for Linode "
+                    f"{linode_id} will be reordered."
+                )
             ],
             request_body={"ids": ids},
         )
@@ -1291,8 +1298,10 @@ async def handle_linode_instance_config_interface_add(
             f"/linode/instances/{linode_id}/configs/{config_id}/interfaces",
             None,
             side_effects=[
-                f"An interface will be added to configuration profile {config_id} "
-                f"on Linode {linode_id}."
+                (
+                    f"An interface will be added to configuration profile {config_id} "
+                    f"on Linode {linode_id}."
+                )
             ],
             request_body=body,
         )
@@ -1390,8 +1399,10 @@ async def handle_linode_instance_config_update(
             f"/linode/instances/{linode_id}/configs/{config_id}",
             None,
             side_effects=[
-                f"Configuration profile {config_id} on Linode {linode_id} "
-                "will be updated."
+                (
+                    f"Configuration profile {config_id} on Linode {linode_id} "
+                    "will be updated."
+                )
             ],
             request_body=fields,
         )
