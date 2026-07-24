@@ -21020,8 +21020,10 @@ async def test_linode_instance_interface_settings_update_rejects_bad_linode_id(
                 "default_route": {"ipv4_eligible_interface_ids": [1]},
                 "confirm": True,
             },
-            "Error: default_route supports only ipv4_interface_id "
-            "and ipv6_interface_id",
+            (
+                "Error: default_route supports only ipv4_interface_id "
+                "and ipv6_interface_id"
+            ),
         ),
         (
             {

@@ -112,8 +112,10 @@ async def handle_linode_firewall_create(
             "/networking/firewalls",
             None,
             side_effects=[
-                f"A new Cloud Firewall {label!r} will be created with inbound "
-                f"policy {inbound_policy} and outbound policy {outbound_policy}."
+                (
+                    f"A new Cloud Firewall {label!r} will be created with inbound "
+                    f"policy {inbound_policy} and outbound policy {outbound_policy}."
+                )
             ],
         )
 
@@ -281,8 +283,10 @@ async def _firewall_delete_dependency_walk(
     if dependencies:
         details["dependencies"] = dependencies
         details["warnings"] = [
-            f"{len(dependencies)} resource(s) currently use this firewall "
-            "and will lose its rules."
+            (
+                f"{len(dependencies)} resource(s) currently use this firewall "
+                "and will lose its rules."
+            )
         ]
     return details
 
@@ -601,8 +605,10 @@ async def handle_linode_instance_firewall_apply(
             f"/linode/instances/{linode_id_value}/firewalls/apply",
             None,
             side_effects=[
-                "Cloud Firewall assignments will be applied to "
-                f"Linode {linode_id_value}."
+                (
+                    "Cloud Firewall assignments will be applied to "
+                    f"Linode {linode_id_value}."
+                )
             ],
         )
 
@@ -764,8 +770,10 @@ async def handle_linode_firewall_device_create(
             f"/networking/firewalls/{firewall_id}/devices",
             None,
             side_effects=[
-                f"The {device_type} {device_id} will be attached to "
-                f"firewall {firewall_id}."
+                (
+                    f"The {device_type} {device_id} will be attached to "
+                    f"firewall {firewall_id}."
+                )
             ],
         )
 

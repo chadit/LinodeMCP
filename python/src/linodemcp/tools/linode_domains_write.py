@@ -76,8 +76,10 @@ async def handle_linode_domain_import(
             None,
             request_body=request_body,
             side_effects=[
-                f"DNS domain {domain_name!r} will be imported from "
-                f"{remote_nameserver!r}."
+                (
+                    f"DNS domain {domain_name!r} will be imported from "
+                    f"{remote_nameserver!r}."
+                )
             ],
         )
 
@@ -403,8 +405,10 @@ async def _domain_delete_dependency_walk(
         details["dependencies"] = dependencies
     if records:
         details["warnings"] = [
-            f"Deleting this domain destroys {len(records)} DNS record(s), "
-            f"including {ns_count} NS record(s)."
+            (
+                f"Deleting this domain destroys {len(records)} DNS record(s), "
+                f"including {ns_count} NS record(s)."
+            )
         ]
     return details
 
