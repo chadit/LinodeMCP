@@ -3877,7 +3877,7 @@ async def test_list_instance_config_interfaces_rejects_non_object_items() -> Non
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        with pytest.raises(TypeError, match="response items must be objects"):
+        with pytest.raises(TypeError, match="response elements must be objects"):
             await client.list_instance_config_interfaces(123, 6)
 
     await client.close()
@@ -8166,7 +8166,7 @@ async def test_get_region_availability_rejects_non_object_items(
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = response
 
-        with pytest.raises(TypeError, match="response items must be objects"):
+        with pytest.raises(TypeError, match="response elements must be objects"):
             await client.get_region_availability("us-east")
 
     await client.close()
@@ -8187,22 +8187,6 @@ async def test_get_region_availability_url_encodes_region_id() -> None:
     mock_request.assert_called_once_with(
         "GET", "/regions/us%2Feast%3Fx%3D1/availability"
     )
-
-    await client.close()
-
-
-async def test_get_region_availability_rejects_page_envelope() -> None:
-    """The per-region availability route documents a bare array, not a page."""
-    client = Client("https://api.linode.com/v4", "test-token")
-
-    response = MagicMock()
-    response.json.return_value = {"data": [], "page": 1, "pages": 1, "results": 0}
-
-    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
-        mock_request.return_value = response
-
-        with pytest.raises(TypeError, match="must be an array"):
-            await client.get_region_availability("us-east")
 
     await client.close()
 

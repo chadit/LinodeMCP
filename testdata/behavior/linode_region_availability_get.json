@@ -74,7 +74,7 @@
           null
         ]
       },
-      "expect_api_error": "availability"
+      "expect_api_error": "element"
     },
     {
       "name": "rejects a boolean array element after the API call",
@@ -85,7 +85,7 @@
           true
         ]
       },
-      "expect_api_error": "availability"
+      "expect_api_error": "element"
     },
     {
       "name": "rejects a string array element after the API call",
@@ -96,7 +96,7 @@
           "invalid"
         ]
       },
-      "expect_api_error": "availability"
+      "expect_api_error": "element"
     },
     {
       "name": "rejects a number array element after the API call",
@@ -107,7 +107,7 @@
           1
         ]
       },
-      "expect_api_error": "availability"
+      "expect_api_error": "element"
     },
     {
       "name": "rejects an array element after the API call",
@@ -118,7 +118,7 @@
           []
         ]
       },
-      "expect_api_error": "availability"
+      "expect_api_error": "element"
     }
   ]
 }

@@ -2592,7 +2592,7 @@ class Client:
                 raise TypeError(msg)
             items = cast("list[object]", data)
             if not all(isinstance(item, dict) for item in items):
-                msg = "config interface list response items must be objects"
+                msg = "config interface list response elements must be objects"
                 raise TypeError(msg)
             return cast("list[dict[str, Any]]", items)
         except httpx.HTTPError as e:
@@ -3912,7 +3912,7 @@ class Client:
                 raise TypeError(msg)
             items = cast("list[object]", data)
             if not all(isinstance(item, dict) for item in items):
-                msg = "region availability response items must be objects"
+                msg = "region availability response elements must be objects"
                 raise TypeError(msg)
             return cast("list[dict[str, Any]]", items)
         except httpx.HTTPError as e:
