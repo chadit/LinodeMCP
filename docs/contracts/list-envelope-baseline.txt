@@ -1,0 +1,7 @@
+# Functions that build a list response and still collapse falsey values
+# with `or []`, hiding a malformed API response as an empty list. Ratchet:
+# switch the handler to serialize_keyed_list_response and remove its line;
+# never add a line by hand (regenerate instead, then attach the required
+# annotation).
+# Regenerate with:
+#   python3 scripts/verify_list_envelope.py --update-baseline

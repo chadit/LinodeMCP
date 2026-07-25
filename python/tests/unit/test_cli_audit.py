@@ -1,4 +1,4 @@
-"""Unit tests for ``linodemcp audit`` (recent/summary/health/export).
+"""Unit tests for ``linodemcp audit`` (recent/summary/health/export/report).
 
 The audit subcommands build a ``linode_audit_*`` call and drive it through the
 shared dispatch, then print the result. Tests use the public synchronous entry
@@ -33,6 +33,32 @@ def audit_config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "    linode:\n"
         "      apiUrl: https://api.linode.com/v4\n"
         "      token: test-token\n"
+    )
+    monkeypatch.setenv("LINODEMCP_CONFIG_PATH", str(config_file))
+    return config_file
+
+
+@pytest.fixture
+def report_config_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Write a config with one named report so `audit report` can resolve it."""
+    config_file = tmp_path / "config.yml"
+    config_file.write_text(
+        "server:\n"
+        "  name: TestCLI\n"
+        "environments:\n"
+        "  default:\n"
+        "    label: Default\n"
+        "    linode:\n"
+        "      apiUrl: https://api.linode.com/v4\n"
+        "      token: test-token\n"
+        "audit:\n"
+        "  reports:\n"
+        "    daily-writes:\n"
+        "      description: write ops in the last day\n"
+        "      filter:\n"
+        "        capability: write\n"
+        "        since_offset: 24h\n"
+        "      output: summary\n"
     )
     monkeypatch.setenv("LINODEMCP_CONFIG_PATH", str(config_file))
     return config_file
@@ -83,6 +109,48 @@ def test_audit_export_with_format_succeeds(audit_config_file: Path) -> None:
     stdout, stderr = io.StringIO(), io.StringIO()
     code = run_audit_command(["export", "--format", "json"], stdout, stderr)
     assert code == 0
+
+
+def test_audit_recent_include_meta_folds_into_call(audit_config_file: Path) -> None:
+    """`audit recent --include-meta` is accepted and still returns JSON.
+
+    The flag maps onto the tool's include_meta argument, matching the Go CLI;
+    on an empty log the widened filter still yields a valid events document.
+    """
+    stdout, stderr = io.StringIO(), io.StringIO()
+    code = run_audit_command(["recent", "--include-meta"], stdout, stderr)
+    assert code == 0
+    payload = json.loads(stdout.getvalue())
+    assert "events" in payload
+
+
+def test_audit_report_succeeds(report_config_file: Path) -> None:
+    """`audit report <name>` resolves a configured report and prints JSON.
+
+    The log is empty, so the summary report has zero rows but still succeeds.
+    """
+    stdout, stderr = io.StringIO(), io.StringIO()
+    code = run_audit_command(["report", "daily-writes"], stdout, stderr)
+    assert code == 0
+    json.loads(stdout.getvalue())
+
+
+def test_audit_report_unknown_name_exits_tool_error(audit_config_file: Path) -> None:
+    """An undefined report name is the tool's error, mapping to exit 1.
+
+    Not a usage error: the CLI cannot know the config's report names, so the
+    rejection must come from the dispatched tool.
+    """
+    stdout, stderr = io.StringIO(), io.StringIO()
+    code = run_audit_command(["report", "no-such-report"], stdout, stderr)
+    assert code == 1
+
+
+def test_audit_report_missing_name_exits_usage(audit_config_file: Path) -> None:
+    """`audit report` with no name is a usage error before any dispatch."""
+    stdout, stderr = io.StringIO(), io.StringIO()
+    code = run_audit_command(["report"], stdout, stderr)
+    assert code == 2
 
 
 def test_audit_unknown_subcommand_exits_usage_error(audit_config_file: Path) -> None:

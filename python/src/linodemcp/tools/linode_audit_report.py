@@ -42,6 +42,7 @@ from linodemcp.config import (
 )
 from linodemcp.genpb.linode.mcp.v1 import audit_pb2
 from linodemcp.profiles import Capability
+from linodemcp.tools.helpers import error_response
 from linodemcp.tools.linode_audit_summary import audit_sqlite_path
 from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema
@@ -85,19 +86,25 @@ def create_linode_audit_report_tool() -> tuple[Tool, Capability]:
 async def handle_linode_audit_report(
     arguments: dict[str, Any],
 ) -> list[TextContent]:
-    """Resolve the named report, run it, and return summary or list output."""
+    """Resolve the named report, run it, and return summary or list output.
+
+    Failures use the standard Error:-prefixed shape (``error_response``) so
+    they read as tool-level errors everywhere Go's ``NewToolResultError``
+    does: the cross-language behavior runner and the CLI's exit-code mapping
+    both key on that convention.
+    """
     name = str(arguments.get("name", ""))
     if not name:
-        return [TextContent(type="text", text="report name is required")]
+        return error_response("report name is required")
 
     report = audit_reports().get(name)
     if report is None:
-        return [TextContent(type="text", text=f"unknown report: {name!r}")]
+        return error_response(f"unknown report: {name!r}")
 
     try:
         payload = _run_report(name, report, datetime.now(UTC))
     except ValueError as exc:
-        return [TextContent(type="text", text=str(exc))]
+        return error_response(f"failed to run report: {exc}")
 
     result = serialize_api_response(payload, audit_pb2.AuditReportResponse())
     return [TextContent(type="text", text=json.dumps(result, indent=2))]

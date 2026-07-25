@@ -48,6 +48,10 @@ message RegionListInput {
   // Filter regions by capability (e.g., 'Linodes', 'Block Storage', 'GPU
   // Linodes').
   optional string capability = 3;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 4;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 5;
 }
 
 // RegionAvailabilityListInput is the input contract for

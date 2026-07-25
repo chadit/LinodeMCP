@@ -13,7 +13,7 @@ from linodemcp.genpb.linode.mcp.v1 import (
     type_pb2,
 )
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import execute_tool, standard_pagination_arguments
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -268,9 +268,13 @@ async def handle_linode_object_storage_endpoint_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_object_storage_endpoint_list tool request."""
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return _error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        endpoints = await client.list_object_storage_endpoints()
+        endpoints = await client.list_object_storage_endpoints(page, page_size)
         return serialize_list_response(
             {"data": endpoints},
             "endpoints",

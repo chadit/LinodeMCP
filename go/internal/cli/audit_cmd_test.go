@@ -2,10 +2,55 @@ package cli_test
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/cli"
 )
+
+// subverbReport is the audit subcommand under test; a constant because
+// goconst flags the repeated literal across the report test cases.
+const subverbReport = "report"
+
+// writeTestConfigWithReport writes the shared minimal config plus one
+// named report under audit.reports, so the report subcommand has a
+// resolvable name. Separate from writeTestConfigFile because only the
+// report tests need the audit block.
+func writeTestConfigWithReport(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	contents := `
+server:
+  name: "Test"
+  logLevel: "info"
+  transport: "stdio"
+  host: "127.0.0.1"
+  port: 8080
+environments:
+  default:
+    label: "Default"
+    linode:
+      apiUrl: "https://api.linode.com/v4"
+      token: "tok"
+audit:
+  reports:
+    daily-writes:
+      description: "write ops in the last day"
+      filter:
+        capability: "write"
+        since_offset: "24h"
+      output: "summary"
+`
+
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatalf("write test config: %v", err)
+	}
+
+	return path
+}
 
 // TestAuditHealthSucceeds checks `audit health` drives the health query
 // tool and prints its JSON. The audit subsystem reports its paths, so the
@@ -61,6 +106,59 @@ func TestAuditExportMissingFormatReturnsError(t *testing.T) {
 	}
 
 	wantContains(t, "stderr", stderr.String(), "error result")
+}
+
+// TestAuditReportSucceeds checks `audit report <name>` resolves a report
+// defined under audit.reports and prints its JSON result. The log is
+// empty, so the summary report returns zero rows but still succeeds.
+func TestAuditReportSucceeds(t *testing.T) {
+	t.Setenv("LINODEMCP_CONFIG_PATH", writeTestConfigWithReport(t))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+
+	code := cli.RunAuditCommand([]string{subverbReport, "daily-writes"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit code = %d (stderr: %s), want 0", code, stderr.String())
+	}
+
+	decodeJSONObject(t, stdout.String())
+}
+
+// TestAuditReportUnknownNameReturnsError checks an undefined report name
+// reaches the tool, whose error result maps to exit 1 (not a usage
+// error: the CLI cannot know the config's report names).
+func TestAuditReportUnknownNameReturnsError(t *testing.T) {
+	t.Setenv("LINODEMCP_CONFIG_PATH", writeTestConfigFile(t))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+
+	code := cli.RunAuditCommand([]string{subverbReport, "no-such-report"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("exit code = %d (stderr: %s), want 1", code, stderr.String())
+	}
+
+	wantContains(t, "stderr", stderr.String(), "error result")
+}
+
+// TestAuditReportMissingNameExitsUsage checks `audit report` with no
+// name (or more than one) is a usage error, caught before any dispatch.
+func TestAuditReportMissingNameExitsUsage(t *testing.T) {
+	t.Setenv("LINODEMCP_CONFIG_PATH", writeTestConfigFile(t))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+
+	code := cli.RunAuditCommand([]string{"report"}, &stdout, &stderr)
+	if code != exitUsage {
+		t.Fatalf("exit code = %d, want %d", code, exitUsage)
+	}
+
+	code = cli.RunAuditCommand([]string{subverbReport, "a", "b"}, &stdout, &stderr)
+	if code != exitUsage {
+		t.Fatalf("exit code with two names = %d, want %d", code, exitUsage)
+	}
 }
 
 // TestAuditUnknownSubcommandExitsUsage checks an unknown audit

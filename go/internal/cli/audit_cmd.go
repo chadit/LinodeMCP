@@ -16,6 +16,7 @@ const (
 	toolAuditSummary = "linode_audit_summary"
 	toolAuditHealth  = "linode_audit_health"
 	toolAuditExport  = "linode_audit_export"
+	toolAuditReport  = "linode_audit_report"
 )
 
 // Audit argument field names. These match the audit tools' input schema,
@@ -26,6 +27,7 @@ const (
 	auditArgLimit       = "limit"
 	auditArgFormat      = "format"
 	auditArgIncludeMeta = "include_meta"
+	auditArgName        = "name"
 )
 
 const auditUsage = `Usage: linodemcp audit <subcommand> [flags]
@@ -39,7 +41,8 @@ Subcommands:
                   Counts grouped by tool, status, capability, and more.
   health          Audit subsystem state: paths, disk bytes, dropped count.
   export --format json|csv|ndjson [--tool glob] [--since ts]
-                  Dump a filtered range to a temp file and print its path.`
+                  Dump a filtered range to a temp file and print its path.
+  report <name>   Run the named report defined under audit.reports.`
 
 // RunAuditCommand dispatches `linodemcp audit <subcommand>` and returns
 // the exit code. Each subcommand maps its flags into the matching
@@ -61,6 +64,8 @@ func RunAuditCommand(args []string, stdout, stderr io.Writer) int {
 		return runAuditHealth(args[1:], stdout, stderr)
 	case "export":
 		return runAuditExport(args[1:], stdout, stderr)
+	case "report":
+		return runAuditReport(args[1:], stdout, stderr)
 	default:
 		writef(stderr, "unknown audit subcommand: %s\n\n%s\n", args[0], auditUsage)
 
@@ -161,6 +166,19 @@ func runAuditExport(args []string, stdout, stderr io.Writer) int {
 	putString(arguments, auditArgSince, since)
 
 	return runAuditTool(toolAuditExport, arguments, stdout, stderr)
+}
+
+// runAuditReport maps the positional report name into linode_audit_report.
+// The name is the only input; an unknown name is the tool's error to
+// report, so validation beyond arity stays in the dispatch.
+func runAuditReport(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		writef(stderr, "audit report takes exactly one report name, got: %v\n", args)
+
+		return ExitUsageError
+	}
+
+	return runAuditTool(toolAuditReport, map[string]any{auditArgName: args[0]}, stdout, stderr)
 }
 
 // runAuditTool builds a one-shot runtime, dispatches one audit tool call

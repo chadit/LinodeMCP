@@ -14200,7 +14200,9 @@ async def test_handle_linode_object_storage_endpoints_list(
         assert len(result) == 1
         assert "us-sea-1.linodeobjects.com" in result[0].text
         assert '"count": 1' in result[0].text
-        mock_client.list_object_storage_endpoints.assert_called_once_with()
+        # No page arguments were supplied, so both stay None and the query
+        # string is omitted, leaving the API's own default page in effect.
+        mock_client.list_object_storage_endpoints.assert_called_once_with(None, None)
 
 
 async def test_handle_linode_object_storage_endpoints_list_error(
@@ -22348,6 +22350,75 @@ async def test_handle_linode_profile_security_questions_list_empty_envelope(
         result = await handle_linode_profile_security_question_list({}, sample_config)
 
     assert json.loads(result[0].text) == {"count": 0, "security_questions": []}
+
+
+@pytest.mark.parametrize(
+    "api_response",
+    [{"security_questions": None}, {"unrelated": True}],
+    ids=["null", "extra-field"],
+)
+async def test_handle_linode_profile_security_questions_list_accepts_empty_shapes(
+    sample_config: Config, api_response: dict[str, Any]
+) -> None:
+    """A null member is an empty list, the shape linodego's []T field decodes to."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_security_questions.return_value = api_response
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_question_list({}, sample_config)
+
+    assert json.loads(result[0].text) == {"count": 0, "security_questions": []}
+
+
+@pytest.mark.parametrize(
+    "questions", [{}, "", 0, False], ids=["object", "string", "number", "boolean"]
+)
+async def test_handle_linode_profile_security_questions_list_rejects_falsey_non_arrays(
+    sample_config: Config, questions: Any
+) -> None:
+    """Falsey non-array members are malformed responses, not empty lists."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_security_questions.return_value = {
+            "security_questions": questions
+        }
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_question_list({}, sample_config)
+
+    assert result[0].text.startswith(
+        "Failed to list Linode profile security questions: "
+        "list response data must be an array"
+    )
+
+
+@pytest.mark.parametrize(
+    "api_response",
+    [[], None, "", 0, False],
+    ids=["array", "null", "string", "number", "boolean"],
+)
+async def test_handle_linode_profile_security_questions_list_rejects_non_object(
+    sample_config: Config, api_response: Any
+) -> None:
+    """A non-object root is rejected before the member lookup can raise."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_security_questions.return_value = api_response
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_question_list({}, sample_config)
+
+    assert result[0].text.startswith(
+        "Failed to list Linode profile security questions: "
+        "list response must be an object"
+    )
 
 
 async def test_handle_linode_profile_security_questions_list_error(

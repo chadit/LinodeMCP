@@ -17,9 +17,11 @@ from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
     WALK_PAGE_SIZE,
     DryRunDetails,
+    error_response,
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    standard_pagination_arguments,
     walk_page_items,
 )
 from linodemcp.tools.proto_enum import enum_value_names, optional_enum_error
@@ -247,10 +249,15 @@ async def handle_linode_instance_disk_list(
     if isinstance(iid, list):
         return iid
 
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        disks = await client.list_instance_disks(iid)
+        disks = await client.list_instance_disks(iid, page, page_size)
         return serialize_list_response(
             {"data": disks},
             "disks",

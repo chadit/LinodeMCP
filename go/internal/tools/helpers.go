@@ -865,6 +865,42 @@ func objectSliceFromToolArg[T any](raw any, name string) ([]T, string) {
 
 // objectJSONFromToolArg returns the JSON text of a single-object tool argument
 // that may arrive as a native map (the schema form) or a JSON-encoded object
+// Standard Linode collection pagination bounds. The API applies these to every
+// paginated collection, so a family with no bounds of its own uses them rather
+// than declaring a private copy.
+const (
+	standardPageSizeMin = 25
+	standardPageSizeMax = 500
+)
+
+// Descriptions for the standard page/page_size params. Shared so every family
+// that adopts standard pagination advertises byte-identical text, which is what
+// keeps the cross-language input schemas equal under the tool-parity gate.
+const (
+	standardPageDesc     = "Page of results to return (optional, minimum 1)."
+	standardPageSizeDesc = "Number of results per page (optional, 25-500)."
+)
+
+// standardPaginationFromTool reads page/page_size under the standard Linode
+// bounds. Families that predate this helper keep their own reader because their
+// validation messages are pinned by the message-parity gate; new paginated
+// families use this one instead of copying the pair again.
+func standardPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
+	args := request.GetArguments()
+
+	page, validationMessage := optionalPaginationInt(args, paramPage, 1, 0)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	pageSize, validationMessage := optionalPaginationInt(args, paramPageSize, standardPageSizeMin, standardPageSizeMax)
+	if validationMessage != "" {
+		return 0, 0, validationMessage
+	}
+
+	return page, pageSize, ""
+}
+
 // string (legacy form), for callers that then decode strictly. An absent value
 // yields ("", ""); a non-object value returns a validation message naming the
 // argument.

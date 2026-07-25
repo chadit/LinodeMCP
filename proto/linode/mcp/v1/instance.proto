@@ -546,6 +546,10 @@ message InstanceListInput {
   optional string environment = 1;
   // Filter instances by status (running, stopped, etc.).
   optional string status = 2;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4;
 }
 
 // InstanceBootInput is the input contract for linode_instance_boot.

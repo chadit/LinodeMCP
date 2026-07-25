@@ -75,6 +75,10 @@ message ImageListInput {
   optional string is_public = 3;
   // Filter by deprecated status (true, false).
   optional string deprecated = 4;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 5;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 6;
 }
 
 // ImageCreateInput is the input contract for linode_image_create. disk_id and

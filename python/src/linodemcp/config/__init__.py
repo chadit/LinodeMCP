@@ -491,12 +491,17 @@ def _apply_environment_overrides(data: dict[str, Any]) -> None:
         data["server"]["logLevel"] = log_level
 
     data.setdefault("environments", {})
-    data["environments"].setdefault("default", {})
 
     api_url = os.getenv("LINODEMCP_LINODE_API_URL")
     token = os.getenv("LINODEMCP_LINODE_TOKEN")
 
+    # The default environment is only materialized when the environment
+    # actually supplies something, matching Go's applyLinodeOverrides. Seeding
+    # it unconditionally would invent a credential-less "default" that
+    # SelectEnvironment then resolves, where Go reports the environment as
+    # missing.
     if api_url or token:
+        data["environments"].setdefault("default", {})
         data["environments"]["default"].setdefault("linode", {})
         if api_url:
             data["environments"]["default"]["linode"]["apiUrl"] = api_url
@@ -1014,6 +1019,23 @@ def load_from_file(path: Path) -> Config:
 def load() -> Config:
     """Load configuration from default location."""
     return load_from_file(get_config_path())
+
+
+def load_default_with_env() -> Config:
+    """Build the no-file default config with environment overrides applied.
+
+    Same pipeline ``load_from_file`` runs, minus reading a file: defaults, then
+    the environment overrides, then the dataclass conversion. A token and API
+    URL supplied by environment therefore produce a usable default environment
+    with no config file on disk, which is the shape CI runners want (the token
+    comes from a secret and never lands in a file). Mirrors Go's
+    ``defaultCLIConfig`` calling ``config.ApplyEnvironmentOverrides``.
+    """
+    data: dict[str, Any] = {}
+    _apply_defaults(data)
+    _apply_environment_overrides(data)
+
+    return _data_to_config(data)
 
 
 def _config_to_data(cfg: Config) -> dict[str, Any]:

@@ -23,8 +23,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    paginated_path,
     pagination_int_argument,
     required_int_id,
+    standard_pagination_arguments,
 )
 from linodemcp.tools.proto_response import (
     raw_str,
@@ -1928,6 +1930,11 @@ async def handle_linode_image_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_list tool request."""
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     type_filter = str(arguments.get("type", ""))
     is_public_filter = str(arguments.get("is_public", ""))
     deprecated_filter = str(arguments.get("deprecated", ""))
@@ -1955,7 +1962,7 @@ async def handle_linode_image_list(
         filters.append(f"deprecated={deprecated_filter}")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/images")
+        raw = await client.get_raw(paginated_path("/images", page, page_size))
         return serialize_list_response(
             raw,
             "images",

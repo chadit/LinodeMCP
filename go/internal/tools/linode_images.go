@@ -33,14 +33,17 @@ var (
 
 // NewLinodeImageListTool creates a tool for listing Linode images.
 func NewLinodeImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolRawSchema(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_image_list",
 		"Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status",
 		"linode.mcp.v1.ImageListInput",
-		func(ctx context.Context, client *linode.Client) ([]*linodev1.Image, error) {
-			return client.ListImagesProto(ctx)
+		standardPageDesc,
+		standardPageSizeDesc,
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Image, error) {
+			return client.ListImagesProto(ctx, page, pageSize)
 		},
+		standardPaginationFromTool,
 		[]listFilterParam[*linodev1.Image]{
 			fieldFilter("type", "Filter images by type (manual, automatic)",
 				func(img *linodev1.Image) string { return img.GetType() }),

@@ -1,12 +1,123 @@
 {
   "tool": "linode_profile_security_question_list",
-  "description": "Pins the bare security-questions GET path both languages issue.",
+  "description": "Pins the bare security-questions GET path both languages issue, plus the keyed response shapes: accepted empty members and rejected response, member, and element shapes.",
   "cases": [
     {
       "name": "lists profile security questions",
       "args": {},
       "api_response": { "security_questions": [] },
       "expect_request": { "method": "GET", "path": "/profile/security-questions" }
+    },
+    {
+      "name": "returns documented keyed questions",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": "Gotham" }
+        ]
+      },
+      "expect_result": {
+        "count": 1,
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": "Gotham" }
+        ]
+      }
+    },
+    {
+      "name": "accepts a missing security_questions member",
+      "args": {},
+      "api_response": {},
+      "expect_result": { "count": 0, "security_questions": [] }
+    },
+    {
+      "name": "accepts a null security_questions member",
+      "args": {},
+      "api_response": { "security_questions": null },
+      "expect_result": { "count": 0, "security_questions": [] }
+    },
+    {
+      "name": "rejects an object security_questions member",
+      "args": {},
+      "api_response": { "security_questions": {} },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a string security_questions member",
+      "args": {},
+      "api_response": { "security_questions": "invalid" },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a numeric security_questions member",
+      "args": {},
+      "api_response": { "security_questions": 1 },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a boolean security_questions member",
+      "args": {},
+      "api_response": { "security_questions": false },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a top-level array response",
+      "args": {},
+      "api_response": [],
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level null response",
+      "args": {},
+      "api_responses": { "GET /profile/security-questions": null },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level string response",
+      "args": {},
+      "api_response": "invalid",
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level numeric response",
+      "args": {},
+      "api_response": 1,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level boolean response",
+      "args": {},
+      "api_response": false,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects an array security question element",
+      "args": {},
+      "api_response": { "security_questions": [[]] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a null security question element",
+      "args": {},
+      "api_response": { "security_questions": [null] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a string security question element",
+      "args": {},
+      "api_response": { "security_questions": ["invalid"] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a numeric security question element",
+      "args": {},
+      "api_response": { "security_questions": [1] },
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a boolean security question element",
+      "args": {},
+      "api_response": { "security_questions": [false] },
+      "expect_api_error": "element"
     }
   ]
 }

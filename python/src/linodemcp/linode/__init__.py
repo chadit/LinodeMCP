@@ -6299,10 +6299,20 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ListObjectStorageBucketContents", e) from e
 
-    async def list_object_storage_endpoints(self) -> list[dict[str, Any]]:
-        """List Object Storage endpoints."""
+    async def list_object_storage_endpoints(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]:
+        """List a page of Object Storage endpoints."""
+        endpoint = "/object-storage/endpoints"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", "/object-storage/endpoints")
+            response = await self.make_request("GET", endpoint)
             data = response.json()
             endpoints: list[dict[str, Any]] = data.get("data", [])
             return endpoints
@@ -10094,9 +10104,21 @@ class Client:
 
     # ── Instance Disks ──
 
-    async def list_instance_disks(self, instance_id: int) -> list[dict[str, Any]]:
-        """List disks for an instance."""
+    async def list_instance_disks(
+        self,
+        instance_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """List a page of disks for an instance."""
         endpoint = f"/linode/instances/{instance_id}/disks"
+        params: dict[str, int] = {}
+        if page is not None:
+            params["page"] = page
+        if page_size is not None:
+            params["page_size"] = page_size
+        if params:
+            endpoint += "?" + urlencode(params)
         try:
             response = await self.make_request("GET", endpoint)
             data = response.json()
@@ -13391,10 +13413,12 @@ class RetryableClient:
         )
         return result
 
-    async def list_object_storage_endpoints(self) -> list[dict[str, Any]]:
-        """List Object Storage endpoints with retry."""
+    async def list_object_storage_endpoints(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]:
+        """List a page of Object Storage endpoints with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_object_storage_endpoints
+            self.client.list_object_storage_endpoints, page, page_size
         )
         return result
 
@@ -14944,10 +14968,15 @@ class RetryableClient:
 
     # ── Instance Disks (retry wrappers) ──
 
-    async def list_instance_disks(self, instance_id: int) -> list[dict[str, Any]]:
-        """List instance disks with retry."""
+    async def list_instance_disks(
+        self,
+        instance_id: int,
+        page: int | None = None,
+        page_size: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """List a page of instance disks with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_instance_disks, instance_id
+            self.client.list_instance_disks, instance_id, page, page_size
         )
         return result
 
