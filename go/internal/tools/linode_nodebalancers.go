@@ -35,13 +35,11 @@ const (
 	// protocol/algorithm/stickiness/check/cipher_suite choice sets now come from
 	// the generated proto enums (linodev1.NodeBalancer*_Value_value), not
 	// hand-maintained constants.
-	nodeBalancerConfigProtocolHTTPS    = "https"
-	nodeBalancerConfigNodesPageSizeMin = 25
-	nodeBalancerConfigNodesPageSizeMax = 500
-	nodeBalancerKeyID                  = "nodebalancer_id"
-	nodeBalancerKeyConfigID            = "config_id"
-	nodeBalancerKeyVPCConfigID         = "vpc_config_id"
-	nodeBalancerKeyNodeID              = "node_id"
+	nodeBalancerConfigProtocolHTTPS = "https"
+	nodeBalancerKeyID               = "nodebalancer_id"
+	nodeBalancerKeyConfigID         = "config_id"
+	nodeBalancerKeyVPCConfigID      = "vpc_config_id"
+	nodeBalancerKeyNodeID           = "node_id"
 )
 
 // NewLinodeNodeBalancerTypesTool creates a tool for listing available NodeBalancer types.
@@ -128,14 +126,12 @@ func NewLinodeNodeBalancerFirewallListTool(cfg *config.Config) (mcp.Tool, profil
 		"linode_nodebalancer_firewall_list",
 		"Lists Cloud Firewalls assigned to a specific NodeBalancer by its ID.",
 		"linode.mcp.v1.NodeBalancerFirewallListInput",
-		"Page number to retrieve",
-		"Number of results per page, from 25 through 500",
 		protoListPathID{
 			option: mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose Cloud Firewalls should be listed")),
 			parse: nodeBalancerIDFromTool,
 		},
-		nodeBalancerListPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, nodeBalancerID, page, pageSize int) ([]*linodev1.Firewall, error) {
 			return client.ListNodeBalancerFirewallsProto(ctx, nodeBalancerID, page, pageSize)
 		},
@@ -168,14 +164,12 @@ func NewLinodeNodeBalancerVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		"linode_nodebalancer_vpc_config_list",
 		"Lists VPC configurations for a specific NodeBalancer by its ID.",
 		"linode.mcp.v1.NodeBalancerVPCConfigListInput",
-		"Page number to retrieve",
-		"Number of results per page, from 25 through 500",
 		protoListPathID{
 			option: mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose VPC configurations should be listed")),
 			parse: nodeBalancerIDFromTool,
 		},
-		nodeBalancerListPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, nodeBalancerID, page, pageSize int) ([]*linodev1.NodeBalancerVPCConfig, error) {
 			return client.ListNodeBalancerVPCsProto(ctx, nodeBalancerID, page, pageSize)
 		},
@@ -197,14 +191,12 @@ func NewLinodeNodeBalancerConfigListTool(cfg *config.Config) (mcp.Tool, profiles
 		"linode_nodebalancer_config_list",
 		"Lists configs for a specific NodeBalancer by its ID.",
 		"linode.mcp.v1.NodeBalancerConfigListInput",
-		"Page number to retrieve",
-		"Number of results per page, from 25 through 500",
 		protoListPathID{
 			option: mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose configs should be listed")),
 			parse: nodeBalancerIDFromTool,
 		},
-		nodeBalancerListPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, nodeBalancerID, page, pageSize int) ([]*linodev1.NodeBalancerConfig, error) {
 			return client.ListNodeBalancerConfigsProto(ctx, nodeBalancerID, page, pageSize)
 		},
@@ -226,8 +218,6 @@ func NewLinodeNodeBalancerConfigNodesListTool(cfg *config.Config) (mcp.Tool, pro
 		"linode_nodebalancer_config_node_list",
 		"Lists backend nodes for a specific NodeBalancer config.",
 		"linode.mcp.v1.NodeBalancerConfigNodeListInput",
-		"Page number to retrieve",
-		"Number of results per page, from 25 through 500",
 		protoListPathID{
 			option: mcp.WithNumber(nodeBalancerKeyID, mcp.Required(),
 				mcp.Description("The ID of the NodeBalancer whose config nodes should be listed")),
@@ -238,7 +228,7 @@ func NewLinodeNodeBalancerConfigNodesListTool(cfg *config.Config) (mcp.Tool, pro
 				mcp.Description("The ID of the NodeBalancer config whose nodes should be listed")),
 			parse: nodeBalancerConfigIDFromTool,
 		},
-		nodeBalancerListPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, nodeBalancerID, configID, page, pageSize int) ([]*linodev1.NodeBalancerConfigNode, error) {
 			return client.ListNodeBalancerConfigNodesProto(ctx, nodeBalancerID, configID, page, pageSize)
 		},
@@ -424,7 +414,7 @@ func handleLinodeNodeBalancerFirewallUpdateRequest(ctx context.Context, request 
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	page, pageSize, validationMessage := instanceFirewallsPaginationFromTool(request)
+	page, pageSize, validationMessage := standardPaginationFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -1012,22 +1002,6 @@ func nodeBalancerConfigNodeIDFromTool(request *mcp.CallToolRequest) (int, string
 
 func nodeBalancerIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredIDArgument(request, nodeBalancerKeyID)
-}
-
-func nodeBalancerListPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", nodeBalancerConfigNodesPageSizeMin, nodeBalancerConfigNodesPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeNodeBalancerNodeCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

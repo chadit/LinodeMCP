@@ -40,9 +40,31 @@ server:
 | `version` | Build and version information. |
 
 The CLI verbs don't require a config file: when none exists they fall back to
-built-in defaults (`loadConfigOrDefault` on the Go side). That makes
-`linodemcp version` and `linodemcp tools` safe first commands on a fresh
-install.
+built-in defaults (`loadConfigOrDefault` on the Go side), with the
+`LINODEMCP_*` environment overrides applied on top. Supplying
+`LINODEMCP_LINODE_API_URL` and `LINODEMCP_LINODE_TOKEN` is therefore enough to
+run API-backed calls with nothing on disk, which is the shape CI runners want.
+`linodemcp version` and `linodemcp tools` are safe first commands on a fresh
+install either way.
+
+### Paging through a list
+
+List tools whose API route paginates accept `page` and `page_size`:
+
+```bash
+linodemcp call linode_instance_list --arg page=2 --arg page_size=50
+```
+
+`page` starts at 1 and `page_size` runs from 25 through 500, the bounds the
+Linode API applies to every paginated collection. Omit either one and the
+API's own default applies rather than a value the CLI invents. Both are
+rejected before any request when they are not integers or fall outside the
+range, so a typo fails locally instead of returning a surprising page.
+
+Not every list tool takes them yet;
+[contracts/pagination-baseline.txt](./contracts/pagination-baseline.txt) is
+the current list of the ones that don't, and `linodemcp tools` shows the real
+input schema for any tool.
 
 ## Why profile switching is CLI-only
 

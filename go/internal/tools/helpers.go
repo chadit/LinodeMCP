@@ -351,7 +351,7 @@ type protoListPageReader func(request *mcp.CallToolRequest) (page, pageSize int,
 // is shared with the other proto-list factories via finishProtoList.
 func newProtoListToolPaginated[T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, pageDesc, pageSizeDesc string,
+	toolName, description string,
 	apiCall func(ctx context.Context, client *linode.Client, page, pageSize int) ([]T, error),
 	readPage protoListPageReader,
 	filterParams []listFilterParam[T],
@@ -360,8 +360,6 @@ func newProtoListToolPaginated[T, R proto.Message](
 	options := protoListFilterOptions([]mcp.ToolOption{
 		mcp.WithDescription(description),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
-		mcp.WithNumber(paramPage, mcp.Description(pageDesc)),
-		mcp.WithNumber(paramPageSize, mcp.Description(pageSizeDesc)),
 	}, filterParams)
 
 	tool := mcp.NewTool(toolName, options...)
@@ -394,13 +392,13 @@ func newProtoListToolPaginated[T, R proto.Message](
 // newProtoListToolRawSchema relates to newProtoListTool.
 func newProtoListToolPaginatedRawSchema[T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, schemaName, pageDesc, pageSizeDesc string,
+	toolName, description, schemaName string,
 	apiCall func(ctx context.Context, client *linode.Client, page, pageSize int) ([]T, error),
 	readPage protoListPageReader,
 	filterParams []listFilterParam[T],
 	assemble func(items []T, count int32, filter *string) R,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListToolPaginated(cfg, toolName, description, pageDesc, pageSizeDesc, apiCall, readPage, filterParams, assemble)
+	_, handler := newProtoListToolPaginated(cfg, toolName, description, apiCall, readPage, filterParams, assemble)
 	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
 
 	return tool, handler
@@ -466,14 +464,14 @@ func newProtoListToolSubresourceRawSchema[T, R proto.Message](
 // via finishProtoList.
 func newProtoListToolSubresourcePaginated[T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, pageDesc, pageSizeDesc string,
+	toolName, description string,
 	pathID protoListPathID,
 	readPage protoListPageReader,
 	apiCall func(ctx context.Context, client *linode.Client, pathID, page, pageSize int) ([]T, error),
 	filterParams []listFilterParam[T],
 	assemble func(items []T, count int32, filter *string) R,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return buildProtoSubresourceListPaginated(cfg, toolName, description, pageDesc, pageSizeDesc,
+	return buildProtoSubresourceListPaginated(cfg, toolName, description,
 		pathID.option, pathID.parse, readPage, apiCall, filterParams, assemble)
 }
 
@@ -484,14 +482,14 @@ func newProtoListToolSubresourcePaginated[T, R proto.Message](
 // newProtoListToolRawSchema relates to newProtoListTool.
 func newProtoListToolSubresourcePaginatedRawSchema[T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, schemaName, pageDesc, pageSizeDesc string,
+	toolName, description, schemaName string,
 	pathID protoListPathID,
 	readPage protoListPageReader,
 	apiCall func(ctx context.Context, client *linode.Client, pathID, page, pageSize int) ([]T, error),
 	filterParams []listFilterParam[T],
 	assemble func(items []T, count int32, filter *string) R,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListToolSubresourcePaginated(cfg, toolName, description, pageDesc, pageSizeDesc, pathID, readPage, apiCall, filterParams, assemble)
+	_, handler := newProtoListToolSubresourcePaginated(cfg, toolName, description, pathID, readPage, apiCall, filterParams, assemble)
 	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
 
 	return tool, handler
@@ -506,7 +504,7 @@ func newProtoListToolSubresourcePaginatedRawSchema[T, R proto.Message](
 // finishProtoList.
 func buildProtoSubresourceListPaginated[P comparable, T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, pageDesc, pageSizeDesc string,
+	toolName, description string,
 	pathOption mcp.ToolOption,
 	parse func(request *mcp.CallToolRequest) (P, string),
 	readPage protoListPageReader,
@@ -518,8 +516,6 @@ func buildProtoSubresourceListPaginated[P comparable, T, R proto.Message](
 		mcp.WithDescription(description),
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		pathOption,
-		mcp.WithNumber(paramPage, mcp.Description(pageDesc)),
-		mcp.WithNumber(paramPageSize, mcp.Description(pageSizeDesc)),
 	}, filterParams)
 
 	tool := mcp.NewTool(toolName, options...)
@@ -607,14 +603,14 @@ func newProtoListToolSubresourceStringRawSchema[T, R proto.Message](
 // differs.
 func newProtoListToolSubresourceStringPaginated[T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, pageDesc, pageSizeDesc string,
+	toolName, description string,
 	pathID protoListPathIDString,
 	readPage protoListPageReader,
 	apiCall func(ctx context.Context, client *linode.Client, pathID string, page, pageSize int) ([]T, error),
 	filterParams []listFilterParam[T],
 	assemble func(items []T, count int32, filter *string) R,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	return buildProtoSubresourceListPaginated(cfg, toolName, description, pageDesc, pageSizeDesc,
+	return buildProtoSubresourceListPaginated(cfg, toolName, description,
 		pathID.option, pathID.parse, readPage, apiCall, filterParams, assemble)
 }
 
@@ -625,14 +621,14 @@ func newProtoListToolSubresourceStringPaginated[T, R proto.Message](
 // newProtoListToolRawSchema relates to newProtoListTool.
 func newProtoListToolSubresourceStringPaginatedRawSchema[T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, schemaName, pageDesc, pageSizeDesc string,
+	toolName, description, schemaName string,
 	pathID protoListPathIDString,
 	readPage protoListPageReader,
 	apiCall func(ctx context.Context, client *linode.Client, pathID string, page, pageSize int) ([]T, error),
 	filterParams []listFilterParam[T],
 	assemble func(items []T, count int32, filter *string) R,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListToolSubresourceStringPaginated(cfg, toolName, description, pageDesc, pageSizeDesc, pathID, readPage, apiCall, filterParams, assemble)
+	_, handler := newProtoListToolSubresourceStringPaginated(cfg, toolName, description, pathID, readPage, apiCall, filterParams, assemble)
 	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
 
 	return tool, handler
@@ -742,7 +738,7 @@ func newProtoListToolSubresource2[T, R proto.Message](
 // finishProtoList.
 func newProtoListToolSubresource2Paginated[T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, pageDesc, pageSizeDesc string,
+	toolName, description string,
 	parent, child protoListPathID,
 	readPage protoListPageReader,
 	apiCall func(ctx context.Context, client *linode.Client, parentID, childID, page, pageSize int) ([]T, error),
@@ -754,8 +750,6 @@ func newProtoListToolSubresource2Paginated[T, R proto.Message](
 		mcp.WithString(paramEnvironment, mcp.Description(paramEnvironmentDesc)),
 		parent.option,
 		child.option,
-		mcp.WithNumber(paramPage, mcp.Description(pageDesc)),
-		mcp.WithNumber(paramPageSize, mcp.Description(pageSizeDesc)),
 	}, filterParams)
 
 	tool := mcp.NewTool(toolName, options...)
@@ -794,14 +788,14 @@ func newProtoListToolSubresource2Paginated[T, R proto.Message](
 // newProtoListToolRawSchema relates to newProtoListTool.
 func newProtoListToolSubresource2PaginatedRawSchema[T, R proto.Message](
 	cfg *config.Config,
-	toolName, description, schemaName, pageDesc, pageSizeDesc string,
+	toolName, description, schemaName string,
 	parent, child protoListPathID,
 	readPage protoListPageReader,
 	apiCall func(ctx context.Context, client *linode.Client, parentID, childID, page, pageSize int) ([]T, error),
 	filterParams []listFilterParam[T],
 	assemble func(items []T, count int32, filter *string) R,
 ) (mcp.Tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListToolSubresource2Paginated(cfg, toolName, description, pageDesc, pageSizeDesc, parent, child, readPage, apiCall, filterParams, assemble)
+	_, handler := newProtoListToolSubresource2Paginated(cfg, toolName, description, parent, child, readPage, apiCall, filterParams, assemble)
 	tool := mcp.NewToolWithRawSchema(toolName, description, toolschemas.Schema(schemaName))
 
 	return tool, handler
@@ -871,14 +865,6 @@ func objectSliceFromToolArg[T any](raw any, name string) ([]T, string) {
 const (
 	standardPageSizeMin = 25
 	standardPageSizeMax = 500
-)
-
-// Descriptions for the standard page/page_size params. Shared so every family
-// that adopts standard pagination advertises byte-identical text, which is what
-// keeps the cross-language input schemas equal under the tool-parity gate.
-const (
-	standardPageDesc     = "Page of results to return (optional, minimum 1)."
-	standardPageSizeDesc = "Number of results per page (optional, 25-500)."
 )
 
 // standardPaginationFromTool reads page/page_size under the standard Linode

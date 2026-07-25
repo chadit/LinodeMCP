@@ -20,8 +20,6 @@ import (
 )
 
 const (
-	imageShareGroupsPageSizeMin = 25
-	imageShareGroupsPageSizeMax = 500
 	imageIDPrefixPrivate        = "private"
 	errImageIDPrivateIdentifier = "image_id must be a private image identifier like private/12345"
 )
@@ -38,8 +36,6 @@ func NewLinodeImageListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		"linode_image_list",
 		"Lists all available Linode images (OS images and custom images) with optional filtering by type, public status, or deprecated status",
 		"linode.mcp.v1.ImageListInput",
-		standardPageDesc,
-		standardPageSizeDesc,
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Image, error) {
 			return client.ListImagesProto(ctx, page, pageSize)
 		},
@@ -99,12 +95,10 @@ func NewLinodeImageShareGroupsListTool(cfg *config.Config) (mcp.Tool, profiles.C
 		"linode_image_sharegroup_list",
 		"Lists owned image share groups with optional pagination.",
 		"linode.mcp.v1.ImageShareGroupListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ImageShareGroup, error) {
 			return client.ListImageShareGroupsProto(ctx, page, pageSize)
 		},
-		imageShareGroupsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		imageShareGroupListResponse,
 	)
@@ -138,13 +132,11 @@ func NewLinodeImageShareGroupsByImageListTool(cfg *config.Config) (mcp.Tool, pro
 		"linode_image_sharegroup_by_image_list",
 		"Lists owned image share groups that currently include a private image.",
 		"linode.mcp.v1.ImageShareGroupByImageListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathIDString{
 			option: mcp.WithString("image_id", mcp.Required(), mcp.Description("Private image ID, for example private/12345.")),
 			parse:  imageShareGroupSourceImageIDFromTool,
 		},
-		imageShareGroupsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, imageID string, page, pageSize int) ([]*linodev1.ImageShareGroup, error) {
 			return client.ListImageShareGroupsByImageProto(ctx, imageID, page, pageSize)
 		},
@@ -166,13 +158,11 @@ func NewLinodeImageShareGroupImagesListTool(cfg *config.Config) (mcp.Tool, profi
 		"linode_image_sharegroup_image_list",
 		"Lists images shared in an owned image share group.",
 		"linode.mcp.v1.ImageShareGroupImageListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
 			parse:  imageShareGroupIDFromTool,
 		},
-		imageShareGroupsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, shareGroupID, page, pageSize int) ([]*linodev1.Image, error) {
 			return client.ListImagesByShareGroupProto(ctx, shareGroupID, page, pageSize)
 		},
@@ -190,13 +180,11 @@ func NewLinodeImageShareGroupMembersListTool(cfg *config.Config) (mcp.Tool, prof
 		"linode_image_sharegroup_member_list",
 		"Lists members linked to an owned image share group.",
 		"linode.mcp.v1.ImageShareGroupMemberListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber("sharegroup_id", mcp.Required(), mcp.Description("Image share group ID.")),
 			parse:  imageShareGroupIDFromTool,
 		},
-		imageShareGroupsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, shareGroupID, page, pageSize int) ([]*linodev1.ImageShareGroupMember, error) {
 			return client.ListMembersByImageShareGroupProto(ctx, shareGroupID, page, pageSize)
 		},
@@ -233,12 +221,10 @@ func NewLinodeImageShareGroupTokensListTool(cfg *config.Config) (mcp.Tool, profi
 		"linode_image_sharegroup_token_list",
 		"Lists image share group tokens for the authenticated user with optional pagination.",
 		"linode.mcp.v1.ImageShareGroupTokenListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ImageShareGroupToken, error) {
 			return client.ListImageShareGroupTokensProto(ctx, page, pageSize)
 		},
-		imageShareGroupsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		imageShareGroupTokenListResponse,
 	)
@@ -332,13 +318,11 @@ func NewLinodeImageShareGroupTokenImagesListTool(cfg *config.Config) (mcp.Tool, 
 		"linode_image_sharegroup_token_image_list",
 		"Lists images available through an image share group token.",
 		"linode.mcp.v1.ImageShareGroupTokenImageListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathIDString{
 			option: mcp.WithString("token_uuid", mcp.Required(), mcp.Description("Image share group token UUID.")),
 			parse:  imageShareGroupTokenUUIDFromTool,
 		},
-		imageShareGroupsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, tokenUUID string, page, pageSize int) ([]*linodev1.Image, error) {
 			return client.ListImagesByShareGroupTokenProto(ctx, tokenUUID, page, pageSize)
 		},
@@ -730,20 +714,4 @@ func imageShareGroupTokenUUIDFromTool(request *mcp.CallToolRequest) (string, str
 	}
 
 	return tokenUUID, ""
-}
-
-func imageShareGroupsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", imageShareGroupsPageSizeMin, imageShareGroupsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }

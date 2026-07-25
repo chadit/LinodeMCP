@@ -7,7 +7,12 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import firewall_device_pb2, firewall_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool, required_int_id
+from linodemcp.tools.helpers import (
+    error_response,
+    execute_tool,
+    required_int_id,
+    standard_pagination_arguments,
+)
 from linodemcp.tools.proto_enum import enum_choice_error
 from linodemcp.tools.proto_response import (
     serialize_api_response,
@@ -261,14 +266,10 @@ async def handle_linode_firewall_device_list(
         return error
     if fw_id is None:
         return error_response("firewall_id is required")
-    page, error = _parse_positive_integer_arg(arguments, "page", required=False)
-    if error is not None:
-        return error
-    page_size, error = _parse_positive_integer_arg(
-        arguments, "page_size", required=False
-    )
-    if error is not None:
-        return error
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         raw = await client.list_firewall_devices(fw_id, page=page, page_size=page_size)
@@ -320,14 +321,10 @@ async def handle_linode_firewall_settings_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_settings_get tool request."""
-    page, error = _parse_positive_integer_arg(arguments, "page", required=False)
-    if error is not None:
-        return error
-    page_size, error = _parse_positive_integer_arg(
-        arguments, "page_size", required=False
-    )
-    if error is not None:
-        return error
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
@@ -351,14 +348,10 @@ async def handle_linode_firewall_template_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_firewall_template_list tool request."""
-    page, error = _parse_positive_integer_arg(arguments, "page", required=False)
-    if error is not None:
-        return error
-    page_size, error = _parse_positive_integer_arg(
-        arguments, "page_size", required=False
-    )
-    if error is not None:
-        return error
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         raw = await client.list_firewall_templates(page=page, page_size=page_size)
@@ -394,15 +387,10 @@ async def handle_linode_firewall_template_get(
     if slug_error is not None:
         return error_response(slug_error)
 
-    # Validate pagination parameters
-    page = arguments.get("page")
-    page_size = arguments.get("page_size")
-
-    if page is not None and (not isinstance(page, int) or page < 1):
-        return error_response("page must be a positive integer")
-
-    if page_size is not None and (not isinstance(page_size, int) or page_size < 1):
-        return error_response("page_size must be a positive integer")
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     params: dict[str, Any] = {}
     if page is not None:

@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	tagsPageSizeMin       = 25
-	tagsPageSizeMax       = 500
 	tagDomainsParam       = "domains"
 	tagLinodesParam       = "linodes"
 	tagNodeBalancersParam = "nodebalancers"
@@ -32,12 +30,10 @@ func NewLinodeTagsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(
 		cfg,
 		"linode_tag_list",
 		"Lists tags visible to the authenticated account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Tag, error) {
 			return client.ListTagsProto(ctx, page, pageSize)
 		},
-		tagsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		tagListResponse,
 	)
@@ -120,22 +116,6 @@ func endpointPathTag(tagLabel string) string {
 
 func deleteTagLabelArgFromTool(request *mcp.CallToolRequest) (string, string) {
 	return tagLabelArgFromTool(request)
-}
-
-func tagsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", tagsPageSizeMin, tagsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 // NewLinodeTagCreateTool creates a tool for creating a Linode tag.

@@ -22,8 +22,6 @@ import (
 const (
 	linodeReservedIPListToolName   = "linode_networking_reserved_ip_list"
 	linodeReservedIPDeleteToolName = "linode_networking_reserved_ip_delete"
-	reservedIPListPageSizeMin      = 25
-	reservedIPListPageSizeMax      = 500
 )
 
 // NewLinodeReservedIPDeleteTool creates a tool for permanently unreserving a
@@ -122,7 +120,7 @@ func reservedIPListPagination(args map[string]any) (int, int, string) {
 		return 0, 0, validationMessage
 	}
 
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", reservedIPListPageSizeMin, reservedIPListPageSizeMax)
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", standardPageSizeMin, standardPageSizeMax)
 	if validationMessage != "" {
 		return 0, 0, validationMessage
 	}

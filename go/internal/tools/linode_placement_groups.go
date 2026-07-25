@@ -16,9 +16,6 @@ import (
 )
 
 const (
-	placementGroupsPageSizeMin = 25
-	placementGroupsPageSizeMax = 500
-
 	placementGroupIDParam           = "group_id"
 	placementGroupLabelParam        = "label"
 	placementGroupRegionParam       = "region"
@@ -45,12 +42,10 @@ func NewLinodePlacementGroupListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		"linode_placement_group_list",
 		"Lists placement groups for the authenticated account with optional pagination.",
 		"linode.mcp.v1.PlacementGroupListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.PlacementGroup, error) {
 			return client.ListPlacementGroupsProto(ctx, page, pageSize)
 		},
-		placementGroupsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		placementGroupListResponse,
 	)
@@ -128,22 +123,6 @@ func placementGroupUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.
 	}
 
 	return &linode.UpdatePlacementGroupRequest{Label: label}, ""
-}
-
-func placementGroupsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", placementGroupsPageSizeMin, placementGroupsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 // NewLinodePlacementGroupCreateTool creates a tool for creating placement groups.

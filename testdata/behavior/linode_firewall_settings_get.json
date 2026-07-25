@@ -1,12 +1,46 @@
 {
   "tool": "linode_firewall_settings_get",
-  "description": "Firewall settings get issues a single GET to the settings endpoint. Pagination-bound rejection messages diverge between languages (see report).",
+  "description": "Firewall settings get issues a single GET to the settings endpoint. The route returns a settings object rather than a page envelope but still takes page/page_size, and both languages now reject out-of-contract values with the shared text.",
   "cases": [
     {
       "name": "gets default firewall settings",
       "args": {},
       "api_response": {},
       "expect_request": { "method": "GET", "path": "/networking/firewalls/settings" }
+    },
+    {
+      "name": "rejects a non-integer page",
+      "args": { "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects a page below one",
+      "args": { "page": 0 },
+      "expect_error": "page must be an integer greater than or equal to 1"
+    },
+    {
+      "name": "rejects a non-integer page_size",
+      "args": { "page_size": "x" },
+      "expect_error": "page_size must be an integer"
+    },
+    {
+      "name": "rejects a page_size below the minimum",
+      "args": { "page_size": 24 },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "rejects a page_size above the maximum",
+      "args": { "page_size": 501 },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "pagination reaches the request",
+      "args": { "page": 2, "page_size": 50 },
+      "api_response": {},
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/firewalls/settings?page=2&page_size=50"
+      }
     }
   ]
 }

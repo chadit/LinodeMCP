@@ -20,8 +20,6 @@ import (
 )
 
 const (
-	instanceConfigsPageSizeMin    = 25
-	instanceConfigsPageSizeMax    = 500
 	configUpdateNoFields          = "at least one configuration field must be provided"
 	configInterfaceUpdateNoFields = "at least one interface update field must be provided"
 	interfaceJSONObjRequired      = "interface must be a JSON object"
@@ -37,14 +35,12 @@ func NewLinodeInstanceConfigListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		cfg,
 		"linode_instance_config_list",
 		"Lists configuration profiles for a Linode instance with optional pagination.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			parse: instanceConfigLinodeIDFromTool,
 		},
-		instanceConfigsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, linodeID, page, pageSize int) ([]*linodev1.InstanceConfig, error) {
 			return client.ListInstanceConfigsProto(ctx, linodeID, page, pageSize)
 		},
@@ -125,22 +121,6 @@ func instanceConfigLinodeIDFromTool(request *mcp.CallToolRequest) (int, string) 
 
 func instanceConfigIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredIDArgument(request, "config_id")
-}
-
-func instanceConfigsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", instanceConfigsPageSizeMin, instanceConfigsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 // NewLinodeInstanceConfigGetTool creates a tool for retrieving a specific configuration profile on a Linode instance.

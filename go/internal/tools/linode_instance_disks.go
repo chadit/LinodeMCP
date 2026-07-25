@@ -21,8 +21,6 @@ func NewLinodeInstanceDiskListTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		cfg,
 		"linode_instance_disk_list",
 		"Lists all disks attached to a Linode instance.",
-		standardPageDesc,
-		standardPageSizeDesc,
 		protoListPathID{
 			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),

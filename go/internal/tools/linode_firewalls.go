@@ -109,12 +109,10 @@ func NewLinodeVLANsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 		"linode_vlan_list",
 		"Lists VLANs on the account with optional pagination.",
 		"linode.mcp.v1.VLANListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.VLAN, error) {
 			return client.ListVLANsProto(ctx, page, pageSize)
 		},
-		ipv6ListPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		vlanListResponse,
 	)
@@ -447,14 +445,12 @@ func NewLinodeFirewallDevicesListTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		"linode_firewall_device_list",
 		"Lists devices assigned to a Cloud Firewall.",
 		"linode.mcp.v1.FirewallDeviceListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber(paramFirewallID, mcp.Required(),
 				mcp.Description("The ID of the firewall whose assigned devices should be listed.")),
 			parse: firewallDeviceListFirewallIDFromTool,
 		},
-		firewallDeviceListPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, firewallID, page, pageSize int) ([]*linodev1.FirewallDevice, error) {
 			return client.ListFirewallDevicesProto(ctx, firewallID, page, pageSize)
 		},
@@ -470,13 +466,6 @@ func NewLinodeFirewallDevicesListTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 // ErrFirewallIDPositive).
 func firewallDeviceListFirewallIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredIDArgument(request, paramFirewallID)
-}
-
-// firewallDeviceListPaginationFromTool reads page/page_size the same way the
-// non-proto handler did: a plain GetInt defaulting to 0, with no bounds
-// validation, so the runtime request matches the previous behavior exactly.
-func firewallDeviceListPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	return request.GetInt("page", 0), request.GetInt("page_size", 0), ""
 }
 
 func firewallDeviceListResponse(items []*linodev1.FirewallDevice, count int32, filter *string) *linodev1.FirewallDeviceListResponse {
@@ -684,12 +673,17 @@ func NewLinodeFirewallSettingsListTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleLinodeFirewallSettingsListRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	page, pageSize, validationMessage := standardPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	settings, err := client.ListFirewallSettingsProto(ctx, request.GetInt("page", 0), request.GetInt("page_size", 0))
+	settings, err := client.ListFirewallSettingsProto(ctx, page, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_settings_get: %v", err)), nil
 	}
@@ -704,24 +698,15 @@ func NewLinodeFirewallTemplatesListTool(cfg *config.Config) (mcp.Tool, profiles.
 		"linode_firewall_template_list",
 		"Lists reusable Cloud Firewall templates for VPC and public interfaces.",
 		"linode.mcp.v1.FirewallTemplateListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.FirewallTemplate, error) {
 			return client.ListFirewallTemplatesProto(ctx, page, pageSize)
 		},
-		firewallTemplateListPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		firewallTemplateListResponse,
 	)
 
 	return tool, profiles.CapRead, handler
-}
-
-// firewallTemplateListPaginationFromTool reads page/page_size the same way the
-// non-proto handler did: a plain GetInt defaulting to 0, with no bounds
-// validation, so the runtime request matches the previous behavior exactly.
-func firewallTemplateListPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	return request.GetInt("page", 0), request.GetInt("page_size", 0), ""
 }
 
 func firewallTemplateListResponse(items []*linodev1.FirewallTemplate, count int32, filter *string) *linodev1.FirewallTemplateListResponse {
@@ -749,12 +734,17 @@ func handleLinodeFirewallTemplateGetRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
+	page, pageSize, validationMessage := standardPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	template, err := client.GetFirewallTemplateProto(ctx, slug, request.GetInt("page", 0), request.GetInt("page_size", 0))
+	template, err := client.GetFirewallTemplateProto(ctx, slug, page, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve linode_firewall_template_get: %v", err)), nil
 	}

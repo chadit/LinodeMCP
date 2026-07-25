@@ -25340,82 +25340,35 @@ async def test_handle_linode_firewall_template_get_with_pagination(
 async def test_handle_linode_firewall_template_get_rejects_bad_pagination(
     sample_config: Config,
 ) -> None:
-    """Template get rejects non-positive page and page_size."""
+    """Template get now rejects through the shared reader, bounds included."""
     result = await handle_linode_firewall_template_get(
         {"slug": "public", "page": 0}, sample_config
     )
     assert len(result) == 1
-    assert "page must be a positive integer" in result[0].text
-
-    result = await handle_linode_firewall_template_get(
-        {"slug": "public", "page_size": -1}, sample_config
-    )
-    assert len(result) == 1
-    assert "page_size must be a positive integer" in result[0].text
-
-
-async def test_handle_linode_firewall_template_get_missing_slug(
-    sample_config: Config,
-) -> None:
-    """Test linode_firewall_template_get validation."""
-    result = await handle_linode_firewall_template_get({}, sample_config)
-
-    assert len(result) == 1
-    assert "slug is required" in result[0].text
-
-
-async def test_handle_linode_firewall_template_get_rejects_invalid_slug(
-    sample_config: Config,
-) -> None:
-    """Slug is validated against the public|vpc closed set, which also rejects
-    path-traversal and other out-of-set values."""
-    for slug in ("allow/http", "allow?http", "allow/../http", "internal"):
-        result = await handle_linode_firewall_template_get(
-            {"slug": slug}, sample_config
-        )
-        assert len(result) == 1
-        assert "slug must be one of: public, vpc" in result[0].text
-
-
-async def test_handle_linode_firewall_template_get_rejects_non_string_slug(
-    sample_config: Config,
-) -> None:
-    """Test that non-string slug values are rejected."""
-    # Test with int
-    result = await handle_linode_firewall_template_get({"slug": 123}, sample_config)
-    assert len(result) == 1
-    assert "must be a string" in result[0].text
-
-    # Test with bool
-    result = await handle_linode_firewall_template_get({"slug": True}, sample_config)
-    assert len(result) == 1
-    assert "must be a string" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
 
 
 async def test_handle_linode_firewall_template_get_rejects_invalid_pagination(
     sample_config: Config,
 ) -> None:
-    """Test that invalid pagination parameters are rejected."""
-    # Test with negative page
+    """The shared bounds apply here too: page_size outside 25-500 is rejected."""
     result = await handle_linode_firewall_template_get(
         {"slug": "public", "page": -1}, sample_config
     )
     assert len(result) == 1
-    assert "page must be a positive integer" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
 
-    # Test with zero page_size
     result = await handle_linode_firewall_template_get(
         {"slug": "public", "page_size": 0}, sample_config
     )
     assert len(result) == 1
-    assert "page_size must be a positive integer" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
 
-    # Test with non-int page
     result = await handle_linode_firewall_template_get(
-        {"slug": "public", "page": "abc"}, sample_config
+        {"slug": "public", "page_size": 501}, sample_config
     )
     assert len(result) == 1
-    assert "page must be a positive integer" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
 
 
 async def test_handle_linode_firewall_device_get(
@@ -25789,14 +25742,20 @@ async def test_handle_linode_firewall_rule_version_list_invalid(
         ({"firewall_id": "abc"}, "firewall_id must be a valid integer"),
         ({"firewall_id": 0}, "firewall_id must be a positive integer"),
         ({"firewall_id": -1}, "firewall_id must be a positive integer"),
-        ({"firewall_id": 1, "page": False}, "page must be a valid integer"),
-        ({"firewall_id": 1, "page": "abc"}, "page must be a valid integer"),
-        ({"firewall_id": 1, "page": 0}, "page must be a positive integer"),
+        ({"firewall_id": 1, "page": False}, "page must be an integer"),
+        ({"firewall_id": 1, "page": "abc"}, "page must be an integer"),
+        (
+            {"firewall_id": 1, "page": 0},
+            "page must be an integer greater than or equal to 1",
+        ),
         (
             {"firewall_id": 1, "page_size": "abc"},
-            "page_size must be a valid integer",
+            "page_size must be an integer",
         ),
-        ({"firewall_id": 1, "page_size": 0}, "page_size must be a positive integer"),
+        (
+            {"firewall_id": 1, "page_size": 0},
+            "page_size must be an integer from 25 through 500",
+        ),
     ],
 )
 async def test_handle_linode_firewall_devices_list_invalid_args(

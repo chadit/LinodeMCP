@@ -20,8 +20,6 @@ func NewLinodeRegionListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 		"linode_region_list",
 		"Lists all available Linode regions (datacenters) with optional filtering by country or capabilities",
 		"linode.mcp.v1.RegionListInput",
-		standardPageDesc,
-		standardPageSizeDesc,
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Region, error) {
 			return client.ListRegionsProto(ctx, page, pageSize)
 		},

@@ -26,14 +26,6 @@ const (
 	managedIDParam                     = "credential_" + "id"
 	managedUpdateIDParam               = managedIDParam
 	maxManagedIDFromJSON               = 9007199254740991
-	accountAvailabilityPageSizeMin     = 25
-	accountAvailabilityPageSizeMax     = 500
-	betasPageSizeMin                   = 25
-	betasPageSizeMax                   = 500
-	accountBetasPageSizeMin            = 25
-	accountBetasPageSizeMax            = 500
-	accountOAuthClientsPageSizeMin     = 25
-	accountOAuthClientsPageSizeMax     = 500
 	profileAppIDParam                  = "app_id"
 	profileDeviceIDParam               = "device_id"
 	profilePhoneISOCodeParam           = "iso_code"
@@ -43,12 +35,6 @@ const (
 	profileTokenIDParam                = "token_id"
 	profileAppIDMaxFromJSON            = 9007199254740991
 	profileDeviceIDMaxFromJSON         = 9007199254740991
-	longviewClientsPageSizeMin         = 25
-	longviewClientsPageSizeMax         = 500
-	longviewSubscriptionsPageSizeMin   = 25
-	longviewSubscriptionsPageSizeMax   = 500
-	monitorAlertChannelsPageSizeMin    = 25
-	monitorAlertChannelsPageSizeMax    = 500
 	longviewClientIDParam              = "client_id"
 	longviewClientsPath                = "/longview/clients"
 	longviewPlanPath                   = "/longview/plan"
@@ -59,8 +45,6 @@ const (
 	accountPaymentsPath                = "/account/payments"
 	accountPaymentMethodsPath          = "/account/payment-methods"
 	accountServiceTransfersPath        = "/account/service-transfers"
-	accountServiceTransfersPageSizeMin = 25
-	accountServiceTransfersPageSizeMax = 500
 	accountAgreementsPath              = "/account/agreements"
 	accountBetasPath                   = "/account/betas"
 	accountCancelPath                  = "/account/cancel"
@@ -75,26 +59,12 @@ const (
 	maxLongviewClientIDFromJSON        = 9007199254740991
 	errLongviewClientLabelRequired     = "label is required"
 	errLongviewClientLabelPattern      = "label must be 3-32 characters and contain only letters, digits, hyphen, or underscore"
-	accountPaymentMethodsPageSizeMin   = 25
-	accountPaymentMethodsPageSizeMax   = 500
-	accountMaintenancePageSizeMin      = 25
-	accountMaintenancePageSizeMax      = 500
-	accountNotificationsPageSizeMin    = 25
-	accountNotificationsPageSizeMax    = 500
-	managedCredentialsPageSizeMin      = 25
-	managedCredentialsPageSizeMax      = 500
 	managedCredentialCreateLabelParam  = "label"
 	managedCredentialCreatePassParam   = "password"
 	managedCredentialCreateUserParam   = "username"
 	errManagedCredentialPasswordReq    = "password is required"
-	accountEventsPageSizeMin           = 25
-	accountEventsPageSizeMax           = 500
-	taggedObjectsPageSizeMin           = 25
-	taggedObjectsPageSizeMax           = 500
 	tagLabelParam                      = "tag_label"
 	errTagLabelPathParam               = "tag_label must not contain '?', '#', or '..'"
-	accountUsersPageSizeMin            = 25
-	accountUsersPageSizeMax            = 500
 	accountUserUsernameParam           = "username"
 	errAccountUserUsernamePathParam    = "username must not contain '/', '?', '#', or '..'"
 	errAccountUserUpdateSSHKeys        = "ssh_keys must be an array of non-empty strings"
@@ -142,17 +112,9 @@ const (
 	managedContactPhoneSecondaryKey    = "secondary"
 	errManagedContactFieldRequired     = "at least one managed contact field is required"
 	errManagedContactReadOnlyField     = "id and updated are read-only and cannot be set when creating a managed contact"
-	accountLoginsPageSizeMin           = 25
-	accountLoginsPageSizeMax           = 500
 	maxAccountLoginIDFromJSON          = 9007199254740991
 	maxAccountPaymentIDFromJSON        = 9007199254740991
 	maxSupportTicketResourceIDFromJSON = 9007199254740991
-	accountInvoicesPageSizeMin         = 25
-	accountInvoicesPageSizeMax         = 500
-	accountPaymentsPageSizeMin         = 25
-	accountPaymentsPageSizeMax         = 500
-	accountInvoiceItemsPageSizeMin     = 25
-	accountInvoiceItemsPageSizeMax     = 500
 	errLabelRequired                   = "label is required"
 	errRegionRequired                  = "region is required"
 	errRedirectURIRequired             = "redirect_uri is required"
@@ -160,8 +122,6 @@ const (
 	errPaymentMethodTypeRequired       = "type is required"
 	oauthClientThumbnailPNGParam       = "thumbnail_png_base64"
 	errThumbnailPNGRequired            = "thumbnail_png_base64 is required"
-	accountChildAccountsPageSizeMin    = 25
-	accountChildAccountsPageSizeMax    = 500
 	accountEventIDParam                = "event_id"
 )
 
@@ -258,12 +218,10 @@ func NewLinodeManagedCredentialsTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		"linode_managed_credential_list",
 		"Lists stored managed credentials for the authenticated account.",
 		"linode.mcp.v1.ManagedCredentialListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedCredential, error) {
 			return client.ListManagedCredentialsProto(ctx, page, pageSize)
 		},
-		managedCredentialsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		managedCredentialListResponse,
 	)
@@ -371,12 +329,10 @@ func NewLinodeAccountMaintenanceTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		cfg,
 		"linode_account_maintenance_list",
 		"Lists maintenance records visible to the authenticated account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountMaintenance, error) {
 			return client.ListAccountMaintenanceProto(ctx, page, pageSize)
 		},
-		accountMaintenancePaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountMaintenanceListResponse,
 	)
@@ -401,12 +357,10 @@ func NewLinodeMaintenancePoliciesTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		"linode_maintenance_policy_list",
 		"Lists available Linode maintenance policies.",
 		"linode.mcp.v1.MaintenancePolicyListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.MaintenancePolicy, error) {
 			return client.ListMaintenancePoliciesProto(ctx, page, pageSize)
 		},
-		accountMaintenancePaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		maintenancePolicyListResponse,
 	)
@@ -424,12 +378,10 @@ func NewLinodeAccountNotificationsTool(cfg *config.Config) (mcp.Tool, profiles.C
 		cfg,
 		"linode_account_notification_list",
 		"Lists active notifications for the authenticated account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountNotification, error) {
 			return client.ListAccountNotificationsProto(ctx, page, pageSize)
 		},
-		accountNotificationsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountNotificationListResponse,
 	)
@@ -453,12 +405,10 @@ func NewLinodeAccountBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		cfg,
 		"linode_account_beta_list",
 		"Lists beta programs that the account is enrolled in.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountBetaProgram, error) {
 			return client.ListAccountBetasProto(ctx, page, pageSize)
 		},
-		accountBetasPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountBetaListResponse,
 	)
@@ -482,12 +432,10 @@ func NewLinodeAccountEventsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		cfg,
 		"linode_account_event_list",
 		"Lists events that represent actions taken on the account over the last 90 days.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountEvent, error) {
 			return client.ListAccountEventsProto(ctx, page, pageSize)
 		},
-		accountEventsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountEventListResponse,
 	)
@@ -526,12 +474,10 @@ func NewLinodeAccountUsersTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 		cfg,
 		"linode_account_user_list",
 		"Lists users on the account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountUser, error) {
 			return client.ListAccountUsersProto(ctx, page, pageSize)
 		},
-		accountUsersPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountUserListResponse,
 	)
@@ -720,12 +666,10 @@ func NewLinodeAccountLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		cfg,
 		"linode_account_login_list",
 		"Lists user logins for the account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountLogin, error) {
 			return client.ListAccountLoginsProto(ctx, page, pageSize)
 		},
-		accountLoginsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountLoginListResponse,
 	)
@@ -764,12 +708,10 @@ func NewLinodeAccountInvoicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		cfg,
 		"linode_account_invoice_list",
 		"Lists invoices for the authenticated account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountInvoice, error) {
 			return client.ListAccountInvoicesProto(ctx, page, pageSize)
 		},
-		accountInvoicesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountInvoiceListResponse,
 	)
@@ -793,12 +735,10 @@ func NewLinodeAccountPaymentsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		cfg,
 		"linode_account_payment_list",
 		"Lists payments made on the authenticated account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountPayment, error) {
 			return client.ListAccountPaymentsProto(ctx, page, pageSize)
 		},
-		accountPaymentsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountPaymentListResponse,
 	)
@@ -882,14 +822,12 @@ func NewLinodeAccountInvoiceItemsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		cfg,
 		"linode_account_invoice_item_list",
 		"Lists line items for one account invoice by ID.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber("invoice_id", mcp.Required(),
 				mcp.Description("Invoice ID whose items should be listed.")),
 			parse: accountInvoiceIDFromTool,
 		},
-		accountInvoiceItemsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, invoiceID, page, pageSize int) ([]*linodev1.AccountInvoiceItem, error) {
 			return client.ListAccountInvoiceItemsProto(ctx, invoiceID, page, pageSize)
 		},
@@ -1006,12 +944,10 @@ func NewLinodeProfileDevicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		cfg,
 		"linode_profile_device_list",
 		"Lists trusted devices for the authenticated profile.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.TrustedDevice, error) {
 			return client.ListProfileDevicesProto(ctx, page, pageSize)
 		},
-		profileDevicesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		profileDeviceListResponse,
 	)
@@ -1110,12 +1046,10 @@ func NewLinodeAccountOAuthClientsTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		cfg,
 		"linode_account_oauth_client_list",
 		"Lists OAuth clients registered on the account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.OAuthClient, error) {
 			return client.ListAccountOAuthClientsProto(ctx, page, pageSize)
 		},
-		accountOAuthClientsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountOAuthClientListResponse,
 	)
@@ -1139,12 +1073,10 @@ func NewLinodeProfileAppsTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		cfg,
 		"linode_profile_app_list",
 		"Lists OAuth app authorizations for the authenticated profile.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ProfileApp, error) {
 			return client.ListProfileAppsProto(ctx, page, pageSize)
 		},
-		profileAppsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		profileAppListResponse,
 	)
@@ -1168,12 +1100,10 @@ func NewLinodeLongviewClientsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		cfg,
 		"linode_longview_client_list",
 		"Lists Longview clients configured for the account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.LongviewClient, error) {
 			return client.ListLongviewClientsProto(ctx, page, pageSize)
 		},
-		longviewClientsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		longviewClientListResponse,
 	)
@@ -1257,12 +1187,10 @@ func NewLinodeAccountPaymentMethodsTool(cfg *config.Config) (mcp.Tool, profiles.
 		cfg,
 		"linode_account_payment_method_list",
 		"Lists payment methods for the authenticated account.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountPaymentMethod, error) {
 			return client.ListAccountPaymentMethodsProto(ctx, page, pageSize)
 		},
-		accountPaymentMethodsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountPaymentMethodListResponse,
 	)
@@ -1451,12 +1379,10 @@ func NewLinodeAccountChildAccountsTool(cfg *config.Config) (mcp.Tool, profiles.C
 		cfg,
 		"linode_account_child_account_list",
 		"Lists child-level accounts the authenticated account can access.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ChildAccount, error) {
 			return client.ListAccountChildAccountsProto(ctx, page, pageSize)
 		},
-		accountChildAccountsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountChildAccountListResponse,
 	)
@@ -1480,12 +1406,10 @@ func NewLinodeAccountServiceTransfersTool(cfg *config.Config) (mcp.Tool, profile
 		cfg,
 		"linode_account_service_transfer_list",
 		"Lists account service transfer requests.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountEntityTransfer, error) {
 			return client.ListAccountServiceTransfersProto(ctx, page, pageSize)
 		},
-		accountServiceTransfersPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountServiceTransferListResponse,
 	)
@@ -1630,12 +1554,10 @@ func NewLinodeBetasTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func
 		"linode_beta_list",
 		"Lists available beta programs.",
 		"linode.mcp.v1.BetaListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.BetaProgram, error) {
 			return client.ListBetasProto(ctx, page, pageSize)
 		},
-		betasPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		betaListResponse,
 	)
@@ -1698,12 +1620,10 @@ func NewLinodeAccountAvailabilityTool(cfg *config.Config) (mcp.Tool, profiles.Ca
 		cfg,
 		"linode_account_availability_list",
 		"Lists services available and unavailable to the account in each region.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountAvailability, error) {
 			return client.ListAccountAvailabilityProto(ctx, page, pageSize)
 		},
-		accountAvailabilityPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		accountAvailabilityListResponse,
 	)
@@ -1779,38 +1699,6 @@ func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	}
 
 	return tool, profiles.CapAdmin, handler
-}
-
-func accountNotificationsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountNotificationsPageSizeMin, accountNotificationsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
-func accountBetasPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountBetasPageSizeMin, accountBetasPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 // runProfilePhoneAction is the shared path for the phone-number send and
@@ -2051,22 +1939,6 @@ func profilePhoneNumberVerifyRequestFromTool(request *mcp.CallToolRequest) (*lin
 	return &linode.ProfilePhoneNumberVerifyRequest{OTPCode: otpCode}, ""
 }
 
-func profileDevicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountOAuthClientsPageSizeMin, accountOAuthClientsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func handleLinodeProfileLoginGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	loginID, validationMessage := accountLoginIDFromTool(request)
 	if validationMessage != "" {
@@ -2229,54 +2101,6 @@ func profileDeviceIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredBoundedIDArgument(request, profileDeviceIDParam, profileDeviceIDMaxFromJSON)
 }
 
-func accountOAuthClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountOAuthClientsPageSizeMin, accountOAuthClientsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
-func profileAppsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountOAuthClientsPageSizeMin, accountOAuthClientsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
-func longviewClientsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", longviewClientsPageSizeMin, longviewClientsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func handleLinodeLongviewClientUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	clientID, validationMessage := longviewClientIDFromTool(request)
 	if validationMessage != "" {
@@ -2420,22 +2244,6 @@ func deleteLongviewClient(ctx context.Context, client *linode.Client, clientID i
 	}
 
 	return ""
-}
-
-func accountPaymentMethodsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountPaymentMethodsPageSizeMin, accountPaymentMethodsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeLongviewSubscriptionGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -3095,22 +2903,6 @@ func oauthClientUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.Upd
 	return req, ""
 }
 
-func accountEventsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountEventsPageSizeMin, accountEventsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func handleLinodeTaggedObjectsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	tagLabel, page, pageSize, validationMessage := taggedObjectsArgsFromTool(request)
 	if validationMessage != "" {
@@ -3147,28 +2939,12 @@ func taggedObjectsArgsFromTool(request *mcp.CallToolRequest) (string, int, int, 
 		return "", 0, 0, validationMessage
 	}
 
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", taggedObjectsPageSizeMin, taggedObjectsPageSizeMax)
+	pageSize, validationMessage := optionalPaginationInt(args, "page_size", standardPageSizeMin, standardPageSizeMax)
 	if validationMessage != "" {
 		return "", 0, 0, validationMessage
 	}
 
 	return tagLabel, page, pageSize, ""
-}
-
-func accountUsersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountUsersPageSizeMin, accountUsersPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeAccountUserGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -4076,22 +3852,6 @@ func requiredAccountUserString(args map[string]any, name string) (string, string
 	return value, ""
 }
 
-func accountLoginsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountLoginsPageSizeMin, accountLoginsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func handleLinodeAccountLoginGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	loginID, validationMessage := accountLoginIDFromTool(request)
 	if validationMessage != "" {
@@ -4113,38 +3873,6 @@ func handleLinodeAccountLoginGetRequest(ctx context.Context, request *mcp.CallTo
 
 func accountLoginIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredBoundedIDArgument(request, "login_id", maxAccountLoginIDFromJSON)
-}
-
-func accountInvoicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountInvoicesPageSizeMin, accountInvoicesPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
-func accountPaymentsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountPaymentsPageSizeMin, accountPaymentsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeAccountPaymentGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -4309,38 +4037,6 @@ func handleLinodeAccountInvoiceGetRequest(ctx context.Context, request *mcp.Call
 
 func accountInvoiceIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredIDArgument(request, "invoice_id")
-}
-
-func accountInvoiceItemsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountInvoiceItemsPageSizeMin, accountInvoiceItemsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
-func accountChildAccountsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountChildAccountsPageSizeMin, accountChildAccountsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeAccountChildAccountGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -4582,22 +4278,6 @@ func accountTransferTokenFromTool(request *mcp.CallToolRequest) (string, string)
 	}
 
 	return token, ""
-}
-
-func accountServiceTransfersPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountServiceTransfersPageSizeMin, accountServiceTransfersPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeAccountServiceTransferCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -5093,22 +4773,6 @@ func managedCredentialIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredBoundedIDArgument(request, managedIDParam, maxManagedIDFromJSON)
 }
 
-func managedCredentialsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedCredentialsPageSizeMin, managedCredentialsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func handleLinodeManagedCredentialCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	createReq, validationMessage := managedCredentialCreateRequestFromTool(request)
 	if validationMessage != "" {
@@ -5186,22 +4850,6 @@ func managedCredentialCreateRequestFromTool(request *mcp.CallToolRequest) (*lino
 	return req, ""
 }
 
-func accountMaintenancePaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountMaintenancePageSizeMin, accountMaintenancePageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func handleLinodeAccountAvailabilityGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	regionID, validationMessage := accountAvailabilityRegionIDFromTool(request)
 	if validationMessage != "" {
@@ -5257,38 +4905,6 @@ func isAccountAvailabilityRegionSlug(regionID string) bool {
 	}
 
 	return true
-}
-
-func betasPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", betasPageSizeMin, betasPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
-func accountAvailabilityPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountAvailabilityPageSizeMin, accountAvailabilityPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func optionalPaginationInt(args map[string]any, name string, minValue, maxValue int) (int, string) {

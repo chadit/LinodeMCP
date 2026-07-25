@@ -82,12 +82,10 @@ func NewLinodeLongviewSubscriptionsTool(cfg *config.Config) (mcp.Tool, profiles.
 		cfg,
 		"linode_longview_subscription_list",
 		"Lists available Longview subscription plans.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.LongviewSubscription, error) {
 			return client.ListLongviewSubscriptionsProto(ctx, page, pageSize)
 		},
-		longviewSubscriptionsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		longviewSubscriptionListResponse,
 	)
@@ -103,22 +101,6 @@ func NewLinodeLongviewSubscriptionsTool(cfg *config.Config) (mcp.Tool, profiles.
 
 func longviewSubscriptionListResponse(items []*linodev1.LongviewSubscription, count int32, filter *string) *linodev1.LongviewSubscriptionListResponse {
 	return &linodev1.LongviewSubscriptionListResponse{Count: count, Filter: filter, LongviewSubscriptions: items}
-}
-
-func longviewSubscriptionsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", longviewSubscriptionsPageSizeMin, longviewSubscriptionsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 // NewLinodeLongviewClientCreateTool creates a tool for creating a Longview client.
