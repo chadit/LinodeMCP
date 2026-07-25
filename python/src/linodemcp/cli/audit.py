@@ -1,4 +1,4 @@
-"""``linodemcp audit <recent|summary|health|export>`` - read the audit log.
+"""``linodemcp audit <recent|summary|health|export|report>`` - read the audit log.
 
 A thin wrapper so an operator can read the audit log from the shell without a
 separate MCP client. Each subcommand builds the matching ``linode_audit_*``
@@ -8,7 +8,9 @@ audit query tools already do that, and routing through dispatch means the read
 is itself audited and profile-checked like any other call.
 
 Common flags map onto the tools' schema arguments: ``--tool`` (glob),
-``--since`` (RFC 3339), ``--limit``. ``export`` adds ``--format``.
+``--since`` (RFC 3339), ``--limit``, ``--include-meta``. ``export`` adds
+``--format``; ``report`` takes the report name defined under
+``audit.reports`` as its one positional argument.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ _AUDIT_TOOLS = {
     "summary": "linode_audit_summary",
     "health": "linode_audit_health",
     "export": "linode_audit_export",
+    "report": "linode_audit_report",
 }
 
 _EXPORT_FORMATS = ("json", "csv", "ndjson")
@@ -43,12 +46,13 @@ _EXPORT_FORMATS = ("json", "csv", "ndjson")
 AUDIT_USAGE = """\
 Usage: linodemcp audit <subcommand> [flags]
 
-  recent [--tool GLOB] [--since TS] [--limit N]
+  recent [--tool GLOB] [--since TS] [--limit N] [--include-meta]
                         Most recent events, newest first.
   summary [--since TS]  Counts grouped by tool, status, capability, ...
   health                Audit subsystem state (paths, sizes, counters).
   export --format FMT [--tool GLOB] [--since TS]
-                        Dump a filtered range to a temp file (json/csv/ndjson).\
+                        Dump a filtered range to a temp file (json/csv/ndjson).
+  report NAME           Run the named report defined under audit.reports.\
 """
 
 
@@ -74,8 +78,9 @@ def _build_audit_arguments(
     """Map the parsed flags onto the audit tool's schema arguments.
 
     Only set flags are written, so the tool sees absent rather than empty for
-    an unused filter. ``export`` always carries its required ``format``; the
-    others share the tool/since/limit subset where the tool supports it.
+    an unused filter. ``export`` always carries its required ``format``,
+    ``report`` its required ``name``; the others share the
+    tool/since/limit/include-meta subset where the tool supports it.
     """
     arguments: dict[str, Any] = {}
     tool_glob = getattr(ns, "tool", None)
@@ -88,8 +93,12 @@ def _build_audit_arguments(
         arguments["since"] = since
     if limit is not None:
         arguments["limit"] = limit
+    if getattr(ns, "include_meta", False):
+        arguments["include_meta"] = True
     if sub == "export":
         arguments["format"] = ns.format
+    if sub == "report":
+        arguments["name"] = ns.name
     return arguments
 
 
@@ -110,6 +119,11 @@ def _parse_audit_args(
         parser.add_argument("--tool", default=None, help="tool-name glob filter")
     if sub == "recent":
         parser.add_argument("--limit", type=int, default=None, help="max events")
+        parser.add_argument(
+            "--include-meta",
+            action="store_true",
+            help="include audit/profile meta events",
+        )
     if sub == "export":
         parser.add_argument(
             "--format",
@@ -117,6 +131,8 @@ def _parse_audit_args(
             required=True,
             help="export format",
         )
+    if sub == "report":
+        parser.add_argument("name", help="report name from audit.reports")
     try:
         return parser.parse_args(rest)
     except SystemExit:

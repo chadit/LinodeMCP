@@ -21,6 +21,7 @@ from linodemcp.tools.helpers import (
 from linodemcp.tools.proto_response import (
     raw_str,
     serialize_api_response,
+    serialize_keyed_list_response,
     serialize_list_response,
     serialize_struct_response,
 )
@@ -487,12 +488,12 @@ async def handle_linode_profile_security_question_list(
     """Handle linode_profile_security_question_list tool request."""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        # The endpoint wraps its elements under "security_questions", not a
-        # {data} page envelope; unwrap and rewrap for the list helper.
+        # The endpoint names its member "security_questions" instead of
+        # returning the {data} page envelope, so the keyed helper owns the
+        # root-object check the page path gets for free.
         raw = await client.list_profile_security_questions()
-        items: list[Any] = raw.get("security_questions") or []
-        return serialize_list_response(
-            {"data": items},
+        return serialize_keyed_list_response(
+            raw,
             "security_questions",
             profile_pb2.SecurityQuestionListResponse(),
         )

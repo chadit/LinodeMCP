@@ -121,12 +121,17 @@ func NewLinodeInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	statusFilter := request.GetString("status", "")
 
+	page, pageSize, validationMessage := standardPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instances, err := client.ListInstancesProto(ctx)
+	instances, err := client.ListInstancesProto(ctx, page, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instances: %v", err)), nil
 	}

@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_disk_list",
-  "description": "Pins the shared missing-linode_id rejection and the disk-list GET.",
+  "description": "Pins the shared missing-linode_id rejection, the disk-list GET, the pagination rejections, and the query string both languages must build.",
   "cases": [
     {
       "name": "rejects missing linode_id",
@@ -8,10 +8,29 @@
       "expect_error": "linode_id is required"
     },
     {
+      "name": "rejects non-integer page",
+      "args": { "linode_id": 123, "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects non-integer page_size",
+      "args": { "linode_id": 123, "page_size": "x" },
+      "expect_error": "page_size must be an integer"
+    },
+    {
       "name": "lists disks for an instance",
       "args": { "linode_id": 123 },
       "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": { "method": "GET", "path": "/linode/instances/123/disks" }
+    },
+    {
+      "name": "pagination reaches the request",
+      "args": { "linode_id": 123, "page": 2, "page_size": 50 },
+      "api_response": { "data": [], "page": 2, "pages": 2, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/linode/instances/123/disks?page=2&page_size=50"
+      }
     }
   ]
 }

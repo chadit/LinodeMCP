@@ -328,6 +328,10 @@ message ObjectStorageEndpointListResponse {
 message ObjectStorageEndpointListInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 2;
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 3;
 }
 
 // ObjectStorageQuota mirrors a Linode Object Storage quota. quota_limit is the

@@ -30,8 +30,8 @@ const (
 
 // httpListInstancesProto retrieves all Linode instances as proto messages,
 // decoded directly from the API JSON for the proto-backed read path.
-func (c *Client) httpListInstancesProto(ctx context.Context) ([]*linodev1.Instance, error) {
-	return listProtoElements(ctx, c, "ListInstances", endpointInstances,
+func (c *Client) httpListInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.Instance, error) {
+	return listProtoElementsPaginated(ctx, c, "ListInstances", endpointInstances, page, pageSize,
 		func() *linodev1.Instance { return &linodev1.Instance{} })
 }
 
@@ -146,8 +146,8 @@ func (c *Client) httpGetInstanceTransferProto(ctx context.Context, linodeID int)
 
 // httpListRegionsProto retrieves all regions as proto messages for the
 // proto-backed list path, sharing the decode tail with every other proto list.
-func (c *Client) httpListRegionsProto(ctx context.Context) ([]*linodev1.Region, error) {
-	return listProtoElements(ctx, c, "ListRegions", endpointRegions,
+func (c *Client) httpListRegionsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Region, error) {
+	return listProtoElementsPaginated(ctx, c, "ListRegions", endpointRegions, page, pageSize,
 		func() *linodev1.Region { return &linodev1.Region{} })
 }
 
@@ -299,8 +299,8 @@ func (c *Client) httpGetKernelProto(ctx context.Context, kernelID string) (*lino
 
 // httpListImagesProto retrieves images as proto messages for the proto-backed
 // list path, decoded directly from the same /images endpoint httpListImages uses.
-func (c *Client) httpListImagesProto(ctx context.Context) ([]*linodev1.Image, error) {
-	return listProtoElements(ctx, c, "ListImages", endpointImages,
+func (c *Client) httpListImagesProto(ctx context.Context, page, pageSize int) ([]*linodev1.Image, error) {
+	return listProtoElementsPaginated(ctx, c, "ListImages", endpointImages, page, pageSize,
 		func() *linodev1.Image { return &linodev1.Image{} })
 }
 

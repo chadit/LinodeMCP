@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"io"
 
@@ -239,17 +240,37 @@ func rejectUnknownTool(srv *server.Server, tool string, stderr io.Writer) (int, 
 func schemaForTool(srv *server.Server, tool string) mcp.ToolInputSchema {
 	for _, info := range srv.ToolInfos() {
 		if info.Name == tool {
-			return info.InputSchema
+			return toolInfoSchema(&info)
 		}
 	}
 
 	for _, info := range srv.AllToolInfos() {
 		if info.Name == tool {
-			return info.InputSchema
+			return toolInfoSchema(&info)
 		}
 	}
 
 	return mcp.ToolInputSchema{}
+}
+
+// toolInfoSchema picks the populated schema off a ToolInfo. Tools built from
+// the generated proto contract carry their schema as RawInputSchema and leave
+// the structured form empty, so reading InputSchema alone yields no properties
+// and every --arg value stays a string. That reaches the tool as the wrong
+// type: a numeric field like page_size then fails validation on a value the
+// caller wrote correctly.
+func toolInfoSchema(info *server.ToolInfo) mcp.ToolInputSchema {
+	var decoded mcp.ToolInputSchema
+
+	// A raw schema that fails to decode leaves decoded zero-valued, which is the
+	// same empty schema the structured field would have given, so arguments fall
+	// back to strings exactly as they did before. That makes the error
+	// indistinguishable from "no raw schema" and not worth a separate branch.
+	if err := json.Unmarshal(info.RawInputSchema, &decoded); err == nil && len(decoded.Properties) > 0 {
+		return decoded
+	}
+
+	return info.InputSchema
 }
 
 // validOutput reports whether the --output value is one the renderer

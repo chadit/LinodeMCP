@@ -1,12 +1,31 @@
 {
   "tool": "linode_image_list",
-  "description": "Filters are applied client-side, so the request is always a bare GET /images.",
+  "description": "Filters are applied client-side, so only pagination reaches the request path. Pins the shared pagination rejections and the query string both languages must build.",
   "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects non-integer page_size",
+      "args": { "page_size": "x" },
+      "expect_error": "page_size must be an integer"
+    },
     {
       "name": "lists all images",
       "args": {},
       "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": { "method": "GET", "path": "/images" }
+    },
+    {
+      "name": "pagination reaches the request",
+      "args": { "page": 2, "page_size": 50 },
+      "api_response": { "data": [], "page": 2, "pages": 2, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/images?page=2&page_size=50"
+      }
     }
   ]
 }

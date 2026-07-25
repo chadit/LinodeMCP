@@ -42,6 +42,25 @@ Inside a Claude conversation, the same data is queryable via five MCP tools (all
 - `linode_audit_export` dumps a filtered range to a temp file in JSON / CSV / NDJSON
 - `linode_audit_report` runs a named report from config
 
+The same five queries work from the shell, no MCP client needed. The `audit`
+CLI verb wraps each tool one-to-one and drives it through the same dispatch,
+so the read is itself audited and profile-checked:
+
+```bash
+linodemcp audit recent [--tool GLOB] [--since TS] [--limit N] [--include-meta]
+linodemcp audit summary [--since TS]
+linodemcp audit health
+linodemcp audit export --format json|csv|ndjson [--tool GLOB] [--since TS]
+linodemcp audit report NAME
+```
+
+The flags map straight onto the tool arguments: `--tool` is a tool-name glob,
+`--since` an RFC 3339 timestamp, `--limit` a result cap. Meta events (the
+audit and profile tools' own calls) are excluded by default; `--include-meta`
+widens the view, same as the `include_meta` tool argument. `report` takes one
+argument, the name of a report defined under `audit.reports`
+(see [audit-reports.md](./audit-reports.md)).
+
 ## Event schema
 
 One event per tool call, written when the handler returns. All fields are non-optional unless noted.

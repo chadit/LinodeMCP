@@ -24,8 +24,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    paginated_path,
     pagination_int_argument,
     required_int_id,
+    standard_pagination_arguments,
 )
 from linodemcp.tools.linode_instance_disks import validate_device_slots
 from linodemcp.tools.proto_enum import enum_value_names, optional_enum_error
@@ -1061,8 +1063,13 @@ async def handle_linode_instance_list(
     """
     status_filter = arguments.get("status", "")
 
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/linode/instances")
+        raw = await client.get_raw(paginated_path("/linode/instances", page, page_size))
         if not status_filter:
             return serialize_list_response(
                 raw, "instances", instance_pb2.InstanceListResponse()
