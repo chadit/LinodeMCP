@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/cli"
@@ -86,12 +87,38 @@ func TestCallLinodeAPIToolNoConfigFailsAtCall(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 
-	code := cli.RunCallCommand([]string{"linode_instance_list"}, &stdout, &stderr)
+	code := cli.RunCallCommand([]string{toolInstLst}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("exit code = %d (stderr: %s), want 1", code, stderr.String())
 	}
 
 	wantContains(t, "stdout", stdout.String(), "environment")
+}
+
+// TestCallNoConfigUsesEnvCredentials checks that with no config file the
+// environment supplies the default environment. A CI runner holds its token in
+// a secret and never writes a config, so the no-file fallback has to accept
+// LINODEMCP_LINODE_API_URL plus LINODEMCP_LINODE_TOKEN; without that the call
+// dies on environment selection before it ever reaches the API. Reaching an
+// API-level failure (bad token) instead of "no provider environments
+// configured" is the proof.
+func TestCallNoConfigUsesEnvCredentials(t *testing.T) {
+	t.Setenv("LINODEMCP_CONFIG_PATH", missingConfigPath(t))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("LINODEMCP_LINODE_API_URL", "http://127.0.0.1:1/v4")
+	t.Setenv("LINODEMCP_LINODE_TOKEN", "env-token")
+
+	var stdout, stderr bytes.Buffer
+
+	// The URL points at a closed port, so the call fails on transport
+	// without leaving the machine; environment selection has to succeed
+	// first for it to get that far.
+	cli.RunCallCommand([]string{toolInstLst}, &stdout, &stderr)
+
+	combined := stdout.String() + stderr.String()
+	if strings.Contains(combined, "no provider environments configured") {
+		t.Errorf("env credentials did not build a default environment: %s", combined)
+	}
 }
 
 // TestVersionCommandNoConfig checks the top-level `version` command works

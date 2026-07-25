@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes baseline-guard tool-float parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes list-envelope env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes baseline-guard tool-float parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes list-envelope env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -237,6 +237,16 @@ dryrun:
 # Known gaps ratchet down in docs/contracts/response-shape-baseline.txt.
 response-shapes:
 	@python3 scripts/verify_response_shapes.py
+
+## list-envelope: Verify no Python list handler collapses a falsey member with `or []`
+# Offline source scan, scoped by docs/contracts/languages.txt rather than a
+# path in the script. `raw.get(key) or []` reads as a null guard but swallows
+# {}, "", 0, and false into an empty list, so a malformed response ships as a
+# successful empty result in Python while Go rejects it. A registered language
+# with no scanner and no stated exemption fails the gate by name. Known gaps
+# ratchet down in docs/contracts/list-envelope-baseline.txt.
+list-envelope:
+	@python3 scripts/verify_list_envelope.py
 
 ## pagination: Verify list tools paginate when their spec route paginates
 # Offline: judges the tool surface against the reviewed snapshot in

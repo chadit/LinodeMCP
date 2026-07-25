@@ -522,10 +522,10 @@ func (c *Client) httpListInstanceDisks(ctx context.Context, linodeID int) ([]Ins
 // messages for the proto-backed list path. The endpoint is formatted with the
 // same fmt.Sprintf(endpointInstanceDeep+"/%d/disks", linodeID) pattern
 // httpListInstanceDisks uses, so the runtime path matches exactly.
-func (c *Client) httpListInstanceDisksProto(ctx context.Context, linodeID int) ([]*linodev1.InstanceDisk, error) {
+func (c *Client) httpListInstanceDisksProto(ctx context.Context, linodeID, page, pageSize int) ([]*linodev1.InstanceDisk, error) {
 	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%d/disks", linodeID)
 
-	return listProtoElements(ctx, c, "ListInstanceDisks", endpoint,
+	return listProtoElementsPaginated(ctx, c, "ListInstanceDisks", endpoint, page, pageSize,
 		func() *linodev1.InstanceDisk { return &linodev1.InstanceDisk{} })
 }
 

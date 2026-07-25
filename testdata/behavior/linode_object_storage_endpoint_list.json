@@ -1,12 +1,31 @@
 {
   "tool": "linode_object_storage_endpoint_list",
-  "description": "No local validation; pins the plain endpoints list GET.",
+  "description": "Pins the endpoints list GET plus the shared pagination rejections and the query string both languages must build.",
   "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": { "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects non-integer page_size",
+      "args": { "page_size": "x" },
+      "expect_error": "page_size must be an integer"
+    },
     {
       "name": "lists endpoints",
       "args": {},
       "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": { "method": "GET", "path": "/object-storage/endpoints" }
+    },
+    {
+      "name": "pagination reaches the request",
+      "args": { "page": 2, "page_size": 50 },
+      "api_response": { "data": [], "page": 2, "pages": 2, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/object-storage/endpoints?page=2&page_size=50"
+      }
     }
   ]
 }

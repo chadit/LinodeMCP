@@ -8,6 +8,7 @@ import json
 import keyword
 import logging
 from typing import TYPE_CHECKING, Any, TypedDict, cast
+from urllib.parse import urlencode
 
 import httpx
 from mcp.types import TextContent
@@ -483,6 +484,44 @@ def valid_ipv6_prefix(value: str) -> bool:
     except ValueError:
         return False
     return isinstance(network, ipaddress.IPv6Network)
+
+
+# Standard Linode collection pagination bounds, shared by every family that has
+# no bounds of its own. Mirrors the Go standardPageSizeMin/Max pair.
+STANDARD_PAGE_SIZE_MIN = 25
+STANDARD_PAGE_SIZE_MAX = 500
+
+
+def standard_pagination_arguments(
+    arguments: dict[str, Any],
+) -> tuple[int | None, int | None]:
+    """Read page/page_size under the standard Linode bounds.
+
+    Raises the same TypeError/ValueError ``pagination_int_argument`` raises, so
+    the validation text stays identical to Go's standardPaginationFromTool.
+    """
+    page = pagination_int_argument(arguments, "page", 1)
+    page_size = pagination_int_argument(
+        arguments, "page_size", STANDARD_PAGE_SIZE_MIN, STANDARD_PAGE_SIZE_MAX
+    )
+    return page, page_size
+
+
+def paginated_path(path: str, page: int | None, page_size: int | None) -> str:
+    """Append page/page_size to a raw request path, omitting unset values.
+
+    Mirrors Go's withPaginationQuery: an unset value stays off the query string
+    so the API's own default applies, which keeps the two languages issuing
+    byte-identical requests for the same arguments.
+    """
+    params: dict[str, int] = {}
+    if page is not None:
+        params["page"] = page
+    if page_size is not None:
+        params["page_size"] = page_size
+    if not params:
+        return path
+    return path + "?" + urlencode(params)
 
 
 def pagination_int_argument(
