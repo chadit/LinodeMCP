@@ -30,7 +30,7 @@ dependencies = [
     # 7.35.0 and must not be newer than the runtime. Ceiling: the
     # opentelemetry-proto exporter chain requires protobuf<8.0; bump the buf
     # plugin tags and this range together for future protobuf majors.
-    "protobuf>=7.35.1,<7.36",
+    "protobuf>=7.35.1,<8.0",
     # Security floors for transitive deps pulled in by mcp. mcp's own
     # constraints are open (starlette>=0.27, python-multipart>=0.0.9), so
     # without these a resolve can land on versions trivy flags HIGH.

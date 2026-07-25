@@ -575,7 +575,7 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-system-metrics", marker = "extra == 'observability'", specifier = ">=0.64b0" },
     { name = "opentelemetry-sdk", marker = "extra == 'observability'", specifier = ">=1.43.0" },
     { name = "prometheus-client", marker = "extra == 'observability'", specifier = ">=0.25.0" },
-    { name = "protobuf", specifier = ">=7.35.1,<7.36" },
+    { name = "protobuf", specifier = ">=7.35.1,<8.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.4.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
