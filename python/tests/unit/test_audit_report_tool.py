@@ -69,11 +69,50 @@ def test_definition() -> None:
 
 
 async def test_unknown_report_returns_error() -> None:
-    """A name with no matching catalog entry returns an error message."""
+    """A name with no matching catalog entry returns an Error: result.
+
+    The prefix is the contract: the CLI's exit-code mapping and the
+    cross-language behavior runner both read it as Go's error result.
+    """
     set_audit_reports({})
 
     result = await handle_linode_audit_report({"name": "does-not-exist"})
+    assert result[0].text.startswith("Error: unknown report:")
     assert "does-not-exist" in result[0].text
+
+
+async def test_missing_name_returns_error() -> None:
+    """An absent name is rejected with the Error: shape, mirroring Go."""
+    set_audit_reports({})
+
+    result = await handle_linode_audit_report({})
+    assert result[0].text == "Error: report name is required"
+
+
+async def test_bad_group_by_returns_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A report whose group_by names an unknown column fails as a tool error.
+
+    The catalog resolves, so the failure comes from running the report; it
+    must land in the Error: shape rather than raise out of the handler.
+    """
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    set_audit_sqlite_path("")
+
+    set_audit_reports(
+        {
+            "bad-group": ReportConfig(
+                filter=ReportFilter(),
+                group_by=["not-a-column"],
+                output=REPORT_OUTPUT_SUMMARY,
+            ),
+        }
+    )
+
+    result = await handle_linode_audit_report({"name": "bad-group"})
+    assert result[0].text.startswith("Error: failed to run report:")
 
 
 async def test_summary_counts_with_capability_in(

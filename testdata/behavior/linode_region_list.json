@@ -1,18 +1,88 @@
 {
   "tool": "linode_region_list",
-  "description": "Region list has no local validation; the country filter is client-side so the request stays a bare GET /regions.",
+  "description": "Region list pins the shared pagination rejections and the query string both languages must build. The country filter is client-side, so it never reaches the request path.",
   "cases": [
+    {
+      "name": "rejects non-integer page",
+      "args": {
+        "page": "x"
+      },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects non-integer page_size",
+      "args": {
+        "page_size": "x"
+      },
+      "expect_error": "page_size must be an integer"
+    },
     {
       "name": "lists all regions",
       "args": {},
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/regions" }
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/regions"
+      }
     },
     {
       "name": "country filter still fetches every region",
-      "args": { "country": "us" },
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/regions" }
+      "args": {
+        "country": "us"
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/regions"
+      }
+    },
+    {
+      "name": "pagination reaches the request",
+      "args": {
+        "page": 2,
+        "page_size": 50
+      },
+      "api_response": {
+        "data": [],
+        "page": 2,
+        "pages": 2,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/regions?page=2&page_size=50"
+      }
+    },
+    {
+      "name": "rejects a non-integer page",
+      "args": {
+        "page": "x"
+      },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects a page_size below the minimum",
+      "args": {
+        "page_size": 24
+      },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "rejects a page_size above the maximum",
+      "args": {
+        "page_size": 501
+      },
+      "expect_error": "page_size must be an integer from 25 through 500"
     }
   ]
 }

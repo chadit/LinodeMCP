@@ -34,6 +34,7 @@ from linodemcp.config import (
     Config,
     ConfigFileNotFoundError,
     get_config_path,
+    load_default_with_env,
     load_from_file,
 )
 from linodemcp.server import Server
@@ -48,18 +49,20 @@ if TYPE_CHECKING:
 def load_config_or_default(path: Path) -> Config:
     """Load the config from ``path`` or return the in-memory CLI default.
 
-    A missing file is the only error swallowed: it yields ``Config()``, whose
-    dataclass defaults match what an empty config file produces (empty
-    ``active_profile`` so the resolver selects the read-only ``default``
-    profile, no environments, audit defaults intact). This mirrors Go's
-    ``defaultCLIConfig`` / ``loadConfigOrDefault`` so both CLIs run meta-tool
-    calls offline. A malformed or unreadable config still propagates so the
-    user sees the real problem instead of a silent fallback.
+    A missing file is the only error swallowed: it yields the in-memory default
+    with the environment overrides applied, matching what an empty config file
+    would produce (empty ``active_profile`` so the resolver selects the
+    read-only ``default`` profile, audit defaults intact). The overrides run
+    here so a caller who supplies only ``LINODEMCP_LINODE_API_URL`` and
+    ``LINODEMCP_LINODE_TOKEN`` gets a usable default environment instead of
+    failing environment selection. This mirrors Go's ``defaultCLIConfig`` /
+    ``loadConfigOrDefault``. A malformed or unreadable config still propagates
+    so the user sees the real problem instead of a silent fallback.
     """
     try:
         return load_from_file(path)
     except ConfigFileNotFoundError:
-        return Config()
+        return load_default_with_env()
 
 
 class OneShotRuntime:

@@ -169,12 +169,10 @@ func NewLinodeProfileTokensTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		cfg,
 		"linode_profile_token_list",
 		"Lists personal access tokens for the authenticated profile.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.PersonalAccessToken, error) {
 			return client.ListProfileTokensProto(ctx, page, pageSize)
 		},
-		profileTokensPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		profileTokenListResponse,
 	)
@@ -190,22 +188,6 @@ func NewLinodeProfileTokensTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 
 func profileTokenListResponse(items []*linodev1.PersonalAccessToken, count int32, filter *string) *linodev1.PersonalAccessTokenListResponse {
 	return &linodev1.PersonalAccessTokenListResponse{Count: count, Filter: filter, ProfileTokens: items}
-}
-
-func profileTokensPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountLoginsPageSizeMin, accountLoginsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 // NewLinodeProfileTokenCreateTool creates a tool for creating a personal access token.
@@ -449,12 +431,10 @@ func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		cfg,
 		"linode_profile_login_list",
 		"Lists login history for the authenticated profile.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.AccountLogin, error) {
 			return client.ListProfileLoginsProto(ctx, page, pageSize)
 		},
-		profileLoginsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		profileLoginListResponse,
 	)
@@ -470,20 +450,4 @@ func NewLinodeProfileLoginsTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 
 func profileLoginListResponse(items []*linodev1.AccountLogin, count int32, filter *string) *linodev1.ProfileLoginListResponse {
 	return &linodev1.ProfileLoginListResponse{Count: count, Filter: filter, ProfileLogins: items}
-}
-
-func profileLoginsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountLoginsPageSizeMin, accountLoginsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }

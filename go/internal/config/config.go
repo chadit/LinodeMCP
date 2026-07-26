@@ -299,7 +299,7 @@ func Load(path string) (*Config, error) {
 	}
 
 	setDefaults(&cfg)
-	applyEnvironmentOverrides(&cfg)
+	ApplyEnvironmentOverrides(&cfg)
 
 	if err := validateConfig(&cfg); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrConfigInvalid, err)
@@ -499,7 +499,13 @@ func setObservabilityDefaults(cfg *Config) {
 	}
 }
 
-func applyEnvironmentOverrides(cfg *Config) {
+// ApplyEnvironmentOverrides layers the environment-variable overrides onto an
+// already-built config. Load calls this for a file-backed config; the CLI's
+// no-file fallback calls it too, so `LINODEMCP_LINODE_API_URL` plus
+// `LINODEMCP_LINODE_TOKEN` are enough to run with no config file on disk (the
+// shape CI runners want, where the token comes from a secret and never lands
+// in a file).
+func ApplyEnvironmentOverrides(cfg *Config) {
 	applyServerOverrides(cfg)
 	applyLinodeOverrides(cfg)
 	applyAuditOverrides(cfg)

@@ -121,12 +121,17 @@ func NewLinodeInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 func handleLinodeInstancesRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	statusFilter := request.GetString("status", "")
 
+	page, pageSize, validationMessage := standardPaginationFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	instances, err := client.ListInstancesProto(ctx)
+	instances, err := client.ListInstancesProto(ctx, page, pageSize)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to retrieve Linode instances: %v", err)), nil
 	}
@@ -746,14 +751,12 @@ func NewLinodeInstanceInterfaceHistoryListTool(cfg *config.Config) (mcp.Tool, pr
 		cfg,
 		"linode_instance_interface_history_list",
 		"Lists historical network interface versions for a specific Linode instance with optional pagination.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			parse: instanceConfigLinodeIDFromTool,
 		},
-		instanceFirewallsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, linodeID, page, pageSize int) ([]*linodev1.InstanceInterfaceHistory, error) {
 			return client.ListInstanceInterfaceHistoryProto(ctx, linodeID, page, pageSize)
 		},

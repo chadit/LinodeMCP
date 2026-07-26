@@ -5,8 +5,54 @@
     {
       "name": "lists firewall templates",
       "args": {},
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/networking/firewalls/templates" }
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/firewalls/templates"
+      }
+    },
+    {
+      "name": "rejects a non-integer page",
+      "args": {
+        "page": "x"
+      },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects a page_size below the minimum",
+      "args": {
+        "page_size": 24
+      },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "rejects a page_size above the maximum",
+      "args": {
+        "page_size": 501
+      },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "pagination reaches the request",
+      "args": {
+        "page": 2,
+        "page_size": 50
+      },
+      "api_response": {
+        "data": [],
+        "page": 2,
+        "pages": 2,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/firewalls/templates?page=2&page_size=50"
+      }
     }
   ]
 }

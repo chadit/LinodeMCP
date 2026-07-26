@@ -4579,8 +4579,8 @@ func TestLinodeInstanceVolumesListToolValidation(t *testing.T) {
 		{name: caseNegativeLinodeID, args: map[string]any{keyLinodeID: float64(-1)}, wantContains: errLinodeIDMin},
 		{name: "fractional linode id", args: map[string]any{keyLinodeID: float64(123.9)}, wantContains: errLinodeIDInteger},
 		{name: caseInvalidInstanceFirewallsPage, args: map[string]any{keyLinodeID: float64(123), keyPage: float64(0)}, wantContains: errInstanceFirewallsPageMin},
-		{name: caseInvalidPageSizeLow, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: "page_size must be an integer from 25 through 500"},
-		{name: caseInvalidPageSizeHigh, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: "page_size must be an integer from 25 through 500"},
+		{name: caseInvalidPageSizeLow, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(10)}, wantContains: errStandardPageSizeRange},
+		{name: caseInvalidPageSizeHigh, args: map[string]any{keyLinodeID: float64(123), keyPageSize: float64(501)}, wantContains: errStandardPageSizeRange},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {

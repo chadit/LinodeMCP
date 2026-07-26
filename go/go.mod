@@ -7,8 +7,8 @@ require (
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/lipgloss/v2 v2.0.5
 	github.com/google/uuid v1.6.0
-	github.com/mark3labs/mcp-go v0.56.0
-	github.com/prometheus/client_golang v1.24.0
+	github.com/mark3labs/mcp-go v0.57.0
+	github.com/prometheus/client_golang v1.24.1
 	go.opentelemetry.io/contrib/instrumentation/host v0.69.0
 	go.opentelemetry.io/contrib/instrumentation/runtime v0.69.0
 	go.opentelemetry.io/otel v1.44.0
@@ -47,7 +47,6 @@ require (
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260627054121-477a66015f15 // indirect
 	github.com/mattn/go-isatty v0.0.23 // indirect

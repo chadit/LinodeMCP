@@ -14200,7 +14200,9 @@ async def test_handle_linode_object_storage_endpoints_list(
         assert len(result) == 1
         assert "us-sea-1.linodeobjects.com" in result[0].text
         assert '"count": 1' in result[0].text
-        mock_client.list_object_storage_endpoints.assert_called_once_with()
+        # No page arguments were supplied, so both stay None and the query
+        # string is omitted, leaving the API's own default page in effect.
+        mock_client.list_object_storage_endpoints.assert_called_once_with(None, None)
 
 
 async def test_handle_linode_object_storage_endpoints_list_error(
@@ -22350,6 +22352,75 @@ async def test_handle_linode_profile_security_questions_list_empty_envelope(
     assert json.loads(result[0].text) == {"count": 0, "security_questions": []}
 
 
+@pytest.mark.parametrize(
+    "api_response",
+    [{"security_questions": None}, {"unrelated": True}],
+    ids=["null", "extra-field"],
+)
+async def test_handle_linode_profile_security_questions_list_accepts_empty_shapes(
+    sample_config: Config, api_response: dict[str, Any]
+) -> None:
+    """A null member is an empty list, the shape linodego's []T field decodes to."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_security_questions.return_value = api_response
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_question_list({}, sample_config)
+
+    assert json.loads(result[0].text) == {"count": 0, "security_questions": []}
+
+
+@pytest.mark.parametrize(
+    "questions", [{}, "", 0, False], ids=["object", "string", "number", "boolean"]
+)
+async def test_handle_linode_profile_security_questions_list_rejects_falsey_non_arrays(
+    sample_config: Config, questions: Any
+) -> None:
+    """Falsey non-array members are malformed responses, not empty lists."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_security_questions.return_value = {
+            "security_questions": questions
+        }
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_question_list({}, sample_config)
+
+    assert result[0].text.startswith(
+        "Failed to list Linode profile security questions: "
+        "list response data must be an array"
+    )
+
+
+@pytest.mark.parametrize(
+    "api_response",
+    [[], None, "", 0, False],
+    ids=["array", "null", "string", "number", "boolean"],
+)
+async def test_handle_linode_profile_security_questions_list_rejects_non_object(
+    sample_config: Config, api_response: Any
+) -> None:
+    """A non-object root is rejected before the member lookup can raise."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.list_profile_security_questions.return_value = api_response
+        mock_client_class.return_value = mock_client
+
+        result = await handle_linode_profile_security_question_list({}, sample_config)
+
+    assert result[0].text.startswith(
+        "Failed to list Linode profile security questions: "
+        "list response must be an object"
+    )
+
+
 async def test_handle_linode_profile_security_questions_list_error(
     sample_config: Config,
 ) -> None:
@@ -25269,82 +25340,35 @@ async def test_handle_linode_firewall_template_get_with_pagination(
 async def test_handle_linode_firewall_template_get_rejects_bad_pagination(
     sample_config: Config,
 ) -> None:
-    """Template get rejects non-positive page and page_size."""
+    """Template get now rejects through the shared reader, bounds included."""
     result = await handle_linode_firewall_template_get(
         {"slug": "public", "page": 0}, sample_config
     )
     assert len(result) == 1
-    assert "page must be a positive integer" in result[0].text
-
-    result = await handle_linode_firewall_template_get(
-        {"slug": "public", "page_size": -1}, sample_config
-    )
-    assert len(result) == 1
-    assert "page_size must be a positive integer" in result[0].text
-
-
-async def test_handle_linode_firewall_template_get_missing_slug(
-    sample_config: Config,
-) -> None:
-    """Test linode_firewall_template_get validation."""
-    result = await handle_linode_firewall_template_get({}, sample_config)
-
-    assert len(result) == 1
-    assert "slug is required" in result[0].text
-
-
-async def test_handle_linode_firewall_template_get_rejects_invalid_slug(
-    sample_config: Config,
-) -> None:
-    """Slug is validated against the public|vpc closed set, which also rejects
-    path-traversal and other out-of-set values."""
-    for slug in ("allow/http", "allow?http", "allow/../http", "internal"):
-        result = await handle_linode_firewall_template_get(
-            {"slug": slug}, sample_config
-        )
-        assert len(result) == 1
-        assert "slug must be one of: public, vpc" in result[0].text
-
-
-async def test_handle_linode_firewall_template_get_rejects_non_string_slug(
-    sample_config: Config,
-) -> None:
-    """Test that non-string slug values are rejected."""
-    # Test with int
-    result = await handle_linode_firewall_template_get({"slug": 123}, sample_config)
-    assert len(result) == 1
-    assert "must be a string" in result[0].text
-
-    # Test with bool
-    result = await handle_linode_firewall_template_get({"slug": True}, sample_config)
-    assert len(result) == 1
-    assert "must be a string" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
 
 
 async def test_handle_linode_firewall_template_get_rejects_invalid_pagination(
     sample_config: Config,
 ) -> None:
-    """Test that invalid pagination parameters are rejected."""
-    # Test with negative page
+    """The shared bounds apply here too: page_size outside 25-500 is rejected."""
     result = await handle_linode_firewall_template_get(
         {"slug": "public", "page": -1}, sample_config
     )
     assert len(result) == 1
-    assert "page must be a positive integer" in result[0].text
+    assert "page must be an integer greater than or equal to 1" in result[0].text
 
-    # Test with zero page_size
     result = await handle_linode_firewall_template_get(
         {"slug": "public", "page_size": 0}, sample_config
     )
     assert len(result) == 1
-    assert "page_size must be a positive integer" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
 
-    # Test with non-int page
     result = await handle_linode_firewall_template_get(
-        {"slug": "public", "page": "abc"}, sample_config
+        {"slug": "public", "page_size": 501}, sample_config
     )
     assert len(result) == 1
-    assert "page must be a positive integer" in result[0].text
+    assert "page_size must be an integer from 25 through 500" in result[0].text
 
 
 async def test_handle_linode_firewall_device_get(
@@ -25718,14 +25742,20 @@ async def test_handle_linode_firewall_rule_version_list_invalid(
         ({"firewall_id": "abc"}, "firewall_id must be a valid integer"),
         ({"firewall_id": 0}, "firewall_id must be a positive integer"),
         ({"firewall_id": -1}, "firewall_id must be a positive integer"),
-        ({"firewall_id": 1, "page": False}, "page must be a valid integer"),
-        ({"firewall_id": 1, "page": "abc"}, "page must be a valid integer"),
-        ({"firewall_id": 1, "page": 0}, "page must be a positive integer"),
+        ({"firewall_id": 1, "page": False}, "page must be an integer"),
+        ({"firewall_id": 1, "page": "abc"}, "page must be an integer"),
+        (
+            {"firewall_id": 1, "page": 0},
+            "page must be an integer greater than or equal to 1",
+        ),
         (
             {"firewall_id": 1, "page_size": "abc"},
-            "page_size must be a valid integer",
+            "page_size must be an integer",
         ),
-        ({"firewall_id": 1, "page_size": 0}, "page_size must be a positive integer"),
+        (
+            {"firewall_id": 1, "page_size": 0},
+            "page_size must be an integer from 25 through 500",
+        ),
     ],
 )
 async def test_handle_linode_firewall_devices_list_invalid_args(

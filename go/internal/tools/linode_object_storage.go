@@ -281,13 +281,14 @@ func formatBucketContentsResponse(page *linode.ObjectStorageBucketContentsPage, 
 
 // NewLinodeObjectStorageEndpointListTool creates a tool for listing Object Storage endpoints.
 func NewLinodeObjectStorageEndpointListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListTool(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_object_storage_endpoint_list",
 		"Lists Object Storage endpoints across regions",
-		func(ctx context.Context, client *linode.Client) ([]*linodev1.ObjectStorageEndpoint, error) {
-			return client.ListObjectStorageEndpointsProto(ctx)
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ObjectStorageEndpoint, error) {
+			return client.ListObjectStorageEndpointsProto(ctx, page, pageSize)
 		},
+		standardPaginationFromTool,
 		nil,
 		objectStorageEndpointListResponse,
 	)

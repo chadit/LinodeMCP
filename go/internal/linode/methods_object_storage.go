@@ -146,8 +146,8 @@ func (c *Client) httpListObjectStorageBucketContentsProto(ctx context.Context, r
 
 // httpListObjectStorageEndpointsProto retrieves Object Storage endpoints as proto
 // ObjectStorageEndpoint messages for the proto-backed list path.
-func (c *Client) httpListObjectStorageEndpointsProto(ctx context.Context) ([]*linodev1.ObjectStorageEndpoint, error) {
-	return listProtoElements(ctx, c, "ListObjectStorageEndpoints", endpointObjEndpoints,
+func (c *Client) httpListObjectStorageEndpointsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ObjectStorageEndpoint, error) {
+	return listProtoElementsPaginated(ctx, c, "ListObjectStorageEndpoints", endpointObjEndpoints, page, pageSize,
 		func() *linodev1.ObjectStorageEndpoint { return &linodev1.ObjectStorageEndpoint{} })
 }
 

@@ -94,6 +94,35 @@ the behavior fixtures, so update the fixture case and both languages must
 match it. **tool-parity** catches param/type/required and OAuth-scope drift;
 **input-proto** catches a language quietly reverting to a hand-built schema.
 
+### Adding pagination to a list tool
+
+Eleven entries in
+[pagination-baseline.txt](./contracts/pagination-baseline.txt) are list tools
+whose spec route paginates but whose input has no `page`/`page_size` yet. To
+clear one:
+
+1. Add `optional int32 page` and `optional int32 page_size` to the tool's
+   proto input message and run `make proto`. Both languages pick up the
+   schema, including the field-comment text that becomes the parameter
+   description, so do not restate it in either language.
+2. Read the pair with the shared reader, never a new per-family copy: Go's
+   `standardPaginationFromTool`, Python's `standard_pagination_arguments`.
+   Both apply the standard 25-500 bounds and emit identical rejection text.
+3. Build the request path with Go's `withPaginationQuery` or Python's
+   `paginated_path`. An unset value stays off the query string so the API's
+   own default applies, which is what keeps the two languages issuing
+   byte-identical requests.
+4. Pin the result in the tool's behavior fixture: the non-integer rejection,
+   both bound rejections, and one `expect_request` whose path carries
+   `?page=2&page_size=50`. The fixture is the cross-language contract; a
+   language-only test is not.
+5. Remove the tool's line from the baseline.
+
+Do not declare new page-size constants. The bounds live in
+[api-pagination-baseline.txt](./contracts/api-pagination-baseline.txt),
+generated from the live spec, and **pagination** fails any constant in either
+language that disagrees with it.
+
 ### Changing output or behavior
 
 Output shape changes go through the response proto (the conformance corpus

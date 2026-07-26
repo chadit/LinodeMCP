@@ -314,13 +314,13 @@ func (c *Client) ListProfileAppsProto(ctx context.Context, page, pageSize int) (
 
 // ListInstancesProto retrieves all instances as proto messages with automatic
 // retry on transient failures.
-func (c *Client) ListInstancesProto(ctx context.Context) ([]*linodev1.Instance, error) {
+func (c *Client) ListInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.Instance, error) {
 	var instances []*linodev1.Instance
 
 	err := c.executeWithRetry(ctx, "ListInstances", func() error {
 		var err error
 
-		instances, err = c.httpListInstancesProto(ctx)
+		instances, err = c.httpListInstancesProto(ctx, page, pageSize)
 
 		return err
 	})
@@ -2186,15 +2186,15 @@ func (c *Client) ListNodeBalancerVPCsProto(ctx context.Context, nodeBalancerID, 
 	return vpcConfigs, err
 }
 
-// ListRegionsProto retrieves all regions as proto messages with automatic retry
-// on transient failures.
-func (c *Client) ListRegionsProto(ctx context.Context) ([]*linodev1.Region, error) {
+// ListRegionsProto retrieves a page of regions as proto messages with automatic
+// retry on transient failures.
+func (c *Client) ListRegionsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Region, error) {
 	var regions []*linodev1.Region
 
 	err := c.executeWithRetry(ctx, "ListRegions", func() error {
 		var retryErr error
 
-		regions, retryErr = c.httpListRegionsProto(ctx)
+		regions, retryErr = c.httpListRegionsProto(ctx, page, pageSize)
 
 		return retryErr
 	})
@@ -2764,13 +2764,13 @@ func (c *Client) ListVolumesProto(ctx context.Context) ([]*linodev1.Volume, erro
 
 // ListImagesProto retrieves images as proto messages with automatic retry on
 // transient failures.
-func (c *Client) ListImagesProto(ctx context.Context) ([]*linodev1.Image, error) {
+func (c *Client) ListImagesProto(ctx context.Context, page, pageSize int) ([]*linodev1.Image, error) {
 	var images []*linodev1.Image
 
 	err := c.executeWithRetry(ctx, "ListImages", func() error {
 		var err error
 
-		images, err = c.httpListImagesProto(ctx)
+		images, err = c.httpListImagesProto(ctx, page, pageSize)
 
 		return err
 	})
@@ -4790,15 +4790,16 @@ func (c *Client) ListNetworkTransferPricesProto(ctx context.Context) ([]*linodev
 	return prices, err
 }
 
-// ListObjectStorageEndpointsProto retrieves Object Storage endpoints as proto
-// ObjectStorageEndpoint messages with automatic retry on transient failures.
-func (c *Client) ListObjectStorageEndpointsProto(ctx context.Context) ([]*linodev1.ObjectStorageEndpoint, error) {
+// ListObjectStorageEndpointsProto retrieves a page of Object Storage endpoints
+// as proto ObjectStorageEndpoint messages with automatic retry on transient
+// failures.
+func (c *Client) ListObjectStorageEndpointsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ObjectStorageEndpoint, error) {
 	var endpoints []*linodev1.ObjectStorageEndpoint
 
 	err := c.executeWithRetry(ctx, "ListObjectStorageEndpoints", func() error {
 		var err error
 
-		endpoints, err = c.httpListObjectStorageEndpointsProto(ctx)
+		endpoints, err = c.httpListObjectStorageEndpointsProto(ctx, page, pageSize)
 
 		return err
 	})
@@ -6041,13 +6042,13 @@ func (c *Client) ListInstanceDisks(ctx context.Context, linodeID int) ([]Instanc
 
 // ListInstanceDisksProto retrieves an instance's disks as proto messages with
 // automatic retry on transient failures.
-func (c *Client) ListInstanceDisksProto(ctx context.Context, linodeID int) ([]*linodev1.InstanceDisk, error) {
+func (c *Client) ListInstanceDisksProto(ctx context.Context, linodeID, page, pageSize int) ([]*linodev1.InstanceDisk, error) {
 	var disks []*linodev1.InstanceDisk
 
 	err := c.executeWithRetry(ctx, "ListInstanceDisks", func() error {
 		var retryErr error
 
-		disks, retryErr = c.httpListInstanceDisksProto(ctx, linodeID)
+		disks, retryErr = c.httpListInstanceDisksProto(ctx, linodeID, page, pageSize)
 
 		return retryErr
 	})

@@ -181,6 +181,64 @@ func TestCallDryRunFlagAccepted(t *testing.T) {
 	wantContains(t, "stdout", stdout.String(), `"version"`)
 }
 
+// TestCallTypesArgsFromRawSchema checks that --arg values are typed from a
+// tool's generated (raw) input schema. Proto-backed tools carry their schema
+// as RawInputSchema and leave the structured form empty; reading only the
+// structured form leaves every value a string, so an integer field like
+// page_size reaches the tool as "25" and fails validation on input the caller
+// wrote correctly. A pagination rejection in stderr means the coercion was
+// skipped.
+func TestCallTypesArgsFromRawSchema(t *testing.T) {
+	t.Setenv("LINODEMCP_CONFIG_PATH", writeTestConfigFile(t))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+
+	// An out-of-range page_size is rejected by the range check, which runs
+	// before the client is built, so this stays hermetic. Reaching the range
+	// message at all proves the value arrived as an integer; without the raw
+	// schema it would have stayed a string and hit the type message instead.
+	cli.RunCallCommand(
+		[]string{"linode_region_list", flagArg, "page_size=1"},
+		&stdout,
+		&stderr,
+	)
+
+	// The range message ("...from 25 through 500") is only reachable once the
+	// value parsed as an integer; an untyped string stops at the bare type
+	// message, which is a prefix of it.
+	combined := stdout.String() + stderr.String()
+	if !strings.Contains(combined, "from 25 through 500") {
+		t.Errorf("page_size was not typed from the raw schema: %s", combined)
+	}
+}
+
+// TestCallTypesArgsForToolOutsideProfile covers the catalog fallback in the
+// schema lookup: a tool the active profile hides is still resolvable for
+// argument typing, because the call is rejected by the profile gate rather
+// than by argument parsing. Without the fallback the arguments would be typed
+// against an empty schema and the user would see a type complaint instead of
+// the real permission answer.
+func TestCallTypesArgsForToolOutsideProfile(t *testing.T) {
+	t.Setenv("LINODEMCP_CONFIG_PATH", writeTestConfigFile(t))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	var stdout, stderr bytes.Buffer
+
+	// The default profile is read-only, so this Destroy tool lives only in
+	// the full catalog.
+	cli.RunCallCommand(
+		[]string{"linode_instance_delete", flagArg, "linode_id=123"},
+		&stdout,
+		&stderr,
+	)
+
+	combined := stdout.String() + stderr.String()
+	if strings.Contains(combined, "linode_id must be") {
+		t.Errorf("linode_id was not typed from the catalog schema: %s", combined)
+	}
+}
+
 // TestCallBadBoolFlagExitsUsage checks that a non-boolean value for a
 // boolean safety flag (--dry-run=maybe) is a usage error, caught during
 // flag parsing before dispatch.

@@ -17,7 +17,7 @@ import (
 
 // NewLinodeInstanceDiskListTool creates a tool for listing all disks on a Linode instance.
 func NewLinodeInstanceDiskListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListToolSubresource(
+	_, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_instance_disk_list",
 		"Lists all disks attached to a Linode instance.",
@@ -26,8 +26,9 @@ func NewLinodeInstanceDiskListTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 				mcp.Description("The ID of the Linode instance")),
 			parse: parseInstanceDiskListPathID,
 		},
-		func(ctx context.Context, client *linode.Client, linodeID int) ([]*linodev1.InstanceDisk, error) {
-			return client.ListInstanceDisksProto(ctx, linodeID)
+		standardPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, linodeID, page, pageSize int) ([]*linodev1.InstanceDisk, error) {
+			return client.ListInstanceDisksProto(ctx, linodeID, page, pageSize)
 		},
 		nil,
 		instanceDiskListResponse,

@@ -20,6 +20,7 @@ Usage: verify_pagination.py [--update-baseline]
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +29,7 @@ import _surface
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SNAPSHOT = _REPO_ROOT / "docs" / "contracts" / "api-pagination-baseline.txt"
+_LANGUAGES = _REPO_ROOT / "docs" / "contracts" / "languages.txt"
 _BASELINE = _REPO_ROOT / "docs" / "contracts" / "pagination-baseline.txt"
 _FIXTURES = _REPO_ROOT / "testdata" / "behavior"
 
@@ -133,7 +135,108 @@ def current_violations() -> tuple[list[str], int]:
     return sorted(set(violations)), len(routes - covered)
 
 
+# How each registered language declares the standard page_size bounds. The
+# pattern's two groups are the constant name and its value. A registered
+# language missing an entry fails by name, so registering one forces the
+# decision rather than leaving its bounds unchecked.
+_BOUND_PATTERNS: dict[str, str] = {
+    "go": r"(\w*PageSize(?:Min|Max))\s*=\s*(\d+)",
+    "python": r"([A-Z_]*PAGE_SIZE_(?:MIN|MAX))\s*=\s*(\d+)",
+}
+
+_SOURCE_SUFFIXES = {"go": ".go", "python": ".py"}
+
+
+def snapshot_bounds(path: Path) -> set[tuple[int, int]]:
+    """Every distinct (min, max) page_size pair the spec snapshot records."""
+    return {
+        (int(m.group(1)), int(m.group(2)))
+        for m in re.finditer(r"page_size=(\d+)-(\d+)", path.read_text(encoding="utf-8"))
+    }
+
+
+def registered_languages(path: Path) -> list[tuple[str, Path]]:
+    """(name, working dir) per registry line, in file order."""
+    languages: list[tuple[str, Path]] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = [field.strip() for field in line.split("\t") if field.strip()]
+        if len(fields) < 2:
+            msg = f"unparsable {path.name} line {raw!r}"
+            raise SystemExit(msg)
+        languages.append((fields[0], _REPO_ROOT / fields[1]))
+    return languages
+
+
+def declared_bounds(name: str, workdir: Path) -> list[tuple[str, str, int]]:
+    """(file, constant, value) for every page_size bound one language declares."""
+    pattern = re.compile(_BOUND_PATTERNS[name])
+    suffix = _SOURCE_SUFFIXES[name]
+    found: list[tuple[str, str, int]] = []
+    for path in sorted(workdir.rglob(f"*{suffix}")):
+        relative = path.relative_to(workdir)
+        if (
+            any(part.startswith(".") for part in relative.parts)
+            or "genpb" in relative.parts
+        ):
+            continue
+        # Reported as "<language>/<path under its workdir>", which reconstructs
+        # the repo-relative path without depending on where the tree sits.
+        display = f"{name}/{relative.as_posix()}"
+        found.extend(
+            (display, match.group(1), int(match.group(2)))
+            for match in pattern.finditer(path.read_text(encoding="utf-8"))
+        )
+    return found
+
+
+def bound_violations() -> list[str]:
+    """Bounds hardcoded in a language that disagree with the spec snapshot.
+
+    The snapshot is generated from the live spec, so it is the only place these
+    two numbers are a fact rather than a copy. Every route in it currently
+    shares one pair; if that ever stops being true, a single standard pair can
+    no longer be right for every tool and this says so instead of comparing
+    against an arbitrary one.
+    """
+    bounds = snapshot_bounds(_SNAPSHOT)
+    if len(bounds) != 1:
+        return [
+            (
+                f"the spec snapshot records {len(bounds)} distinct page_size bound"
+                f" pairs ({sorted(bounds)}); a single standard pair can no longer"
+                " cover every route, so the per-route bound must reach the code"
+            )
+        ]
+
+    minimum, maximum = next(iter(bounds))
+    problems: list[str] = []
+    for name, workdir in registered_languages(_LANGUAGES):
+        if name not in _BOUND_PATTERNS:
+            problems.append(
+                f"{name}: no page_size bound pattern declared; add one to"
+                " _BOUND_PATTERNS in scripts/verify_pagination.py"
+            )
+            continue
+        for file, constant, value in declared_bounds(name, workdir):
+            want = minimum if constant.upper().endswith("MIN") else maximum
+            if value != want:
+                problems.append(
+                    f"{file}: {constant} = {value}, but the spec snapshot says {want}"
+                )
+    return problems
+
+
 def main(argv: list[str]) -> int:
+    drift = bound_violations()
+    if drift:
+        print("page_size bounds disagree with the spec snapshot:", file=sys.stderr)
+        for entry in drift:
+            print(f"  {entry}", file=sys.stderr)
+        return 1
+
     violations, unmapped = current_violations()
 
     if "--update-baseline" in argv:
@@ -171,7 +274,7 @@ def main(argv: list[str]) -> int:
 
     print(
         f"pagination gate OK: {len(violations)} accepted gap(s),"
-        f" no drift vs {_BASELINE.name}"
+        f" no drift vs {_BASELINE.name}, bounds match the spec snapshot"
     )
     return 0
 

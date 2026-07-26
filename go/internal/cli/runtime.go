@@ -109,14 +109,20 @@ func loadConfigOrDefault() (*config.Config, error) {
 // defaultCLIConfig builds the in-memory config the CLI uses when no config
 // file exists. It mirrors what config.Load produces for an empty file:
 // the server fields take their package defaults, audit keeps its defaults
-// (PII redaction on, the standard SQLite busy timeout), the active profile
-// is left empty so the resolver selects the read-only default, and there
-// are no environments. The RedactPII pointer must be non-nil because the
-// audit middleware dereferences it.
+// (PII redaction on, the standard SQLite busy timeout), and the active
+// profile is left empty so the resolver selects the read-only default. The
+// RedactPII pointer must be non-nil because the audit middleware
+// dereferences it.
+//
+// The environment overrides run here for the same reason Load runs them: a
+// token and API URL supplied by environment must produce a usable default
+// environment. Without this the no-file path builds a config with no
+// environments at all, and every API-backed call fails on environment
+// selection even though the caller supplied credentials.
 func defaultCLIConfig() *config.Config {
 	redactPII := config.DefaultAuditRedactPII
 
-	return &config.Config{
+	cfg := &config.Config{
 		Server: config.ServerConfig{
 			Name:      config.DefaultServerName,
 			LogLevel:  config.DefaultLogLevel,
@@ -129,6 +135,10 @@ func defaultCLIConfig() *config.Config {
 			SQLite:    config.AuditSQLiteConfig{BusyTimeoutMS: config.DefaultAuditSQLiteBusyTimeoutMS},
 		},
 	}
+
+	config.ApplyEnvironmentOverrides(cfg)
+
+	return cfg
 }
 
 // attachAuditSink opens the JSONL audit sink (and the SQLite sink when

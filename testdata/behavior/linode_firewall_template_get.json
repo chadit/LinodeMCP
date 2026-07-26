@@ -1,6 +1,6 @@
 {
   "tool": "linode_firewall_template_get",
-  "description": "Firewall template get fetches one template by slug via GET. Missing-slug text and the invalid-slug enum check diverge between languages (see report).",
+  "description": "Firewall template get fetches one template by slug via GET. Missing-slug text and the invalid-slug enum check diverge between languages (see report). Pagination is validated after the slug and before any request, with the shared text.",
   "cases": [
     {
       "name": "gets a firewall template by slug",
@@ -12,6 +12,35 @@
       "name": "rejects an invalid slug (proto FirewallTemplateSlug enum)",
       "args": { "slug": "internal" },
       "expect_error": "slug must be one of: public, vpc"
+    },
+    {
+      "name": "rejects a non-integer page",
+      "args": { "slug": "public", "page": "x" },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects a page below one",
+      "args": { "slug": "public", "page": 0 },
+      "expect_error": "page must be an integer greater than or equal to 1"
+    },
+    {
+      "name": "rejects a page_size below the minimum",
+      "args": { "slug": "public", "page_size": 24 },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "rejects a page_size above the maximum",
+      "args": { "slug": "public", "page_size": 501 },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "pagination reaches the request",
+      "args": { "slug": "public", "page": 2, "page_size": 50 },
+      "api_response": {},
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/firewalls/templates/public?page=2&page_size=50"
+      }
     }
   ]
 }

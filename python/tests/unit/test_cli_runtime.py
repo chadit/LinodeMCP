@@ -71,6 +71,45 @@ def test_load_config_or_default_missing_falls_back(tmp_path: Path) -> None:
     assert profile.name == DEFAULT_PROFILE_NAME
 
 
+def test_load_config_or_default_missing_uses_env_credentials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no config file, the environment supplies the default environment.
+
+    A CI runner keeps its token in a secret and never writes a config, so the
+    no-file fallback has to accept the two Linode env vars. Without this the
+    config carries no environments and every API-backed call dies on
+    environment selection. Mirrors Go's defaultCLIConfig.
+    """
+    monkeypatch.setenv("LINODEMCP_LINODE_API_URL", "https://api.linode.com/v4")
+    monkeypatch.setenv("LINODEMCP_LINODE_TOKEN", "env-token")
+
+    cfg = load_config_or_default(tmp_path / "absent.yml")
+
+    assert "default" in cfg.environments
+    assert cfg.environments["default"].linode.token == "env-token"
+    assert cfg.environments["default"].linode.api_url == "https://api.linode.com/v4"
+
+
+def test_load_config_or_default_missing_without_env_has_no_environments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No config file and no env vars means no environments at all.
+
+    Go only materializes the default environment when the environment actually
+    supplies something. Seeding an empty one here would invent a
+    credential-less "default" that resolves where Go reports it missing.
+    """
+    monkeypatch.delenv("LINODEMCP_LINODE_API_URL", raising=False)
+    monkeypatch.delenv("LINODEMCP_LINODE_TOKEN", raising=False)
+
+    cfg = load_config_or_default(tmp_path / "absent.yml")
+
+    assert cfg.environments == {}
+
+
 def test_load_config_or_default_malformed_raises(tmp_path: Path) -> None:
     """A malformed config still raises; only file-not-found is swallowed."""
     bad = tmp_path / "bad.yml"

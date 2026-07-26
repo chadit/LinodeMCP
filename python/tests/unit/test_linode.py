@@ -11323,7 +11323,11 @@ async def test_list_object_storage_quotas_wraps_http_error() -> None:
 
 
 async def test_retryable_list_object_storage_endpoints_delegates_to_client() -> None:
-    """Retryable client delegates endpoint list to the low-level client."""
+    """Retryable client forwards the endpoint list plus its pagination pair.
+
+    The pair must reach the low-level client, otherwise a caller asking for a
+    later page would silently receive the first one.
+    """
     base_client = AsyncMock()
     base_client.list_object_storage_endpoints.return_value = [{"region": "us-sea"}]
     retryable = RetryableClient.__new__(RetryableClient)
@@ -11334,11 +11338,11 @@ async def test_retryable_list_object_storage_endpoints_delegates_to_client() -> 
     ) as execute_with_retry:
         execute_with_retry.return_value = [{"region": "us-sea"}]
 
-        result = await retryable.list_object_storage_endpoints()
+        result = await retryable.list_object_storage_endpoints(2, 50)
 
         assert result == [{"region": "us-sea"}]
         execute_with_retry.assert_awaited_once_with(
-            base_client.list_object_storage_endpoints
+            base_client.list_object_storage_endpoints, 2, 50
         )
 
 

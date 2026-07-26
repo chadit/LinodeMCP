@@ -9,7 +9,12 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import region_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import (
+    error_response,
+    execute_tool,
+    paginated_path,
+    standard_pagination_arguments,
+)
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -49,6 +54,11 @@ async def handle_linode_region_list(
     country_filter: str = arguments.get("country", "")
     capability_filter: str = arguments.get("capability", "")
 
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     def _matches(region: dict[str, Any]) -> bool:
         country = str(region.get("country", ""))
         if country_filter and country.lower() != country_filter.lower():
@@ -68,7 +78,7 @@ async def handle_linode_region_list(
         applied.append(f"capability={capability_filter}")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/regions")
+        raw = await client.get_raw(paginated_path("/regions", page, page_size))
         return serialize_list_response(
             raw,
             "regions",

@@ -301,3 +301,36 @@ def serialize_list_response(
         wrapper["filter"] = filter_value
 
     return serialize_api_response(wrapper, message)
+
+
+def serialize_keyed_list_response(
+    raw: Any,
+    key: str,
+    message: Message,
+) -> dict[str, Any]:
+    """Build the project list envelope from a response keyed under key.
+
+    A few Linode list routes name their own member instead of returning the
+    {data, page, pages, results} page envelope: /linode/instances/{id}/interfaces
+    returns {"interfaces": [...]} and /profile/security-questions returns
+    {"security_questions": [...]}. Rewrapping that member as {"data": ...} for
+    serialize_list_response would skip the root-object check it applies to a page
+    body, so the check happens here and the member goes over untouched for the
+    array and element checks.
+
+    Both routes name the member after the proto repeated field, so one key names
+    both sides.
+
+    A missing or null member is an empty list. Every other non-array member is a
+    malformed response and raises. That is the contract linodego decodes these
+    routes under (a []T struct field: absent and null leave it nil, anything else
+    fails to unmarshal), and the contract Go holds here through
+    listProtoElementsKeyed.
+    """
+    if not isinstance(raw, dict):
+        msg = "list response must be an object"
+        raise TypeError(msg)
+
+    envelope = cast("dict[str, Any]", raw)
+
+    return serialize_list_response({"data": envelope.get(key, [])}, key, message)

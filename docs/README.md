@@ -117,10 +117,13 @@ comment holds its full rules and exact regenerate command.
 | [meta-proto-baseline.txt](./contracts/meta-proto-baseline.txt) | Meta tools not yet proto-routed on both sides | `scripts/verify_meta_proto.py` |
 | [message-parity-baseline.txt](./contracts/message-parity-baseline.txt) | Cross-language confirm-message divergences | `scripts/verify_messages.py` |
 | [pagination-baseline.txt](./contracts/pagination-baseline.txt) | Tools whose spec route paginates but whose input has no page/page_size yet | `scripts/verify_pagination.py` |
+| [response-shape-baseline.txt](./contracts/response-shape-baseline.txt) | Behavior-fixture case bodies whose shape diverges from the route's spec response shape | `scripts/verify_response_shapes.py` |
+| [list-envelope-baseline.txt](./contracts/list-envelope-baseline.txt) | List handlers that still collapse a falsey keyed member with `or []` | `scripts/verify_list_envelope.py` |
 | [enum-sync-baseline.txt](./contracts/enum-sync-baseline.txt) | Enum drift against the Linode OpenAPI spec (network; runs on the sync schedule) | `scripts/verify_sync_enums.py` |
 | [api-defaults-baseline.txt](./contracts/api-defaults-baseline.txt) | Snapshot of API wire-body defaults at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_defaults.py` |
 | [scope-sync-baseline.txt](./contracts/scope-sync-baseline.txt) | Accepted deviations between the per-tool OAuth scope mapping and the spec's per-operation security blocks, each annotated with its tracking issue (network; runs on the sync schedule) | `scripts/verify_sync_scopes.py` |
 | [api-pagination-baseline.txt](./contracts/api-pagination-baseline.txt) | Snapshot of paginated GET routes and their page_size bounds at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_pagination.py` |
+| [api-response-shapes-baseline.txt](./contracts/api-response-shapes-baseline.txt) | Snapshot of every route's success response shape at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_response_shapes.py` |
 
 A few cross-language pins live as shared fixtures under `testdata/` rather
 than contracts files, because a language's own unit tests consume them:
