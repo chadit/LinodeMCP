@@ -215,6 +215,9 @@ def test_main_fails_on_an_unbaselined_violation(
     baseline = tmp_path / "baseline.txt"
     baseline.write_text("# empty\n", encoding="utf-8")
     monkeypatch.setattr(gate, "_BASELINE", baseline)
+    monkeypatch.setattr(
+        gate, "current_violations", lambda: ["python/new.py:handler._call"]
+    )
 
     assert gate.main([]) == 1
 
