@@ -1,0 +1,148 @@
+{
+  "tool": "linode_networking_reserved_ip_create",
+  "description": "Reserved-IP create validates the region slug and tag list, requires explicit confirmation because reserving starts billing, previews without reserving, and POSTs only the fields the caller supplied.",
+  "cases": [
+    {
+      "name": "rejects a missing region",
+      "args": { "confirm": true },
+      "expect_error": "region is required"
+    },
+    {
+      "name": "rejects an uppercase region slug",
+      "args": { "region": "US-East", "confirm": true },
+      "expect_error": "region must be a lowercase region slug"
+    },
+    {
+      "name": "rejects a region slug with a trailing separator",
+      "args": { "region": "us-east-", "confirm": true },
+      "expect_error": "region must be a lowercase region slug"
+    },
+    {
+      "name": "rejects a non-list tags argument",
+      "args": { "region": "us-east", "tags": "prod", "confirm": true },
+      "expect_error": "tags must be a list of strings"
+    },
+    {
+      "name": "rejects an empty tag",
+      "args": { "region": "us-east", "tags": [""], "confirm": true },
+      "expect_error": "tags must contain only non-empty strings"
+    },
+    {
+      "name": "rejects missing confirmation without reserving",
+      "args": { "region": "us-east" },
+      "expect_error": "This reserves a public IPv4 address and starts billing. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects false confirmation without reserving",
+      "args": { "region": "us-east", "confirm": false },
+      "expect_error": "This reserves a public IPv4 address and starts billing. Set confirm=true to proceed."
+    },
+    {
+      "name": "reserves with only the region when no tags are supplied",
+      "args": { "region": "us-east", "confirm": true },
+      "api_response": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": [],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/reserved/ips",
+        "body": { "region": "us-east" }
+      }
+    },
+    {
+      "name": "sends the supplied tags",
+      "args": { "region": "us-east", "tags": ["prod", "web"], "confirm": true },
+      "api_response": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": ["prod", "web"],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/reserved/ips",
+        "body": { "region": "us-east", "tags": ["prod", "web"] }
+      }
+    },
+    {
+      "name": "returns the reserved address with its explicit nulls",
+      "args": { "region": "us-east", "confirm": true },
+      "api_response": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": [],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_result": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": [],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "region": "us-east", "tags": ["prod"], "dry_run": true },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_networking_reserved_ip_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/networking/reserved/ips",
+          "body": { "region": "us-east", "tags": ["prod"] }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [],
+        "billing_delta": {
+          "monthly_change_usd": "unknown",
+          "note": "Reserved IPv4 pricing varies by region; see linode_networking_reserved_ip_type_list."
+        },
+        "warnings": ["Reserved IP billing begins when the address is created."]
+      }
+    }
+  ]
+}

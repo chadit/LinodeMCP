@@ -16,24 +16,25 @@ import (
 )
 
 const (
-	endpointNetworkingIPs         = "/networking/ips"
-	endpointNetworkingReservedIPs = "/networking/reserved/ips"
-	endpointNetworkingIPsAssign   = endpointNetworkingIPs + "/assign"
-	endpointNetworkingIPsShare    = endpointNetworkingIPs + "/share"
-	endpointNetworkingIPv4Share   = "/networking/ipv4/share"
-	endpointNetworkingIPv4Assign  = "/networking/ipv4/assign"
-	endpointFirewalls             = "/networking/firewalls"
-	endpointFirewallSettings      = endpointFirewalls + "/settings"
-	endpointFirewallTemplates     = endpointFirewalls + "/templates"
-	endpointNetworkTransferPrices = "/network-transfer/prices"
-	endpointNetworkingIPv6Pools   = "/networking/ipv6/pools"
-	endpointNetworkingIPv6Ranges  = "/networking/ipv6/ranges"
-	endpointNetworkingVLANs       = "/networking/vlans"
-	endpointNodeBalancers         = "/nodebalancers"
-	endpointNodeBalancerTypes     = "/nodebalancers/types"
-	endpointNodeBalancerVPCs      = endpointNodeBalancers + "/%s/vpcs"
-	endpointNodeBalancerConfigs   = endpointNodeBalancers + "/%d/configs"
-	endpointNodeBalancerNodes     = endpointNodeBalancerConfigs + "/%d/nodes"
+	endpointNetworkingIPs             = "/networking/ips"
+	endpointNetworkingReservedIPs     = "/networking/reserved/ips"
+	endpointNetworkingReservedIPTypes = endpointNetworkingReservedIPs + "/types"
+	endpointNetworkingIPsAssign       = endpointNetworkingIPs + "/assign"
+	endpointNetworkingIPsShare        = endpointNetworkingIPs + "/share"
+	endpointNetworkingIPv4Share       = "/networking/ipv4/share"
+	endpointNetworkingIPv4Assign      = "/networking/ipv4/assign"
+	endpointFirewalls                 = "/networking/firewalls"
+	endpointFirewallSettings          = endpointFirewalls + "/settings"
+	endpointFirewallTemplates         = endpointFirewalls + "/templates"
+	endpointNetworkTransferPrices     = "/network-transfer/prices"
+	endpointNetworkingIPv6Pools       = "/networking/ipv6/pools"
+	endpointNetworkingIPv6Ranges      = "/networking/ipv6/ranges"
+	endpointNetworkingVLANs           = "/networking/vlans"
+	endpointNodeBalancers             = "/nodebalancers"
+	endpointNodeBalancerTypes         = "/nodebalancers/types"
+	endpointNodeBalancerVPCs          = endpointNodeBalancers + "/%s/vpcs"
+	endpointNodeBalancerConfigs       = endpointNodeBalancers + "/%d/configs"
+	endpointNodeBalancerNodes         = endpointNodeBalancerConfigs + "/%d/nodes"
 )
 
 // httpListReservedIPsProto retrieves reserved public IPv4 addresses with their
@@ -93,6 +94,81 @@ func (c *Client) httpGetReservedIPRaw(ctx context.Context, address string) (json
 	}
 
 	return reservedIP, nil
+}
+
+// httpCreateReservedIPRaw reserves a public IPv4 address in one region,
+// returning the raw API object so the tool can preserve documented explicit
+// nulls the way the list and get paths do.
+func (c *Client) httpCreateReservedIPRaw(ctx context.Context, region string, tags []string) (json.RawMessage, error) {
+	if region == "" {
+		return nil, ErrRegionRequired
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	body := map[string]any{"region": region}
+	// Absent and empty are different to the API here: omitting tags leaves the
+	// reservation untagged, so only a supplied list is sent.
+	if tags != nil {
+		body["tags"] = tags
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpointNetworkingReservedIPs, body)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CreateReservedIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var reservedIP json.RawMessage
+	if err := c.handleResponse(resp, &reservedIP); err != nil {
+		return nil, err
+	}
+
+	return reservedIP, nil
+}
+
+// httpUpdateReservedIPRaw replaces one reserved address's tags, returning the
+// raw API object for the same null-preserving reason as the create path.
+func (c *Client) httpUpdateReservedIPRaw(ctx context.Context, address string, tags []string) (json.RawMessage, error) {
+	addr, err := netip.ParseAddr(address)
+	if err != nil || !addr.Is4() {
+		return nil, ErrIPv4AddressInvalid
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointNetworkingReservedIPs + "/" + url.PathEscape(address)
+
+	// The update replaces the whole tag set, so an empty list is a meaningful
+	// request (clear the tags) rather than an omission.
+	if tags == nil {
+		tags = []string{}
+	}
+
+	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, map[string]any{"tags": tags})
+	if err != nil {
+		return nil, &NetworkError{Operation: "UpdateReservedIP", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	var reservedIP json.RawMessage
+	if err := c.handleResponse(resp, &reservedIP); err != nil {
+		return nil, err
+	}
+
+	return reservedIP, nil
+}
+
+// httpListReservedIPTypesProto retrieves reserved IPv4 pricing types. Unlike the
+// address routes this needs no raw copy: the nullable price fields are optional
+// in the proto, so protojson keeps them without help.
+func (c *Client) httpListReservedIPTypesProto(ctx context.Context) ([]*linodev1.ReservedIPType, error) {
+	return listProtoElements(ctx, c, "ListReservedIPTypes", endpointNetworkingReservedIPTypes,
+		func() *linodev1.ReservedIPType { return &linodev1.ReservedIPType{} })
 }
 
 // httpDeleteReservedIP permanently unreserves one public IPv4 address.

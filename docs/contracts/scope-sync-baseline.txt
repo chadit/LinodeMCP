@@ -6,9 +6,3 @@
 # Every entry MUST carry an annotation naming when it was accepted
 # and the tracking issue that will close it:
 #   <entry>  # accepted YYYY-MM-DD <tracking-issue URL>
-linode_networking_reserved_ip_create: route POST /networking/reserved/ips not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_delete: route DELETE /networking/reserved/ips/{p} not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_get: route GET /networking/reserved/ips/{p} not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_list: route GET /networking/reserved/ips not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_type_list: route GET /networking/reserved/ips/types not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038
-linode_networking_reserved_ip_update: route PUT /networking/reserved/ips/{p} not in spec  # accepted 2026-07-21 https://github.com/chadit/LinodeMCP-Issue/issues/1038

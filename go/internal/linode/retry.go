@@ -3238,6 +3238,56 @@ func (c *Client) GetReservedIPRaw(ctx context.Context, address string) (json.Raw
 	return reservedIP, err
 }
 
+// ListReservedIPTypesProto retrieves reserved IPv4 pricing types with automatic
+// retry on transient failures.
+func (c *Client) ListReservedIPTypesProto(ctx context.Context) ([]*linodev1.ReservedIPType, error) {
+	var types []*linodev1.ReservedIPType
+
+	err := c.executeWithRetry(ctx, "ListReservedIPTypes", func() error {
+		var retryErr error
+
+		types, retryErr = c.httpListReservedIPTypesProto(ctx)
+
+		return retryErr
+	})
+
+	return types, err
+}
+
+// CreateReservedIPRaw reserves a public IPv4 address without retrying: the POST
+// allocates a new address, so a retried request can reserve a second one and
+// bill for it.
+func (c *Client) CreateReservedIPRaw(ctx context.Context, region string, tags []string) (json.RawMessage, error) {
+	var reservedIP json.RawMessage
+
+	err := c.executeWithoutRetry(ctx, "CreateReservedIP", func() error {
+		var retryErr error
+
+		reservedIP, retryErr = c.httpCreateReservedIPRaw(ctx, region, tags)
+
+		return retryErr
+	})
+
+	return reservedIP, err
+}
+
+// UpdateReservedIPRaw replaces one reserved address's tags with automatic retry
+// on transient failures. Replacing the whole tag set is idempotent, so a retry
+// lands the same state.
+func (c *Client) UpdateReservedIPRaw(ctx context.Context, address string, tags []string) (json.RawMessage, error) {
+	var reservedIP json.RawMessage
+
+	err := c.executeWithRetry(ctx, "UpdateReservedIP", func() error {
+		var retryErr error
+
+		reservedIP, retryErr = c.httpUpdateReservedIPRaw(ctx, address, tags)
+
+		return retryErr
+	})
+
+	return reservedIP, err
+}
+
 // DeleteReservedIP permanently unreserves one public IPv4 address without
 // retrying the destructive DELETE request.
 func (c *Client) DeleteReservedIP(ctx context.Context, address string) error {

@@ -1,0 +1,7 @@
+# Contracted routes no client builds, and request call sites a scanner
+# could not follow. Ratchet: build the route (or teach the scanner the
+# shape) and remove its line; never add a line by hand (regenerate
+# instead, then attach the required annotation).
+# Regenerate with:
+#   python3 scripts/verify_route_evidence.py --update-baseline
+

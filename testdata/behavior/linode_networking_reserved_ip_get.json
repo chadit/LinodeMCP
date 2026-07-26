@@ -1,0 +1,127 @@
+{
+  "tool": "linode_networking_reserved_ip_get",
+  "description": "Reserved-IP get validates the IPv4 path argument, GETs the address without query or body, and preserves the documented explicit nulls protojson would otherwise drop.",
+  "cases": [
+    {
+      "name": "rejects a missing address",
+      "args": {},
+      "expect_error": "address is required"
+    },
+    {
+      "name": "rejects an IPv6 address",
+      "args": { "address": "2001:db8::10" },
+      "expect_error": "address must be a valid IPv4 address"
+    },
+    {
+      "name": "rejects a non-address string",
+      "args": { "address": "not-an-ip" },
+      "expect_error": "address must be a valid IPv4 address"
+    },
+    {
+      "name": "gets the address with no query or body",
+      "args": { "address": "192.0.2.10" },
+      "api_response": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": [],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/reserved/ips/192.0.2.10"
+      }
+    },
+    {
+      "name": "preserves documented explicit nulls",
+      "args": { "address": "192.0.2.10" },
+      "api_response": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": [],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_result": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": [],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      }
+    },
+    {
+      "name": "keeps an assigned entity and its linode id",
+      "args": { "address": "192.0.2.11" },
+      "api_response": {
+        "address": "192.0.2.11",
+        "assigned_entity": {
+          "id": 123,
+          "label": "web-01",
+          "type": "linode",
+          "url": "/v4/linode/instances/123"
+        },
+        "gateway": "192.0.2.1",
+        "interface_id": 456,
+        "linode_id": 123,
+        "prefix": 24,
+        "public": true,
+        "rdns": "web-01.example.com",
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": ["prod"],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_result": {
+        "address": "192.0.2.11",
+        "assigned_entity": {
+          "id": 123,
+          "label": "web-01",
+          "type": "linode",
+          "url": "/v4/linode/instances/123"
+        },
+        "gateway": "192.0.2.1",
+        "interface_id": 456,
+        "linode_id": 123,
+        "prefix": 24,
+        "public": true,
+        "rdns": "web-01.example.com",
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": ["prod"],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      }
+    }
+  ]
+}

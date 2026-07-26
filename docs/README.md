@@ -88,8 +88,11 @@ of these by exact path, so moving or renaming one means a coordinated sweep of
 its consumers. Baselines are ratchets: fixing an item removes its line, and
 lines are never added by hand. An accepted line carries a dated annotation
 citing a tracking-issue URL, and the baseline guard fails growth without one
-(`behavior-exempt.txt` alone may use a free-text reason). Each file's header
-comment holds its full rules and exact regenerate command.
+(the two `*-exempt.txt` files may use a free-text reason instead). That guard
+only checks the shape of the URL, so `make sync-issues` resolves each cited
+issue on the sync schedule and fails when one is closed; an acceptance whose
+issue can never close belongs in an exempt file, not a ratchet. Each file's
+header comment holds its full rules and exact regenerate command.
 
 ### Registries
 
@@ -100,7 +103,7 @@ comment holds its full rules and exact regenerate command.
 | [languages.txt](./contracts/languages.txt) | The registered language implementations: name, working dir, surface-dump command | `Makefile`, `scripts/verify_tool_parity.py` |
 | [env-vars.txt](./contracts/env-vars.txt) | The complete environment-variable surface every language reads (observability has none by design) | `scripts/verify_env_parity.py` |
 | [coverage-floors.txt](./contracts/coverage-floors.txt) | Minimum total unit-test statement coverage per registered language (rise-only; the per-line half is `make diff-coverage`) | `scripts/verify_coverage_floor.py` |
-| [tool-routes.txt](./contracts/tool-routes.txt) | Which Linode API operation (method plus path template) each tool calls; checked from both sides against the registry and the live spec | `scripts/verify_sync_scopes.py` |
+| [tool-routes.txt](./contracts/tool-routes.txt) | Which Linode API operation (method plus path template) each tool calls; checked from both sides against the registry and the live spec, and against what each client can actually build | `scripts/verify_sync_scopes.py`, `scripts/verify_route_evidence.py` |
 
 ### Ratchet baselines
 
@@ -110,6 +113,7 @@ comment holds its full rules and exact regenerate command.
 | [behavior-baseline.txt](./contracts/behavior-baseline.txt) | Tools with no shared behavior fixture yet | `scripts/verify_behavior.py` |
 | [behavior-dryrun-baseline.txt](./contracts/behavior-dryrun-baseline.txt) | Mutating tools whose fixture lacks a pinned dry-run preview case (Destroy stays at zero) | `scripts/verify_behavior.py` |
 | [behavior-exempt.txt](./contracts/behavior-exempt.txt) | Tools the behavior gate structurally cannot pin, with reasons (hand-curated; new entries need the dated acceptance annotation) | `scripts/verify_behavior.py` |
+| [scope-sync-exempt.txt](./contracts/scope-sync-exempt.txt) | Scope deviations no change here can close, such as a route upstream gates behind limited availability, with reasons (hand-curated; new entries need the dated acceptance annotation) | `scripts/verify_sync_scopes.py` |
 | [input-proto-baseline.txt](./contracts/input-proto-baseline.txt) | Tools whose input schema is not yet proto-generated on both sides | `scripts/verify_input_proto.py` |
 | [read-proto-baseline.txt](./contracts/read-proto-baseline.txt) | Read tools not yet proto-routed on both sides | `scripts/verify_read_proto.py` |
 | [write-proto-baseline.txt](./contracts/write-proto-baseline.txt) | Mutating tools not yet proto-routed on both sides | `scripts/verify_write_proto.py` |
@@ -119,6 +123,7 @@ comment holds its full rules and exact regenerate command.
 | [pagination-baseline.txt](./contracts/pagination-baseline.txt) | Tools whose spec route paginates but whose input has no page/page_size yet | `scripts/verify_pagination.py` |
 | [response-shape-baseline.txt](./contracts/response-shape-baseline.txt) | Behavior-fixture case bodies whose shape diverges from the route's spec response shape | `scripts/verify_response_shapes.py` |
 | [list-envelope-baseline.txt](./contracts/list-envelope-baseline.txt) | List handlers that still collapse a falsey keyed member with `or []` | `scripts/verify_list_envelope.py` |
+| [route-evidence-baseline.txt](./contracts/route-evidence-baseline.txt) | Contracted routes no client builds, and request call sites a scanner cannot follow | `scripts/verify_route_evidence.py` |
 | [enum-sync-baseline.txt](./contracts/enum-sync-baseline.txt) | Enum drift against the Linode OpenAPI spec (network; runs on the sync schedule) | `scripts/verify_sync_enums.py` |
 | [api-defaults-baseline.txt](./contracts/api-defaults-baseline.txt) | Snapshot of API wire-body defaults at a reviewed OpenAPI version (network; runs on the sync schedule) | `scripts/verify_sync_defaults.py` |
 | [scope-sync-baseline.txt](./contracts/scope-sync-baseline.txt) | Accepted deviations between the per-tool OAuth scope mapping and the spec's per-operation security blocks, each annotated with its tracking issue (network; runs on the sync schedule) | `scripts/verify_sync_scopes.py` |

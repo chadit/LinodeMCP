@@ -161,10 +161,12 @@ func RequiredScopes(toolName string, capability Capability) []Scope {
 // being shadowed by a more general linode_instance_ rule.
 func scopeCategory(toolName string) string {
 	switch toolName {
-	case "linode_networking_reserved_ip_list":
+	// The API's security metadata splits this route family: create and the
+	// collection list use ips:*, while the item, pricing, and delete tools use
+	// reserved-ips:*. Only the two collection overrides live here; the rest
+	// resolve through the prefix table below.
+	case "linode_networking_reserved_ip_create", "linode_networking_reserved_ip_list":
 		return categoryIPs
-	case "linode_networking_reserved_ip_delete":
-		return categoryReservedIPs
 	case "linode_account_event_get", "linode_account_event_list":
 		// Event routes live under /account but the API gates them with
 		// events:* scopes, not account:*. The seen-marker tool is an
@@ -219,9 +221,15 @@ func scopePrefixTable() []prefixRule {
 		{prefixes: []string{"linode_stackscript_"}, category: categoryStackScripts},
 		{prefixes: []string{"linode_vpc_"}, category: categoryVPC},
 		{prefixes: []string{"linode_image_"}, category: categoryImages},
+		// Ahead of the ips:* rule below so the longer reserved-ip prefix wins.
+		// Create and the collection list are the exceptions and take their
+		// ips:* category from the explicit cases in scopeCategory.
+		{
+			prefixes: []string{"linode_networking_reserved_ip_"},
+			category: categoryReservedIPs,
+		},
 		// The /networking/ips, /networking/ipv4, and /networking/ipv6
-		// routes all sit on ips:* scopes. The reserved-ip tools never
-		// reach here: their explicit cases in scopeCategory win first.
+		// routes all sit on ips:* scopes.
 		{
 			prefixes: []string{
 				"linode_networking_ip_", "linode_networking_ipv4_", "linode_ipv6_",
