@@ -25,8 +25,6 @@ const (
 	managedCredentialsPath    = "/managed/" + "credentials"
 	managedLinodeSettingsPath = "/managed/linode-settings"
 
-	managedContactsPageSizeMin               = 25
-	managedContactsPageSizeMax               = 500
 	managedServiceLabelParam                 = "label"
 	managedServiceTypeParam                  = "service_type"
 	managedServiceAddressParam               = "address"
@@ -50,15 +48,9 @@ const (
 	managedContactDeleteIDParam              = "contact_id"
 	managedIssueGetIDParam                   = "issue_id"
 	maxManagedIssueGetIDFromJSON             = 9007199254740991
-	managedIssuesPageSizeMin                 = 25
-	managedIssuesPageSizeMax                 = 500
 	managedServiceGetIDParam                 = "service_id"
 	errManagedServiceUpdateFields            = "at least one managed service field is required"
 	maxManagedServiceGetIDFromJSON           = 9007199254740991
-	managedServicesPageSizeMin               = 25
-	managedServicesPageSizeMax               = 500
-	managedLinodeSettingsPageSizeMin         = 25
-	managedLinodeSettingsPageSizeMax         = 500
 	managedLinodeSettingsUpdateIDParam       = "linode_id"
 	managedLinodeSettingsUpdateSSHParam      = "ssh"
 	managedLinodeSettingsUpdateAccessKey     = "access"
@@ -139,12 +131,10 @@ func NewLinodeManagedContactsTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		"linode_managed_contact_list",
 		"Lists contacts configured for Linode Managed service alerts.",
 		"linode.mcp.v1.ManagedContactListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedContact, error) {
 			return client.ListManagedContactsProto(ctx, page, pageSize)
 		},
-		managedContactsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		managedContactListResponse,
 	)
@@ -163,12 +153,10 @@ func NewLinodeManagedLinodeSettingsTool(cfg *config.Config) (mcp.Tool, profiles.
 		"linode_managed_linode_settings_list",
 		"Lists Managed service settings for Linodes on the account.",
 		"linode.mcp.v1.ManagedLinodeSettingsListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedLinodeSettings, error) {
 			return client.ListManagedLinodeSettingsProto(ctx, page, pageSize)
 		},
-		managedLinodeSettingsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		managedLinodeSettingsListResponse,
 	)
@@ -292,12 +280,10 @@ func NewLinodeManagedServicesTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 		"linode_managed_service_list",
 		"Lists services monitored by Linode Managed.",
 		"linode.mcp.v1.ManagedServiceListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedService, error) {
 			return client.ListManagedServicesProto(ctx, page, pageSize)
 		},
-		managedServicesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		managedServiceListResponse,
 	)
@@ -331,12 +317,10 @@ func NewLinodeManagedIssuesTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		"linode_managed_issue_list",
 		"Lists recent and ongoing issues detected by Linode Managed service monitors.",
 		"linode.mcp.v1.ManagedIssueListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ManagedIssue, error) {
 			return client.ListManagedIssuesProto(ctx, page, pageSize)
 		},
-		managedIssuesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		managedIssueListResponse,
 	)
@@ -468,38 +452,6 @@ func managedContactDeleteIDFromTool(request *mcp.CallToolRequest) (int, string) 
 
 func managedContactIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredBoundedIDArgument(request, managedContactGetIDParam, maxManagedContactGetIDFromJSON)
-}
-
-func managedContactsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedContactsPageSizeMin, managedContactsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
-func managedLinodeSettingsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedLinodeSettingsPageSizeMin, managedLinodeSettingsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeManagedStatsRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -921,22 +873,6 @@ func managedServiceOptionalStringWithCount(request *mcp.CallToolRequest, name st
 	return ""
 }
 
-func managedServicesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedServicesPageSizeMin, managedServicesPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func handleLinodeManagedIssueGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	issueID, validationMessage := managedIssueIDFromTool(request)
 	if validationMessage != "" {
@@ -958,22 +894,6 @@ func handleLinodeManagedIssueGetRequest(ctx context.Context, request *mcp.CallTo
 
 func managedIssueIDFromTool(request *mcp.CallToolRequest) (int, string) {
 	return requiredBoundedIDArgument(request, managedIssueGetIDParam, maxManagedIssueGetIDFromJSON)
-}
-
-func managedIssuesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", managedIssuesPageSizeMin, managedIssuesPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeManagedServiceCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {

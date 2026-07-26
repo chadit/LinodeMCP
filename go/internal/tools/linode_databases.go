@@ -35,15 +35,6 @@ const (
 	paramDatabaseUpdates        = "updates"
 	paramDatabaseVersion        = "version"
 
-	databaseEnginesPageSizeMin = 25
-	databaseEnginesPageSizeMax = 500
-
-	databaseTypesPageSizeMin = 25
-	databaseTypesPageSizeMax = 500
-
-	databaseInstancesPageSizeMin = 25
-	databaseInstancesPageSizeMax = 500
-
 	dbMySQLInstancesPath      = "/databases/mysql/instances"
 	dbPostgreSQLInstancesPath = "/databases/postgresql/instances"
 
@@ -58,12 +49,10 @@ func NewLinodeDatabaseEngineListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		"linode_database_engine_list",
 		"Lists available Managed Database engines with optional pagination.",
 		"linode.mcp.v1.DatabaseEngineListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseEngine, error) {
 			return client.ListDatabaseEnginesProto(ctx, page, pageSize)
 		},
-		databaseEnginesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		databaseEngineListResponse,
 	)
@@ -82,12 +71,10 @@ func NewLinodeDatabaseTypeListTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 		"linode_database_type_list",
 		"Lists available Managed Database node types with optional pagination.",
 		"linode.mcp.v1.DatabaseTypeListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseType, error) {
 			return client.ListDatabaseTypesProto(ctx, page, pageSize)
 		},
-		databaseTypesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		databaseTypeListResponse,
 	)
@@ -154,12 +141,10 @@ func NewLinodeDatabaseInstanceListTool(cfg *config.Config) (mcp.Tool, profiles.C
 		"linode_database_mysql_instance_list",
 		"Lists Managed Database instances with optional pagination.",
 		"linode.mcp.v1.DatabaseMySQLInstanceListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
 			return client.ListDatabaseInstancesProto(ctx, page, pageSize)
 		},
-		databaseInstancesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		databaseMySQLInstanceListResponse,
 	)
@@ -180,12 +165,10 @@ func NewLinodeDatabaseAllInstancesListTool(cfg *config.Config) (mcp.Tool, profil
 		"linode_database_instance_list",
 		"Lists Managed Database instances across all engines with optional pagination.",
 		"linode.mcp.v1.DatabaseInstanceListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
 			return client.ListAllDatabaseInstancesProto(ctx, page, pageSize)
 		},
-		databaseInstancesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		databaseInstanceListResponse,
 	)
@@ -206,12 +189,10 @@ func NewLinodeDatabasePostgreSQLInstanceListTool(cfg *config.Config) (mcp.Tool, 
 		"linode_database_postgresql_instance_list",
 		"Lists PostgreSQL Managed Database instances with optional pagination.",
 		"linode.mcp.v1.DatabasePostgreSQLInstanceListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
 			return client.ListDatabasePostgreSQLInstancesProto(ctx, page, pageSize)
 		},
-		databaseInstancesPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		databasePostgreSQLInstanceListResponse,
 	)
@@ -866,7 +847,7 @@ func handleDatabaseTypeGetRequest(ctx context.Context, request *mcp.CallToolRequ
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	page, pageSize, validationMessage := databaseTypesPaginationFromTool(request)
+	page, pageSize, validationMessage := standardPaginationFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -1277,38 +1258,6 @@ func formatDatabasePostgreSQLInstanceResumeError(instanceID int, err error) stri
 	return "Failed to resume PostgreSQL Managed Database instance " + strconv.Itoa(instanceID) + ": " + err.Error()
 }
 
-func databaseEnginesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", databaseEnginesPageSizeMin, databaseEnginesPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
-func databaseTypesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", databaseTypesPageSizeMin, databaseTypesPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 func databaseTypeIDFromTool(request *mcp.CallToolRequest) (string, string) {
 	typeID, ok := request.GetArguments()[paramDatabaseTypeID].(string)
 	if !ok || strings.TrimSpace(typeID) == "" {
@@ -1320,22 +1269,6 @@ func databaseTypeIDFromTool(request *mcp.CallToolRequest) (string, string) {
 	}
 
 	return typeID, ""
-}
-
-func databaseInstancesPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", databaseInstancesPageSizeMin, databaseInstancesPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func databaseInstanceIDFromTool(request *mcp.CallToolRequest) (int, string) {

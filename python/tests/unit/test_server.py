@@ -1144,14 +1144,14 @@ async def test_firewall_settings_get_handler_returns_settings(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"page": "bad"}, "page must be a valid integer"),
-        ({"page": True}, "page must be a valid integer"),
-        ({"page": 0}, "page must be a positive integer"),
-        ({"page": -1}, "page must be a positive integer"),
-        ({"page_size": "bad"}, "page_size must be a valid integer"),
-        ({"page_size": True}, "page_size must be a valid integer"),
-        ({"page_size": 0}, "page_size must be a positive integer"),
-        ({"page_size": -1}, "page_size must be a positive integer"),
+        ({"page": "bad"}, "page must be an integer"),
+        ({"page": True}, "page must be an integer"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
+        ({"page": -1}, "page must be an integer greater than or equal to 1"),
+        ({"page_size": "bad"}, "page_size must be an integer"),
+        ({"page_size": True}, "page_size must be an integer"),
+        ({"page_size": 0}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": -1}, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_firewall_settings_get_rejects_invalid_pagination(
@@ -1231,14 +1231,14 @@ async def test_firewall_templates_list_handler_returns_templates(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ({"page": "bad"}, "page must be a valid integer"),
-        ({"page": True}, "page must be a valid integer"),
-        ({"page": 0}, "page must be a positive integer"),
-        ({"page": -1}, "page must be a positive integer"),
-        ({"page_size": "bad"}, "page_size must be a valid integer"),
-        ({"page_size": True}, "page_size must be a valid integer"),
-        ({"page_size": 0}, "page_size must be a positive integer"),
-        ({"page_size": -1}, "page_size must be a positive integer"),
+        ({"page": "bad"}, "page must be an integer"),
+        ({"page": True}, "page must be an integer"),
+        ({"page": 0}, "page must be an integer greater than or equal to 1"),
+        ({"page": -1}, "page must be an integer greater than or equal to 1"),
+        ({"page_size": "bad"}, "page_size must be an integer"),
+        ({"page_size": True}, "page_size must be an integer"),
+        ({"page_size": 0}, "page_size must be an integer from 25 through 500"),
+        ({"page_size": -1}, "page_size must be an integer from 25 through 500"),
     ],
 )
 async def test_firewall_templates_list_rejects_invalid_pagination(

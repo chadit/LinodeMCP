@@ -18,12 +18,10 @@ func NewLinodeIPv6PoolsListTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 		"linode_ipv6_pool_list",
 		"Lists IPv6 pools on the account with optional pagination.",
 		"linode.mcp.v1.IPv6PoolListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.IPv6Pool, error) {
 			return client.ListIPv6PoolsProto(ctx, page, pageSize)
 		},
-		ipv6ListPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		ipv6PoolListResponse,
 	)

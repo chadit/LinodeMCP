@@ -4,14 +4,68 @@
   "cases": [
     {
       "name": "rejects a non-positive firewall_id",
-      "args": { "firewall_id": -1 },
+      "args": {
+        "firewall_id": -1
+      },
       "expect_error": "firewall_id must be a positive integer"
     },
     {
       "name": "lists firewall devices",
-      "args": { "firewall_id": 5 },
-      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
-      "expect_request": { "method": "GET", "path": "/networking/firewalls/5/devices" }
+      "args": {
+        "firewall_id": 5
+      },
+      "api_response": {
+        "data": [],
+        "page": 1,
+        "pages": 1,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/firewalls/5/devices"
+      }
+    },
+    {
+      "name": "rejects a non-integer page",
+      "args": {
+        "firewall_id": 5,
+        "page": "x"
+      },
+      "expect_error": "page must be an integer"
+    },
+    {
+      "name": "rejects a page_size below the minimum",
+      "args": {
+        "firewall_id": 5,
+        "page_size": 24
+      },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "rejects a page_size above the maximum",
+      "args": {
+        "firewall_id": 5,
+        "page_size": 501
+      },
+      "expect_error": "page_size must be an integer from 25 through 500"
+    },
+    {
+      "name": "pagination reaches the request",
+      "args": {
+        "firewall_id": 5,
+        "page": 2,
+        "page_size": 50
+      },
+      "api_response": {
+        "data": [],
+        "page": 2,
+        "pages": 2,
+        "results": 0
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/firewalls/5/devices?page=2&page_size=50"
+      }
     }
   ]
 }

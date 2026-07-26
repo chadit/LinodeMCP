@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	kernelsPageSizeMin    = 25
-	kernelsPageSizeMax    = 500
 	kernelIDPrefixLinode  = "linode"
 	errKernelIDIdentifier = "kernel_id must be a kernel identifier like linode/latest-64bit"
 )
@@ -28,12 +26,10 @@ func NewLinodeKernelListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 		"linode_kernel_list",
 		"Lists available Linode kernels with optional pagination.",
 		"linode.mcp.v1.KernelListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Kernel, error) {
 			return client.ListKernelsProto(ctx, page, pageSize)
 		},
-		kernelsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		kernelListResponse,
 	)
@@ -77,22 +73,6 @@ func handleKernelGetRequest(ctx context.Context, request *mcp.CallToolRequest, c
 	}
 
 	return MarshalProtoToolResponse(kernel)
-}
-
-func kernelsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", kernelsPageSizeMin, kernelsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func getKernelIDArg(request *mcp.CallToolRequest) (string, bool) {

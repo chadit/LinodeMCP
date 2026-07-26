@@ -735,12 +735,10 @@ func NewLinodeMonitorDashboardsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 		"linode_monitor_dashboard_list",
 		"Lists monitoring dashboards available to the user.",
 		"linode.mcp.v1.MonitorDashboardListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.MonitorDashboard, error) {
 			return client.ListMonitorDashboardsProto(ctx, page, pageSize)
 		},
-		monitorDashboardsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		monitorDashboardListResponse,
 	)
@@ -750,22 +748,6 @@ func NewLinodeMonitorDashboardsTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 
 func monitorDashboardListResponse(items []*linodev1.MonitorDashboard, count int32, filter *string) *linodev1.MonitorDashboardListResponse {
 	return &linodev1.MonitorDashboardListResponse{Count: count, Filter: filter, Dashboards: items}
-}
-
-func monitorDashboardsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", monitorAlertChannelsPageSizeMin, monitorAlertChannelsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 // NewLinodeMonitorDashboardGetTool creates a tool for retrieving one monitoring dashboard.
@@ -818,12 +800,10 @@ func NewLinodeMonitorAlertDefinitionsTool(cfg *config.Config) (mcp.Tool, profile
 		"linode_monitor_alert_definition_list",
 		"Lists monitoring alert definitions available to the user.",
 		"linode.mcp.v1.MonitorAlertDefinitionListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.MonitorAlertDefinition, error) {
 			return client.ListMonitorAlertDefinitionsProto(ctx, page, pageSize)
 		},
-		monitorAlertDefinitionsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		monitorAlertDefinitionListResponse,
 	)
@@ -835,22 +815,6 @@ func monitorAlertDefinitionListResponse(items []*linodev1.MonitorAlertDefinition
 	return &linodev1.MonitorAlertDefinitionListResponse{Count: count, Filter: filter, AlertDefinitions: items}
 }
 
-func monitorAlertDefinitionsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", monitorAlertChannelsPageSizeMin, monitorAlertChannelsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
-}
-
 // NewLinodeMonitorAlertChannelsTool creates a tool for listing monitoring alert channels.
 func NewLinodeMonitorAlertChannelsTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	tool, handler := newProtoListToolPaginatedRawSchema(
@@ -858,12 +822,10 @@ func NewLinodeMonitorAlertChannelsTool(cfg *config.Config) (mcp.Tool, profiles.C
 		"linode_monitor_alert_channel_list",
 		"Lists monitoring alert channels available to the user.",
 		"linode.mcp.v1.MonitorAlertChannelListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.MonitorAlertChannel, error) {
 			return client.ListMonitorAlertChannelsProto(ctx, page, pageSize)
 		},
-		monitorAlertChannelsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		monitorAlertChannelListResponse,
 	)
@@ -873,20 +835,4 @@ func NewLinodeMonitorAlertChannelsTool(cfg *config.Config) (mcp.Tool, profiles.C
 
 func monitorAlertChannelListResponse(items []*linodev1.MonitorAlertChannel, count int32, filter *string) *linodev1.MonitorAlertChannelListResponse {
 	return &linodev1.MonitorAlertChannelListResponse{Count: count, Filter: filter, AlertChannels: items}
-}
-
-func monitorAlertChannelsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", monitorAlertChannelsPageSizeMin, monitorAlertChannelsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }

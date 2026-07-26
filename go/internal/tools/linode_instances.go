@@ -751,14 +751,12 @@ func NewLinodeInstanceInterfaceHistoryListTool(cfg *config.Config) (mcp.Tool, pr
 		cfg,
 		"linode_instance_interface_history_list",
 		"Lists historical network interface versions for a specific Linode instance with optional pagination.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			parse: instanceConfigLinodeIDFromTool,
 		},
-		instanceFirewallsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, linodeID, page, pageSize int) ([]*linodev1.InstanceInterfaceHistory, error) {
 			return client.ListInstanceInterfaceHistoryProto(ctx, linodeID, page, pageSize)
 		},

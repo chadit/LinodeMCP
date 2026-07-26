@@ -21,14 +21,12 @@ func NewLinodeInstanceVolumeListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		cfg,
 		"linode_instance_volume_list",
 		"Lists volumes attached to a Linode instance with optional pagination.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			parse: instanceConfigLinodeIDFromTool,
 		},
-		instanceConfigsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, linodeID, page, pageSize int) ([]*linodev1.Volume, error) {
 			return client.ListInstanceVolumesProto(ctx, linodeID, page, pageSize)
 		},

@@ -66,12 +66,10 @@ func NewLinodeSupportTicketsTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		"linode_support_ticket_list",
 		"Lists support tickets for the authenticated account.",
 		"linode.mcp.v1.SupportTicketListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.SupportTicket, error) {
 			return client.ListSupportTicketsProto(ctx, page, pageSize)
 		},
-		supportTicketsPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		supportTicketListResponse,
 	)
@@ -96,22 +94,6 @@ func NewLinodeSupportTicketCloseTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 	}
 
 	return tool, profiles.CapWrite, handler
-}
-
-func supportTicketsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", accountEventsPageSizeMin, accountEventsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
 
 func handleLinodeSupportTicketCloseRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -162,14 +144,12 @@ func NewLinodeSupportTicketRepliesTool(cfg *config.Config) (mcp.Tool, profiles.C
 		supportTicketRepliesToolName,
 		"Lists replies for one support ticket by ticket_id.",
 		"linode.mcp.v1.SupportTicketReplyListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber(supportTicketIDParam, mcp.Required(),
 				mcp.Description("Numeric support ticket ID whose replies should be listed.")),
 			parse: supportTicketIDFromTool,
 		},
-		supportTicketsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, ticketID, page, pageSize int) ([]*linodev1.SupportTicketReply, error) {
 			return client.ListSupportTicketRepliesProto(ctx, ticketID, page, pageSize)
 		},

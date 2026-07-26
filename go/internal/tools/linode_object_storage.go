@@ -285,8 +285,6 @@ func NewLinodeObjectStorageEndpointListTool(cfg *config.Config) (mcp.Tool, profi
 		cfg,
 		"linode_object_storage_endpoint_list",
 		"Lists Object Storage endpoints across regions",
-		standardPageDesc,
-		standardPageSizeDesc,
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.ObjectStorageEndpoint, error) {
 			return client.ListObjectStorageEndpointsProto(ctx, page, pageSize)
 		},

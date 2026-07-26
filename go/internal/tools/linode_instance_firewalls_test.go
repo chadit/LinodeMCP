@@ -18,13 +18,13 @@ import (
 )
 
 const (
-	keyFirewallIDs                    = "firewall_ids"
-	labelAssignedInstanceFirewall     = "assigned-instance-firewall"
-	errInstanceFirewallsPageSizeRange = "page_size must be an integer from 25 through 500"
-	errInstanceFirewallsArray         = "firewall_ids must be an array"
-	errInstanceFirewallsEntries       = "firewall_ids entries must be positive integers"
-	caseInvalidInstanceFirewallsPage  = "invalid page"
-	errInstanceFirewallsPageMin       = "page must be an integer greater than or equal to 1"
+	keyFirewallIDs                   = "firewall_ids"
+	labelAssignedInstanceFirewall    = "assigned-instance-firewall"
+	errStandardPageSizeRange         = "page_size must be an integer from 25 through 500"
+	errInstanceFirewallsArray        = "firewall_ids must be an array"
+	errInstanceFirewallsEntries      = "firewall_ids entries must be positive integers"
+	caseInvalidInstanceFirewallsPage = "invalid page"
+	errInstanceFirewallsPageMin      = "page must be an integer greater than or equal to 1"
 )
 
 func TestLinodeInstanceFirewallListToolDefinition(t *testing.T) {
@@ -551,7 +551,7 @@ func TestLinodeInstanceFirewallsUpdateToolValidation(t *testing.T) {
 		{name: "invalid firewall ids", args: map[string]any{keyLinodeID: float64(123), keyFirewallIDs: "456", keyConfirm: true}, want: errInstanceFirewallsArray},
 		{name: "invalid firewall id entry", args: map[string]any{keyLinodeID: float64(123), keyFirewallIDs: []any{float64(0)}, keyConfirm: true}, want: errInstanceFirewallsEntries},
 		{name: caseInvalidInstanceFirewallsPage, args: map[string]any{keyLinodeID: float64(123), keyFirewallIDs: []any{float64(456)}, keyPage: float64(0), keyConfirm: true}, want: errInstanceFirewallsPageMin},
-		{name: "invalid page size", args: map[string]any{keyLinodeID: float64(123), keyFirewallIDs: []any{float64(456)}, keyPageSize: float64(501), keyConfirm: true}, want: errInstanceFirewallsPageSizeRange},
+		{name: "invalid page size", args: map[string]any{keyLinodeID: float64(123), keyFirewallIDs: []any{float64(456)}, keyPageSize: float64(501), keyConfirm: true}, want: errStandardPageSizeRange},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {

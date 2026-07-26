@@ -31,12 +31,10 @@ func NewLinodeIPv6RangesListTool(cfg *config.Config) (mcp.Tool, profiles.Capabil
 		"linode_ipv6_range_list",
 		"Lists IPv6 ranges on the account with optional pagination.",
 		"linode.mcp.v1.IPv6RangeListInput",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.IPv6Range, error) {
 			return client.ListIPv6RangesProto(ctx, page, pageSize)
 		},
-		ipv6ListPaginationFromTool,
+		standardPaginationFromTool,
 		nil,
 		ipv6RangeListResponse,
 	)

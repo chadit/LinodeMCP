@@ -14,10 +14,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 if TYPE_CHECKING:
     from types import ModuleType
-
-    import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -154,3 +154,144 @@ def test_fixture_get_paths_reads_expect_request(
     monkeypatch.setattr(gate, "_FIXTURES", fixtures)
 
     assert gate.fixture_get_paths() == {"linode_widget_list": {"/widgets"}}
+
+
+def _write_registry(path: Path, *names: str) -> Path:
+    """A languages.txt whose entries point at sibling working dirs."""
+    registry = path / "languages.txt"
+    registry.write_text(
+        "# comment\n" + "".join(f"{n}\t{n}\tdump\n" for n in names), encoding="utf-8"
+    )
+    return registry
+
+
+def test_snapshot_bounds_collapses_one_shared_pair() -> None:
+    """Every route sharing 25-500 reads as a single pair, which is the premise."""
+    bounds = gate.snapshot_bounds(
+        REPO_ROOT / "docs" / "contracts" / "api-pagination-baseline.txt"
+    )
+
+    assert bounds == {(25, 500)}
+
+
+def test_declared_bounds_finds_constants_and_skips_generated_trees(
+    tmp_path: Path,
+) -> None:
+    """Generated code and dot-directories are not places a bound is declared."""
+    workdir = tmp_path / "go"
+    (workdir / "internal" / "tools").mkdir(parents=True)
+    (workdir / "internal" / "tools" / "helpers.go").write_text(
+        "const (\n\tstandardPageSizeMin = 25\n\tstandardPageSizeMax = 500\n)\n",
+        encoding="utf-8",
+    )
+    (workdir / "genpb").mkdir()
+    (workdir / "genpb" / "gen.go").write_text(
+        "const generatedPageSizeMin = 1\n", encoding="utf-8"
+    )
+    (workdir / ".cache").mkdir()
+    (workdir / ".cache" / "stale.go").write_text(
+        "const cachedPageSizeMax = 9\n", encoding="utf-8"
+    )
+
+    found = gate.declared_bounds("go", workdir)
+
+    assert sorted(name for _, name, _ in found) == [
+        "standardPageSizeMax",
+        "standardPageSizeMin",
+    ]
+
+
+def test_bound_violations_passes_when_code_matches_the_snapshot() -> None:
+    """The live repo is the case that must stay green."""
+    assert gate.bound_violations() == []
+
+
+def test_bound_violations_reports_a_constant_that_drifted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A hand-edited bound is exactly the drift this check exists to catch."""
+    snapshot = tmp_path / "snapshot.txt"
+    snapshot.write_text("GET /widgets page_size=25-500 default=100\n", encoding="utf-8")
+    workdir = tmp_path / "go"
+    workdir.mkdir()
+    (workdir / "tools.go").write_text(
+        "const widgetPageSizeMax = 501\n", encoding="utf-8"
+    )
+
+    monkeypatch.setattr(gate, "_SNAPSHOT", snapshot)
+    monkeypatch.setattr(gate, "_LANGUAGES", _write_registry(tmp_path, "go"))
+    monkeypatch.setattr(gate, "_REPO_ROOT", tmp_path)
+
+    problems = gate.bound_violations()
+
+    assert len(problems) == 1
+    assert "widgetPageSizeMax = 501" in problems[0]
+    assert "snapshot says 500" in problems[0]
+
+
+def test_bound_violations_refuses_a_single_pair_when_routes_disagree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two distinct spec pairs mean no single standard pair can be correct."""
+    snapshot = tmp_path / "snapshot.txt"
+    snapshot.write_text(
+        "GET /widgets page_size=25-500 default=100\n"
+        "GET /gadgets page_size=1-100 default=25\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gate, "_SNAPSHOT", snapshot)
+
+    problems = gate.bound_violations()
+
+    assert len(problems) == 1
+    assert "2 distinct page_size bound pairs" in problems[0]
+
+
+def test_bound_violations_names_a_language_with_no_pattern(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Registering a language must force a decision, not silently skip it."""
+    snapshot = tmp_path / "snapshot.txt"
+    snapshot.write_text("GET /widgets page_size=25-500 default=100\n", encoding="utf-8")
+    (tmp_path / "rust").mkdir()
+
+    monkeypatch.setattr(gate, "_SNAPSHOT", snapshot)
+    monkeypatch.setattr(gate, "_LANGUAGES", _write_registry(tmp_path, "rust"))
+    monkeypatch.setattr(gate, "_REPO_ROOT", tmp_path)
+
+    problems = gate.bound_violations()
+
+    assert len(problems) == 1
+    assert problems[0].startswith("rust: no page_size bound pattern declared")
+
+
+def test_registered_languages_rejects_an_unparsable_line(tmp_path: Path) -> None:
+    """A malformed registry must fail loudly rather than scan nothing."""
+    registry = tmp_path / "languages.txt"
+    registry.write_text("go\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="unparsable"):
+        gate.registered_languages(registry)
+
+
+def test_main_fails_when_a_bound_drifts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """main must turn a drifted bound into a non-zero exit, not just report it."""
+    snapshot = tmp_path / "snapshot.txt"
+    snapshot.write_text("GET /widgets page_size=25-500 default=100\n", encoding="utf-8")
+    workdir = tmp_path / "go"
+    workdir.mkdir()
+    (workdir / "tools.go").write_text(
+        "const widgetPageSizeMin = 10\n", encoding="utf-8"
+    )
+
+    monkeypatch.setattr(gate, "_SNAPSHOT", snapshot)
+    monkeypatch.setattr(gate, "_LANGUAGES", _write_registry(tmp_path, "go"))
+
+    assert gate.main([]) == 1
+
+
+def test_main_passes_on_the_live_repo() -> None:
+    """The committed state is the case that must stay green."""
+    assert gate.main([]) == 0

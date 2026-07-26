@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from types import ModuleType
 
+    import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 
@@ -204,3 +206,51 @@ def test_go_exemption_still_matches_the_go_source() -> None:
     sources = list(workdirs["go"].rglob("*.go"))
     assert sources
     assert any(helper in path.read_text(encoding="utf-8") for path in sources)
+
+
+def test_main_fails_on_an_unbaselined_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """main must turn a violation into a non-zero exit, not just report it."""
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text("# empty\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_BASELINE", baseline)
+
+    assert gate.main([]) == 1
+
+
+def test_main_fails_when_a_baseline_entry_is_already_fixed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stale ratchet line must fail so the baseline shrinks with the fix."""
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text("python/gone.py:handler._call\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_BASELINE", baseline)
+    monkeypatch.setattr(gate, "current_violations", list)
+
+    assert gate.main([]) == 1
+
+
+def test_main_passes_when_violations_match_the_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The accepted-gap state is the one that must stay green."""
+    baseline = tmp_path / "baseline.txt"
+    baseline.write_text("python/kept.py:handler._call\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_BASELINE", baseline)
+    monkeypatch.setattr(
+        gate, "current_violations", lambda: ["python/kept.py:handler._call"]
+    )
+
+    assert gate.main([]) == 0
+
+
+def test_main_fails_on_an_undeclared_language(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A registered language with no coverage decision blocks the gate."""
+    registry = tmp_path / "languages.txt"
+    registry.write_text("rust\trust\tdump\n", encoding="utf-8")
+    monkeypatch.setattr(gate, "_LANGUAGES", registry)
+
+    assert gate.main([]) == 1

@@ -15,11 +15,6 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 )
 
-const (
-	instanceFirewallsPageSizeMin = 25
-	instanceFirewallsPageSizeMax = 500
-)
-
 // NewLinodeInstanceFirewallListTool creates a tool for listing Cloud Firewalls assigned to a Linode instance.
 func NewLinodeInstanceFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 	// The raw-schema tool advertises the generated InstanceFirewallListInput; the
@@ -29,14 +24,12 @@ func NewLinodeInstanceFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.C
 		cfg,
 		"linode_instance_firewall_list",
 		"Lists Cloud Firewalls assigned to a Linode instance with optional pagination.",
-		"Page of results to return (optional, minimum 1).",
-		"Number of results per page (optional, 25-500).",
 		protoListPathID{
 			option: mcp.WithNumber("linode_id", mcp.Required(),
 				mcp.Description("The ID of the Linode instance")),
 			parse: instanceConfigLinodeIDFromTool,
 		},
-		instanceConfigsPaginationFromTool,
+		standardPaginationFromTool,
 		func(ctx context.Context, client *linode.Client, linodeID, page, pageSize int) ([]*linodev1.Firewall, error) {
 			return client.ListInstanceFirewallsProto(ctx, linodeID, page, pageSize)
 		},
@@ -110,7 +103,7 @@ func handleInstanceFirewallsUpdateRequest(ctx context.Context, request *mcp.Call
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	page, pageSize, validationMessage := instanceFirewallsPaginationFromTool(request)
+	page, pageSize, validationMessage := standardPaginationFromTool(request)
 	if validationMessage != "" {
 		return mcp.NewToolResultError(validationMessage), nil
 	}
@@ -183,20 +176,4 @@ func instanceFirewallsIDsFromTool(request *mcp.CallToolRequest) ([]int, string) 
 	}
 
 	return firewallIDs, ""
-}
-
-func instanceFirewallsPaginationFromTool(request *mcp.CallToolRequest) (int, int, string) {
-	args := request.GetArguments()
-
-	page, validationMessage := optionalPaginationInt(args, "page", 1, 0)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	pageSize, validationMessage := optionalPaginationInt(args, "page_size", instanceFirewallsPageSizeMin, instanceFirewallsPageSizeMax)
-	if validationMessage != "" {
-		return 0, 0, validationMessage
-	}
-
-	return page, pageSize, ""
 }
