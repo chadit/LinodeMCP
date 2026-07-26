@@ -191,7 +191,18 @@ async def handle_linode_networking_reserved_ip_create(
             "/networking/reserved/ips",
             None,
             request_body=request_body,
-            billing_delta={"reserved_ipv4": 1},
+            # The wire contract is DryRunBillingDelta{monthly_change_usd, note},
+            # so a differently shaped dict is dropped by the proto and leaves an
+            # empty delta behind. Reserved IPv4 pricing varies by region and the
+            # preview has no region price to read, which is what "unknown" is
+            # for.
+            billing_delta={
+                "monthly_change_usd": "unknown",
+                "note": (
+                    "Reserved IPv4 pricing varies by region; "
+                    "see linode_networking_reserved_ip_type_list."
+                ),
+            },
             warnings=["Reserved IP billing begins when the address is created."],
         )
 

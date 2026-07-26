@@ -109,6 +109,28 @@ _UPSTREAM_SCOPE_FIXUPS: dict[tuple[str, str], tuple[list[str], list[str]]] = {
     ),
 }
 
+_EXEMPT = _REPO_ROOT / "docs" / "contracts" / "scope-sync-exempt.txt"
+
+
+def _exempt_deviations() -> set[str]:
+    """The deviations no work here can close, so the ratchet never holds them.
+
+    Each line is <deviation>\\t<reason>; the reason is mandatory documentation
+    but only the deviation matters for matching.
+    """
+    exempt: set[str] = set()
+
+    if not _EXEMPT.exists():
+        return exempt
+
+    for raw in _EXEMPT.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if stripped and not stripped.startswith("#"):
+            exempt.add(stripped.split("\t")[0].strip())
+
+    return exempt
+
+
 _BASELINE_HEADER = (
     "# Accepted (known) deviations between the tool scope mapping and the\n"
     "# Linode OpenAPI spec's per-operation security blocks. Ratchet: fix\n"
@@ -288,7 +310,13 @@ def main(argv: list[str]) -> int:
     spec = load_spec(_flag_value(argv, "--spec"))
     version = str(spec.get("info", {}).get("version", "unknown"))
 
-    current = set(compare(routes, dump, spec_operations(spec)))
+    exempt = _exempt_deviations()
+    generated = set(compare(routes, dump, spec_operations(spec)))
+    # Exempt deviations leave the ratchet entirely: they are upstream facts, not
+    # work waiting on someone here, so a baseline line would be a promise with
+    # nothing behind it.
+    current = generated - exempt
+    stale_exemptions = sorted(exempt - generated)
     stored = _baselines.read_baseline(_BASELINE)
     baseline = set(stored)
 
@@ -307,10 +335,11 @@ def main(argv: list[str]) -> int:
     fixed = sorted(baseline - current)
     pending = _baselines.unannotated(current & baseline, stored)
 
-    if not new and not fixed and not pending:
+    if not new and not fixed and not pending and not stale_exemptions:
         print(
             f"sync-scopes OK: {len(routes)} route(s) checked against spec "
-            f"{version}, {len(baseline)} accepted deviation(s) unchanged"
+            f"{version}, {len(baseline)} accepted deviation(s) unchanged, "
+            f"{len(exempt)} exemption(s)"
         )
         return 0
 
@@ -327,6 +356,17 @@ def main(argv: list[str]) -> int:
         print("\nbaseline lines missing a valid annotation:")
         for line in pending:
             print(f"  {line}")
+    if stale_exemptions:
+        print(
+            f"\nEXEMPTIONS that no longer apply ({len(stale_exemptions)}) - "
+            "remove these lines from docs/contracts/scope-sync-exempt.txt:"
+        )
+        for line in stale_exemptions:
+            print(f"  {line}")
+        print(
+            "\nThe spec now covers the route, so the exemption claims an"
+            " absence that ended."
+        )
     return 1
 
 

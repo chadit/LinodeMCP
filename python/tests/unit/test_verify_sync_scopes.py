@@ -212,8 +212,14 @@ def _write_env(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     baseline: str | None,
+    exempt: str = "",
 ) -> tuple[Path, Path]:
-    """Point the module at tmp contract/baseline/spec/dump files."""
+    """Point the module at tmp contract/baseline/exempt/spec/dump files.
+
+    The exempt file is redirected even when empty: left pointing at the real
+    one, every deviation it lists would read as an exemption that no longer
+    applies against this fixture's tiny route set.
+    """
     routes_file = tmp_path / "tool-routes.txt"
     routes_file.write_text(
         "linode_tag_list: GET /tags\n",
@@ -222,8 +228,11 @@ def _write_env(
     baseline_file = tmp_path / "scope-sync-baseline.txt"
     if baseline is not None:
         baseline_file.write_text(baseline, encoding="utf-8")
+    exempt_file = tmp_path / "scope-sync-exempt.txt"
+    exempt_file.write_text(exempt, encoding="utf-8")
     monkeypatch.setattr(gate, "_ROUTES", routes_file)
     monkeypatch.setattr(gate, "_BASELINE", baseline_file)
+    monkeypatch.setattr(gate, "_EXEMPT", exempt_file)
 
     spec_file = tmp_path / "spec.json"
     spec_file.write_text(
@@ -352,3 +361,78 @@ def test_live_contract_files_are_coherent() -> None:
     # renamed tool cannot leave an orphaned baseline entry behind.
     baseline_tools = {entry.split(":", 1)[0] for entry in stored}
     assert baseline_tools <= set(routes)
+
+
+def test_main_exempt_deviation_leaves_the_ratchet(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An exempt deviation needs no baseline line and no tracking issue.
+
+    A ratchet line is a promise to come back. A route upstream has not published
+    is not work waiting on anyone here, so holding it in the ratchet forces an
+    annotation that cites an issue nothing can close.
+    """
+    exempt = (
+        "linode_tag_list: scopes doc=['account:read_only']"
+        " mapped=['account:read_write']\tupstream gates the route\n"
+    )
+    spec_file, dump_file = _write_env(tmp_path, monkeypatch, baseline="", exempt=exempt)
+
+    rc = gate.main(["--spec", str(spec_file), "--dump", str(dump_file)])
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "1 exemption(s)" in out
+
+
+def test_main_stale_exemption_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An exemption whose deviation stopped being generated has to go.
+
+    Otherwise the file keeps claiming an absence that ended, which is the same
+    silent-debt failure the ratchet exists to prevent.
+    """
+    exempt = "linode_gone: route GET /gone not in spec\tupstream never published it\n"
+    spec_file, dump_file = _write_env(
+        tmp_path,
+        monkeypatch,
+        baseline=(
+            "linode_tag_list: scopes doc=['account:read_only']"
+            " mapped=['account:read_write']"
+            "  # accepted 2026-07-21 https://example.test/issues/1\n"
+        ),
+        exempt=exempt,
+    )
+
+    rc = gate.main(["--spec", str(spec_file), "--dump", str(dump_file)])
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "EXEMPTIONS that no longer apply" in out
+    assert "linode_gone" in out
+
+
+def test_live_exemptions_are_real_deviations() -> None:
+    """Every exempt line names a tool the route contract still knows.
+
+    A renamed tool would otherwise leave an exemption suppressing nothing.
+    """
+    exempt_path = REPO_ROOT / "docs" / "contracts" / "scope-sync-exempt.txt"
+    routes = gate.parse_routes(
+        (REPO_ROOT / "docs" / "contracts" / "tool-routes.txt").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    for raw in exempt_path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        deviation = line.split("\t")[0]
+        assert deviation.split(":", 1)[0] in routes

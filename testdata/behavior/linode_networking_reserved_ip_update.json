@@ -1,0 +1,181 @@
+{
+  "tool": "linode_networking_reserved_ip_update",
+  "description": "Reserved-IP update validates the IPv4 address and the required tag list, requires explicit confirmation because it replaces every tag, previews against current state, and PUTs the whole replacement set.",
+  "cases": [
+    {
+      "name": "rejects a missing address",
+      "args": { "tags": ["prod"], "confirm": true },
+      "expect_error": "address is required"
+    },
+    {
+      "name": "rejects an IPv6 address",
+      "args": { "address": "2001:db8::10", "tags": ["prod"], "confirm": true },
+      "expect_error": "address must be a valid IPv4 address"
+    },
+    {
+      "name": "rejects missing tags because the update replaces the whole set",
+      "args": { "address": "192.0.2.10", "confirm": true },
+      "expect_error": "tags is required"
+    },
+    {
+      "name": "rejects a non-list tags argument",
+      "args": { "address": "192.0.2.10", "tags": "prod", "confirm": true },
+      "expect_error": "tags must be a list of strings"
+    },
+    {
+      "name": "rejects an empty tag",
+      "args": { "address": "192.0.2.10", "tags": [""], "confirm": true },
+      "expect_error": "tags must contain only non-empty strings"
+    },
+    {
+      "name": "rejects missing confirmation without updating",
+      "args": { "address": "192.0.2.10", "tags": ["prod"] },
+      "expect_error": "This replaces all tags on the reserved IP. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects false confirmation without updating",
+      "args": { "address": "192.0.2.10", "tags": ["prod"], "confirm": false },
+      "expect_error": "This replaces all tags on the reserved IP. Set confirm=true to proceed."
+    },
+    {
+      "name": "sends the replacement tag set",
+      "args": {
+        "address": "192.0.2.10",
+        "tags": ["prod", "web"],
+        "confirm": true
+      },
+      "api_response": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": ["prod", "web"],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/reserved/ips/192.0.2.10",
+        "body": { "tags": ["prod", "web"] }
+      }
+    },
+    {
+      "name": "an empty list clears every tag",
+      "args": { "address": "192.0.2.10", "tags": [], "confirm": true },
+      "api_response": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": [],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/reserved/ips/192.0.2.10",
+        "body": { "tags": [] }
+      }
+    },
+    {
+      "name": "returns the updated address with its explicit nulls",
+      "args": { "address": "192.0.2.10", "tags": ["prod"], "confirm": true },
+      "api_response": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": ["prod"],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      },
+      "expect_result": {
+        "address": "192.0.2.10",
+        "assigned_entity": null,
+        "gateway": "192.0.2.1",
+        "interface_id": null,
+        "linode_id": null,
+        "prefix": 24,
+        "public": true,
+        "rdns": null,
+        "region": "us-east",
+        "reserved": true,
+        "subnet_mask": "255.255.255.0",
+        "tags": ["prod"],
+        "type": "ipv4",
+        "vpc_nat_1_1": null
+      }
+    },
+    {
+      "name": "dry_run_preview",
+      "args": { "address": "192.0.2.10", "tags": ["prod"], "dry_run": true },
+      "api_responses": {
+        "GET /networking/reserved/ips/192.0.2.10": {
+          "address": "192.0.2.10",
+          "assigned_entity": null,
+          "gateway": "192.0.2.1",
+          "interface_id": null,
+          "linode_id": null,
+          "prefix": 24,
+          "public": true,
+          "rdns": null,
+          "region": "us-east",
+          "reserved": true,
+          "subnet_mask": "255.255.255.0",
+          "tags": [],
+          "type": "ipv4",
+          "vpc_nat_1_1": null
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_networking_reserved_ip_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/networking/reserved/ips/192.0.2.10",
+          "body": { "tags": ["prod"] }
+        },
+        "current_state": {
+          "address": "192.0.2.10",
+          "assigned_entity": null,
+          "gateway": "192.0.2.1",
+          "interface_id": null,
+          "linode_id": null,
+          "prefix": 24,
+          "public": true,
+          "rdns": null,
+          "region": "us-east",
+          "reserved": true,
+          "subnet_mask": "255.255.255.0",
+          "tags": [],
+          "type": "ipv4",
+          "vpc_nat_1_1": null
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

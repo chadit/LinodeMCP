@@ -1,0 +1,25 @@
+# Scope deviations exempt from the sync-scopes ratchet, one per line with a
+# reason. Exemption is for deviations no work on this repo can close, which a
+# ratchet cannot express: a ratchet line is a promise to come back, and a
+# promise needs an issue that can close. A route the Linode API gates behind
+# limited availability is absent from the public OpenAPI spec by upstream
+# choice, so the deviation persists until the API publishes it, not until
+# someone here fixes something.
+#
+# The bar: an exemption needs upstream evidence that the deviation is real and
+# outside this repo's control, named in the reason. Prefer a baseline line
+# whenever the deviation is something a change here could close.
+#
+# The gate still checks these in the other direction: an exemption whose
+# deviation stops being generated (the spec published the route) is reported so
+# the line is removed rather than left claiming an absence that ended.
+#
+# Format: <deviation>\t<reason>
+# NEW entries must also carry the baseline-guard acceptance annotation
+# (append: `  # accepted YYYY-MM-DD <reason or tracking-issue URL>`).
+linode_networking_reserved_ip_create: route POST /networking/reserved/ips not in spec	Reserved IPv4 is limited-availability, so the route is absent from the public spec; linodego v1.52.1 ReserveIPAddress builds the same path and notes the feature "may not currently be available to all users"  # accepted 2026-07-25 upstream gates the feature, no work here can publish it
+linode_networking_reserved_ip_delete: route DELETE /networking/reserved/ips/{p} not in spec	Reserved IPv4 is limited-availability, so the route is absent from the public spec; linodego v1.52.1 DeleteReservedIPAddress builds the same path  # accepted 2026-07-25 upstream gates the feature, no work here can publish it
+linode_networking_reserved_ip_get: route GET /networking/reserved/ips/{p} not in spec	Reserved IPv4 is limited-availability, so the route is absent from the public spec; linodego v1.52.1 GetReservedIPAddress builds the same path  # accepted 2026-07-25 upstream gates the feature, no work here can publish it
+linode_networking_reserved_ip_list: route GET /networking/reserved/ips not in spec	Reserved IPv4 is limited-availability, so the route is absent from the public spec; linodego v1.52.1 ListReservedIPAddresses builds the same path  # accepted 2026-07-25 upstream gates the feature, no work here can publish it
+linode_networking_reserved_ip_type_list: route GET /networking/reserved/ips/types not in spec	Reserved IPv4 pricing route, absent from the public spec and from linodego; carried on the Python implementation alone and mirrored in Go for parity  # accepted 2026-07-25 upstream gates the feature, no work here can publish it
+linode_networking_reserved_ip_update: route PUT /networking/reserved/ips/{p} not in spec	Reserved IPv4 tag replacement, absent from the public spec and from linodego; carried on the Python implementation alone and mirrored in Go for parity  # accepted 2026-07-25 upstream gates the feature, no work here can publish it

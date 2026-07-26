@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes list-envelope env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes baseline-guard tool-float parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes list-envelope route-evidence env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -60,7 +60,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes list-envelope env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes list-envelope route-evidence env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -187,7 +187,17 @@ sync-scopes: python-install-dev
 	@python3 scripts/verify_sync_scopes.py
 
 ## sync: Run all live API-drift checks (scheduled agent; needs network)
-sync: sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes
+sync: sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues
+
+## sync-issues: Verify every baseline acceptance still cites an open tracking issue
+# Network (resolves each cited issue through gh), so scheduled-only like the
+# other sync gates. The offline baseline guard only checks that an annotation
+# names something shaped like an issue URL, which a closed issue satisfies
+# forever: issue 1038 closed while 20 baseline lines across 8 files pointed at
+# it, and 6 of those annotations were written the day after. Skips loudly when
+# gh is unavailable rather than passing an unchecked promise.
+sync-issues:
+	@python3 scripts/verify_tracking_issues.py
 
 ## baseline-guard: Verify baseline growth vs BASE (default origin/main) carries issue-linked annotations
 # Diff-aware but cheap (git show plus file parses, no artifacts), so it rides
@@ -247,6 +257,17 @@ response-shapes:
 # ratchet down in docs/contracts/list-envelope-baseline.txt.
 list-envelope:
 	@python3 scripts/verify_list_envelope.py
+
+## route-evidence: Verify every contracted route is one a client can build
+# Offline source scan, scoped by docs/contracts/languages.txt rather than a
+# path in the script. Go resolves through go/cmd/route-dump, Python through
+# scripts/_routescan.py; both follow the call graph outward from the request
+# primitive, so a path assembled from a base constant and a format verb counts
+# as evidence where a text search finds nothing. That false negative is what
+# sends a catalog scan chasing a route the client has had all along. Known
+# gaps ratchet down in docs/contracts/route-evidence-baseline.txt.
+route-evidence:
+	@python3 scripts/verify_route_evidence.py
 
 ## pagination: Verify list tools paginate when their spec route paginates
 # Offline: judges the tool surface against the reviewed snapshot in

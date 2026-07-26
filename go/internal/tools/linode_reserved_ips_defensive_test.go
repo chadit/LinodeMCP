@@ -94,3 +94,44 @@ func TestReservedIPAddressResponseProtoDecodeError(t *testing.T) {
 		t.Fatal("expected an error, got nil")
 	}
 }
+
+// TestMarshalReservedIPResponseProtoMarshalError covers the single-address
+// twin of the list path's marshal failure. A valid API object cannot reach it,
+// so the marshaller is injected the same way.
+func TestMarshalReservedIPResponseProtoMarshalError(t *testing.T) {
+	t.Parallel()
+
+	sentinel := errors.New("marshal failed")
+
+	result, err := marshalReservedIPResponseWithMarshal(
+		json.RawMessage(`{"address":"192.0.2.10"}`),
+		func(proto.Message) ([]byte, error) { return nil, sentinel },
+	)
+	if result != nil || !errors.Is(err, sentinel) {
+		t.Errorf("result = %v, err = %v, want the marshal error", result, err)
+	}
+}
+
+// TestMarshalReservedIPResponseDecodeError proves a body that is not an object
+// fails loudly rather than rendering as an address with every field empty.
+func TestMarshalReservedIPResponseDecodeError(t *testing.T) {
+	t.Parallel()
+
+	result, err := marshalReservedIPResponse(json.RawMessage(`[]`))
+	if result != nil || err == nil {
+		t.Errorf("result = %v, err = %v, want a decode error", result, err)
+	}
+}
+
+// TestMarshalReservedIPJSONError covers the render branch with a field holding
+// invalid JSON, which no decoded response produces.
+func TestMarshalReservedIPJSONError(t *testing.T) {
+	t.Parallel()
+
+	result, err := marshalReservedIPJSON(&reservedIPAddressJSON{
+		Address: json.RawMessage(`{"address":`),
+	})
+	if result != nil || err == nil {
+		t.Errorf("result = %v, err = %v, want a marshal error", result, err)
+	}
+}
