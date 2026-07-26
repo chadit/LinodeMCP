@@ -1,0 +1,85 @@
+{
+  "tool": "linode_networking_reserved_ip_type_list",
+  "description": "Reserved-IP pricing list GETs the types collection without query or body and keeps the nullable price values the API returns rather than defaulting them.",
+  "cases": [
+    {
+      "name": "lists pricing types with no query or body",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": {
+        "method": "GET",
+        "path": "/networking/reserved/ips/types"
+      }
+    },
+    {
+      "name": "returns the documented pricing shape",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "id": "ipv4_reserved",
+            "label": "IPv4 Reserved",
+            "price": { "hourly": 0.005, "monthly": 3.6 },
+            "region_prices": [
+              { "id": "us-east", "hourly": 0.006, "monthly": 4.32 }
+            ],
+            "transfer": 0
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_result": {
+        "count": 1,
+        "reserved_ip_types": [
+          {
+            "id": "ipv4_reserved",
+            "label": "IPv4 Reserved",
+            "price": { "hourly": 0.005, "monthly": 3.6 },
+            "region_prices": [
+              { "id": "us-east", "hourly": 0.006, "monthly": 4.32 }
+            ],
+            "transfer": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "keeps null prices instead of defaulting them",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "id": "ipv4_reserved",
+            "label": "IPv4 Reserved",
+            "price": { "hourly": null, "monthly": null },
+            "region_prices": [],
+            "transfer": 0
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_result": {
+        "count": 1,
+        "reserved_ip_types": [
+          {
+            "id": "ipv4_reserved",
+            "label": "IPv4 Reserved",
+            "price": { "hourly": null, "monthly": null },
+            "region_prices": [],
+            "transfer": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "returns an empty list when the account has no pricing types",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_result": { "count": 0, "reserved_ip_types": [] }
+    }
+  ]
+}

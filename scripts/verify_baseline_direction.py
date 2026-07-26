@@ -72,10 +72,12 @@ _SNAPSHOT_BASELINES = frozenset(
 
 # Outside the *-baseline.txt glob but under the same growth rule: an entry in
 # behavior-exempt.txt removes a tool from behavior-fixture coverage for good,
-# which is a bigger commitment than any ratchet line. New exemptions must
-# carry the same dated annotation; verify_behavior reads only the tab-split
-# tool name, so the annotation is invisible to the gate itself.
-_ANNOTATED_EXTRAS = ("behavior-exempt.txt",)
+# and scope-sync-exempt.txt removes a scope deviation from the ratchet for as
+# long as upstream keeps the route unpublished. Both are bigger commitments
+# than any ratchet line. New exemptions must carry the same dated annotation;
+# each gate reads only the tab-split key, so the annotation is invisible to the
+# gates themselves and only this guard enforces it.
+_ANNOTATED_EXTRAS = ("behavior-exempt.txt", "scope-sync-exempt.txt")
 
 
 def _guarded_baselines(contracts: Path) -> list[Path]:

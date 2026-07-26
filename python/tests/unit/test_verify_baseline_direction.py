@@ -90,6 +90,7 @@ def test_guarded_baselines_excludes_snapshots_and_adds_exempt_list(
         "tool-parity-baseline.txt",
         "write-proto-baseline.txt",
         "behavior-exempt.txt",
+        "scope-sync-exempt.txt",
     }
 
 

@@ -21,6 +21,10 @@ on:
 
 permissions:
   contents: read
+  # sync-issues resolves the tracking issue every baseline acceptance cites.
+  # They live in a private companion repo, so the built-in token cannot read
+  # them and the gate skips loudly unless GH_TOKEN below carries a PAT that can.
+  issues: read
 
 jobs:
   sync-drift:
@@ -34,3 +38,9 @@ jobs:
 
       - name: make sync
         run: make sync
+        env:
+          # gh reads this to resolve the cited tracking issues. Falls back to
+          # the job token, which cannot see the private issue repo: the gate
+          # then reports every issue as unresolvable rather than passing them
+          # unchecked, so a missing secret is visible instead of silent.
+          GH_TOKEN: ${{ secrets.ISSUE_TRACKER_TOKEN || github.token }}
