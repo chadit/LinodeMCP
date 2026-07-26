@@ -172,6 +172,73 @@ async def test_handle_linode_instance_interfaces_list_success(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "api_response",
+    [{}, {"interfaces": None}, {"unrelated": True}],
+    ids=["missing", "null", "extra-field"],
+)
+async def test_handle_linode_instance_interfaces_list_accepts_empty_shapes(
+    api_response: dict[str, Any],
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    mock_linode_client.list_instance_interfaces.return_value = api_response
+
+    result = await handle_linode_instance_interface_list(
+        {"linode_id": 123}, sample_config
+    )
+
+    assert json.loads(result[0].text) == {"count": 0, "interfaces": []}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "interfaces",
+    [{}, "", 0, False],
+    ids=["object", "string", "number", "boolean"],
+)
+async def test_handle_linode_instance_interfaces_list_rejects_falsey_non_arrays(
+    interfaces: Any,
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    mock_linode_client.list_instance_interfaces.return_value = {
+        "interfaces": interfaces
+    }
+
+    result = await handle_linode_instance_interface_list(
+        {"linode_id": 123}, sample_config
+    )
+
+    assert result[0].text.startswith(
+        "Failed to retrieve Linode instance interfaces: "
+        "list response data must be an array"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "api_response",
+    [[], None, "", 0, False],
+    ids=["array", "null", "string", "number", "boolean"],
+)
+async def test_handle_linode_instance_interfaces_list_rejects_non_object_response(
+    api_response: Any,
+    sample_config: Any,
+    mock_linode_client: AsyncMock,
+) -> None:
+    mock_linode_client.list_instance_interfaces.return_value = api_response
+
+    result = await handle_linode_instance_interface_list(
+        {"linode_id": 123}, sample_config
+    )
+
+    assert result[0].text.startswith(
+        "Failed to retrieve Linode instance interfaces: list response must be an object"
+    )
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("linode_id", ["1/2", "1?x=2", "..", 0, True])
 async def test_handle_linode_instance_interfaces_list_rejects_invalid_linode_id(
     linode_id: Any, sample_config: Any, mock_linode_client: AsyncMock

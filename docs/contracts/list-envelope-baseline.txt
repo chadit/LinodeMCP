@@ -5,4 +5,3 @@
 # annotation).
 # Regenerate with:
 #   python3 scripts/verify_list_envelope.py --update-baseline
-python/src/linodemcp/tools/linode_instances.py:handle_linode_instance_interface_list._call  # accepted 2026-07-24 https://github.com/chadit/LinodeMCP-Issue/issues/1064 fix is in flight on PR #749; remove this line when it merges
