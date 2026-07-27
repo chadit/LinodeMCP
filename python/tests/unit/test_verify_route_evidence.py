@@ -101,6 +101,33 @@ class Handlers(Client):
     assert evidence.unresolved == []
 
 
+def test_resolves_profile_logins_through_paginated_endpoint(tmp_path: Path) -> None:
+    """The profile login list route remains visible through its query helper."""
+    evidence = _scan(
+        tmp_path,
+        """
+def _paginated_endpoint(base, page, page_size):
+    params = {}
+    if page is not None:
+        params['page'] = page
+    if page_size is not None:
+        params['page_size'] = page_size
+    if not params:
+        return base
+    return f'{base}?{urlencode(params)}'
+
+
+class ProfileClient(Client):
+    async def list_profile_logins(self, page=None, page_size=None):
+        endpoint = _paginated_endpoint('/profile/logins', page, page_size)
+        return await self.make_request('GET', endpoint)
+""",
+    )
+
+    assert evidence.routes == {"GET /profile/logins"}
+    assert evidence.unresolved == []
+
+
 def test_resolves_a_wrapper_that_forwards_its_endpoint(tmp_path: Path) -> None:
     """A wrapper taking an endpoint is discovered, so its callers resolve too.
 
