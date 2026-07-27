@@ -59,9 +59,14 @@ def test_resolves_every_endpoint_shape(tmp_path: Path) -> None:
         """
 def paginated_path(path, page, page_size):
     # Pagination is a query string, so it is not part of the route.
-    if page is None:
+    params = {}
+    if page is not None:
+        params['page'] = page
+    if page_size is not None:
+        params['page_size'] = page_size
+    if not params:
         return path
-    return path + '?page=1'
+    return f'{path}?{urlencode(params)}'
 
 
 class Handlers(Client):
@@ -98,33 +103,6 @@ class Handlers(Client):
         "GET /things/maybe",
         "GET /things/paged",
     }
-    assert evidence.unresolved == []
-
-
-def test_resolves_profile_logins_through_paginated_endpoint(tmp_path: Path) -> None:
-    """The profile login list route remains visible through its query helper."""
-    evidence = _scan(
-        tmp_path,
-        """
-def _paginated_endpoint(base, page, page_size):
-    params = {}
-    if page is not None:
-        params['page'] = page
-    if page_size is not None:
-        params['page_size'] = page_size
-    if not params:
-        return base
-    return f'{base}?{urlencode(params)}'
-
-
-class ProfileClient(Client):
-    async def list_profile_logins(self, page=None, page_size=None):
-        endpoint = _paginated_endpoint('/profile/logins', page, page_size)
-        return await self.make_request('GET', endpoint)
-""",
-    )
-
-    assert evidence.routes == {"GET /profile/logins"}
     assert evidence.unresolved == []
 
 
