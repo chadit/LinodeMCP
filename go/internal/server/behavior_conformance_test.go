@@ -41,6 +41,8 @@ type behaviorFixture struct {
 // implementations may fetch equivalent data from different endpoints, and
 // the contract these fixtures pin is the OUTPUT, not the fetch pattern.
 // Without APIResponses the single APIResponse (or {}) answers every request.
+// APIStatus overrides the default 200 response status in that single-response
+// mode, allowing fixtures to exercise real HTTP error handling.
 //
 // A case whose args include dry_run:true additionally asserts that every
 // captured request is a GET: a dry run may read whatever it needs to build
@@ -50,6 +52,7 @@ type behaviorCase struct {
 	Args           map[string]any             `json:"args"`
 	APIResponse    json.RawMessage            `json:"api_response"`
 	APIResponses   map[string]json.RawMessage `json:"api_responses"`
+	APIStatus      int                        `json:"api_status"`
 	ExpectAPIError string                     `json:"expect_api_error"`
 	ExpectError    string                     `json:"expect_error"`
 	ExpectRequest  *behaviorRequest           `json:"expect_request"`
@@ -233,7 +236,12 @@ func resolveBehaviorResponse(testCase *behaviorCase, method, path string) (json.
 			response = json.RawMessage(`{}`)
 		}
 
-		return response, http.StatusOK, true
+		status := testCase.APIStatus
+		if status == 0 {
+			status = http.StatusOK
+		}
+
+		return response, status, true
 	}
 
 	response, ok := testCase.APIResponses[method+" "+path]

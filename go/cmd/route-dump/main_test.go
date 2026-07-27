@@ -3,6 +3,9 @@ package main_test
 import (
 	"bytes"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +13,72 @@ import (
 	"strings"
 	"testing"
 )
+
+func sprintfAssignment(statement ast.Stmt, format string) (string, bool) {
+	assignment, isAssignment := statement.(*ast.AssignStmt)
+	if !isAssignment || len(assignment.Lhs) != 1 || len(assignment.Rhs) != 1 {
+		return "", false
+	}
+
+	endpoint, isEndpoint := assignment.Lhs[0].(*ast.Ident)
+
+	call, isCall := assignment.Rhs[0].(*ast.CallExpr)
+	if !isEndpoint || !isCall || len(call.Args) == 0 {
+		return "", false
+	}
+
+	selector, isSelector := call.Fun.(*ast.SelectorExpr)
+	if !isSelector || selector.Sel.Name != "Sprintf" {
+		return "", false
+	}
+
+	pkg, isPackage := selector.X.(*ast.Ident)
+
+	literal, isLiteral := call.Args[0].(*ast.BasicLit)
+	if !isPackage || pkg.Name != "fmt" || !isLiteral ||
+		literal.Kind != token.STRING || literal.Value != format {
+		return "", false
+	}
+
+	return endpoint.Name, true
+}
+
+func returnsListWithEndpoint(statement ast.Stmt, endpointName string) bool {
+	returnStatement, isReturn := statement.(*ast.ReturnStmt)
+	if !isReturn || len(returnStatement.Results) != 1 {
+		return false
+	}
+
+	call, isCall := returnStatement.Results[0].(*ast.CallExpr)
+	if !isCall || len(call.Args) < 4 {
+		return false
+	}
+
+	function, isFunction := call.Fun.(*ast.Ident)
+	endpoint, isEndpoint := call.Args[3].(*ast.Ident)
+
+	return isFunction && function.Name == "listProtoElementsKeyed" &&
+		isEndpoint && endpoint.Name == endpointName
+}
+
+func functionReturnsSprintfFormatAsListEndpoint(file *ast.File, functionName, format string) bool {
+	for _, declaration := range file.Decls {
+		function, isFunction := declaration.(*ast.FuncDecl)
+		if !isFunction || function.Name.Name != functionName || function.Body == nil {
+			continue
+		}
+
+		for index, statement := range function.Body.List {
+			endpointName, isAssignment := sprintfAssignment(statement, format)
+			if isAssignment && index+1 < len(function.Body.List) &&
+				returnsListWithEndpoint(function.Body.List[index+1], endpointName) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
 
 // clientDir is the Linode client package, two levels up from this command's
 // package directory (go test runs with that directory as cwd).
@@ -267,9 +336,9 @@ func TestDumpWithoutARequestPrimitiveIsHardFail(t *testing.T) {
 }
 
 // TestDumpResolvesTheRealClient pins the two properties the gate depends on:
-// every request call site resolves, and a route the client assembles from a
-// base constant and a format verb is present. That second one is the shape a
-// text search cannot find, which is the whole reason this command exists.
+// every request call site resolves, and the instance interfaces list route is
+// present in both the resolved route surface and a statically discoverable
+// format string.
 func TestDumpResolvesTheRealClient(t *testing.T) {
 	t.Parallel()
 
@@ -282,10 +351,41 @@ func TestDumpResolvesTheRealClient(t *testing.T) {
 		t.Errorf("unresolved call sites in the real client: %v", got.Unresolved)
 	}
 
-	// Built as endpointInstanceDeep + "/%s/interfaces", so no search for the
-	// whole path matches the source.
-	const assembled = "GET /linode/instances/{p}/interfaces"
-	if !slices.Contains(got.Routes, assembled) {
-		t.Errorf("route surface is missing %q", assembled)
+	const route = "GET /linode/instances/{p}/interfaces"
+	if !slices.Contains(got.Routes, route) {
+		t.Errorf("route surface is missing %q", route)
+	}
+
+	const (
+		format       = `"/linode/instances/%s/interfaces"`
+		functionName = "httpListInstanceInterfacesProto"
+	)
+
+	paths, globErr := filepath.Glob(filepath.Join(clientDir, "*.go"))
+	if globErr != nil {
+		t.Fatalf("find client source: %v", globErr)
+	}
+
+	var foundFormatInFunction bool
+
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+
+		file, parseErr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if parseErr != nil {
+			t.Fatalf("parse client source %s: %v", path, parseErr)
+		}
+
+		if functionReturnsSprintfFormatAsListEndpoint(file, functionName, format) {
+			foundFormatInFunction = true
+
+			break
+		}
+	}
+
+	if !foundFormatInFunction {
+		t.Errorf("%s does not pass statically discoverable route format %s to fmt.Sprintf", functionName, format)
 	}
 }

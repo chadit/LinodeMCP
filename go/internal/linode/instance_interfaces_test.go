@@ -11,6 +11,44 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
+func TestClientListInstanceInterfacesProtoUsesDocumentedRoute(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
+		}
+
+		if r.URL.Path != tcLinodeInstances123Interfaces {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcLinodeInstances123Interfaces)
+		}
+
+		if r.URL.RawQuery != "" {
+			t.Errorf("r.URL.RawQuery = %v, want empty", r.URL.RawQuery)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"interfaces": []map[string]any{{"id": 456}},
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "token", nil, linode.WithMaxRetries(0))
+
+	got, err := client.ListInstanceInterfacesProto(t.Context(), 123)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(got) != 1 || got[0].GetId() != 456 {
+		t.Errorf("got = %v, want one interface with id 456", got)
+	}
+}
+
 func TestClientGetInstanceInterfaceSuccess(t *testing.T) {
 	t.Parallel()
 

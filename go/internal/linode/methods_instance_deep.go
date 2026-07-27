@@ -679,7 +679,7 @@ func (c *Client) httpListInstanceInterfacesProto(ctx context.Context, linodeID i
 	}
 
 	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
-	endpoint := fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", encodedLinodeID)
+	endpoint := fmt.Sprintf("/linode/instances/%s/interfaces", encodedLinodeID)
 
 	return listProtoElementsKeyed(ctx, c, "ListInstanceInterfaces", endpoint, "interfaces",
 		func() *linodev1.InstanceInterface { return &linodev1.InstanceInterface{} })

@@ -1,12 +1,24 @@
 {
   "tool": "linode_instance_interface_list",
-  "description": "Pins the documented keyed instance-interface list response, including accepted empty shapes and rejected response, member, and element shapes.",
+  "description": "Pins validation, HTTP errors, and the documented keyed instance-interface list response, including accepted empty shapes and rejected response, member, and element shapes.",
   "cases": [
+    {
+      "name": "rejects an invalid linode id",
+      "args": { "linode_id": 0 },
+      "expect_error": "linode_id must be a positive integer"
+    },
     {
       "name": "lists interfaces",
       "args": { "linode_id": 123 },
       "api_response": { "interfaces": [] },
       "expect_request": { "method": "GET", "path": "/linode/instances/123/interfaces" }
+    },
+    {
+      "name": "reports an HTTP error",
+      "args": { "linode_id": 123 },
+      "api_status": 403,
+      "api_response": { "errors": [{ "reason": "Forbidden" }] },
+      "expect_api_error": "Forbidden"
     },
     {
       "name": "returns documented keyed interfaces",
