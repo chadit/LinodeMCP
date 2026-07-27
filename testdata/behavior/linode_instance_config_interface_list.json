@@ -118,6 +118,36 @@
       "args": { "linode_id": 123, "config_id": 456 },
       "api_response": false,
       "expect_api_error": "response"
+    },
+    {
+      "name": "rejects an array interface element",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_response": [[]],
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a null interface element",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_response": [null],
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a string interface element",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_response": ["invalid"],
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a numeric interface element",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_response": [1],
+      "expect_api_error": "element"
+    },
+    {
+      "name": "rejects a boolean interface element",
+      "args": { "linode_id": 123, "config_id": 456 },
+      "api_response": [false],
+      "expect_api_error": "element"
     }
   ]
 }
