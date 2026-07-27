@@ -178,25 +178,38 @@ def _copy_database_fork(
 
 
 def _copy_database_create_optional_fields(
-    arguments: dict[str, Any], payload: dict[str, Any]
+    arguments: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    reject_null_private_network: bool = False,
 ) -> str | None:
-    validators: tuple[Callable[[dict[str, Any], dict[str, Any]], str | None], ...] = (
+    validators_before_private_network: tuple[
+        Callable[[dict[str, Any], dict[str, Any]], str | None], ...
+    ] = (
         _copy_database_allow_list,
         _copy_database_cluster_size,
         _copy_database_engine_config,
         _copy_database_fork,
-        _copy_database_private_network,
-        _copy_database_ssl_connection,
     )
-    for validator in validators:
+    for validator in validators_before_private_network:
         error = validator(arguments, payload)
         if error is not None:
             return error
+    if reject_null_private_network and arguments.get("private_network", {}) is None:
+        return "private_network must be an object"
+    error = _copy_database_private_network(arguments, payload)
+    if error is not None:
+        return error
+    error = _copy_database_ssl_connection(arguments, payload)
+    if error is not None:
+        return error
     return None
 
 
 def _build_database_create_payload(
     arguments: dict[str, Any],
+    *,
+    reject_null_private_network: bool = False,
 ) -> tuple[dict[str, Any] | None, str | None]:
     payload: dict[str, Any] = {}
     error = _validate_allowed_database_create_fields(arguments)
@@ -205,7 +218,11 @@ def _build_database_create_payload(
     error = _copy_database_required_fields(arguments, payload)
     if error is not None:
         return None, error
-    error = _copy_database_create_optional_fields(arguments, payload)
+    error = _copy_database_create_optional_fields(
+        arguments,
+        payload,
+        reject_null_private_network=reject_null_private_network,
+    )
     if error is not None:
         return None, error
     return payload, None
@@ -220,7 +237,10 @@ def _build_mysql_database_payload(
 def _build_postgresql_database_payload(
     arguments: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, str | None]:
-    payload, error = _build_database_create_payload(arguments)
+    payload, error = _build_database_create_payload(
+        arguments,
+        reject_null_private_network=True,
+    )
     if error is not None or payload is None:
         return None, error
     engine = payload["engine"]
@@ -907,15 +927,18 @@ async def handle_linode_database_postgresql_instance_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.create_postgresql_database_instance(payload)
+        serialized_instance = serialize_api_response(
+            instance,
+            database_instance_pb2.DatabaseInstance(),
+        )
         return serialize_api_response(
             {
-                # Match Go's zero-value getters on the API body: label "", id 0.
                 "message": (
                     f"PostgreSQL Managed Database instance"
-                    f" '{instance.get('label', '')}'"
-                    f" (ID: {instance.get('id', 0)}) created"
+                    f" '{serialized_instance['label']}'"
+                    f" (ID: {serialized_instance['id']}) created"
                 ),
-                "database_instance": instance,
+                "database_instance": serialized_instance,
             },
             database_instance_pb2.DatabaseInstanceWriteResponse(),
         )

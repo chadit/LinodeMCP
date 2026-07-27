@@ -288,4 +288,9 @@ func TestDumpResolvesTheRealClient(t *testing.T) {
 	if !slices.Contains(got.Routes, assembled) {
 		t.Errorf("route surface is missing %q", assembled)
 	}
+
+	const postgreSQLCreate = "POST /databases/postgresql/instances"
+	if !slices.Contains(got.Routes, postgreSQLCreate) {
+		t.Errorf("route surface is missing %q", postgreSQLCreate)
+	}
 }

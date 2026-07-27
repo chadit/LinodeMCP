@@ -27,6 +27,52 @@
       "name": "requires confirm",
       "args": { "label": "prod-pg", "type": "g6-nanode-1", "engine": "postgresql/16", "region": "us-east" },
       "expect_error": "This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects null private network",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "private_network": null,
+        "confirm": true
+      },
+      "expect_error": "private_network must be an object"
+    },
+    {
+      "name": "uses zero values for accepted null response fields",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": {
+        "id": null,
+        "label": null,
+        "future_field": "ignored"
+      },
+      "expect_result": {
+        "message": "PostgreSQL Managed Database instance '' (ID: 0) created",
+        "database_instance": {
+          "id": 0,
+          "status": "",
+          "label": "",
+          "region": "",
+          "type": "",
+          "engine": "",
+          "version": "",
+          "cluster_size": 0,
+          "replication_type": "",
+          "ssl_connection": false,
+          "encrypted": false,
+          "allow_list": [],
+          "created": "",
+          "updated": ""
+        }
+      }
     }
   ]
 }

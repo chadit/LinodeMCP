@@ -7305,6 +7305,37 @@ async def test_database_postgresql_instance_create_dispatches_from_registry(
     )
 
 
+async def test_database_postgresql_instance_create_uses_decoded_message_fields(
+    sample_config: Config,
+) -> None:
+    """Accepted null fields use the same proto zero values as the output body."""
+    response_data = {"id": None, "label": None, "future_field": "ignored"}
+    arguments = {
+        "label": "primary-pg",
+        "type": "g6-dedicated-2",
+        "engine": "postgresql/17",
+        "region": "us-east",
+        "confirm": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_postgresql_database_instance.return_value = response_data
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_create", arguments
+        )
+
+    assert json.loads(result[0].text) == _database_instance_write_envelope(
+        "PostgreSQL Managed Database instance '' (ID: 0) created",
+        {},
+    )
+
+
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
 async def test_database_postgresql_instance_create_rejects_non_true_confirm(
     sample_config: Config, confirm: object
@@ -7356,6 +7387,39 @@ async def test_database_postgresql_instance_create_rejects_non_true_confirm(
                 "confirm": True,
             },
             "cluster_size must be an integer",
+        ),
+        (
+            {
+                "label": "primary-pg",
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/17",
+                "region": "us-east",
+                "private_network": None,
+                "confirm": True,
+            },
+            "private_network must be an object",
+        ),
+        (
+            {
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/17",
+                "region": "us-east",
+                "private_network": None,
+                "confirm": True,
+            },
+            "label is required",
+        ),
+        (
+            {
+                "label": "primary-pg",
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/17",
+                "region": "us-east",
+                "private_network": None,
+                "unknown": "value",
+                "confirm": True,
+            },
+            "unsupported argument: unknown",
         ),
         (
             {
