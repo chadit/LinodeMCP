@@ -63,6 +63,11 @@
       "expect_error": "status must be one of: active, disabled"
     },
     {
+      "name": "rejects non-string status",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com", "status": 1 },
+      "expect_error": "status must be a string"
+    },
+    {
       "name": "master requires soa_email",
       "args": { "confirm": true, "domain": "example.com", "type": "master" },
       "expect_error": "soa_email is required for master domains"

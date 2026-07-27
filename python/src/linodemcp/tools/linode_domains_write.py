@@ -235,11 +235,23 @@ def _domain_create_integer_fields_error(arguments: dict[str, Any]) -> str | None
     return None
 
 
+def _domain_create_status_error(arguments: dict[str, Any]) -> str | None:
+    """Return a status type or enum validation error, if any."""
+    if "status" not in arguments:
+        return None
+    status = arguments["status"]
+    if not isinstance(status, str):
+        return "status must be a string"
+    if status not in ("active", "disabled"):
+        return "status must be one of: active, disabled"
+    return None
+
+
 def _domain_create_optional_fields_error(arguments: dict[str, Any]) -> str | None:
     """Return an optional-field type/enum validation error, if any."""
-    status = arguments.get("status")
-    if "status" in arguments and status not in ("active", "disabled"):
-        return "status must be one of: active, disabled"
+    status_error = _domain_create_status_error(arguments)
+    if status_error is not None:
+        return status_error
 
     for name in _DOMAIN_CREATE_ARRAY_FIELDS:
         if name not in arguments:

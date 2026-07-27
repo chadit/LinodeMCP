@@ -103,6 +103,15 @@ def test_domain_create_is_exported_registered_scoped_and_schema_backed() -> None
         (
             {
                 "domain": "example.com",
+                "type": "master",
+                "soa_email": "a@example.com",
+                "status": 1,
+            },
+            "status must be a string",
+        ),
+        (
+            {
+                "domain": "example.com",
                 "type": "slave",
                 "master_ips": ["192.0.2.1", 2],
             },
