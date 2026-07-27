@@ -23,7 +23,8 @@ A request with no matching key fails the case, but an unused key does not:
 implementations may fetch equivalent data from different endpoints, and the
 contract these fixtures pin is the OUTPUT, not the fetch pattern. Without
 ``api_responses`` the single ``api_response`` (or ``{}``) answers every
-request. A case whose args include ``dry_run: true`` additionally asserts
+request. ``api_status`` sets the HTTP status for matched responses and defaults
+to 200. A case whose args include ``dry_run: true`` additionally asserts
 every captured request is a GET: a dry run may read whatever it needs for
 its preview but must never mutate.
 """
@@ -87,6 +88,7 @@ def _behavior_outcome_count(case: dict[str, Any]) -> int:
 def _resolve_response(
     api_responses: dict[str, Any] | None,
     api_response: Any,
+    api_status: int,
     method: str,
     url: str,
     unmatched: list[str],
@@ -98,7 +100,7 @@ def _resolve_response(
     ``unmatched`` so the test fails loudly, and served as a 404.
     """
     if api_responses is None:
-        return 200, api_response
+        return api_status, api_response
 
     path = url.removeprefix(_FAKE_API_URL).split("?", 1)[0]
     key = f"{method} {path}"
@@ -106,7 +108,7 @@ def _resolve_response(
         unmatched.append(key)
         return 404, {}
 
-    return 200, api_responses[key]
+    return api_status, api_responses[key]
 
 
 @pytest.mark.asyncio
@@ -129,13 +131,14 @@ async def test_behavior_conformance(
     unmatched: list[str] = []
     api_response = case.get("api_response", {})
     api_responses: dict[str, Any] | None = case.get("api_responses")
+    api_status = case.get("api_status", 200)
 
     async def _fake_request(
         _self: httpx.AsyncClient, method: str, url: str, **kwargs: Any
     ) -> httpx.Response:
         captured.append((method, url, kwargs.get("json")))
         status, body = _resolve_response(
-            api_responses, api_response, method, url, unmatched
+            api_responses, api_response, api_status, method, url, unmatched
         )
         return httpx.Response(
             status,

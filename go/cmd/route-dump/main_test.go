@@ -288,4 +288,9 @@ func TestDumpResolvesTheRealClient(t *testing.T) {
 	if !slices.Contains(got.Routes, assembled) {
 		t.Errorf("route surface is missing %q", assembled)
 	}
+
+	const profileSecurityQuestions = "GET /profile/security-questions"
+	if !slices.Contains(got.Routes, profileSecurityQuestions) {
+		t.Errorf("route surface is missing %q", profileSecurityQuestions)
+	}
 }

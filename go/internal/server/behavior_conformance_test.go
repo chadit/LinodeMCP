@@ -41,6 +41,7 @@ type behaviorFixture struct {
 // implementations may fetch equivalent data from different endpoints, and
 // the contract these fixtures pin is the OUTPUT, not the fetch pattern.
 // Without APIResponses the single APIResponse (or {}) answers every request.
+// APIStatus sets the HTTP status for matched responses and defaults to 200.
 //
 // A case whose args include dry_run:true additionally asserts that every
 // captured request is a GET: a dry run may read whatever it needs to build
@@ -50,6 +51,7 @@ type behaviorCase struct {
 	Args           map[string]any             `json:"args"`
 	APIResponse    json.RawMessage            `json:"api_response"`
 	APIResponses   map[string]json.RawMessage `json:"api_responses"`
+	APIStatus      int                        `json:"api_status"`
 	ExpectAPIError string                     `json:"expect_api_error"`
 	ExpectError    string                     `json:"expect_error"`
 	ExpectRequest  *behaviorRequest           `json:"expect_request"`
@@ -227,13 +229,18 @@ func TestBehaviorOutcomeCount(t *testing.T) {
 // Routed mode (api_responses) matches on "METHOD /path" with the query string
 // stripped; a miss serves 404 and reports notFound so the case fails loudly.
 func resolveBehaviorResponse(testCase *behaviorCase, method, path string) (json.RawMessage, int, bool) {
+	status := testCase.APIStatus
+	if status == 0 {
+		status = http.StatusOK
+	}
+
 	if testCase.APIResponses == nil {
 		response := testCase.APIResponse
 		if response == nil {
 			response = json.RawMessage(`{}`)
 		}
 
-		return response, http.StatusOK, true
+		return response, status, true
 	}
 
 	response, ok := testCase.APIResponses[method+" "+path]
@@ -241,7 +248,7 @@ func resolveBehaviorResponse(testCase *behaviorCase, method, path string) (json.
 		return json.RawMessage(`{}`), http.StatusNotFound, false
 	}
 
-	return response, http.StatusOK, true
+	return response, status, true
 }
 
 // runBehaviorCase dispatches one case and checks its expected outcome.

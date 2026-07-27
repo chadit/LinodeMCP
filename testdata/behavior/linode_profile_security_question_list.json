@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_security_question_list",
-  "description": "Pins the bare security-questions GET path both languages issue, plus the keyed response shapes: accepted empty members and rejected response, member, and element shapes.",
+  "description": "Pins the bare security-questions GET path used by both languages, plus keyed success, field compatibility, rejected response/member/element shapes, and default API errors.",
   "cases": [
     {
       "name": "lists profile security questions",
@@ -13,7 +13,24 @@
       "args": {},
       "api_response": {
         "security_questions": [
-          { "id": 11, "question": "In what city were you born?", "response": "Gotham" }
+          { "id": 11, "question": "In what city were you born?", "response": "Gotham" },
+          { "id": 12, "question": "What was your first school?", "response": null }
+        ]
+      },
+      "expect_result": {
+        "count": 2,
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": "Gotham" },
+          { "id": 12, "question": "What was your first school?" }
+        ]
+      }
+    },
+    {
+      "name": "ignores unknown security question fields",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": "Gotham", "future_field": "ignored" }
         ]
       },
       "expect_result": {
@@ -22,6 +39,36 @@
           { "id": 11, "question": "In what city were you born?", "response": "Gotham" }
         ]
       }
+    },
+    {
+      "name": "rejects an incompatible id type",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          { "id": true, "question": "In what city were you born?" }
+        ]
+      },
+      "expect_api_error": "id"
+    },
+    {
+      "name": "rejects an incompatible question type",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          { "id": 11, "question": 1 }
+        ]
+      },
+      "expect_api_error": "question"
+    },
+    {
+      "name": "rejects an incompatible response type",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": 1 }
+        ]
+      },
+      "expect_api_error": "response"
     },
     {
       "name": "accepts a missing security_questions member",
@@ -118,6 +165,17 @@
       "args": {},
       "api_response": { "security_questions": [false] },
       "expect_api_error": "element"
+    },
+    {
+      "name": "surfaces a default API error",
+      "args": {},
+      "api_status": 400,
+      "api_response": {
+        "errors": [
+          { "reason": "security question request rejected" }
+        ]
+      },
+      "expect_api_error": "security question request rejected"
     }
   ]
 }
