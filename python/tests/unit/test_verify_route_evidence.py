@@ -244,6 +244,16 @@ def test_a_tree_that_reaches_no_http_library_is_a_hard_fail(tmp_path: Path) -> N
         routescan.scan_python(tmp_path, tmp_path)
 
 
+def test_real_profile_token_list_route_resolves() -> None:
+    """The real handler and client helper chain resolves the token-list GET."""
+    evidence = gate.python_evidence(REPO_ROOT / "python")
+
+    assert "GET /profile/tokens" in evidence.routes
+    assert [
+        site for site in evidence.unresolved if "profile_token" in site.lower()
+    ] == []
+
+
 def test_contract_routes_rejects_an_unparsable_line(tmp_path: Path) -> None:
     """A malformed contract line fails the gate instead of being skipped."""
     path = tmp_path / "tool-routes.txt"
