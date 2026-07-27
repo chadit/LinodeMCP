@@ -7109,7 +7109,7 @@ class Client:
             devices: list[dict[str, Any]] = []
             current_page = page if page is not None else 1
             pages = 1
-            while current_page <= pages:
+            while single_page or current_page <= pages:
                 query_page = current_page if (single_page or current_page > 1) else None
                 endpoint = _paginated_endpoint(
                     "/profile/devices", query_page, page_size

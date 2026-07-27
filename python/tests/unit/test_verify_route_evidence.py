@@ -101,6 +101,13 @@ class Handlers(Client):
     assert evidence.unresolved == []
 
 
+def test_resolves_profile_devices_list_route_from_python_client() -> None:
+    """The direct Python implementation is evidence for GET /profile/devices."""
+    evidence = gate.python_evidence(REPO_ROOT / "python")
+
+    assert "GET /profile/devices" in evidence.routes
+
+
 def test_resolves_a_wrapper_that_forwards_its_endpoint(tmp_path: Path) -> None:
     """A wrapper taking an endpoint is discovered, so its callers resolve too.
 

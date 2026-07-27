@@ -69,6 +69,28 @@ func listProtoElementsPaginated[T proto.Message](
 	return decodeProtoElements[T](resp, client, operation, newElem)
 }
 
+// listProtoElementsPaginatedRequiredData is the profile devices list variant
+// that rejects a missing or null data member instead of treating it as empty.
+func listProtoElementsPaginatedRequiredData[T proto.Message](
+	ctx context.Context,
+	client *Client,
+	operation, endpoint string,
+	page, pageSize int,
+	newElem func() T,
+) ([]T, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := client.makeRequest(ctx, http.MethodGet, withPaginationQuery(endpoint, page, pageSize), nil)
+	if err != nil {
+		return nil, &NetworkError{Operation: operation, Err: err}
+	}
+
+	defer drainClose(resp)
+
+	return decodeProtoElementsRequiredData[T](resp, client, operation, newElem)
+}
+
 // listProtoElementsKeyed is listProtoElements for endpoints that wrap their
 // elements under a key other than "data". The current Interfaces generation
 // endpoint /linode/instances/{id}/interfaces returns {"interfaces":[...]} rather
@@ -128,6 +150,15 @@ func decodeProtoElements[T proto.Message](
 	return decodeProtoElementsKeyed[T](resp, client, operation, "data", newElem)
 }
 
+func decodeProtoElementsRequiredData[T proto.Message](
+	resp *http.Response,
+	client *Client,
+	operation string,
+	newElem func() T,
+) ([]T, error) {
+	return decodeProtoElementsKeyedRequired[T](resp, client, operation, "data", true, newElem)
+}
+
 // decodeProtoElementsBare reads a top-level JSON array from resp, then
 // protojson-decodes each element the same way decodeProtoElementsKeyed does.
 func decodeProtoElementsBare[T proto.Message](
@@ -160,6 +191,16 @@ func decodeProtoElementsKeyed[T proto.Message](
 	operation, itemsKey string,
 	newElem func() T,
 ) ([]T, error) {
+	return decodeProtoElementsKeyedRequired[T](resp, client, operation, itemsKey, false, newElem)
+}
+
+func decodeProtoElementsKeyedRequired[T proto.Message](
+	resp *http.Response,
+	client *Client,
+	operation, itemsKey string,
+	requireItems bool,
+	newElem func() T,
+) ([]T, error) {
 	var envelope map[string]json.RawMessage
 
 	if err := client.handleResponse(resp, &envelope); err != nil {
@@ -179,6 +220,14 @@ func decodeProtoElementsKeyed[T proto.Message](
 		if err := json.Unmarshal(raw, &rawItems); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal %s list envelope: %w", operation, err)
 		}
+	}
+
+	if requireItems && rawItems == nil {
+		return nil, fmt.Errorf(
+			"failed to unmarshal %s list envelope: %w",
+			operation,
+			errResponseBodyNotJSONArray,
+		)
 	}
 
 	return decodeRawProtoItems[T](rawItems, operation, newElem)

@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_device_list",
-  "description": "Shared non-integer pagination rejections and the bare trusted-device list GET.",
+  "description": "Shared pagination, request-path, and malformed-response behavior for the trusted-device list.",
   "cases": [
     {
       "name": "rejects non-integer page",
@@ -17,6 +17,98 @@
       "args": {},
       "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": { "method": "GET", "path": "/profile/devices" }
+    },
+    {
+      "name": "lists one explicit page",
+      "args": { "page": 2, "page_size": 25 },
+      "api_response": {
+        "data": [{ "id": 456, "user_agent": "curl/8.0" }],
+        "page": 2,
+        "pages": 4,
+        "results": 4
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/profile/devices?page=2&page_size=25"
+      }
+    },
+    {
+      "name": "rejects a missing data member",
+      "args": {},
+      "api_response": {},
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a null data member",
+      "args": {},
+      "api_response": { "data": null, "page": 1, "pages": 1, "results": 0 },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects an object data member",
+      "args": {},
+      "api_response": { "data": {}, "page": 1, "pages": 1, "results": 0 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects a top-level array response",
+      "args": {},
+      "api_response": [],
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level null response",
+      "args": {},
+      "api_response": null,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level string response",
+      "args": {},
+      "api_response": "invalid",
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level numeric response",
+      "args": {},
+      "api_response": 1,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level boolean response",
+      "args": {},
+      "api_response": false,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a null trusted-device element",
+      "args": {},
+      "api_response": { "data": [null], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects an array trusted-device element",
+      "args": {},
+      "api_response": { "data": [[]], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects a string trusted-device element",
+      "args": {},
+      "api_response": { "data": ["invalid"], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects a numeric trusted-device element",
+      "args": {},
+      "api_response": { "data": [1], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects a boolean trusted-device element",
+      "args": {},
+      "api_response": { "data": [false], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
     }
   ]
 }

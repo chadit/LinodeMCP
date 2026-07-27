@@ -17842,6 +17842,26 @@ async def test_list_profile_devices_fetches_all_pages() -> None:
     await client.close()
 
 
+async def test_list_profile_devices_explicit_page_fetches_only_that_page() -> None:
+    """An explicit page is fetched once even when it is greater than one."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "data": [{"id": 456, "user_agent": "curl/8.0"}],
+        "page": 2,
+        "pages": 4,
+        "results": 4,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.list_profile_devices(page=2, page_size=25)
+
+    assert result == [{"id": 456, "user_agent": "curl/8.0"}]
+    mock_request.assert_awaited_once_with("GET", "/profile/devices?page=2&page_size=25")
+    await client.close()
+
+
 async def test_list_profile_devices_rejects_malformed_response() -> None:
     """Profile trusted device list fails closed on malformed payloads."""
     client = Client("https://api.linode.com/v4", "test-token")

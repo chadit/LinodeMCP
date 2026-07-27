@@ -953,7 +953,7 @@ func (c *Client) httpListAccountNotificationsProto(ctx context.Context, page, pa
 // proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListProfileDevices.
 func (c *Client) httpListProfileDevicesProto(ctx context.Context, page, pageSize int) ([]*linodev1.TrustedDevice, error) {
-	return listProtoElementsPaginated(ctx, c, "ListProfileDevices", endpointProfileDevices, page, pageSize,
+	return listProtoElementsPaginatedRequiredData(ctx, c, "ListProfileDevices", endpointProfileDevices, page, pageSize,
 		func() *linodev1.TrustedDevice { return &linodev1.TrustedDevice{} })
 }
 
