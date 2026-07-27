@@ -288,4 +288,11 @@ func TestDumpResolvesTheRealClient(t *testing.T) {
 	if !slices.Contains(got.Routes, assembled) {
 		t.Errorf("route surface is missing %q", assembled)
 	}
+
+	// Built as a constant plus an escaped ID, then passed through
+	// writeDatabaseInstanceProto before it reaches makeRequest.
+	const databaseUpdate = "PUT /databases/mysql/instances/{p}"
+	if !slices.Contains(got.Routes, databaseUpdate) {
+		t.Errorf("route surface is missing %q", databaseUpdate)
+	}
 }
