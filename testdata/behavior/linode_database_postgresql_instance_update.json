@@ -13,6 +13,12 @@
       }
     },
     {
+      "name": "rejects a bare-array API response",
+      "args": { "instance_id": 123, "label": "renamed-pg", "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to update PostgreSQL Managed Database"
+    },
+    {
       "name": "requires confirm",
       "args": { "instance_id": 123, "label": "renamed-db" },
       "expect_error": "This updates a PostgreSQL Managed Database instance. Set confirm=true to proceed."

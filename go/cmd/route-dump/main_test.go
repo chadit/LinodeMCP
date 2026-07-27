@@ -289,3 +289,21 @@ func TestDumpResolvesTheRealClient(t *testing.T) {
 		t.Errorf("route surface is missing %q", assembled)
 	}
 }
+
+func TestDumpResolvesPostgreSQLInstanceUpdateRoute(t *testing.T) {
+	t.Parallel()
+
+	got, stderr, err := runDump(t, clientDir)
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if len(got.Unresolved) != 0 {
+		t.Errorf("unresolved call sites in the real client: %v", got.Unresolved)
+	}
+
+	const want = "PUT /databases/postgresql/instances/{p}"
+	if !slices.Contains(got.Routes, want) {
+		t.Errorf("route surface is missing %q", want)
+	}
+}
