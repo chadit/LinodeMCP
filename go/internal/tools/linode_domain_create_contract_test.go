@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"slices"
 	"strings"
@@ -97,6 +98,11 @@ func TestLinodeDomainCreateValidationContract(t *testing.T) {
 			want: "domain must match the documented domain-name pattern",
 		},
 		{
+			name: caseMissingType,
+			args: map[string]any{keyDomain: domainExample, keyConfirm: true},
+			want: errTypeRequired,
+		},
+		{
 			name: caseInvalidType,
 			args: map[string]any{keyDomain: domainExample, keyType: "primary", keyConfirm: true},
 			want: "type must be one of: master, slave",
@@ -169,7 +175,17 @@ func TestLinodeDomainCreateValidationContract(t *testing.T) {
 		{
 			name: "retry sec type",
 			args: map[string]any{keyDomain: domainExample, keyType: keyMaster, keySoaEmail: domainSOAEmailExample, keyRetrySec: "1", keyConfirm: true},
-			want: "retry_sec must be an integer",
+			want: errRetrySecInteger,
+		},
+		{
+			name: "retry sec nan",
+			args: map[string]any{keyDomain: domainExample, keyType: keyMaster, keySoaEmail: domainSOAEmailExample, keyRetrySec: math.NaN(), keyConfirm: true},
+			want: errRetrySecInteger,
+		},
+		{
+			name: "retry sec infinity",
+			args: map[string]any{keyDomain: domainExample, keyType: keyMaster, keySoaEmail: domainSOAEmailExample, keyRetrySec: math.Inf(1), keyConfirm: true},
+			want: errRetrySecInteger,
 		},
 		{
 			name: "ttl sec type",

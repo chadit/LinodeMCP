@@ -333,8 +333,6 @@ async def handle_linode_domain_create(
     async def _call(client: RetryableClient) -> dict[str, Any]:
         try:
             raw = await client.post_raw("/domains", body, retry=False)
-        except (APIError, NetworkError):
-            raise
         except ValueError as exc:
             msg = f"domain create response is invalid: {exc}"
             raise ValueError(msg) from exc

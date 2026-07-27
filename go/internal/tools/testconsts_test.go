@@ -501,6 +501,7 @@ const (
 	errDomainIDRequired            = "domain_id is required"
 	errDomainIDPositive            = "domain_id must be a positive integer"
 	errDomainRequired              = "domain is required"
+	errRetrySecInteger             = "retry_sec must be an integer"
 	errClusterIDRequired           = "cluster_id is required"
 	errVPCIDRequired               = "vpc_id is required"
 	errSubnetIDRequired            = "subnet_id is required"

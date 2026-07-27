@@ -16,7 +16,12 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
-const domainCreateNameMaxLength = 253
+const (
+	domainCreateNameMaxLength   = 253
+	domainCreateStatusActive    = "active"
+	domainCreateStatusDisabled  = "disabled"
+	errDomainCreateTypeRequired = "type is required"
+)
 
 var domainCreateNamePattern = regexp.MustCompile(`^(\*\.)?([a-zA-Z0-9-_]{1,63}\.)+([a-zA-Z]{2,3}\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$`)
 
@@ -241,7 +246,7 @@ func validateDomainCreateIdentity(req *linode.CreateDomainRequest) string {
 	}
 
 	if req.Type == "" {
-		return errPaymentMethodTypeRequired
+		return errDomainCreateTypeRequired
 	}
 
 	if req.Type != "master" && req.Type != "slave" {
@@ -302,7 +307,7 @@ func populateDomainCreateOptionals(request *mcp.CallToolRequest, req *linode.Cre
 }
 
 func validateDomainCreateConditionalFields(req *linode.CreateDomainRequest) string {
-	if req.Status != nil && *req.Status != "active" && *req.Status != monitorAlertDefinitionStatusDisabled {
+	if req.Status != nil && *req.Status != domainCreateStatusActive && *req.Status != domainCreateStatusDisabled {
 		return "status must be one of: active, disabled"
 	}
 

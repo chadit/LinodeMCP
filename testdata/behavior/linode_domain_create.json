@@ -84,7 +84,7 @@
       "expect_request": {
         "method": "POST",
         "path": "/domains",
-        "body": { "domain": "example.com", "type": "master", "soa_email": "admin@example.com", "retry_sec": 1.0 }
+        "body": { "domain": "example.com", "type": "master", "soa_email": "admin@example.com", "retry_sec": 1 }
       }
     },
     {
