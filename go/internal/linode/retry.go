@@ -4448,12 +4448,12 @@ func (c *Client) CreateTagProto(ctx context.Context, req *CreateTagRequest) (*li
 	return c.httpCreateTagProto(ctx, req)
 }
 
-// CreateDomainProto creates a domain as a proto message with automatic retry on
-// transient failures.
+// CreateDomainProto creates a domain as a proto message without automatic retry.
+// Replaying this POST after a transient response can create duplicate domains.
 func (c *Client) CreateDomainProto(ctx context.Context, req *CreateDomainRequest) (*linodev1.Domain, error) {
 	var domain *linodev1.Domain
 
-	err := c.executeWithRetry(ctx, "CreateDomain", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateDomain", func() error {
 		var err error
 
 		domain, err = c.httpCreateDomainProto(ctx, req)

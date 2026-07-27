@@ -2,8 +2,12 @@ package linode
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+
+	"google.golang.org/protobuf/encoding/protojson"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
@@ -174,9 +178,27 @@ func (c *Client) httpCreateDomainProto(ctx context.Context, req *CreateDomainReq
 
 	defer drainClose(resp)
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode >= httpBadRequest {
+		return nil, c.handleErrorResponse(resp.StatusCode, body, resp)
+	}
+
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal domain create response: %w", err)
+	}
+
+	if object == nil {
+		return nil, fmt.Errorf("failed to unmarshal domain create response: %w", errResponseBodyNotJSONObject)
+	}
+
 	domain := &linodev1.Domain{}
-	if err := c.handleProtoResponse(resp, domain); err != nil {
-		return nil, err
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, domain); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal domain create response: %w", err)
 	}
 
 	return domain, nil

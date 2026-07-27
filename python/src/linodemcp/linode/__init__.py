@@ -11229,14 +11229,20 @@ class RetryableClient:
         result: Any = await self._execute_with_retry(self.client.get_raw, endpoint)
         return result
 
-    async def post_raw(self, endpoint: str, body: dict[str, Any] | None = None) -> Any:
-        """POST to an endpoint as raw decoded JSON with retry.
+    async def post_raw(
+        self,
+        endpoint: str,
+        body: dict[str, Any] | None = None,
+        *,
+        retry: bool = True,
+    ) -> Any:
+        """POST to an endpoint as raw decoded JSON.
 
-        Used by proto-backed write handlers to serialize via the proto contract.
+        Proto-backed write handlers retry by default for compatibility. Callers
+        creating non-idempotent resources can select one protected attempt.
         """
-        result: Any = await self._execute_with_retry(
-            self.client.post_raw, endpoint, body
-        )
+        execute = self._execute_with_retry if retry else self._execute_without_retry
+        result: Any = await execute(self.client.post_raw, endpoint, body)
         return result
 
     async def put_raw(self, endpoint: str, body: dict[str, Any] | None = None) -> Any:

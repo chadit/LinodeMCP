@@ -153,6 +153,18 @@ class Tools:
     assert evidence.routes == {"GET /domains"}
 
 
+def test_real_python_tree_resolves_domain_create_route() -> None:
+    """The registered domain-create call chain proves POST /domains exists."""
+    evidence = gate.python_evidence(REPO_ROOT / "python")
+
+    assert "POST /domains" in evidence.routes
+    assert not any(
+        "python/src/linodemcp/tools/linode_domains_write.py:" in site
+        and "handle_linode_domain_create" in site
+        for site in evidence.unresolved
+    )
+
+
 def test_resolves_a_request_that_skips_the_shared_primitive(tmp_path: Path) -> None:
     """A method reaching the HTTP library directly still yields its route.
 

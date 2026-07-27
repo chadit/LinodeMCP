@@ -2832,7 +2832,7 @@ func TestLinodeDomainCreateToolSuccessfulCreation(t *testing.T) {
 	req := createRequestWithArgs(t, map[string]any{
 		keyDomain:   domainExample,
 		keyType:     keyMaster,
-		keySoaEmail: "admin@example.com",
+		keySoaEmail: domainSOAEmailExample,
 		keyConfirm:  true,
 	})
 

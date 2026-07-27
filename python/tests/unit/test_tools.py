@@ -11297,6 +11297,7 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
                 "soa_email": "admin@example.com",
                 "ttl_sec": 3600,
             },
+            retry=False,
         )
 
 
@@ -11526,7 +11527,13 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
 async def test_domain_create_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true previews the create with no resource state and no call."""
     result = await handle_linode_domain_create(
-        {"domain": "example.com", "type": "master", "dry_run": True}, sample_config
+        {
+            "domain": "example.com",
+            "type": "master",
+            "soa_email": "admin@example.com",
+            "dry_run": True,
+        },
+        sample_config,
     )
 
     assert len(result) == 1
@@ -11535,6 +11542,11 @@ async def test_domain_create_dry_run_returns_preview(sample_config: Config) -> N
     assert body["tool"] == "linode_domain_create"
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/domains"
+    assert body["would_execute"]["body"] == {
+        "domain": "example.com",
+        "type": "master",
+        "soa_email": "admin@example.com",
+    }
     assert body["current_state"] is None
     assert any("example.com" in s for s in body["side_effects"])
     assert "confirm=true" not in result[0].text

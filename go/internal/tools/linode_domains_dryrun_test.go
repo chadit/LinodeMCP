@@ -201,9 +201,10 @@ func TestLinodeDomainCreateToolDryRunPreviewWithoutCreating(t *testing.T) {
 	_, _, handler := tools.NewLinodeDomainCreateTool(dryRunNoCallServer(t))
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
-		keyDomain: domainExample,
-		keyType:   "master",
-		keyDryRun: true,
+		keyDomain:   domainExample,
+		keyType:     keyMaster,
+		keySoaEmail: domainSOAEmailExample,
+		keyDryRun:   true,
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

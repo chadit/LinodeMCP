@@ -55,18 +55,19 @@ type CloneDomainRequest struct {
 
 // CreateDomainRequest represents the request body for creating a domain.
 type CreateDomainRequest struct {
-	Domain      string   `json:"domain"`
-	Type        string   `json:"type"` // master, slave
-	SOAEmail    string   `json:"soa_email,omitempty"`
-	Description string   `json:"description,omitempty"`
-	RetrySec    int      `json:"retry_sec,omitempty"`
-	MasterIPs   []string `json:"master_ips,omitempty"`
-	AXFRIPs     []string `json:"axfr_ips,omitempty"`
-	ExpireSec   int      `json:"expire_sec,omitempty"`
-	RefreshSec  int      `json:"refresh_sec,omitempty"`
-	TTLSec      int      `json:"ttl_sec,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	Group       string   `json:"group,omitempty"`
+	Domain      string    `json:"domain"`
+	Type        string    `json:"type"` // master, slave
+	SOAEmail    *string   `json:"soa_email,omitempty"`
+	Description *string   `json:"description,omitempty"`
+	RetrySec    *int      `json:"retry_sec,omitempty"`
+	MasterIPs   *[]string `json:"master_ips,omitempty"`
+	AXFRIPs     *[]string `json:"axfr_ips,omitempty"`
+	ExpireSec   *int      `json:"expire_sec,omitempty"`
+	RefreshSec  *int      `json:"refresh_sec,omitempty"`
+	TTLSec      *int      `json:"ttl_sec,omitempty"`
+	Tags        *[]string `json:"tags,omitempty"`
+	Group       *string   `json:"group,omitempty"`
+	Status      *string   `json:"status,omitempty"`
 }
 
 // UpdateDomainRequest represents the request body for updating a domain.
