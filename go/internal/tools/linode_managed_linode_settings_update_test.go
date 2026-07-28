@@ -184,8 +184,8 @@ func TestLinodeManagedLinodeSettingsUpdateToolConfirmRejectsBeforeClient(t *test
 	t.Parallel()
 
 	cases := []struct {
-		name       string
 		confirm    any
+		name       string
 		setConfirm bool
 	}{
 		{name: caseMissingConfirm},

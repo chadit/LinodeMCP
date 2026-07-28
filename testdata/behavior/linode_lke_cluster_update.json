@@ -1,6 +1,6 @@
 {
   "tool": "linode_lke_cluster_update",
-  "description": "Pins the cluster_id-required rejection and the confirmed PUT with a minimal label body. Confirm-message text diverges (see report), so no confirm-required case here.",
+  "description": "Pins the cluster_id-required rejection and the confirmed PUT with a minimal label body. Confirm-message text diverges (see report), so no confirm-required case here. A response that is not a JSON object must fail rather than yield a zeroed cluster; the bare-array shape of that case is withheld because Python still fabricates a success from it (see report).",
   "cases": [
     {
       "name": "rejects missing cluster_id",
@@ -17,6 +17,12 @@
       "name": "requires confirm",
       "args": {"cluster_id": 12345, "label": "renamed"},
       "expect_error": "This modifies the LKE cluster configuration. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "cluster_id": 12345, "label": "renamed", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "LKE cluster"
     }
   ]
 }

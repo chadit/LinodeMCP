@@ -112,8 +112,14 @@ const (
 	keyMetric                    = "metric"
 	keyMetricType                = "metric_type"
 	keyDomain                    = "domain"
+	keyAXFRIPs                   = "axfr_ips"
+	keyExpireSec                 = "expire_sec"
+	keyMasterIPs                 = "master_ips"
 	keyName                      = "name"
+	keyRefreshSec                = "refresh_sec"
+	keyRetrySec                  = "retry_sec"
 	keySize                      = "size"
+	keyTTLSec                    = "ttl_sec"
 	keyIPv4                      = "ipv4"
 	keyACL                       = "acl"
 	keyAddress                   = "address"
@@ -327,13 +333,15 @@ const (
 	// Unknown-field drop pin: proto read tools must drop any API field their
 	// message does not model, so success tests inject a keyNotInProto field with
 	// value valNotInProto and assert the key is absent from the proto-canonical
-	// output. keyNotInProto is the map-literal key form; struct-bodied fixtures use
-	// a json:"not_in_proto" tag instead.
+	// output. keyNotInProto is the map-literal key form; a fixture built from an
+	// SDK value goes through withUnmodeledField, and one that also carries fields
+	// the SDK type lacks declares a json:"not_in_proto" tag instead.
 	keyNotInProto = "not_in_proto"
 	valNotInProto = "dropped"
 
 	// Common test fixture values.
 	statusActive                    = "active"
+	statusDisabled                  = "disabled"
 	statusAvailable                 = "available"
 	statusEnabled                   = "enabled"
 	statusOK                        = "ok"
@@ -363,6 +371,9 @@ const (
 	labelProdCluster                = "prod-cluster"
 	labelTestCluster                = "test-cluster"
 	domainExample                   = "example.com"
+	domainSlave                     = "slave"
+	domainSOAEmailExample           = "admin@example.com"
+	domainMasterIPExample           = "192.0.2.20"
 	remoteNameserverExample         = "ns1.example.com"
 	domainZoneTTL                   = "$TTL 864000"
 	hostWWW                         = "www"
@@ -492,6 +503,7 @@ const (
 	errDomainIDPositive            = "domain_id must be a positive integer"
 	errDomainRequired              = "domain is required"
 	errClusterIDRequired           = "cluster_id is required"
+	errRetrySecInteger             = "retry_sec must be an integer"
 	errVPCIDRequired               = "vpc_id is required"
 	errSubnetIDRequired            = "subnet_id is required"
 	errACLMustBeOneOf              = "acl must be one of"

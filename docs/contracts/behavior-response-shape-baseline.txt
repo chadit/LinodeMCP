@@ -1,0 +1,12 @@
+# Mutating tools (Write/Destroy) whose behavior fixture decodes an API
+# response body but never proves the tool rejects a malformed one: no
+# case serving a non-object api_response (or an api_response_raw body)
+# with an expect_api_error pinning the rejection. Decoding is
+# hand-written per language, so one side can accept a wrong-shaped body,
+# or fail on it with different text, while the input schema, outgoing
+# request and happy-path result all still match and every other gate
+# stays green. Ratchet: add the malformed-body case (reconciling any
+# divergence it exposes), then remove the line; never add a line by hand.
+# Regenerate:
+#   python scripts/verify_behavior.py --update-baseline
+

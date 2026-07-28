@@ -1,12 +1,18 @@
 {
   "tool": "linode_instance_stats_month_get",
-  "description": "GETs a specific month's stats. The linode_id/year/month rejection texts and year ranges diverge between the languages, so only the success request is fixtured (see report).",
+  "description": "GETs a specific month's stats, and rejects a non-object body in both languages (Python used to swap one for an empty object and report success where Go's protojson decode errors). The linode_id/year/month rejection texts and year ranges still diverge between the languages, so those are not fixtured (see report).",
   "cases": [
     {
       "name": "gets a month of stats with a plain GET",
       "args": { "linode_id": 123, "year": 2024, "month": 8 },
       "api_response": {},
       "expect_request": { "method": "GET", "path": "/linode/instances/123/stats/2024/8" }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "linode_id": 123, "year": 2024, "month": 8 },
+      "api_response": [],
+      "expect_api_error": "Failed to retrieve"
     }
   ]
 }

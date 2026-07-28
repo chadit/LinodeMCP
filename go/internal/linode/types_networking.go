@@ -15,22 +15,22 @@ type ReservedIPListPage struct {
 
 // Firewall represents a Linode Cloud Firewall.
 type Firewall struct {
-	ID      int           `json:"id"`
 	Label   string        `json:"label"`
 	Status  string        `json:"status"` // enabled, disabled, deleted
-	Rules   FirewallRules `json:"rules"`
-	Tags    []string      `json:"tags"`
 	Created string        `json:"created"`
 	Updated string        `json:"updated"`
+	Tags    []string      `json:"tags"`
+	Rules   FirewallRules `json:"rules"`
+	ID      int           `json:"id"`
 }
 
 // FirewallRules represents inbound and outbound firewall rules.
 type FirewallRules struct {
-	Inbound        []FirewallRule `json:"inbound"`
 	InboundPolicy  string         `json:"inbound_policy"`
-	Outbound       []FirewallRule `json:"outbound"`
 	OutboundPolicy string         `json:"outbound_policy"`
 	Fingerprint    string         `json:"fingerprint,omitempty"`
+	Inbound        []FirewallRule `json:"inbound"`
+	Outbound       []FirewallRule `json:"outbound"`
 	Version        int            `json:"version,omitempty"`
 }
 
@@ -39,9 +39,9 @@ type FirewallRule struct {
 	Action      string            `json:"action"`   // ACCEPT, DROP
 	Protocol    string            `json:"protocol"` // TCP, UDP, ICMP, IPENCAP
 	Ports       string            `json:"ports"`
-	Addresses   FirewallAddresses `json:"addresses"`
 	Label       string            `json:"label"`
 	Description string            `json:"description"`
+	Addresses   FirewallAddresses `json:"addresses"`
 }
 
 // FirewallAddresses represents IPv4 and IPv6 addresses for a firewall rule.
@@ -59,19 +59,19 @@ type VLAN struct {
 
 // FirewallDevice represents a device attached to a Cloud Firewall.
 type FirewallDevice struct {
-	ID      int                  `json:"id"`
-	Entity  FirewallDeviceEntity `json:"entity"`
 	Created string               `json:"created"`
 	Updated string               `json:"updated"`
+	Entity  FirewallDeviceEntity `json:"entity"`
+	ID      int                  `json:"id"`
 }
 
 // FirewallDeviceEntity represents the Linode, Linode interface, or NodeBalancer attached to a firewall.
 type FirewallDeviceEntity struct {
-	ID           int                   `json:"id"`
+	ParentEntity *FirewallDeviceEntity `json:"parent_entity"`
 	Label        string                `json:"label"`
 	Type         string                `json:"type"`
 	URL          string                `json:"url"`
-	ParentEntity *FirewallDeviceEntity `json:"parent_entity"`
+	ID           int                   `json:"id"`
 }
 
 // FirewallSettings represents the default firewall assignments for resource types.
@@ -110,8 +110,8 @@ type FirewallTemplate struct {
 type NetworkTransferPrice struct {
 	ID           string                       `json:"id"`
 	Label        string                       `json:"label"`
-	Price        Price                        `json:"price"`
 	RegionPrices []NetworkTransferRegionPrice `json:"region_prices"`
+	Price        Price                        `json:"price"`
 	Transfer     int                          `json:"transfer"`
 }
 
@@ -132,15 +132,15 @@ type IPv6Pool struct {
 // CreateIPv6RangeRequest represents the request body for creating an IPv6 range.
 type CreateIPv6RangeRequest struct {
 	LinodeID     *int   `json:"linode_id,omitempty"`
-	PrefixLength int    `json:"prefix_length"`
 	RouteTarget  string `json:"route_target,omitempty"`
+	PrefixLength int    `json:"prefix_length"`
 }
 
 // AllocateNetworkingIPRequest represents the request body for allocating an account-level IP address.
 type AllocateNetworkingIPRequest struct {
+	Type     string `json:"type"`
 	LinodeID int    `json:"linode_id"`
 	Public   bool   `json:"public"`
-	Type     string `json:"type"`
 }
 
 // UpdateNetworkingIPRequest represents the request body for updating account-level IP reverse DNS.
@@ -162,8 +162,8 @@ type AssignNetworkingIPsRequest struct {
 
 // ShareNetworkingIPsRequest represents the request body for sharing IP addresses with a Linode.
 type ShareNetworkingIPsRequest struct {
-	LinodeID int      `json:"linode_id"`
 	IPs      []string `json:"ips"`
+	LinodeID int      `json:"linode_id"`
 }
 
 // NodeBalancerType represents an available NodeBalancer type.
@@ -176,70 +176,69 @@ type NodeBalancerType struct {
 
 // NodeBalancer represents a Linode NodeBalancer (load balancer).
 type NodeBalancer struct {
-	ID                 int      `json:"id"`
 	Label              string   `json:"label"`
 	Region             string   `json:"region"`
 	Hostname           string   `json:"hostname"`
 	IPv4               string   `json:"ipv4"`
 	IPv6               string   `json:"ipv6"`
-	ClientConnThrottle int      `json:"client_conn_throttle"`
-	Transfer           Transfer `json:"transfer"`
-	Tags               []string `json:"tags"`
 	Created            string   `json:"created"`
 	Updated            string   `json:"updated"`
+	Tags               []string `json:"tags"`
+	Transfer           Transfer `json:"transfer"`
+	ID                 int      `json:"id"`
+	ClientConnThrottle int      `json:"client_conn_throttle"`
 }
 
 // NodeBalancerConfig represents a NodeBalancer frontend configuration.
 type NodeBalancerConfig struct {
-	ID             int                     `json:"id"`
-	Port           int                     `json:"port"`
+	CipherSuite    string                  `json:"cipher_suite"`
+	CheckPath      string                  `json:"check_path"`
 	Protocol       string                  `json:"protocol"`
 	Algorithm      string                  `json:"algorithm"`
 	Stickiness     string                  `json:"stickiness"`
 	Check          string                  `json:"check"`
-	CheckInterval  int                     `json:"check_interval"`
-	CheckTimeout   int                     `json:"check_timeout"`
-	CheckAttempts  int                     `json:"check_attempts"`
-	CheckPath      string                  `json:"check_path"`
-	CheckBody      string                  `json:"check_body"`
-	CheckPassive   bool                    `json:"check_passive"`
-	CipherSuite    string                  `json:"cipher_suite"`
-	SSLCommonName  string                  `json:"ssl_commonname"`
 	SSLFingerprint string                  `json:"ssl_fingerprint"`
-	NodeBalancerID int                     `json:"nodebalancer_id"`
+	SSLCommonName  string                  `json:"ssl_commonname"`
+	CheckBody      string                  `json:"check_body"`
 	NodesStatus    NodeBalancerNodesStatus `json:"nodes_status"`
+	Port           int                     `json:"port"`
+	CheckAttempts  int                     `json:"check_attempts"`
+	ID             int                     `json:"id"`
+	CheckTimeout   int                     `json:"check_timeout"`
+	CheckInterval  int                     `json:"check_interval"`
+	NodeBalancerID int                     `json:"nodebalancer_id"`
+	CheckPassive   bool                    `json:"check_passive"`
 }
 
 // CreateNodeBalancerConfigRequest represents the request body for creating a NodeBalancer config.
 type CreateNodeBalancerConfigRequest struct {
-	Port          int    `json:"port"`
-	Protocol      string `json:"protocol,omitempty"`
-	Algorithm     string `json:"algorithm,omitempty"`
-	Stickiness    string `json:"stickiness,omitempty"`
-	Check         string `json:"check,omitempty"`
-	CheckInterval int    `json:"check_interval,omitempty"`
-	CheckTimeout  int    `json:"check_timeout,omitempty"`
-	CheckAttempts int    `json:"check_attempts,omitempty"`
-	CheckPath     string `json:"check_path,omitempty"`
-	CheckBody     string `json:"check_body,omitempty"`
-	CheckPassive  *bool  `json:"check_passive,omitempty"`
-	CipherSuite   string `json:"cipher_suite,omitempty"`
-	SSLCert       string `json:"ssl_cert,omitempty"`
-	SSLKey        string `json:"ssl_key,omitempty"`
-	ProxyProtocol string `json:"proxy_protocol,omitempty"`
-	UDPCheckPort  int    `json:"udp_check_port,omitempty"`
-
-	Nodes []CreateNodeBalancerNodeRequest `json:"nodes,omitempty"`
+	CheckPassive  *bool                           `json:"check_passive,omitempty"`
+	CheckPath     string                          `json:"check_path,omitempty"`
+	CipherSuite   string                          `json:"cipher_suite,omitempty"`
+	Stickiness    string                          `json:"stickiness,omitempty"`
+	Check         string                          `json:"check,omitempty"`
+	ProxyProtocol string                          `json:"proxy_protocol,omitempty"`
+	SSLKey        string                          `json:"ssl_key,omitempty"`
+	Algorithm     string                          `json:"algorithm,omitempty"`
+	Protocol      string                          `json:"protocol,omitempty"`
+	CheckBody     string                          `json:"check_body,omitempty"`
+	SSLCert       string                          `json:"ssl_cert,omitempty"`
+	Nodes         []CreateNodeBalancerNodeRequest `json:"nodes,omitempty"`
+	CheckAttempts int                             `json:"check_attempts,omitempty"`
+	Port          int                             `json:"port"`
+	CheckTimeout  int                             `json:"check_timeout,omitempty"`
+	CheckInterval int                             `json:"check_interval,omitempty"`
+	UDPCheckPort  int                             `json:"udp_check_port,omitempty"`
 }
 
 // NodeBalancerNode represents a backend node on a NodeBalancer config.
 type NodeBalancerNode struct {
-	ID             int    `json:"id"`
 	Label          string `json:"label"`
 	Address        string `json:"address"`
 	Status         string `json:"status"`
-	Weight         int    `json:"weight"`
 	Mode           string `json:"mode"`
+	ID             int    `json:"id"`
+	Weight         int    `json:"weight"`
 	NodeBalancerID int    `json:"nodebalancer_id"`
 	ConfigID       int    `json:"config_id"`
 }
@@ -248,8 +247,8 @@ type NodeBalancerNode struct {
 type CreateNodeBalancerNodeRequest struct {
 	Label    string `json:"label"`
 	Address  string `json:"address"`
-	Weight   int    `json:"weight,omitempty"`
 	Mode     string `json:"mode,omitempty"`
+	Weight   int    `json:"weight,omitempty"`
 	SubnetID int    `json:"subnet_id,omitempty"`
 }
 
@@ -257,28 +256,28 @@ type CreateNodeBalancerNodeRequest struct {
 type UpdateNodeBalancerNodeRequest struct {
 	Label    string `json:"label,omitempty"`
 	Address  string `json:"address,omitempty"`
-	Weight   int    `json:"weight,omitempty"`
 	Mode     string `json:"mode,omitempty"`
+	Weight   int    `json:"weight,omitempty"`
 	SubnetID int    `json:"subnet_id,omitempty"`
 }
 
 // UpdateNodeBalancerConfigRequest represents the request body for updating a NodeBalancer config.
 type UpdateNodeBalancerConfigRequest struct {
-	Port          int    `json:"port,omitempty"`
-	Protocol      string `json:"protocol,omitempty"`
-	Algorithm     string `json:"algorithm,omitempty"`
+	CheckPassive  *bool  `json:"check_passive,omitempty"`
+	CheckPath     string `json:"check_path,omitempty"`
+	SSLCert       string `json:"ssl_cert,omitempty"`
 	Stickiness    string `json:"stickiness,omitempty"`
 	Check         string `json:"check,omitempty"`
-	CheckInterval int    `json:"check_interval,omitempty"`
-	CheckTimeout  int    `json:"check_timeout,omitempty"`
-	CheckAttempts int    `json:"check_attempts,omitempty"`
-	CheckPath     string `json:"check_path,omitempty"`
 	CheckBody     string `json:"check_body,omitempty"`
-	CheckPassive  *bool  `json:"check_passive,omitempty"`
-	CipherSuite   string `json:"cipher_suite,omitempty"`
-	SSLCert       string `json:"ssl_cert,omitempty"`
-	SSLKey        string `json:"ssl_key,omitempty"`
 	ProxyProtocol string `json:"proxy_protocol,omitempty"`
+	Algorithm     string `json:"algorithm,omitempty"`
+	CipherSuite   string `json:"cipher_suite,omitempty"`
+	SSLKey        string `json:"ssl_key,omitempty"`
+	Protocol      string `json:"protocol,omitempty"`
+	CheckInterval int    `json:"check_interval,omitempty"`
+	Port          int    `json:"port,omitempty"`
+	CheckAttempts int    `json:"check_attempts,omitempty"`
+	CheckTimeout  int    `json:"check_timeout,omitempty"`
 	UDPCheckPort  int    `json:"udp_check_port,omitempty"`
 }
 
@@ -290,12 +289,12 @@ type NodeBalancerNodesStatus struct {
 
 // NodeBalancerConfigNode represents a backend node attached to a NodeBalancer config.
 type NodeBalancerConfigNode struct {
-	ID             int    `json:"id"`
 	Address        string `json:"address"`
 	Label          string `json:"label"`
 	Status         string `json:"status"`
-	Weight         int    `json:"weight"`
 	Mode           string `json:"mode"`
+	ID             int    `json:"id"`
+	Weight         int    `json:"weight"`
 	NodeBalancerID int    `json:"nodebalancer_id"`
 	ConfigID       int    `json:"config_id"`
 }
@@ -328,10 +327,10 @@ type firewallCreateBody struct {
 }
 
 type firewallCreateRules struct {
-	Inbound        []FirewallRule `json:"inbound,omitempty"`
 	InboundPolicy  string         `json:"inbound_policy,omitempty"`
-	Outbound       []FirewallRule `json:"outbound,omitempty"`
 	OutboundPolicy string         `json:"outbound_policy,omitempty"`
+	Inbound        []FirewallRule `json:"inbound,omitempty"`
+	Outbound       []FirewallRule `json:"outbound,omitempty"`
 }
 
 func firewallCreateBodyFromRequest(req CreateFirewallRequest) firewallCreateBody {
@@ -373,14 +372,14 @@ type firewallRulesRawReplaceBody struct {
 
 // Device represents a device attached to a firewall.
 type Device struct {
-	ID   int    `json:"id"`
 	Type string `json:"type"` // linode, nodebalancer
+	ID   int    `json:"id"`
 }
 
 // CreateFirewallDeviceRequest represents the request body for assigning a device to a firewall.
 type CreateFirewallDeviceRequest struct {
-	ID   int    `json:"id"`
 	Type string `json:"type"`
+	ID   int    `json:"id"`
 }
 
 // UpdateFirewallRequest represents the request body for updating a firewall.
@@ -405,11 +404,11 @@ type UpdateNodeBalancerFirewallsRequest struct {
 
 // CreateNodeBalancerRequest represents the request body for creating a NodeBalancer.
 type CreateNodeBalancerRequest struct {
+	IPv4               *string  `json:"ipv4,omitempty"`
 	Region             string   `json:"region"`
 	Label              string   `json:"label,omitempty"`
-	ClientConnThrottle int      `json:"client_conn_throttle,omitempty"`
 	Tags               []string `json:"tags,omitempty"`
-	IPv4               *string  `json:"ipv4,omitempty"`
+	ClientConnThrottle int      `json:"client_conn_throttle,omitempty"`
 }
 
 // UpdateNodeBalancerRequest represents the request body for updating a NodeBalancer.

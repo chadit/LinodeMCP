@@ -18,11 +18,11 @@ const secondsPerMinute = 60.0
 // rate. Constructed with rate <= 0, NewRateLimiter returns nil and Wait
 // becomes a no-op (limiter disabled).
 type RateLimiter struct {
-	mu         sync.Mutex
+	lastRefill time.Time
 	tokens     float64
 	capacity   float64
 	refillRate float64
-	lastRefill time.Time
+	mu         sync.Mutex
 }
 
 // NewRateLimiter returns a token bucket limiter at perMinute rate. A

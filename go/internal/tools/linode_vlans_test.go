@@ -288,8 +288,8 @@ func TestLinodeVLANDeleteToolConfirmRejectsBeforeClient(t *testing.T) {
 	_, _, handler := tools.NewLinodeVLANDeleteTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissing},
 		{name: caseFalseConfirmRejected, value: false},

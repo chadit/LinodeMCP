@@ -119,15 +119,15 @@ type EnvironmentConfig struct {
 
 // Config holds the full LinodeMCP configuration.
 type Config struct {
-	Server                   ServerConfig                 `json:"server"                     yaml:"server"`
-	Resilience               ResilienceConfig             `json:"resilience"                 yaml:"resilience"`
-	Observability            ObservabilityConfig          `json:"observability"              yaml:"observability"`
+	TwoStage                 TwoStageConfig               `json:"two_stage"                  yaml:"two_stage"`
 	Environments             map[string]EnvironmentConfig `json:"environments"               yaml:"environments"`
-	ActiveProfile            string                       `json:"active_profile"             yaml:"active_profile"`
 	Profiles                 map[string]UserProfileConfig `json:"profiles"                   yaml:"profiles"`
 	ProfilesBuiltinOverrides map[string]BuiltinOverride   `json:"profiles_builtin_overrides" yaml:"profiles_builtin_overrides"`
+	ActiveProfile            string                       `json:"active_profile"             yaml:"active_profile"`
+	Server                   ServerConfig                 `json:"server"                     yaml:"server"`
 	Audit                    AuditConfig                  `json:"audit"                      yaml:"audit"`
-	TwoStage                 TwoStageConfig               `json:"two_stage"                  yaml:"two_stage"`
+	Observability            ObservabilityConfig          `json:"observability"              yaml:"observability"`
+	Resilience               ResilienceConfig             `json:"resilience"                 yaml:"resilience"`
 }
 
 // TwoStageConfig tunes the plan/apply (two-stage write) flow. Every field is
@@ -155,8 +155,8 @@ type TwoStageConfig struct {
 type AuditConfig struct {
 	RetentionDays *int                    `json:"retention_days" yaml:"retention_days"`
 	RedactPII     *bool                   `json:"redact_pii"     yaml:"redact_pii"`
-	SQLite        AuditSQLiteConfig       `json:"sqlite"         yaml:"sqlite"`
 	Reports       map[string]ReportConfig `json:"reports"        yaml:"reports"`
+	SQLite        AuditSQLiteConfig       `json:"sqlite"         yaml:"sqlite"`
 }
 
 // Report output modes. ReportOutputSummary aggregates into per-bucket
@@ -172,10 +172,10 @@ const (
 // resolves and runs it at call time, so editing the report file takes
 // effect on the next call. An empty Output defaults to "summary".
 type ReportConfig struct {
-	Description string       `json:"description" yaml:"description"`
 	Filter      ReportFilter `json:"filter"      yaml:"filter"`
-	GroupBy     []string     `json:"group_by"    yaml:"group_by"`
+	Description string       `json:"description" yaml:"description"`
 	Output      string       `json:"output"      yaml:"output"`
+	GroupBy     []string     `json:"group_by"    yaml:"group_by"`
 	Limit       int          `json:"limit"       yaml:"limit"`
 }
 
@@ -189,14 +189,14 @@ type ReportConfig struct {
 type ReportFilter struct {
 	Tool         string   `json:"tool"          yaml:"tool"`
 	Capability   string   `json:"capability"    yaml:"capability"`
-	CapabilityIn []string `json:"capability_in" yaml:"capability_in"`
 	Status       string   `json:"status"        yaml:"status"`
-	StatusIn     []string `json:"status_in"     yaml:"status_in"`
 	Environment  string   `json:"environment"   yaml:"environment"`
 	Profile      string   `json:"profile"       yaml:"profile"`
 	SinceOffset  string   `json:"since_offset"  yaml:"since_offset"`
 	Since        string   `json:"since"         yaml:"since"`
 	Until        string   `json:"until"         yaml:"until"`
+	CapabilityIn []string `json:"capability_in" yaml:"capability_in"`
+	StatusIn     []string `json:"status_in"     yaml:"status_in"`
 }
 
 // AuditSQLiteConfig holds the optional SQLite audit sink settings.
@@ -204,9 +204,9 @@ type ReportFilter struct {
 // JSONL and SQLite. An empty Path resolves to audit.db alongside the
 // JSONL log. Consumed by the Phase 3b sink.
 type AuditSQLiteConfig struct {
-	Enabled       bool   `json:"enabled"         yaml:"enabled"`
 	Path          string `json:"path"            yaml:"path"`
 	BusyTimeoutMS int    `json:"busy_timeout_ms" yaml:"busy_timeout_ms"`
+	Enabled       bool   `json:"enabled"         yaml:"enabled"`
 }
 
 // UserProfileConfig is the YAML/JSON shape for a single user-defined profile
@@ -233,35 +233,35 @@ type BuiltinOverride struct {
 // ObservabilityConfig holds observability settings.
 type ObservabilityConfig struct {
 	Tracing TracingConfig `json:"tracing" yaml:"tracing"`
-	Metrics MetricsConfig `json:"metrics" yaml:"metrics"`
-	Logging LoggingConfig `json:"logging" yaml:"logging"`
 	Health  HealthConfig  `json:"health"  yaml:"health"`
+	Logging LoggingConfig `json:"logging" yaml:"logging"`
+	Metrics MetricsConfig `json:"metrics" yaml:"metrics"`
 }
 
 // TracingConfig holds OpenTelemetry tracing settings.
 type TracingConfig struct {
-	Enabled    bool              `json:"enabled"     yaml:"enabled"`
+	Headers    map[string]string `json:"headers"     yaml:"headers"`
 	Endpoint   string            `json:"endpoint"    yaml:"endpoint"`
 	Protocol   string            `json:"protocol"    yaml:"protocol"`
-	Insecure   bool              `json:"insecure"    yaml:"insecure"`
 	SampleRate float64           `json:"sample_rate" yaml:"sampleRate"`
-	Headers    map[string]string `json:"headers"     yaml:"headers"`
+	Enabled    bool              `json:"enabled"     yaml:"enabled"`
+	Insecure   bool              `json:"insecure"    yaml:"insecure"`
 }
 
 // MetricsConfig holds metrics settings.
 type MetricsConfig struct {
-	Enabled    bool             `json:"enabled"    yaml:"enabled"`
 	Prometheus PrometheusConfig `json:"prometheus" yaml:"prometheus"`
+	Enabled    bool             `json:"enabled"    yaml:"enabled"`
 	Runtime    bool             `json:"runtime"    yaml:"runtime"`
 	Host       bool             `json:"host"       yaml:"host"`
 }
 
 // PrometheusConfig holds Prometheus-specific metrics settings.
 type PrometheusConfig struct {
-	Enabled bool   `json:"enabled" yaml:"enabled"`
 	Host    string `json:"host"    yaml:"host"`
-	Port    int    `json:"port"    yaml:"port"`
 	Path    string `json:"path"    yaml:"path"`
+	Port    int    `json:"port"    yaml:"port"`
+	Enabled bool   `json:"enabled" yaml:"enabled"`
 }
 
 // LoggingConfig holds logging settings.
@@ -272,10 +272,10 @@ type LoggingConfig struct {
 
 // HealthConfig holds health check settings.
 type HealthConfig struct {
-	Enabled bool   `json:"enabled" yaml:"enabled"`
 	Host    string `json:"host"    yaml:"host"`
-	Port    int    `json:"port"    yaml:"port"`
 	Path    string `json:"path"    yaml:"path"`
+	Port    int    `json:"port"    yaml:"port"`
+	Enabled bool   `json:"enabled" yaml:"enabled"`
 }
 
 // Load reads and returns the configuration from the given file path.

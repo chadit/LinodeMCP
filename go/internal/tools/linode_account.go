@@ -1978,12 +1978,12 @@ func handleLinodeProfileAppGetRequest(ctx context.Context, request *mcp.CallTool
 }
 
 type profileRevokeTarget struct {
-	toolName       string
-	pathPrefix     string
-	confirmMessage string
 	fetchState     func(context.Context, *linode.Client, int) (any, error)
 	deleteFailure  func(context.Context, *linode.Client, int) string
 	respond        func(id int) (*mcp.CallToolResult, error)
+	toolName       string
+	pathPrefix     string
+	confirmMessage string
 }
 
 func handleLinodeProfileAppDeleteRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
@@ -3157,8 +3157,8 @@ func accountUserGrantsUpdateRequestFromTool(request *mcp.CallToolRequest) (*lino
 	}
 
 	sections := []struct {
-		name string
 		set  func(*[]linode.UpdateAccountUserGrant)
+		name string
 	}{
 		{name: accountUserGrantsLinodeParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Linode = grants }},
 		{name: accountUserGrantsDomainParam, set: func(grants *[]linode.UpdateAccountUserGrant) { req.Domain = grants }},
@@ -3445,8 +3445,8 @@ func supportTicketCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.C
 	req := &linode.CreateSupportTicketRequest{Summary: summary, Description: description}
 
 	optionalStrings := []struct {
-		field string
 		set   func(string)
+		field string
 	}{
 		{field: supportTicketBucketParam, set: func(value string) { req.Bucket = &value }},
 		{field: supportTicketRegionParam, set: func(value string) { req.Region = &value }},
@@ -3464,8 +3464,8 @@ func supportTicketCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.C
 	}
 
 	optionalIDs := []struct {
-		field string
 		set   func(int)
+		field string
 	}{
 		{field: supportTicketDatabaseIDParam, set: func(value int) { req.DatabaseID = &value }},
 		{field: supportTicketDomainIDParam, set: func(value int) { req.DomainID = &value }},
@@ -5000,8 +5000,8 @@ func acknowledgeAccountAgreementsRequestFromTool(request *mcp.CallToolRequest) (
 	}
 
 	for _, field := range []struct {
-		name   string
 		target **bool
+		name   string
 	}{
 		{name: "billing_agreement", target: &req.BillingAgreement},
 		{name: "eu_model", target: &req.EUModel},
@@ -5155,8 +5155,8 @@ func updateAccountRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateA
 	}
 
 	for _, field := range []struct {
-		name   string
 		target **string
+		name   string
 	}{
 		{name: "address_1", target: &req.Address1},
 		{name: "address_2", target: &req.Address2},
@@ -5316,8 +5316,8 @@ func updateAccountSettingsRequestFromTool(request *mcp.CallToolRequest) (*linode
 	}
 
 	for _, field := range []struct {
-		name   string
 		target **bool
+		name   string
 	}{
 		{name: "backups_enabled", target: &req.BackupsEnabled},
 		{name: "managed", target: &req.Managed},
@@ -5329,8 +5329,8 @@ func updateAccountSettingsRequestFromTool(request *mcp.CallToolRequest) (*linode
 	}
 
 	for _, field := range []struct {
-		name   string
 		target **string
+		name   string
 	}{
 		{name: "interfaces_for_new_linodes", target: &req.InterfacesForNewLinodes},
 		{name: "longview_subscription", target: &req.LongviewSubscription},

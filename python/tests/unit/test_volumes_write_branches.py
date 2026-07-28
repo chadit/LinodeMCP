@@ -97,7 +97,7 @@ async def test_create_threads_linode_id_into_body(sample_config: Config) -> None
         )
 
     client.post_raw.assert_awaited_once_with(
-        "/volumes", {"label": "vol", "size": 20, "linode_id": 42}
+        "/volumes", {"label": "vol", "size": 20, "linode_id": 42}, retry=False
     )
 
 

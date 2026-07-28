@@ -17,11 +17,11 @@ import (
 
 // summaryResult mirrors the linode_audit_summary JSON response.
 type summaryResult struct {
-	TotalEvents int `json:"total_events"`
-	Rows        []struct {
+	Rows []struct {
 		Groups map[string]string `json:"groups"`
 		Count  int               `json:"count"`
 	} `json:"rows"`
+	TotalEvents int `json:"total_events"`
 }
 
 // TestLinodeAuditSummaryDefinition pins the tool identity and schema.

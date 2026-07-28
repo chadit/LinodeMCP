@@ -2,29 +2,29 @@ package linode
 
 // VPC represents a Linode Virtual Private Cloud.
 type VPC struct {
-	ID          int         `json:"id"`
 	Label       string      `json:"label"`
 	Description string      `json:"description"`
 	Region      string      `json:"region"`
-	Subnets     []VPCSubnet `json:"subnets"`
 	Created     string      `json:"created"`
 	Updated     string      `json:"updated"`
+	Subnets     []VPCSubnet `json:"subnets"`
+	ID          int         `json:"id"`
 }
 
 // VPCSubnet represents a subnet within a VPC.
 type VPCSubnet struct {
-	ID      int               `json:"id"`
 	Label   string            `json:"label"`
 	IPv4    string            `json:"ipv4"`
-	Linodes []VPCSubnetLinode `json:"linodes"`
 	Created string            `json:"created"`
 	Updated string            `json:"updated"`
+	Linodes []VPCSubnetLinode `json:"linodes"`
+	ID      int               `json:"id"`
 }
 
 // VPCSubnetLinode represents a Linode assigned to a VPC subnet.
 type VPCSubnetLinode struct {
-	ID         int                        `json:"id"`
 	Interfaces []VPCSubnetLinodeInterface `json:"interfaces"`
+	ID         int                        `json:"id"`
 }
 
 // VPCSubnetLinodeInterface represents a network interface on a Linode within a VPC subnet.
@@ -36,31 +36,31 @@ type VPCSubnetLinodeInterface struct {
 
 // VPCIP represents an IP address associated with a VPC.
 type VPCIP struct {
-	Address      *string `json:"address"`
-	AddressRange *string `json:"address_range"`
-	VPCID        int     `json:"vpc_id"`
-	SubnetID     int     `json:"subnet_id"`
-	Region       string  `json:"region"`
-	LinodeID     *int    `json:"linode_id"`
 	ConfigID     *int    `json:"config_id"`
-	InterfaceID  int     `json:"interface_id"`
-	Active       bool    `json:"active"`
-	NAT1To1      string  `json:"nat_1_1"`
-	Gateway      *string `json:"gateway"`
+	AddressRange *string `json:"address_range"`
 	Prefix       *int    `json:"prefix"`
+	Gateway      *string `json:"gateway"`
+	Address      *string `json:"address"`
+	LinodeID     *int    `json:"linode_id"`
+	NAT1To1      string  `json:"nat_1_1"`
+	Region       string  `json:"region"`
 	SubnetMask   string  `json:"subnet_mask"`
+	InterfaceID  int     `json:"interface_id"`
+	SubnetID     int     `json:"subnet_id"`
+	VPCID        int     `json:"vpc_id"`
+	Active       bool    `json:"active"`
 }
 
 // NodeBalancerVPCConfig represents a VPC configuration for a NodeBalancer.
 type NodeBalancerVPCConfig struct {
-	ID                  int    `json:"id"`
 	VPCID               *int   `json:"vpc_id"`
-	SubnetID            int    `json:"subnet_id"`
-	IPv4Range           string `json:"ipv4_range,omitempty"`
-	IPv6Range           string `json:"ipv6_range,omitempty"`
 	IPv4RangeID         *int   `json:"ipv4_range_id,omitempty"`
 	IPv6RangeID         *int   `json:"ipv6_range_id,omitempty"`
 	IPv4RangeAutoAssign *bool  `json:"ipv4_range_auto_assign,omitempty"`
+	IPv4Range           string `json:"ipv4_range,omitempty"`
+	IPv6Range           string `json:"ipv6_range,omitempty"`
+	ID                  int    `json:"id"`
+	SubnetID            int    `json:"subnet_id"`
 	NodeBalancerID      int    `json:"nodebalancer_id,omitempty"`
 }
 

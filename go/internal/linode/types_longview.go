@@ -2,18 +2,18 @@ package linode
 
 // LongviewSubscription represents the current Longview subscription plan.
 type LongviewSubscription struct {
-	ClientsIncluded int    `json:"clients_included"`
 	ID              string `json:"id"`
 	Label           string `json:"label"`
 	Price           Price  `json:"price"`
+	ClientsIncluded int    `json:"clients_included"`
 }
 
 // LongviewType represents an available Longview subscription type.
 type LongviewType struct {
-	ClientsIncluded int    `json:"clients_included"`
 	ID              string `json:"id"`
 	Label           string `json:"label"`
 	Price           Price  `json:"price"`
+	ClientsIncluded int    `json:"clients_included"`
 }
 
 // CreatedLongviewClient represents the response from creating a Longview client.
@@ -21,12 +21,12 @@ type LongviewType struct {
 // exposed by the read-only LongviewClient list type.
 type CreatedLongviewClient struct {
 	APIKey      string       `json:"api_key"`
-	Apps        LongviewApps `json:"apps"`
 	Created     string       `json:"created"`
-	ID          int          `json:"id"`
 	InstallCode string       `json:"install_code"`
 	Label       string       `json:"label"`
 	Updated     string       `json:"updated"`
+	ID          int          `json:"id"`
+	Apps        LongviewApps `json:"apps"`
 }
 
 // CreateLongviewClientRequest contains editable fields for POST /longview/clients.

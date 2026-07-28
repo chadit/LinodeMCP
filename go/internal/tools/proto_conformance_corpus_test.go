@@ -462,8 +462,8 @@ func assertFixtureConforms(t *testing.T, path string, registry map[string]func()
 	}
 
 	var testCase conformanceCase
-	if err := json.Unmarshal(raw, &testCase); err != nil {
-		t.Fatalf("parse fixture: %v", err)
+	if parseErr := json.Unmarshal(raw, &testCase); parseErr != nil {
+		t.Fatalf("parse fixture: %v", parseErr)
 	}
 
 	ctor, ok := registry[testCase.Message]
@@ -472,8 +472,8 @@ func assertFixtureConforms(t *testing.T, path string, registry map[string]func()
 	}
 
 	message := ctor()
-	if err := protojson.Unmarshal(testCase.Input, message); err != nil {
-		t.Fatalf("decode input: %v", err)
+	if decodeErr := protojson.Unmarshal(testCase.Input, message); decodeErr != nil {
+		t.Fatalf("decode input: %v", decodeErr)
 	}
 
 	result, err := tools.MarshalProtoToolResponse(message)

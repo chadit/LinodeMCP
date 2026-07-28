@@ -1,6 +1,6 @@
 {
   "tool": "linode_support_ticket_reply_create",
-  "description": "Support ticket reply create: the confirm gate, invalid-ticket_id and description-required rejections (confirm set so both reach them), and the reply POST once confirmed. The missing-ticket_id message diverges (see report).",
+  "description": "Support ticket reply create: the confirm gate, invalid-ticket_id and description-required rejections (confirm set so both reach them), and the reply POST once confirmed. The missing-ticket_id message diverges (see report). A body that will not parse must fail rather than turn into a made-up reply. The two languages frame the parse failure differently, so the shared assertion is the parser's position marker.",
   "cases": [
     {
       "name": "requires confirm before replying",
@@ -31,6 +31,18 @@
       "name": "requires confirm",
       "args": {"ticket_id": 123, "description": "Thanks for the help"},
       "expect_error": "This creates a support ticket reply. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "confirm": true, "ticket_id": 123, "description": "Thanks for the help" },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "confirm": true, "ticket_id": 123, "description": "Thanks for the help" },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
     }
   ]
 }

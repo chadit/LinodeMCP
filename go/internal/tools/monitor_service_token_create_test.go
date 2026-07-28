@@ -53,8 +53,8 @@ func TestLinodeMonitorServiceTokenCreateToolDefinition(t *testing.T) {
 	}
 
 	var parsed struct {
-		Required   []string                   `json:"required"`
 		Properties map[string]json.RawMessage `json:"properties"`
+		Required   []string                   `json:"required"`
 	}
 	if err := json.Unmarshal(tool.RawInputSchema, &parsed); err != nil {
 		t.Fatalf("unmarshal RawInputSchema: %v", err)
@@ -212,8 +212,8 @@ func TestLinodeMonitorServiceTokenCreateToolConfirmRequiredBeforeClient(t *testi
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},

@@ -61,8 +61,8 @@ func TestLinodeManagedContactGetToolInvalidContactIdRejectedBeforeClientCall(t *
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: "missing contact id", args: map[string]any{}},
 		{name: caseZeroContactID, args: map[string]any{keyContactID: 0}},

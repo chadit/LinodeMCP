@@ -1,6 +1,6 @@
 {
   "tool": "linode_volume_create",
-  "description": "Volume create: label-required, region-or-linode_id, and size-below-10GB rejections plus the POST body. Both languages omit size when the caller does not supply it (API defaults to 20 GB); a supplied size is sent verbatim.",
+  "description": "Volume create: label-required, region-or-linode_id, and size-below-10GB rejections plus the POST body. Both languages omit size when the caller does not supply it (API defaults to 20 GB); a supplied size is sent verbatim. A success body that is not a JSON object must fail rather than turn into a zeroed volume record.",
   "cases": [
     {
       "name": "requires label",
@@ -41,6 +41,24 @@
       "name": "requires confirm",
       "args": {"label": "my-vol", "region": "us-east", "size": 20},
       "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "confirm": true, "label": "my-vol", "region": "us-east" },
+      "api_response": 7,
+      "expect_api_error": "Failed to create volume"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "confirm": true, "label": "my-vol", "region": "us-east" },
+      "api_response": true,
+      "expect_api_error": "Failed to create volume"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "confirm": true, "label": "my-vol", "region": "us-east" },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to create volume"
     }
   ]
 }

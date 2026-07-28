@@ -9389,6 +9389,7 @@ async def test_handle_linode_stackscript_create(sample_config: Config) -> None:
                 "is_public": False,
                 "rev_note": "Initial revision",
             },
+            retry=False,
         )
 
 
@@ -11184,7 +11185,7 @@ async def test_handle_linode_domain_clone(sample_config: Config) -> None:
     assert payload["message"] == expected
     assert payload["domain"]["soa_email"] == "admin@example.com"
     mock_client.post_raw.assert_awaited_once_with(
-        "/domains/12345/clone", {"domain": "clone.example.com"}
+        "/domains/12345/clone", {"domain": "clone.example.com"}, retry=False
     )
 
 
@@ -11297,6 +11298,7 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
                 "soa_email": "admin@example.com",
                 "ttl_sec": 3600,
             },
+            retry=False,
         )
 
 
@@ -11485,6 +11487,7 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
                 "protocol": "_tcp",
                 "tag": "issue",
             },
+            retry=False,
         )
 
 
@@ -11526,7 +11529,13 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
 async def test_domain_create_dry_run_returns_preview(sample_config: Config) -> None:
     """dry_run=true previews the create with no resource state and no call."""
     result = await handle_linode_domain_create(
-        {"domain": "example.com", "type": "master", "dry_run": True}, sample_config
+        {
+            "domain": "example.com",
+            "type": "master",
+            "soa_email": "admin@example.com",
+            "dry_run": True,
+        },
+        sample_config,
     )
 
     assert len(result) == 1
@@ -11535,6 +11544,11 @@ async def test_domain_create_dry_run_returns_preview(sample_config: Config) -> N
     assert body["tool"] == "linode_domain_create"
     assert body["would_execute"]["method"] == "POST"
     assert body["would_execute"]["path"] == "/domains"
+    assert body["would_execute"]["body"] == {
+        "domain": "example.com",
+        "type": "master",
+        "soa_email": "admin@example.com",
+    }
     assert body["current_state"] is None
     assert any("example.com" in s for s in body["side_effects"])
     assert "confirm=true" not in result[0].text
@@ -11675,7 +11689,7 @@ async def test_handle_linode_volume_create(sample_config: Config) -> None:
         assert payload["volume"]["filesystem_path"].endswith("my-volume")
         # No size supplied -> omitted so the API applies its 20 GB default.
         mock_client.post_raw.assert_awaited_once_with(
-            "/volumes", {"label": "my-volume", "region": "us-east"}
+            "/volumes", {"label": "my-volume", "region": "us-east"}, retry=False
         )
 
 
@@ -11741,7 +11755,7 @@ async def test_handle_linode_volume_clone(sample_config: Config) -> None:
         )
 
         mock_client.post_raw.assert_awaited_once_with(
-            "/volumes/12345/clone", {"label": "my-volume-clone"}
+            "/volumes/12345/clone", {"label": "my-volume-clone"}, retry=False
         )
         assert len(result) == 1
         payload = json.loads(result[0].text)

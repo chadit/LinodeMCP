@@ -179,9 +179,9 @@ func FilterByContains[T any](items []T, substr string, getField func(T) string) 
 
 // listFilterParam combines a tool parameter definition with its filter logic for list tools.
 type listFilterParam[T any] struct {
+	matchFunc   func(items []T, value string) []T
 	paramName   string
 	description string
-	matchFunc   func(items []T, value string) []T
 }
 
 // fieldFilter creates a list filter parameter that matches a field exactly (case-insensitive).

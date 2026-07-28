@@ -212,7 +212,12 @@ async def handle_linode_domain_record_create(
     body = _domain_record_create_body(record_type, arguments)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.post_raw(f"/domains/{int(domain_id)}/records", body)
+        # retry=False because POST /domains/{id}/records is not idempotent: the
+        # zone accepts identical records side by side, so replaying after a
+        # transient failure leaves a duplicate RR the caller never learns about.
+        raw = await client.post_raw(
+            f"/domains/{int(domain_id)}/records", body, retry=False
+        )
         rec_type = raw_str(raw, "type")
         rec_id = raw_int(raw, "id")
         return serialize_api_response(

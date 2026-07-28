@@ -16,13 +16,13 @@ import (
 // drop from. The field exists so the wire shape is stable if a future
 // async sink adds drop accounting.
 type HealthReport struct {
+	SQLite            *SQLiteHealth `json:"sqlite"`
 	JSONLPath         string        `json:"jsonl_path"`
-	ActiveLogExists   bool          `json:"active_log_exists"`
-	RotatedFileCount  int           `json:"rotated_file_count"`
 	OldestRotatedDate string        `json:"oldest_rotated_date"`
+	RotatedFileCount  int           `json:"rotated_file_count"`
 	DiskBytes         int64         `json:"disk_bytes"`
 	DroppedEvents     int64         `json:"dropped_events"`
-	SQLite            *SQLiteHealth `json:"sqlite"`
+	ActiveLogExists   bool          `json:"active_log_exists"`
 }
 
 // SQLiteHealth is the SQLite-sink portion of the health report,

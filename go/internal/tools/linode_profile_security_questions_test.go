@@ -192,8 +192,8 @@ func TestLinodeProfileSecurityQuestionsAnswerToolConfirmRequiredBeforeClientCall
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},

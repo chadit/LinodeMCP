@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_backup_create",
-  "description": "Snapshot create needs confirm; POSTs the label body. No-confirm message text diverges (see report), so only the post-confirm linode_id rejection is fixtured.",
+  "description": "Snapshot create needs confirm; POSTs the label body. No-confirm message text diverges (see report), so only the post-confirm linode_id rejection is fixtured. A success body that is not a JSON object must fail rather than turn into a zeroed snapshot record; the two languages name the subject differently, so only the failure verb is shared.",
   "cases": [
     {
       "name": "rejects missing linode_id once confirmed",
@@ -21,6 +21,42 @@
       "name": "requires confirm",
       "args": {"linode_id": 123, "label": "snap-1"},
       "expect_error": "This creates a manual snapshot and overwrites any existing one. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a null API response",
+      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "api_response": null,
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "api_response": "not-an-object",
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "linode_id": 123, "label": "snap-1", "confirm": true },
+      "api_response": true,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

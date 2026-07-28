@@ -186,8 +186,8 @@ func scopeCategory(toolName string) string {
 // prefixRule pairs tool-name prefixes with the scope category they
 // resolve to.
 type prefixRule struct {
-	prefixes []string
 	category string
+	prefixes []string
 }
 
 // scopePrefixTable returns the prefix-to-category dispatch rules,

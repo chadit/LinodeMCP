@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_ip_allocate",
-  "description": "Allocate needs confirm; public is required by the API (no default) so both languages reject a missing public rather than injecting one; then POSTs the type/public body. No-confirm and missing-type message text diverge (see report).",
+  "description": "Allocate needs confirm; public is required by the API (no default) so both languages reject a missing public rather than injecting one; then POSTs the type/public body. No-confirm and missing-type message text diverge (see report). A success body that is not a JSON object must fail rather than turn into a zeroed address record.",
   "cases": [
     {
       "name": "rejects missing linode_id once confirmed",
@@ -31,6 +31,42 @@
       "name": "requires confirm",
       "args": {"linode_id": 123, "type": "ipv4", "public": true},
       "expect_error": "This allocates a new IP address which may incur charges. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a null API response",
+      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "api_response": null,
+      "expect_api_error": "Failed to allocate"
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to allocate"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to allocate"
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "api_response": "not-an-object",
+      "expect_api_error": "Failed to allocate"
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to allocate"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "api_response": true,
+      "expect_api_error": "Failed to allocate"
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_ip_update",
-  "description": "RDNS update needs confirm; PUTs the rdns body. No-confirm message text diverges (see report). Both languages check confirm before parsing, so the fixtured rejections carry confirm.",
+  "description": "RDNS update needs confirm; PUTs the rdns body. No-confirm message text diverges (see report). Both languages check confirm before parsing, so the fixtured rejections carry confirm. A success body that is not a JSON object must fail rather than turn into a zeroed ip record; the two languages word that failure differently, so only the subject is shared.",
   "cases": [
     {
       "name": "rejects missing linode_id once confirmed",
@@ -31,6 +31,24 @@
       "name": "requires confirm",
       "args": {"linode_id": 123, "address": "203.0.113.5", "rdns": "host.example.com"},
       "expect_error": "This updates reverse DNS for the IP address. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "linode_id": 123, "address": "203.0.113.5", "rdns": "host.example.com", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "IP"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "linode_id": 123, "address": "203.0.113.5", "rdns": "host.example.com", "confirm": true },
+      "api_response": true,
+      "expect_api_error": "IP"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "linode_id": 123, "address": "203.0.113.5", "rdns": "host.example.com", "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "IP"
     }
   ]
 }

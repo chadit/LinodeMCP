@@ -16,9 +16,9 @@ import (
 // Confirm that API failures are surfaced as user-visible error results across multiple tool handlers.
 func TestToolHandlersAPIErrorResponsesListInstances(t *testing.T) {
 	type errorCase struct {
-		statusCode   int
 		errorMessage string
 		label        string
+		statusCode   int
 	}
 
 	errorCases := []errorCase{
@@ -64,9 +64,9 @@ func TestToolHandlersAPIErrorResponsesListInstances(t *testing.T) {
 
 func TestToolHandlersAPIErrorResponsesGetInstance(t *testing.T) {
 	type errorCase struct {
-		statusCode   int
 		errorMessage string
 		label        string
+		statusCode   int
 	}
 
 	errorCases := []errorCase{
@@ -112,9 +112,9 @@ func TestToolHandlersAPIErrorResponsesGetInstance(t *testing.T) {
 
 func TestToolHandlersAPIErrorResponsesCreateInstance(t *testing.T) {
 	type errorCase struct {
-		statusCode   int
 		errorMessage string
 		label        string
+		statusCode   int
 	}
 
 	errorCases := []errorCase{
@@ -168,9 +168,9 @@ func TestToolHandlersAPIErrorResponsesCreateInstance(t *testing.T) {
 
 func TestToolHandlersAPIErrorResponsesListDomainRecords(t *testing.T) {
 	type errorCase struct {
-		statusCode   int
 		errorMessage string
 		label        string
+		statusCode   int
 	}
 
 	errorCases := []errorCase{

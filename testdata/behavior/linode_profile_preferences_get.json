@@ -1,12 +1,24 @@
 {
   "tool": "linode_profile_preferences_get",
-  "description": "Pins the bare profile-preferences GET path both languages issue.",
+  "description": "Pins the bare profile-preferences GET path both languages issue, plus the rejection of a non-object body. Python used to swap a bare array for an empty object and report success where Go's map decode errors.",
   "cases": [
     {
       "name": "gets profile preferences",
       "args": {},
       "api_response": {},
       "expect_request": { "method": "GET", "path": "/profile/preferences" }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {},
+      "api_response": [],
+      "expect_api_error": "Failed to retrieve"
+    },
+    {
+      "name": "reads a null body as empty preferences",
+      "args": {},
+      "api_response_raw": "null",
+      "expect_result": {}
     }
   ]
 }

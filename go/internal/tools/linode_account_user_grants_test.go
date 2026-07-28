@@ -115,6 +115,13 @@ func TestLinodeAccountUserGrantsToolInvalidUsernameRejectedBeforeClientCall(t *t
 func TestLinodeAccountUserGrantsToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	// The extra top-level field the proto does not model must be dropped by
+	// the DiscardUnknown decode, proving proto-canonical output.
+	grants := withUnmodeledField(t, linode.Grants{
+		Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")},
+		Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission("read_write")}},
+	})
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
@@ -133,20 +140,6 @@ func TestLinodeAccountUserGrantsToolSuccess(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-
-		// The extra top-level field the proto does not model must be dropped by
-		// the DiscardUnknown decode, proving proto-canonical output.
-		grants := struct {
-			linode.Grants
-
-			NotInProto string `json:"not_in_proto"`
-		}{
-			Grants: linode.Grants{
-				Global: linode.GlobalGrants{AccountAccess: linode.GrantPermission("read_only")},
-				Linode: []linode.Grant{{ID: 123, Permissions: linode.GrantPermission("read_write")}},
-			},
-			NotInProto: valNotInProto,
-		}
 
 		if err := json.NewEncoder(w).Encode(grants); err != nil {
 			t.Errorf("unexpected error: %v", err)

@@ -112,6 +112,7 @@ header comment holds its full rules and exact regenerate command.
 | [tool-parity-baseline.txt](./contracts/tool-parity-baseline.txt) | Accepted one-sided tools, each annotated with a tracking reason | `scripts/verify_tool_parity.py` |
 | [behavior-baseline.txt](./contracts/behavior-baseline.txt) | Tools with no shared behavior fixture yet | `scripts/verify_behavior.py` |
 | [behavior-dryrun-baseline.txt](./contracts/behavior-dryrun-baseline.txt) | Mutating tools whose fixture lacks a pinned dry-run preview case (Destroy stays at zero) | `scripts/verify_behavior.py` |
+| [behavior-response-shape-baseline.txt](./contracts/behavior-response-shape-baseline.txt) | Mutating tools whose fixture decodes a response body but never pins the rejection of a malformed one | `scripts/verify_behavior.py` |
 | [behavior-exempt.txt](./contracts/behavior-exempt.txt) | Tools the behavior gate structurally cannot pin, with reasons (hand-curated; new entries need the dated acceptance annotation) | `scripts/verify_behavior.py` |
 | [scope-sync-exempt.txt](./contracts/scope-sync-exempt.txt) | Scope deviations no change here can close, such as a route upstream gates behind limited availability, with reasons (hand-curated; new entries need the dated acceptance annotation) | `scripts/verify_sync_scopes.py` |
 | [input-proto-baseline.txt](./contracts/input-proto-baseline.txt) | Tools whose input schema is not yet proto-generated on both sides | `scripts/verify_input_proto.py` |

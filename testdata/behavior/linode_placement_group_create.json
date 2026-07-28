@@ -1,6 +1,6 @@
 {
   "tool": "linode_placement_group_create",
-  "description": "Placement group create: the label-pattern, placement_group_type, and placement_group_policy rejections both languages agree on (confirm set so both reach them), plus the POST body once confirmed. Go now mirrors Python's label pattern.",
+  "description": "Placement group create: the label-pattern, placement_group_type, and placement_group_policy rejections both languages agree on (confirm set so both reach them), plus the POST body once confirmed. Go now mirrors Python's label pattern. A success body that is not a JSON object must fail rather than turn into a zeroed placement-group record.",
   "cases": [
     {
       "name": "rejects an invalid label",
@@ -41,6 +41,24 @@
       "name": "requires confirm",
       "args": {"label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict"},
       "expect_error": "This creates a placement group. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "confirm": true, "label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict" },
+      "api_response": 7,
+      "expect_api_error": "Failed to create placement group"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "confirm": true, "label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict" },
+      "api_response": true,
+      "expect_api_error": "Failed to create placement group"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "confirm": true, "label": "my-group", "region": "us-east", "placement_group_type": "anti_affinity:local", "placement_group_policy": "strict" },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to create placement group"
     }
   ]
 }

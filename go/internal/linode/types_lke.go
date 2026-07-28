@@ -2,14 +2,14 @@ package linode
 
 // LKECluster represents a Linode Kubernetes Engine cluster.
 type LKECluster struct {
-	ID           int             `json:"id"`
 	Label        string          `json:"label"`
 	Region       string          `json:"region"`
 	K8sVersion   string          `json:"k8s_version"`
 	Status       string          `json:"status"`
-	Tags         []string        `json:"tags"`
 	Created      string          `json:"created"`
 	Updated      string          `json:"updated"`
+	Tags         []string        `json:"tags"`
+	ID           int             `json:"id"`
 	ControlPlane LKEControlPlane `json:"control_plane"`
 }
 
@@ -20,14 +20,14 @@ type LKEControlPlane struct {
 
 // LKENodePool represents a node pool within an LKE cluster.
 type LKENodePool struct {
-	ID         int                    `json:"id"`
-	ClusterID  int                    `json:"cluster_id"`
-	Type       string                 `json:"type"`
-	Count      int                    `json:"count"`
-	Disks      []LKENodePoolDisk      `json:"disks"`
 	Autoscaler *LKENodePoolAutoscaler `json:"autoscaler"`
+	Type       string                 `json:"type"`
+	Disks      []LKENodePoolDisk      `json:"disks"`
 	Nodes      []LKENode              `json:"nodes"`
 	Tags       []string               `json:"tags"`
+	ID         int                    `json:"id"`
+	ClusterID  int                    `json:"cluster_id"`
+	Count      int                    `json:"count"`
 }
 
 // LKENodePoolAutoscaler represents autoscaling settings for a node pool.
@@ -39,15 +39,15 @@ type LKENodePoolAutoscaler struct {
 
 // LKENodePoolDisk represents a disk configuration in a node pool.
 type LKENodePoolDisk struct {
-	Size int    `json:"size"`
 	Type string `json:"type"`
+	Size int    `json:"size"`
 }
 
 // LKENode represents a node within an LKE node pool.
 type LKENode struct {
 	ID         string `json:"id"`
-	InstanceID int    `json:"instance_id"`
 	Status     string `json:"status"`
+	InstanceID int    `json:"instance_id"`
 }
 
 // LKEKubeconfig holds the base64-encoded kubeconfig for an LKE cluster.
@@ -74,8 +74,8 @@ type LKEVersion struct {
 type LKEType struct {
 	ID           string           `json:"id"`
 	Label        string           `json:"label"`
-	Price        LKETypePrice     `json:"price"`
 	RegionPrices []LKERegionPrice `json:"region_prices"`
+	Price        LKETypePrice     `json:"price"`
 	Transfer     int              `json:"transfer"`
 }
 
@@ -100,8 +100,8 @@ type LKETierVersion struct {
 
 // LKEControlPlaneACL represents the control plane ACL for an LKE cluster.
 type LKEControlPlaneACL struct {
-	Enabled   bool                        `json:"enabled"`
 	Addresses LKEControlPlaneACLAddresses `json:"addresses"`
+	Enabled   bool                        `json:"enabled"`
 }
 
 // LKEControlPlaneACLAddresses holds the IP addresses in a control plane ACL.
@@ -112,38 +112,38 @@ type LKEControlPlaneACLAddresses struct {
 
 // CreateLKEClusterRequest represents the request body for creating an LKE cluster.
 type CreateLKEClusterRequest struct {
+	ControlPlane *LKEControlPlane           `json:"control_plane,omitempty"`
 	Label        string                     `json:"label"`
 	Region       string                     `json:"region"`
 	K8sVersion   string                     `json:"k8s_version"`
 	Tags         []string                   `json:"tags,omitempty"`
 	NodePools    []CreateLKEClusterNodePool `json:"node_pools"`
-	ControlPlane *LKEControlPlane           `json:"control_plane,omitempty"`
 }
 
 // CreateLKEClusterNodePool represents a node pool in a create cluster request.
 type CreateLKEClusterNodePool struct {
-	Type       string                 `json:"type"`
-	Count      int                    `json:"count"`
 	Autoscaler *LKENodePoolAutoscaler `json:"autoscaler,omitempty"`
+	Type       string                 `json:"type"`
 	Disks      []LKENodePoolDisk      `json:"disks,omitempty"`
 	Tags       []string               `json:"tags,omitempty"`
+	Count      int                    `json:"count"`
 }
 
 // UpdateLKEClusterRequest represents the request body for updating an LKE cluster.
 type UpdateLKEClusterRequest struct {
+	ControlPlane *LKEControlPlane `json:"control_plane,omitempty"`
 	Label        string           `json:"label,omitempty"`
 	K8sVersion   string           `json:"k8s_version,omitempty"`
 	Tags         []string         `json:"tags,omitempty"`
-	ControlPlane *LKEControlPlane `json:"control_plane,omitempty"`
 }
 
 // CreateLKENodePoolRequest represents the request body for creating a node pool.
 type CreateLKENodePoolRequest struct {
-	Type       string                 `json:"type"`
-	Count      int                    `json:"count"`
 	Autoscaler *LKENodePoolAutoscaler `json:"autoscaler,omitempty"`
+	Type       string                 `json:"type"`
 	Disks      []LKENodePoolDisk      `json:"disks,omitempty"`
 	Tags       []string               `json:"tags,omitempty"`
+	Count      int                    `json:"count"`
 }
 
 // UpdateLKENodePoolRequest represents the request body for updating a node pool.

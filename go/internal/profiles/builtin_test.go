@@ -590,8 +590,8 @@ func TestJSONRoundtrip(t *testing.T) {
 
 	var decoded []map[string]any
 
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if unmarshalErr := json.Unmarshal(data, &decoded); unmarshalErr != nil {
+		t.Fatalf("unexpected error: %v", unmarshalErr)
 	}
 
 	if len(decoded) != 8 {

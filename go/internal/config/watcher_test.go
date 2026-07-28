@@ -317,8 +317,8 @@ func TestWatcherReloadsUnderSynctest(t *testing.T) {
 		watcher.Start(t.Context())
 
 		updated := reloadedServerYAML
-		if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if writeErr := os.WriteFile(path, []byte(updated), 0o600); writeErr != nil {
+			t.Fatalf("unexpected error: %v", writeErr)
 		}
 
 		// Force a strictly-newer mtime. ModTime is a real wall-clock value
@@ -381,8 +381,8 @@ func TestWatcherCloseStopsPollingUnderSynctest(t *testing.T) {
 
 		// Mutate the file after Close. A stopped watcher must ignore it.
 		updated := reloadedServerYAML
-		if err := os.WriteFile(path, []byte(updated), 0o600); err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if writeErr := os.WriteFile(path, []byte(updated), 0o600); writeErr != nil {
+			t.Fatalf("unexpected error: %v", writeErr)
 		}
 
 		info, err := os.Stat(path)

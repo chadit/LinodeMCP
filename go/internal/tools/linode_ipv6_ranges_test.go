@@ -355,8 +355,8 @@ func TestLinodeIPv6RangeCreateToolCreateConfirmRequired(t *testing.T) {
 
 	_, _, handler := tools.NewLinodeIPv6RangeCreateTool(&config.Config{})
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyPrefixLength: 124}},
 		{name: caseConfirmFalse, args: map[string]any{keyPrefixLength: 124, keyConfirm: false}},
@@ -480,9 +480,9 @@ func TestLinodeIPv6RangeGetToolSuccess(t *testing.T) {
 	rangeResult := struct {
 		linode.IPv6Range
 
-		IsBgp      bool   `json:"is_bgp"`
-		Linodes    []int  `json:"linodes"`
 		NotInProto string `json:"not_in_proto"`
+		Linodes    []int  `json:"linodes"`
+		IsBgp      bool   `json:"is_bgp"`
 	}{
 		IPv6Range:  linode.IPv6Range{Range: ipv6RangeCIDR, Region: regionUSEast, Prefix: 64},
 		IsBgp:      false,
@@ -604,8 +604,8 @@ func TestLinodeIPv6RangeGetToolInvalidRangeRejectsBeforeClient(t *testing.T) {
 	_, _, handler := tools.NewLinodeIPv6RangeGetTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: "missing range", args: map[string]any{}},
 		{name: "non-string range", args: map[string]any{keyIPv6Range: 123}},
@@ -735,8 +735,8 @@ func TestLinodeIPv6RangeDeleteToolConfirmRequired(t *testing.T) {
 
 	_, _, handler := tools.NewLinodeIPv6RangeDeleteTool(&config.Config{})
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyIPv6Range: ipv6RangeCIDR}},
 		{name: caseConfirmFalse, args: map[string]any{keyIPv6Range: ipv6RangeCIDR, keyConfirm: false}},
@@ -826,8 +826,8 @@ func TestLinodeIPv6RangeDeleteToolInvalidRangeRejectsBeforeClient(t *testing.T) 
 	_, _, handler := tools.NewLinodeIPv6RangeDeleteTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: "missing range", args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}},
 		{name: "non-string range", args: map[string]any{keyIPv6Range: 123, keyConfirm: true, keyConfirmedDryRun: true}},

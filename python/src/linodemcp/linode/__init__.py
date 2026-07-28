@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import enum
+import functools
 import ipaddress
 import logging
 import re
@@ -113,6 +114,34 @@ def _validate_positive_path_int(value: object, name: str) -> int:
         msg = f"{name} must be a positive integer"
         raise ValueError(msg)
     return value
+
+
+def _require_object_body(data: Any, subject: str) -> dict[str, Any]:
+    """Return a decoded JSON object body, rejecting any other JSON type.
+
+    Swapping a bare array, string, number or boolean for an empty object
+    reports success carrying no data, so a malformed body reaches the caller
+    looking like an empty-but-valid response. Go decodes the same bodies into a
+    map or a proto message and fails outright, so raising here keeps both
+    clients rejecting the same responses.
+    """
+    if not isinstance(data, dict):
+        msg = f"{subject} response must be an object"
+        raise TypeError(msg)
+    return cast("dict[str, Any]", data)
+
+
+def _object_body_or_empty(data: Any, subject: str) -> dict[str, Any]:
+    """Return a decoded JSON object body, reading JSON null as an empty object.
+
+    For endpoints Go decodes into a map, encoding/json leaves the map untouched
+    on a null body and reports no error, so null has to stay a success here or
+    the two clients disagree on that one body. Every other non-object is
+    rejected, which is where Go's map decode fails too.
+    """
+    if data is None:
+        return {}
+    return _require_object_body(data, subject)
 
 
 def _paginated_endpoint(base: str, page: int | None, page_size: int | None) -> str:
@@ -2048,9 +2077,7 @@ class Client:
         try:
             response = await self.make_request("GET", "/profile/preferences")
             data: Any = response.json()
-            if isinstance(data, dict):
-                return cast("dict[str, Any]", data)
-            return {}
+            return _object_body_or_empty(data, "profile preferences")
         except httpx.HTTPError as e:
             raise NetworkError("GetProfilePreferences", e) from e
 
@@ -2063,9 +2090,7 @@ class Client:
                 "PUT", "/profile/preferences", preferences
             )
             data: Any = response.json()
-            if isinstance(data, dict):
-                return cast("dict[str, Any]", data)
-            return {}
+            return _object_body_or_empty(data, "profile preferences")
         except httpx.HTTPError as e:
             raise NetworkError("UpdateProfilePreferences", e) from e
 
@@ -2184,9 +2209,7 @@ class Client:
         try:
             response = await self.make_request("GET", endpoint)
             data: Any = response.json()
-            if isinstance(data, dict):
-                return cast("dict[str, Any]", data)
-            return {}
+            return _require_object_body(data, "instance stats")
         except httpx.HTTPError as e:
             raise NetworkError("GetInstanceStatsByYearMonth", e) from e
 
@@ -7109,7 +7132,11 @@ class Client:
             devices: list[dict[str, Any]] = []
             current_page = page if page is not None else 1
             pages = 1
-            while current_page <= pages:
+            # pages only becomes real after the first response, so an explicit
+            # page above 1 would fall out of the walk condition and return an
+            # empty list without ever calling the API. A single-page request
+            # always breaks after one pass, so entering unconditionally is safe.
+            while single_page or current_page <= pages:
                 query_page = current_page if (single_page or current_page > 1) else None
                 endpoint = _paginated_endpoint(
                     "/profile/devices", query_page, page_size
@@ -11229,14 +11256,20 @@ class RetryableClient:
         result: Any = await self._execute_with_retry(self.client.get_raw, endpoint)
         return result
 
-    async def post_raw(self, endpoint: str, body: dict[str, Any] | None = None) -> Any:
-        """POST to an endpoint as raw decoded JSON with retry.
+    async def post_raw(
+        self,
+        endpoint: str,
+        body: dict[str, Any] | None = None,
+        *,
+        retry: bool = True,
+    ) -> Any:
+        """POST to an endpoint as raw decoded JSON.
 
-        Used by proto-backed write handlers to serialize via the proto contract.
+        Proto-backed write handlers retry by default for compatibility. Callers
+        creating non-idempotent resources can select one protected attempt.
         """
-        result: Any = await self._execute_with_retry(
-            self.client.post_raw, endpoint, body
-        )
+        execute = self._execute_with_retry if retry else self._execute_without_retry
+        result: Any = await execute(self.client.post_raw, endpoint, body)
         return result
 
     async def put_raw(self, endpoint: str, body: dict[str, Any] | None = None) -> Any:
@@ -11372,8 +11405,8 @@ class RetryableClient:
         self, linode_id: int, config_id: int, interface: dict[str, Any]
     ) -> dict[str, Any]:
         """Add instance config interface without retry replay."""
-        result: dict[str, Any] = await self.client.add_instance_config_interface(
-            linode_id, config_id, interface
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.add_instance_config_interface, linode_id, config_id, interface
         )
         return result
 
@@ -11381,8 +11414,8 @@ class RetryableClient:
         self, linode_id: int, interface: dict[str, Any]
     ) -> dict[str, Any]:
         """Add a Linode instance interface without replay retry."""
-        result: dict[str, Any] = await self.client.add_instance_interface(
-            linode_id, interface
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.add_instance_interface, linode_id, interface
         )
         return result
 
@@ -11761,13 +11794,19 @@ class RetryableClient:
         self, payload: dict[str, Any]
     ) -> dict[str, Any]:
         """Create or restore a MySQL Managed Database once without retry replay."""
-        return await self.client.create_mysql_database_instance(payload)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_mysql_database_instance, payload
+        )
+        return result
 
     async def create_postgresql_database_instance(
         self, payload: dict[str, Any]
     ) -> dict[str, Any]:
         """Create or restore a PostgreSQL Managed Database once without retry replay."""
-        return await self.client.create_postgresql_database_instance(payload)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_postgresql_database_instance, payload
+        )
+        return result
 
     async def delete_mysql_database_instance(
         self, instance_id: int | str
@@ -11915,7 +11954,10 @@ class RetryableClient:
 
     async def create_account_child_account_token(self, euuid: str) -> dict[str, Any]:
         """Create a child account proxy token once without retry replay."""
-        return await self.client.create_account_child_account_token(euuid)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_account_child_account_token, euuid
+        )
+        return result
 
     async def update_account(self, **fields: Any) -> Account:
         """Update Linode account information with retry."""
@@ -11932,7 +11974,10 @@ class RetryableClient:
         self, username: str, email: str, restricted: bool
     ) -> dict[str, Any]:
         """Create an account user once without retry replay."""
-        return await self.client.create_account_user(username, email, restricted)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_account_user, username, email, restricted
+        )
+        return result
 
     async def update_account_user(
         self, current_username: str, **fields: Any
@@ -11950,21 +11995,28 @@ class RetryableClient:
         self, label: str, redirect_uri: str
     ) -> dict[str, Any]:
         """Create an OAuth client once without retry replay."""
-        return await self.client.create_account_oauth_client(label, redirect_uri)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_account_oauth_client, label, redirect_uri
+        )
+        return result
 
     async def create_account_payment_method(
         self, payment_type: str, data: dict[str, Any], is_default: bool
     ) -> dict[str, Any]:
         """Add an account payment method once without retry replay."""
-        return await self.client.create_account_payment_method(
-            payment_type, data, is_default
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_account_payment_method, payment_type, data, is_default
         )
+        return result
 
     async def create_account_payment(
         self, usd: str, payment_method_id: int | None = None
     ) -> dict[str, Any]:
         """Make an account payment once without retry replay."""
-        return await self.client.create_account_payment(usd, payment_method_id)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_account_payment, usd, payment_method_id
+        )
+        return result
 
     async def add_account_promo_credit(self, promo_code: str) -> dict[str, Any]:
         """Add an account promo credit once without retry replay."""
@@ -11974,7 +12026,10 @@ class RetryableClient:
         self, linode_ids: list[int]
     ) -> dict[str, Any]:
         """Request an account service transfer once without retry replay."""
-        return await self.client.create_account_service_transfer(linode_ids)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_account_service_transfer, linode_ids
+        )
+        return result
 
     async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
         """Delete an OAuth client once without retry replay."""
@@ -12265,9 +12320,17 @@ class RetryableClient:
         images: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """Create an image share group once without retry replay."""
-        return await self.client.create_image_sharegroup(
-            label=label, description=description, images=images
+        # partial because the inner call is keyword-only and
+        # _execute_without_retry forwards positional arguments only.
+        result: dict[str, Any] = await self._execute_without_retry(
+            functools.partial(
+                self.client.create_image_sharegroup,
+                label=label,
+                description=description,
+                images=images,
+            )
         )
+        return result
 
     async def get_image_sharegroup(self, sharegroup_id: str) -> dict[str, Any]:
         """Get a single image share group with retry."""
@@ -12429,9 +12492,14 @@ class RetryableClient:
         self, valid_for_sharegroup_uuid: str, label: str | None = None
     ) -> dict[str, Any]:
         """Create an image share group token without retry replay."""
-        return await self.client.create_image_sharegroup_token(
-            valid_for_sharegroup_uuid=valid_for_sharegroup_uuid, label=label
+        result: dict[str, Any] = await self._execute_without_retry(
+            functools.partial(
+                self.client.create_image_sharegroup_token,
+                valid_for_sharegroup_uuid=valid_for_sharegroup_uuid,
+                label=label,
+            )
         )
+        return result
 
     async def update_image_sharegroup_token(
         self, token_uuid: str, label: str
@@ -12748,7 +12816,10 @@ class RetryableClient:
 
     async def create_longview_client(self, label: str) -> dict[str, Any]:
         """Create Longview client without generic retry replay."""
-        return await self.client.create_longview_client(label)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_longview_client, label
+        )
+        return result
 
     async def delete_tag(self, tag_label: str) -> None:
         """Delete tag with retry."""
@@ -12864,12 +12935,16 @@ class RetryableClient:
         phone: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a Managed contact by delegating once without retry."""
-        return await self.client.create_managed_contact(
-            email=email,
-            group=group,
-            name=name,
-            phone=phone,
+        result: dict[str, Any] = await self._execute_without_retry(
+            functools.partial(
+                self.client.create_managed_contact,
+                email=email,
+                group=group,
+                name=name,
+                phone=phone,
+            )
         )
+        return result
 
     async def create_managed_credential(
         self,
@@ -12879,11 +12954,15 @@ class RetryableClient:
         username: str | None = None,
     ) -> dict[str, Any]:
         """Create a Managed credential by delegating once without retry."""
-        return await self.client.create_managed_credential(
-            label=label,
-            password=password,
-            username=username,
+        result: dict[str, Any] = await self._execute_without_retry(
+            functools.partial(
+                self.client.create_managed_credential,
+                label=label,
+                password=password,
+                username=username,
+            )
         )
+        return result
 
     async def create_managed_service(
         self,
@@ -12899,17 +12978,21 @@ class RetryableClient:
         region: str | None = None,
     ) -> dict[str, Any]:
         """Create a Managed service monitor once without retry."""
-        return await self.client.create_managed_service(
-            label=label,
-            service_type=service_type,
-            address=address,
-            timeout=timeout,
-            body=body,
-            consultation_group=consultation_group,
-            credentials=credentials,
-            notes=notes,
-            region=region,
+        result: dict[str, Any] = await self._execute_without_retry(
+            functools.partial(
+                self.client.create_managed_service,
+                label=label,
+                service_type=service_type,
+                address=address,
+                timeout=timeout,
+                body=body,
+                consultation_group=consultation_group,
+                credentials=credentials,
+                notes=notes,
+                region=region,
+            )
         )
+        return result
 
     async def get_managed_service(self, service_id: int) -> dict[str, Any]:
         """Get a Managed service monitor with retry."""
@@ -13203,7 +13286,10 @@ class RetryableClient:
         self, nodebalancer_id: int, fields: dict[str, Any]
     ) -> dict[str, Any]:
         """Create a NodeBalancer config without replay retry."""
-        return await self.client.create_nodebalancer_config(nodebalancer_id, fields)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_nodebalancer_config, nodebalancer_id, fields
+        )
+        return result
 
     async def get_nodebalancer_config(
         self, nodebalancer_id: int, config_id: int
@@ -13249,9 +13335,13 @@ class RetryableClient:
         self, nodebalancer_id: int, config_id: int, fields: dict[str, Any]
     ) -> dict[str, Any]:
         """Create a NodeBalancer config node without replay retry."""
-        return await self.client.create_nodebalancer_config_node(
-            nodebalancer_id, config_id, fields
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_nodebalancer_config_node,
+            nodebalancer_id,
+            config_id,
+            fields,
         )
+        return result
 
     async def update_nodebalancer_config_node(
         self,
@@ -13496,7 +13586,12 @@ class RetryableClient:
         acl: str | None = None,
         cors_enabled: bool | None = None,
     ) -> dict[str, Any]:
-        """Create Object Storage bucket with retry."""
+        """Create an Object Storage bucket with retry.
+
+        Unlike the other creates here the caller names the resource, so region
+        plus label already identifies it and a replay addresses the bucket the
+        first attempt made rather than leaving a second one behind.
+        """
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.create_object_storage_bucket,
             label,
@@ -13554,8 +13649,14 @@ class RetryableClient:
         label: str,
         bucket_access: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
-        """Create Object Storage access key with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create an Object Storage key with one protected attempt.
+
+        POST /object-storage/keys mints a fresh access key pair on every call,
+        so a replayed attempt after a transient failure leaves a live
+        credential nobody is tracking. The secret comes back once, which means
+        the orphan cannot even be recovered afterwards.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_object_storage_key,
             label,
             bucket_access,
@@ -13588,7 +13689,11 @@ class RetryableClient:
         method: str,
         expires_in: int | None = None,
     ) -> dict[str, Any]:
-        """Generate presigned URL with retry."""
+        """Generate a presigned URL with retry.
+
+        The "create" is a signature over the request, not a stored object, so a
+        replay costs an extra signed URL and nothing on the account.
+        """
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.create_presigned_url,
             region,
@@ -13640,8 +13745,13 @@ class RetryableClient:
     # Stage 4: Write operations with retry
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
-        """Create SSH key with retry."""
-        result: SSHKey = await self._execute_with_retry(
+        """Create an SSH key with one protected attempt, never a replay.
+
+        POST /profile/sshkeys is not idempotent and the API assigns the ID, so
+        a replayed attempt after a transient failure adds a second key the
+        caller never learns about.
+        """
+        result: SSHKey = await self._execute_without_retry(
             self.client.create_ssh_key, label, ssh_key
         )
         return result
@@ -13937,8 +14047,13 @@ class RetryableClient:
     async def create_monitor_service_token(
         self, service_type: str, entity_ids: list[int]
     ) -> dict[str, Any]:
-        """Create a monitor service token with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Mint a monitor service token with one protected attempt.
+
+        The POST mints a fresh token on every call, so a replayed attempt after
+        a transient failure leaves a live credential nobody is tracking. Same
+        hazard as create_object_storage_key.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_monitor_service_token, service_type, entity_ids
         )
         return result
@@ -14008,17 +14123,18 @@ class RetryableClient:
         entity_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a monitor service alert definition without retry replay."""
-        result: dict[
-            str, Any
-        ] = await self.client.create_monitor_service_alert_definition(
-            service_type,
-            label=label,
-            severity=severity,
-            rule_criteria=rule_criteria,
-            trigger_conditions=trigger_conditions,
-            channel_ids=channel_ids,
-            description=description,
-            entity_ids=entity_ids,
+        result: dict[str, Any] = await self._execute_without_retry(
+            functools.partial(
+                self.client.create_monitor_service_alert_definition,
+                service_type,
+                label=label,
+                severity=severity,
+                rule_criteria=rule_criteria,
+                trigger_conditions=trigger_conditions,
+                channel_ids=channel_ids,
+                description=description,
+                entity_ids=entity_ids,
+            )
         )
         return result
 
@@ -14075,8 +14191,13 @@ class RetryableClient:
         route_ipv6: bool = True,
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create instance with retry, returning the full raw API body."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create an instance once, returning the full raw API body.
+
+        POST /linode/instances is not idempotent and the API assigns the ID, so
+        a replayed attempt after a transient failure leaves a second billable
+        Linode running that the caller never learns about.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_instance_raw,
             region,
             instance_type,
@@ -14144,8 +14265,13 @@ class RetryableClient:
         inbound_policy: str = "ACCEPT",
         outbound_policy: str = "ACCEPT",
     ) -> dict[str, Any]:
-        """Create firewall and return the raw API body with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create a firewall once and return the raw API body.
+
+        POST /networking/firewalls is not idempotent and the API assigns the
+        ID, so a replayed attempt after a transient failure leaves a second
+        firewall behind, possibly already attached to the same devices.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_firewall_raw, label, inbound_policy, outbound_policy
         )
         return result
@@ -14179,8 +14305,13 @@ class RetryableClient:
         device_id: int,
         device_type: str,
     ) -> dict[str, Any]:
-        """Create a new device for a firewall with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Attach a device to a firewall with one protected attempt.
+
+        POST /networking/firewalls/{id}/devices is not idempotent and the API
+        assigns the device ID, so a replayed attempt after a transient failure
+        leaves a duplicate device entry the caller never learns about.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_firewall_device, firewall_id, device_id, device_type
         )
         return result
@@ -14214,11 +14345,17 @@ class RetryableClient:
 
     async def clone_domain(self, domain_id: int, domain: str) -> Domain:
         """Clone domain without replaying the POST."""
-        return await self.client.clone_domain(domain_id, domain)
+        result: Domain = await self._execute_without_retry(
+            self.client.clone_domain, domain_id, domain
+        )
+        return result
 
     async def import_domain(self, domain: str, remote_nameserver: str) -> Domain:
         """Import domain without replaying the POST."""
-        return await self.client.import_domain(domain, remote_nameserver)
+        result: Domain = await self._execute_without_retry(
+            self.client.import_domain, domain, remote_nameserver
+        )
+        return result
 
     async def update_domain(
         self,
@@ -14438,8 +14575,13 @@ class RetryableClient:
         tags: list[str] | None = None,
         control_plane: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create LKE cluster with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create an LKE cluster with one protected attempt.
+
+        POST /lke/clusters is not idempotent and the API assigns the ID, so a
+        replayed attempt after a transient failure leaves a second cluster, and
+        every node pool it provisions, billing against the account.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_lke_cluster,
             label,
             region,
@@ -14503,8 +14645,13 @@ class RetryableClient:
         autoscaler: dict[str, Any] | None = None,
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create LKE node pool with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create an LKE node pool with one protected attempt.
+
+        POST /lke/clusters/{id}/pools is not idempotent and the API assigns the
+        ID, so a replayed attempt after a transient failure doubles the
+        billable nodes attached to the cluster.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_lke_node_pool,
             cluster_id,
             node_type,
@@ -14673,8 +14820,13 @@ class RetryableClient:
         description: str | None = None,
         subnets: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Create VPC with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create a VPC with one protected attempt.
+
+        POST /vpcs is not idempotent and the API assigns the ID, so a replayed
+        attempt after a transient failure leaves a second VPC, along with any
+        subnets declared in the same body.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_vpc,
             label,
             region,
@@ -14736,8 +14888,13 @@ class RetryableClient:
         label: str,
         ipv4: str,
     ) -> dict[str, Any]:
-        """Create VPC subnet with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create a VPC subnet with one protected attempt.
+
+        POST /vpcs/{id}/subnets is not idempotent and the API assigns the ID,
+        so a replayed attempt after a transient failure consumes a second block
+        of the VPC address space.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_vpc_subnet,
             vpc_id,
             label,
@@ -14876,7 +15033,9 @@ class RetryableClient:
         self, region: str, tags: list[str] | None = None
     ) -> dict[str, Any]:
         """Reserve a public IPv4 address once without replay."""
-        result: dict[str, Any] = await self.client.create_reserved_ip(region, tags)
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_reserved_ip, region, tags
+        )
         return result
 
     async def list_reserved_ips(
@@ -14934,8 +15093,14 @@ class RetryableClient:
     async def create_instance_backup(
         self, instance_id: int, label: str | None = None
     ) -> dict[str, Any]:
-        """Create instance backup with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Take a manual snapshot with one protected attempt.
+
+        POST /linode/instances/{id}/backups is not idempotent: the API assigns
+        the ID and each call overwrites the instance's single manual snapshot
+        slot, so a replayed attempt after a transient failure destroys the
+        snapshot the first attempt just took.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_instance_backup,
             instance_id,
             label,
@@ -15041,8 +15206,14 @@ class RetryableClient:
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create instance disk with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Create an instance disk with one protected attempt.
+
+        POST /linode/instances/{id}/disks is not idempotent and the API assigns
+        the ID, so a replayed attempt after a transient failure claims a second
+        slice of the Linode's storage allotment, which the next disk create
+        then fails to find.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.create_instance_disk,
             instance_id,
             label,
@@ -15070,7 +15241,8 @@ class RetryableClient:
         interfaces: list[Any] | None = None,
     ) -> dict[str, Any]:
         """Create instance config without retrying the non-idempotent POST."""
-        return await self.client.create_instance_config(
+        result: dict[str, Any] = await self._execute_without_retry(
+            self.client.create_instance_config,
             instance_id,
             label,
             devices,
@@ -15083,6 +15255,7 @@ class RetryableClient:
             helpers,
             interfaces,
         )
+        return result
 
     async def update_instance_disk(
         self,
@@ -15110,8 +15283,14 @@ class RetryableClient:
     async def clone_instance_disk(
         self, instance_id: int, disk_id: int
     ) -> dict[str, Any]:
-        """Clone instance disk with retry."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Clone an instance disk with one protected attempt.
+
+        POST /linode/instances/{id}/disks/{disk_id}/clone is not idempotent and
+        the API assigns the new ID, so a replayed attempt after a transient
+        failure claims a second slice of the Linode's storage allotment, which
+        the next disk create then fails to find.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.clone_instance_disk,
             instance_id,
             disk_id,
@@ -15245,8 +15424,13 @@ class RetryableClient:
         disks: list[int] | None = None,
         configs: list[int] | None = None,
     ) -> dict[str, Any]:
-        """Clone instance with retry, returning the full raw API body."""
-        result: dict[str, Any] = await self._execute_with_retry(
+        """Clone an instance once, returning the full raw API body.
+
+        POST /linode/instances/{id}/clone is not idempotent and the API assigns
+        the new ID, so a replayed attempt after a transient failure leaves a
+        second billable Linode running that the caller never learns about.
+        """
+        result: dict[str, Any] = await self._execute_without_retry(
             self.client.clone_instance_raw,
             instance_id,
             region,

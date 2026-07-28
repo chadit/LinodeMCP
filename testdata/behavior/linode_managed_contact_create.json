@@ -1,6 +1,6 @@
 {
   "tool": "linode_managed_contact_create",
-  "description": "Contact create: shared phone-type rejection and the POST body once confirmed. Confirm-gate and empty-body text diverge (see report).",
+  "description": "Contact create: shared phone-type rejection and the POST body once confirmed. Confirm-gate and empty-body text diverge (see report). A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "rejects non-object phone",
@@ -26,6 +26,18 @@
       "name": "requires confirm",
       "args": {"name": "Ops", "email": "ops@example.com"},
       "expect_error": "This creates a managed contact. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "name": "Ops", "email": "ops@example.com", "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "name": "Ops", "email": "ops@example.com", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

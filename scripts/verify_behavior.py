@@ -34,6 +34,9 @@ _BEHAVIOR_DIR = _REPO_ROOT / "testdata" / "behavior"
 _MANIFEST = _REPO_ROOT / "docs" / "contracts" / "tools-manifest.txt"
 _BASELINE = _REPO_ROOT / "docs" / "contracts" / "behavior-baseline.txt"
 _DRYRUN_BASELINE = _REPO_ROOT / "docs" / "contracts" / "behavior-dryrun-baseline.txt"
+_SHAPE_BASELINE = (
+    _REPO_ROOT / "docs" / "contracts" / "behavior-response-shape-baseline.txt"
+)
 _EXEMPT = _REPO_ROOT / "docs" / "contracts" / "behavior-exempt.txt"
 _CAPABILITIES = _REPO_ROOT / "docs" / "contracts" / "tools-capabilities.txt"
 
@@ -68,6 +71,20 @@ _DRYRUN_HEADER = (
     "# entry may ever be (re)added here. Ratchet: add the dry-run case\n"
     "# (reconciling any preview divergence it exposes), then remove the line;\n"
     "# never add a line by hand. Regenerate:\n"
+    "#   python scripts/verify_behavior.py --update-baseline\n"
+)
+
+_SHAPE_HEADER = (
+    "# Mutating tools (Write/Destroy) whose behavior fixture decodes an API\n"
+    "# response body but never proves the tool rejects a malformed one: no\n"
+    "# case serving a non-object api_response (or an api_response_raw body)\n"
+    "# with an expect_api_error pinning the rejection. Decoding is\n"
+    "# hand-written per language, so one side can accept a wrong-shaped body,\n"
+    "# or fail on it with different text, while the input schema, outgoing\n"
+    "# request and happy-path result all still match and every other gate\n"
+    "# stays green. Ratchet: add the malformed-body case (reconciling any\n"
+    "# divergence it exposes), then remove the line; never add a line by hand.\n"
+    "# Regenerate:\n"
     "#   python scripts/verify_behavior.py --update-baseline\n"
 )
 
@@ -171,6 +188,57 @@ def _missing_dryrun(fixtures: dict[str, list[dict[str, Any]]]) -> set[str]:
     }
 
 
+def _decodes_response_body(cases: list[dict[str, Any]]) -> bool:
+    """Report whether any case hands the tool a populated object to decode."""
+    return any(
+        isinstance(case.get("api_response"), dict) and case["api_response"]
+        for case in cases
+    )
+
+
+def _serves_non_object_body(case: dict[str, Any]) -> bool:
+    """Report whether the case answers with something other than a JSON object.
+
+    api_response_raw serves exact bytes, which is the only way to reach the
+    empty, truncated and trailing-junk bodies; a present-but-non-dict
+    api_response serves a well-formed JSON scalar or array. Membership decides
+    the second one because JSON null and an absent field both read as None.
+    """
+    if "api_response_raw" in case:
+        return True
+
+    return "api_response" in case and not isinstance(case["api_response"], dict)
+
+
+def _has_shape_rejection_case(cases: list[dict[str, Any]]) -> bool:
+    """Report whether any case serves a malformed body and pins the rejection."""
+    return any(
+        _serves_non_object_body(case) and case.get("expect_api_error") for case in cases
+    )
+
+
+def _missing_shape_rejection(fixtures: dict[str, list[dict[str, Any]]]) -> set[str]:
+    """Return fixtured mutators that decode a body but never reject a bad one.
+
+    Response decoding is hand-written per language, so a handler that accepts
+    a wrong-shaped body, or fails on it with different text, diverges with
+    nothing to catch it: the input schema, the outgoing request and the
+    happy-path result all still match. Scope is Write and Destroy fixtures
+    that actually decode a body, since a fixture pinning validation alone has
+    no decode path to attack, and a tool with no fixture is already debt in
+    the coverage baseline.
+    """
+    capabilities = _capabilities()
+
+    return {
+        tool
+        for tool, cases in fixtures.items()
+        if capabilities.get(tool, "") in ("Write", "Destroy")
+        and _decodes_response_body(cases)
+        and not _has_shape_rejection_case(cases)
+    }
+
+
 def _manifest_tools() -> set[str]:
     """Return the full tool surface from the manifest."""
     tools: set[str] = set()
@@ -206,8 +274,10 @@ def _say(line: str) -> None:
     sys.stdout.write(line + "\n")
 
 
-def _update_baselines(uncovered: set[str], missing_dryrun: set[str]) -> int:
-    """Rewrite both baselines to the current sets and report the counts.
+def _update_baselines(
+    uncovered: set[str], missing_dryrun: set[str], missing_shape: set[str]
+) -> int:
+    """Rewrite every baseline to the current sets and report the counts.
 
     Annotations ("  # accepted ...") on surviving entries are preserved so a
     regeneration cannot silently drop the audit trail the baseline guard
@@ -222,9 +292,16 @@ def _update_baselines(uncovered: set[str], missing_dryrun: set[str]) -> int:
         missing_dryrun,
         _baselines.read_baseline(_DRYRUN_BASELINE),
     )
+    _baselines.write_baseline(
+        _SHAPE_BASELINE,
+        _SHAPE_HEADER,
+        missing_shape,
+        _baselines.read_baseline(_SHAPE_BASELINE),
+    )
     _say(
         f"baselines updated: {len(uncovered)} uncovered tool(s), "
-        f"{len(missing_dryrun)} without a dry-run preview case"
+        f"{len(missing_dryrun)} without a dry-run preview case, "
+        f"{len(missing_shape)} without a malformed-response case"
     )
     return 0
 
@@ -292,9 +369,10 @@ def main() -> int:
 
     uncovered = manifest - covered - exempt
     missing_dryrun = _missing_dryrun(fixtures)
+    missing_shape = _missing_shape_rejection(fixtures)
 
     if "--update-baseline" in sys.argv:
-        return _update_baselines(uncovered, missing_dryrun)
+        return _update_baselines(uncovered, missing_dryrun, missing_shape)
 
     coverage_ok = _report_drift(
         "uncovered tools",
@@ -308,8 +386,15 @@ def main() -> int:
         missing_dryrun,
         _baselines.read_entries(_DRYRUN_BASELINE),
     )
+    shape_ok = _report_drift(
+        "mutating tools without a malformed-response case",
+        "add a non-object api_response (or api_response_raw) case with"
+        " expect_api_error",
+        missing_shape,
+        _baselines.read_entries(_SHAPE_BASELINE),
+    )
 
-    ok = coverage_ok and dryrun_ok
+    ok = coverage_ok and dryrun_ok and shape_ok
     if ok:
         _say(f"behavior exemptions: {len(exempt)} (docs/contracts/behavior-exempt.txt)")
 

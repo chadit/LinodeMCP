@@ -1,6 +1,6 @@
 {
   "tool": "linode_placement_group_unassign",
-  "description": "Placement group unassign: the unassign POST once confirmed. Confirm-gate text, group_id validation text, and the linodes-array messages all diverge, so only the success path is pinned (see report).",
+  "description": "Placement group unassign: the unassign POST once confirmed. Confirm-gate text, group_id validation text, and the linodes-array messages all diverge, so only the success path is pinned (see report). A success body that is not a JSON object must fail rather than turn into a zeroed placement-group record.",
   "cases": [
     {
       "name": "unassigns Linodes from a placement group",
@@ -16,6 +16,24 @@
       "name": "requires confirm",
       "args": {"group_id": 123, "linodes": [456]},
       "expect_error": "This unassigns Linodes from a placement group. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "confirm": true, "group_id": 123, "linodes": [456] },
+      "api_response": 7,
+      "expect_api_error": "Failed to unassign"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "confirm": true, "group_id": 123, "linodes": [456] },
+      "api_response": true,
+      "expect_api_error": "Failed to unassign"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "confirm": true, "group_id": 123, "linodes": [456] },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to unassign"
     }
   ]
 }

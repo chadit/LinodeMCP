@@ -306,11 +306,11 @@ func TestLinodeMonitorDashboardsToolSuccess(t *testing.T) {
 	}
 
 	var out struct {
-		Count      int `json:"count"`
 		Dashboards []struct {
 			Label   string           `json:"label"`
 			Widgets []map[string]any `json:"widgets"`
 		} `json:"dashboards"`
+		Count int `json:"count"`
 	}
 	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
 		t.Fatalf("unmarshal output: %v", err)

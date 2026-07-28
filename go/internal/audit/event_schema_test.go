@@ -28,8 +28,8 @@ func TestEventFieldsMatchSharedFixture(t *testing.T) {
 	var fixture struct {
 		Fields []string `json:"fields"`
 	}
-	if err := json.Unmarshal(raw, &fixture); err != nil {
-		t.Fatalf("parse shared fixture: %v", err)
+	if parseErr := json.Unmarshal(raw, &fixture); parseErr != nil {
+		t.Fatalf("parse shared fixture: %v", parseErr)
 	}
 
 	marshaled, err := json.Marshal(audit.Event{})

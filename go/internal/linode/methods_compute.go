@@ -915,8 +915,8 @@ func (c *Client) httpUploadImageProto(ctx context.Context, req *UploadImageReque
 	defer drainClose(resp)
 
 	var envelope struct {
-		Image    json.RawMessage `json:"image"`
 		UploadTo string          `json:"upload_to"`
+		Image    json.RawMessage `json:"image"`
 	}
 	if err := c.handleResponse(resp, &envelope); err != nil {
 		return nil, "", err

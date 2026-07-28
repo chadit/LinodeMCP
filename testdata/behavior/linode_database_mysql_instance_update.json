@@ -1,26 +1,262 @@
 {
   "tool": "linode_database_mysql_instance_update",
-  "description": "Confirm-gated update PUT body and the unsupported-argument rejection now enforced in both languages (Go gained Python's allowlist). The unsupported case sets confirm:true so both reach the check.",
+  "description": "Confirm-gated update PUT body, the documented 200 write envelope, the documented error responses both languages must surface identically, and the unsupported-argument rejection now enforced in both languages (Go gained Python's allowlist). The unsupported case sets confirm:true so both reach the check. Error cases pin the shared 'Linode API error (status N)' text, not each language's outer 'Failed to ...' framing. The bare-array case proves neither language reports a zero-valued instance as a successful update; its expected substring stops at 'Failed to update' because the engine label differs in the outer framing (Go says 'Managed Database instance', Python says 'MySQL Managed Database 123'). The dry-run case pins the full Tier B preview from docs/dry-run.md: the PUT body, the fetched current_state (the instance exists, so the preview reads it), and the side effect plus warning the update implies.",
   "cases": [
     {
       "name": "rejects an unsupported argument",
-      "args": { "instance_id": 123, "label": "renamed-db", "bogus_field": "x", "confirm": true },
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "bogus_field": "x",
+        "confirm": true
+      },
       "expect_error": "unsupported argument: bogus_field"
     },
     {
       "name": "updates a mysql instance label",
-      "args": { "instance_id": 123, "label": "renamed-db", "confirm": true },
-      "api_response": { "id": 123, "label": "renamed-db" },
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "renamed-db"
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/databases/mysql/instances/123",
-        "body": { "label": "renamed-db" }
+        "body": {
+          "label": "renamed-db"
+        }
       }
     },
     {
+      "name": "returns the documented write envelope",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "status": "active",
+        "label": "renamed-db",
+        "region": "us-east",
+        "type": "g6-dedicated-2",
+        "engine": "mysql",
+        "version": "8.0.30",
+        "cluster_size": 3,
+        "replication_type": "semi_synch",
+        "ssl_connection": true,
+        "encrypted": false,
+        "allow_list": [
+          "203.0.113.1/32"
+        ],
+        "created": "2026-01-02T03:04:05",
+        "updated": "2026-01-03T04:05:06"
+      },
+      "expect_result": {
+        "message": "Managed Database instance 'renamed-db' (ID: 123) updated",
+        "database_instance": {
+          "id": 123,
+          "status": "active",
+          "label": "renamed-db",
+          "region": "us-east",
+          "type": "g6-dedicated-2",
+          "engine": "mysql",
+          "version": "8.0.30",
+          "cluster_size": 3,
+          "replication_type": "semi_synch",
+          "ssl_connection": true,
+          "encrypted": false,
+          "allow_list": [
+            "203.0.113.1/32"
+          ],
+          "created": "2026-01-02T03:04:05",
+          "updated": "2026-01-03T04:05:06"
+        }
+      }
+    },
+    {
+      "name": "surfaces a documented 400 reason and field",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_status": 400,
+      "api_response": {
+        "errors": [
+          {
+            "field": "label",
+            "reason": "Label must be unique"
+          }
+        ]
+      },
+      "expect_api_error": "Linode API error (status 400): Label must be unique (field: label)"
+    },
+    {
+      "name": "surfaces a documented 400 reason with no field",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_status": 400,
+      "api_response": {
+        "errors": [
+          {
+            "reason": "Invalid request"
+          }
+        ]
+      },
+      "expect_api_error": "Linode API error (status 400): Invalid request"
+    },
+    {
+      "name": "surfaces a documented 404 reason for a missing instance",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_status": 404,
+      "api_response": {
+        "errors": [
+          {
+            "reason": "Not found"
+          }
+        ]
+      },
+      "expect_api_error": "Linode API error (status 404): Not found"
+    },
+    {
+      "name": "falls back to the status when the error body has no errors member",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_status": 400,
+      "api_response": {},
+      "expect_api_error": "Linode API error (status 400): API request failed with status 400"
+    },
+    {
+      "name": "falls back to the status when the error body has an empty errors list",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_status": 409,
+      "api_response": {
+        "errors": []
+      },
+      "expect_api_error": "Linode API error (status 409): API request failed with status 409"
+    },
+    {
+      "name": "falls back to the status when the error body is not JSON",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_status": 400,
+      "api_response_raw": "<html>gateway said no</html>",
+      "expect_api_error": "Linode API error (status 400): API request failed with status 400"
+    },
+    {
+      "name": "falls back to the status when the error body is empty",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_status": 404,
+      "api_response_raw": "",
+      "expect_api_error": "Linode API error (status 404): API request failed with status 404"
+    },
+    {
       "name": "requires confirm",
-      "args": { "instance_id": 123, "label": "renamed-db" },
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db"
+      },
       "expect_error": "This updates a Managed Database instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db",
+        "confirm": true
+      },
+      "api_response": [],
+      "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "dry run previews the update without sending it",
+      "args": {
+        "dry_run": true,
+        "instance_id": 123,
+        "label": "renamed-mysql"
+      },
+      "api_responses": {
+        "GET /databases/mysql/instances/123": {
+          "id": 123,
+          "status": "active",
+          "label": "prod-mysql",
+          "region": "us-east",
+          "type": "g6-dedicated-2",
+          "engine": "mysql",
+          "version": "8.0.30",
+          "cluster_size": 3,
+          "replication_type": "semi_synch",
+          "ssl_connection": true,
+          "encrypted": false,
+          "allow_list": [
+            "203.0.113.1/32"
+          ],
+          "created": "2026-01-02T03:04:05",
+          "updated": "2026-01-03T04:05:06"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_mysql_instance_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/databases/mysql/instances/123",
+          "body": {
+            "label": "renamed-mysql"
+          }
+        },
+        "current_state": {
+          "id": 123,
+          "status": "active",
+          "label": "prod-mysql",
+          "region": "us-east",
+          "type": "g6-dedicated-2",
+          "engine": "mysql",
+          "version": "8.0.30",
+          "cluster_size": 3,
+          "replication_type": "semi_synch",
+          "ssl_connection": true,
+          "encrypted": false,
+          "allow_list": [
+            "203.0.113.1/32"
+          ],
+          "created": "2026-01-02T03:04:05",
+          "updated": "2026-01-03T04:05:06"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "MySQL Managed Database 123 will be updated."
+        ],
+        "warnings": [
+          "Updating a Managed Database can change service behavior."
+        ]
+      }
     }
   ]
 }

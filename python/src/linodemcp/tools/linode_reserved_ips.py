@@ -83,11 +83,17 @@ def _restore_reserved_ip_nulls(
 
 
 def _restore_reserved_ip_list_nulls(
-    raw: Any, serialized: dict[str, Any]
+    raw: dict[str, Any], serialized: dict[str, Any]
 ) -> dict[str, Any]:
-    """Restore explicit nulls for each reserved IP in a list envelope."""
-    raw_page = cast("dict[str, Any]", raw) if isinstance(raw, dict) else {}
-    raw_data = raw_page.get("data", [])
+    """Restore explicit nulls for each reserved IP in a list envelope.
+
+    raw is the page _reserved_ip_list_response already proved is an object, so
+    the parameter is typed rather than narrowed here. Standing an empty object
+    in for a non-dict page used to drop every raw item and return the
+    serialized page as though the API had sent no nulls, which read as a clean
+    result for a malformed body.
+    """
+    raw_data = raw.get("data", [])
     raw_items = (
         [
             cast("dict[str, Any]", item)
@@ -112,6 +118,46 @@ def _restore_reserved_ip_list_nulls(
         for raw_item, serialized_item in zip(raw_items, serialized_items, strict=True)
     ]
     return serialized
+
+
+def _reserved_ip_list_response(raw: Any) -> dict[str, Any]:
+    """Serialize a reserved IP page into the tool's list envelope.
+
+    The dict guard runs before serialize_list_response so the page reaching
+    _restore_reserved_ip_list_nulls is known to be an object, which is what
+    lets that helper drop the empty-object stand-in it used to fabricate for a
+    malformed body. The wording matches serialize_list_response's own so the
+    two paths stay one sentence, which is also the one Go's client emits.
+    """
+    if not isinstance(raw, dict):
+        msg = "list response must be an object"
+        raise TypeError(msg)
+
+    page = cast("dict[str, Any]", raw)
+    serialized = serialize_list_response(
+        page,
+        "reserved_ips",
+        ip_pb2.ReservedIPListResponse(),
+    )
+    return _restore_reserved_ip_list_nulls(page, serialized)
+
+
+def _reserved_ip_response(raw: Any) -> dict[str, Any]:
+    """Serialize one address response body into the tool's output.
+
+    The dict guard is load-bearing: ParseDict finds no members to copy in a
+    list or string and would hand back a zero-valued address as a success,
+    hiding a malformed body. Raising here surfaces it as the tool's
+    "Failed to ..." text, matching the sentence Go's address path emits and the
+    way serialize_list_response guards a malformed list page.
+    """
+    if not isinstance(raw, dict):
+        msg = "reserved IP response must be an object"
+        raise TypeError(msg)
+
+    body = cast("dict[str, Any]", raw)
+    serialized = serialize_api_response(body, ip_pb2.ReservedIPAddress())
+    return _restore_reserved_ip_nulls(body, serialized)
 
 
 def _reserved_ipv4_argument(
@@ -213,9 +259,7 @@ async def handle_linode_networking_reserved_ip_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        reserved_ip = await client.create_reserved_ip(region, tags)
-        serialized = serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
-        return _restore_reserved_ip_nulls(reserved_ip, serialized)
+        return _reserved_ip_response(await client.create_reserved_ip(region, tags))
 
     return await execute_tool(cfg, arguments, "reserve public IPv4 address", _call)
 
@@ -240,13 +284,9 @@ async def handle_linode_networking_reserved_ip_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        response = await client.list_reserved_ips(page=page, page_size=page_size)
-        serialized = serialize_list_response(
-            response,
-            "reserved_ips",
-            ip_pb2.ReservedIPListResponse(),
+        return _reserved_ip_list_response(
+            await client.list_reserved_ips(page=page, page_size=page_size)
         )
-        return _restore_reserved_ip_list_nulls(response, serialized)
 
     return await execute_tool(cfg, arguments, "list reserved IPv4 addresses", _call)
 
@@ -269,9 +309,7 @@ async def handle_linode_networking_reserved_ip_get(
         return address
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        reserved_ip = await client.get_reserved_ip(address)
-        serialized = serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
-        return _restore_reserved_ip_nulls(reserved_ip, serialized)
+        return _reserved_ip_response(await client.get_reserved_ip(address))
 
     return await execute_tool(cfg, arguments, "get reserved IPv4 address", _call)
 
@@ -321,9 +359,9 @@ async def handle_linode_networking_reserved_ip_update(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        reserved_ip = await client.update_reserved_ip(address, typed_tags)
-        serialized = serialize_api_response(reserved_ip, ip_pb2.ReservedIPAddress())
-        return _restore_reserved_ip_nulls(reserved_ip, serialized)
+        return _reserved_ip_response(
+            await client.update_reserved_ip(address, typed_tags)
+        )
 
     return await execute_tool(cfg, arguments, "replace reserved IPv4 tags", _call)
 

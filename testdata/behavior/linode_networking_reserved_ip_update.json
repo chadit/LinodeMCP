@@ -1,6 +1,6 @@
 {
   "tool": "linode_networking_reserved_ip_update",
-  "description": "Reserved-IP update validates the IPv4 address and the required tag list, requires explicit confirmation because it replaces every tag, previews against current state, and PUTs the whole replacement set.",
+  "description": "Reserved-IP update validates the IPv4 address and the required tag list, requires explicit confirmation because it replaces every tag, previews against current state, and PUTs the whole replacement set. A response body that is not a JSON object fails with the same sentence in both languages instead of rendering as an address with every field empty.",
   "cases": [
     {
       "name": "rejects a missing address",
@@ -126,6 +126,24 @@
         "type": "ipv4",
         "vpc_nat_1_1": null
       }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "address": "192.0.2.10", "tags": ["prod"], "confirm": true },
+      "api_response": [],
+      "expect_api_error": "reserved IP response must be an object"
+    },
+    {
+      "name": "rejects a JSON null API response",
+      "args": { "address": "192.0.2.10", "tags": ["prod"], "confirm": true },
+      "api_response_raw": "null",
+      "expect_api_error": "reserved IP response must be an object"
+    },
+    {
+      "name": "rejects a bare-number API response",
+      "args": { "address": "192.0.2.10", "tags": ["prod"], "confirm": true },
+      "api_response_raw": "42",
+      "expect_api_error": "reserved IP response must be an object"
     },
     {
       "name": "dry_run_preview",

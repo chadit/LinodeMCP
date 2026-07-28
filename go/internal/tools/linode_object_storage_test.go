@@ -171,15 +171,8 @@ func TestLinodeObjectStorageBucketsListByRegionToolSuccess(t *testing.T) {
 
 	// Each element carries a field the proto does not model so the DiscardUnknown
 	// decode must drop it, proving the list routes through the proto serializer.
-	buckets := []struct {
-		linode.ObjectStorageBucket
-
-		NotInProto string `json:"not_in_proto"`
-	}{
-		{
-			ObjectStorageBucket: linode.ObjectStorageBucket{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024},
-			NotInProto:          valNotInProto,
-		},
+	buckets := []json.RawMessage{
+		withUnmodeledField(t, linode.ObjectStorageBucket{Label: bucketTest, Region: regionUSEast1, Hostname: bucketHostnameUSEast1, Objects: 42, Size: 1024}),
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -247,9 +240,9 @@ func TestLinodeObjectStorageBucketsListByRegionToolSuccess(t *testing.T) {
 	// substring-matching the count. The envelope is {count, buckets}: the region
 	// input echo is not part of the proto contract.
 	var body struct {
-		Count   int              `json:"count"`
 		Region  string           `json:"region"`
 		Buckets []map[string]any `json:"buckets"`
+		Count   int              `json:"count"`
 	}
 	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
@@ -283,8 +276,8 @@ func TestLinodeObjectStorageBucketsListByRegionToolValidation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingRegion, args: map[string]any{}},
 		{name: "slash in region", args: map[string]any{keyRegion: regionSlashUSEast1}},
@@ -414,8 +407,8 @@ func TestLinodeObjectStorageBucketGetToolValidation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingRegion, args: map[string]any{keyLabel: bucketTest}},
 		{name: caseMissingLabel, args: map[string]any{keyRegion: regionUSEast1}},
@@ -476,26 +469,26 @@ func objectStorageContentsBody(objects string, isTruncated bool, nextMarker stri
 }
 
 func decodeObjectListOutput(t *testing.T, text string) struct {
-	Count       int    `json:"count"`
-	Filter      string `json:"filter"`
-	IsTruncated bool   `json:"is_truncated"`
-	NextMarker  string `json:"next_marker"`
-	Objects     []struct {
+	Filter     string `json:"filter"`
+	NextMarker string `json:"next_marker"`
+	Objects    []struct {
 		Name string `json:"name"`
 		Size int64  `json:"size"`
 	} `json:"objects"`
+	Count       int  `json:"count"`
+	IsTruncated bool `json:"is_truncated"`
 } {
 	t.Helper()
 
 	var out struct {
-		Count       int    `json:"count"`
-		Filter      string `json:"filter"`
-		IsTruncated bool   `json:"is_truncated"`
-		NextMarker  string `json:"next_marker"`
-		Objects     []struct {
+		Filter     string `json:"filter"`
+		NextMarker string `json:"next_marker"`
+		Objects    []struct {
 			Name string `json:"name"`
 			Size int64  `json:"size"`
 		} `json:"objects"`
+		Count       int  `json:"count"`
+		IsTruncated bool `json:"is_truncated"`
 	}
 	if err := json.Unmarshal([]byte(text), &out); err != nil {
 		t.Fatalf("unmarshal output: %v", err)
@@ -725,10 +718,10 @@ func TestLinodeObjectStorageBucketReadFormatValidation(t *testing.T) {
 	_, _, listHandler := tools.NewLinodeObjectStorageBucketContentsTool(cfg)
 
 	tests := []struct {
-		name     string
-		list     bool
 		args     map[string]any
+		name     string
 		contains string
+		list     bool
 	}{
 		{name: "get rejects uppercase region", args: map[string]any{keyRegion: "US-EAST-1", keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
 		{name: "get rejects region with slash", args: map[string]any{keyRegion: regionSlashUSEast1, keyLabel: bucketTest}, contains: msgRegionInvalidClusterID},
@@ -2092,8 +2085,8 @@ func TestLinodeObjectStorageBucketAccessGetToolValidation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingRegion, args: map[string]any{keyLabel: bucketTest}},
 		{name: caseMissingLabel, args: map[string]any{keyRegion: regionUSEast1}},
@@ -2585,8 +2578,8 @@ func TestLinodeObjectStorageCancelToolValidation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{}},
 		{name: "false confirm", args: map[string]any{keyConfirm: false}},

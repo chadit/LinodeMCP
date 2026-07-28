@@ -1,6 +1,6 @@
 {
   "tool": "linode_nodebalancer_create",
-  "description": "Pins the create POST body and the shared region-required rejection (with confirm set). Missing-confirm text and zero-throttle body diverge (see report).",
+  "description": "Pins the create POST body and the shared region-required rejection (with confirm set). Missing-confirm text and zero-throttle body diverge (see report). A response that is not a JSON object must fail rather than yield a zeroed NodeBalancer; the bare-array shape of that case is withheld because Python still fabricates a success from it (see report).",
   "cases": [
     {
       "name": "rejects missing region",
@@ -21,6 +21,12 @@
       "name": "requires confirm",
       "args": {"region": "us-east", "client_conn_throttle": 20},
       "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "region": "us-east", "client_conn_throttle": 20, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create NodeBalancer"
     }
   ]
 }

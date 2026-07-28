@@ -76,18 +76,18 @@ func defaultTUIKeyMap() tuiKeyMap {
 // stays open for the whole session; RunTUICommand closes it after the
 // program exits, not here.
 type tuiModel struct {
-	srv     *server.Server
-	envs    []string
-	cfg     *config.Config
-	keys    tuiKeyMap
-	screen  tuiScreen
-	catalog *catalogModel
-	form    *formModel
-	run     *runModel
-	audit   *auditModel
 	profile *profileModel
+	cfg     *config.Config
+	form    *formModel
+	catalog *catalogModel
+	audit   *auditModel
+	run     *runModel
+	srv     *server.Server
 	health  *healthModel
 	status  string
+	keys    tuiKeyMap
+	envs    []string
+	screen  tuiScreen
 	width   int
 	height  int
 }

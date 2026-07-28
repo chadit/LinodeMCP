@@ -1,6 +1,6 @@
 {
   "tool": "linode_account_user_update",
-  "description": "Account user update: missing username agrees, confirm gate, and the PUT body once confirmed.",
+  "description": "Account user update: missing username agrees, confirm gate, and the PUT body once confirmed. A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "requires username",
@@ -26,6 +26,12 @@
       "name": "requires confirm",
       "args": {"username": "alice", "email": "new@example.com"},
       "expect_error": "This updates an account user. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "username": "alice", "email": "new@example.com", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to update"
     }
   ]
 }

@@ -100,8 +100,8 @@ func TestLoadReportsValidation(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]struct {
-		reportsBlock string
 		wantErr      error
+		reportsBlock string
 	}{
 		"bad output": {
 			reportsBlock: `    bad-out:

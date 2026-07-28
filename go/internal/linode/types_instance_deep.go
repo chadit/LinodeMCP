@@ -4,7 +4,6 @@ import "encoding/json"
 
 // InstanceBackup represents a detailed backup of a Linode instance.
 type InstanceBackup struct {
-	ID        int                  `json:"id"`
 	Label     string               `json:"label"`
 	Status    string               `json:"status"`
 	Type      string               `json:"type"`
@@ -12,23 +11,24 @@ type InstanceBackup struct {
 	Updated   string               `json:"updated"`
 	Finished  string               `json:"finished"`
 	Region    string               `json:"region"`
-	Available bool                 `json:"available"`
 	Configs   []string             `json:"configs"`
 	Disks     []InstanceBackupDisk `json:"disks"`
+	ID        int                  `json:"id"`
+	Available bool                 `json:"available"`
 }
 
 // InstanceBackupDisk represents a disk within an instance backup.
 type InstanceBackupDisk struct {
 	Label      string `json:"label"`
-	Size       int    `json:"size"`
 	Filesystem string `json:"filesystem"`
+	Size       int    `json:"size"`
 }
 
 // InstanceBackupsResponse represents the response from the instance backups endpoint.
 // The API returns automatic backups as an array and snapshots as a nested object.
 type InstanceBackupsResponse struct {
-	Automatic []InstanceBackup        `json:"automatic"`
 	Snapshot  InstanceBackupSnapshots `json:"snapshot"`
+	Automatic []InstanceBackup        `json:"automatic"`
 }
 
 // InstanceBackupSnapshots holds the current and in-progress snapshot references.
@@ -51,19 +51,19 @@ type CreateInstanceBackupRequest struct {
 
 // InstanceConfig represents a Linode configuration profile.
 type InstanceConfig struct {
-	ID          int                       `json:"id"`
-	Label       string                    `json:"label"`
-	Kernel      string                    `json:"kernel,omitempty"`
+	Devices     map[string]*ConfigDevice  `json:"devices,omitempty"`
+	Helpers     *ConfigHelpers            `json:"helpers,omitempty"`
 	Comments    string                    `json:"comments,omitempty"`
-	MemoryLimit int                       `json:"memory_limit,omitempty"`
 	RootDevice  string                    `json:"root_device,omitempty"`
 	RunLevel    string                    `json:"run_level,omitempty"`
 	VirtMode    string                    `json:"virt_mode,omitempty"`
-	Devices     map[string]*ConfigDevice  `json:"devices,omitempty"`
-	Helpers     *ConfigHelpers            `json:"helpers,omitempty"`
-	Interfaces  []ConfigInterfaceResponse `json:"interfaces,omitempty"`
+	Kernel      string                    `json:"kernel,omitempty"`
+	Label       string                    `json:"label"`
 	Created     string                    `json:"created,omitempty"`
 	Updated     string                    `json:"updated,omitempty"`
+	Interfaces  []ConfigInterfaceResponse `json:"interfaces,omitempty"`
+	ID          int                       `json:"id"`
+	MemoryLimit int                       `json:"memory_limit,omitempty"`
 }
 
 // ConfigDevice assigns a disk or volume to a configuration device slot.
@@ -109,16 +109,16 @@ type UpdateConfigInterfaceRequest struct {
 
 // ConfigInterfaceResponse represents a legacy network interface returned by a configuration profile interface list.
 type ConfigInterfaceResponse struct {
-	ID          int                  `json:"id"`
-	Active      bool                 `json:"active"`
-	Purpose     string               `json:"purpose"`
 	Label       *string              `json:"label"`
 	IPAMAddress *string              `json:"ipam_address"`
-	Primary     bool                 `json:"primary"`
 	SubnetID    *int                 `json:"subnet_id"`
 	VPCID       *int                 `json:"vpc_id"`
 	IPv4        *ConfigInterfaceIPv4 `json:"ipv4"`
+	Purpose     string               `json:"purpose"`
 	IPRanges    []string             `json:"ip_ranges,omitempty"`
+	ID          int                  `json:"id"`
+	Active      bool                 `json:"active"`
+	Primary     bool                 `json:"primary"`
 }
 
 // ConfigInterfaceIPv4 contains IPv4 settings for a configuration interface.
@@ -129,16 +129,16 @@ type ConfigInterfaceIPv4 struct {
 
 // CreateConfigRequest represents the request body for creating an instance configuration profile.
 type CreateConfigRequest struct {
-	Label       string                   `json:"label"`
 	Devices     map[string]*ConfigDevice `json:"devices"`
+	Helpers     *ConfigHelpers           `json:"helpers,omitempty"`
+	Label       string                   `json:"label"`
 	Kernel      string                   `json:"kernel,omitempty"`
 	Comments    string                   `json:"comments,omitempty"`
-	MemoryLimit int                      `json:"memory_limit,omitempty"`
 	RootDevice  string                   `json:"root_device,omitempty"`
 	RunLevel    string                   `json:"run_level,omitempty"`
 	VirtMode    string                   `json:"virt_mode,omitempty"`
-	Helpers     *ConfigHelpers           `json:"helpers,omitempty"`
 	Interfaces  []ConfigInterface        `json:"interfaces,omitempty"`
+	MemoryLimit int                      `json:"memory_limit,omitempty"`
 }
 
 // UpdateConfigRequest represents the request body for updating an instance configuration profile.
@@ -174,24 +174,24 @@ type UpdateInstanceInterfaceSettingsRequest struct {
 
 // InstanceDisk represents a disk attached to a Linode instance.
 type InstanceDisk struct {
-	ID         int    `json:"id"`
 	Label      string `json:"label"`
 	Status     string `json:"status"`
-	Size       int    `json:"size"`
 	Filesystem string `json:"filesystem"`
 	Created    string `json:"created"`
 	Updated    string `json:"updated"`
+	ID         int    `json:"id"`
+	Size       int    `json:"size"`
 }
 
 // CreateDiskRequest represents the request body for creating an instance disk.
 type CreateDiskRequest struct {
 	Label           string   `json:"label"`
-	Size            int      `json:"size"`
 	Filesystem      string   `json:"filesystem,omitempty"`
 	Image           string   `json:"image,omitempty"`
 	RootPass        string   `json:"root_pass,omitempty"`
 	AuthorizedKeys  []string `json:"authorized_keys,omitempty"`
 	AuthorizedUsers []string `json:"authorized_users,omitempty"`
+	Size            int      `json:"size"`
 }
 
 // UpdateDiskRequest represents the request body for updating an instance disk.
@@ -229,16 +229,16 @@ type InstanceIPv6 struct {
 
 // IPAddress represents an IPv4 address assigned to a Linode instance.
 type IPAddress struct {
+	VPCNAT1To1 *string `json:"vpc_nat_1_1,omitempty"`
 	Address    string  `json:"address"`
 	Gateway    string  `json:"gateway"`
 	SubnetMask string  `json:"subnet_mask"`
-	Prefix     int     `json:"prefix"`
 	Type       string  `json:"type"`
-	Public     bool    `json:"public"`
 	RDNS       string  `json:"rdns"`
-	LinodeID   int     `json:"linode_id"`
 	Region     string  `json:"region"`
-	VPCNAT1To1 *string `json:"vpc_nat_1_1,omitempty"`
+	Prefix     int     `json:"prefix"`
+	LinodeID   int     `json:"linode_id"`
+	Public     bool    `json:"public"`
 }
 
 // IPv6SLAAC represents an IPv6 SLAAC or link-local address.
@@ -246,18 +246,18 @@ type IPv6SLAAC struct {
 	Address    string `json:"address"`
 	Gateway    string `json:"gateway"`
 	SubnetMask string `json:"subnet_mask"`
-	Prefix     int    `json:"prefix"`
 	Type       string `json:"type"`
 	RDNS       string `json:"rdns"`
 	Region     string `json:"region"`
+	Prefix     int    `json:"prefix"`
 }
 
 // IPv6Range represents an IPv6 range or pool assigned to an instance.
 type IPv6Range struct {
 	Range       string `json:"range"`
 	Region      string `json:"region"`
-	Prefix      int    `json:"prefix"`
 	RouteTarget string `json:"route_target"`
+	Prefix      int    `json:"prefix"`
 }
 
 // AllocateIPRequest represents the request body for allocating an IP address to an instance.
@@ -277,9 +277,9 @@ type CloneInstanceRequest struct {
 	Type           string `json:"type,omitempty"`
 	Label          string `json:"label,omitempty"`
 	Group          string `json:"group,omitempty"`
-	BackupsEnabled bool   `json:"backups_enabled,omitempty"`
 	Disks          []int  `json:"disks,omitempty"`
 	Configs        []int  `json:"configs,omitempty"`
+	BackupsEnabled bool   `json:"backups_enabled,omitempty"`
 }
 
 // MutateInstanceRequest represents the request body for upgrading a Linode instance.
@@ -289,11 +289,11 @@ type MutateInstanceRequest struct {
 
 // RebuildInstanceRequest represents the request body for rebuilding a Linode instance.
 type RebuildInstanceRequest struct {
+	Booted          *bool    `json:"booted,omitempty"`
 	Image           string   `json:"image"`
 	RootPass        string   `json:"root_pass"`
 	AuthorizedKeys  []string `json:"authorized_keys,omitempty"`
 	AuthorizedUsers []string `json:"authorized_users,omitempty"`
-	Booted          *bool    `json:"booted,omitempty"`
 }
 
 // RescueInstanceRequest represents the request body for booting an instance into

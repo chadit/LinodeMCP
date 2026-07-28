@@ -148,6 +148,11 @@ const (
 
 	authHeaderTestToken = "Bearer test-token"
 	instanceStatsTitle  = "linode.com - my-linode (linode123456) - day (5 min avg)"
+
+	// Well-formed JSON bodies that are not objects, served by the response-shape
+	// contract tests.
+	jsonBodyArray = "[]"
+	jsonBodyTrue  = "true"
 )
 
 // Repeated literals extracted to satisfy goconst.

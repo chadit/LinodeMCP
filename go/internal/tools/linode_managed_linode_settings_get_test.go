@@ -61,8 +61,8 @@ func TestLinodeManagedLinodeSettingsGetToolInvalidLinodeIdRejectedBeforeClientCa
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingLinodeID, args: map[string]any{}},
 		{name: "zero linode id", args: map[string]any{keyManagedLinodeSettingsLinodeID: 0}},

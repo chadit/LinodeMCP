@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_object_acl_update",
-  "description": "Pins the shared region/name validation (behind confirm) and the object-acl PUT body. Every case carries confirm:true because the confirm-gate message text diverges.",
+  "description": "Pins the shared region/name validation (behind confirm) and the object-acl PUT body. Every case carries confirm:true because the confirm-gate message text diverges. A success body that is not a JSON object must fail rather than turn into a zeroed acl record; the two languages word that failure differently, so only the acl subject is shared.",
   "cases": [
     {
       "name": "requires region",
@@ -31,6 +31,30 @@
       "name": "requires confirm",
       "args": {"region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read"},
       "expect_error": "This modifies the object's access permissions. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a null API response",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
+      "api_response": null,
+      "expect_api_error": "ACL"
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "ACL"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
+      "api_response": true,
+      "expect_api_error": "ACL"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "acl": "public-read", "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "ACL"
     }
   ]
 }

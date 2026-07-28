@@ -1,6 +1,6 @@
 {
   "tool": "linode_support_ticket_create",
-  "description": "Support ticket create: summary and description required rejections both languages agree on (confirm set so both reach them), plus the POST body once confirmed. Confirm-gate text diverges (see report).",
+  "description": "Support ticket create: summary and description required rejections both languages agree on (confirm set so both reach them), plus the POST body once confirmed. Confirm-gate text diverges (see report). A body that will not parse must fail rather than turn into a made-up ticket. The two languages frame the parse failure differently, so the shared assertion is the parser's position marker.",
   "cases": [
     {
       "name": "requires summary",
@@ -26,6 +26,18 @@
       "name": "requires confirm",
       "args": {"summary": "Cannot reach server", "description": "My Linode is unreachable via SSH."},
       "expect_error": "This creates a support ticket. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "confirm": true, "summary": "Cannot reach server", "description": "My Linode is unreachable via SSH." },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "confirm": true, "summary": "Cannot reach server", "description": "My Linode is unreachable via SSH." },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
     }
   ]
 }

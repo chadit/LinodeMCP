@@ -24,20 +24,21 @@ const DefaultWatchInterval = 5 * time.Second
 // to change at runtime should keep it out of the file (use env-var
 // overrides), since those are only read once at startup.
 type Watcher struct {
-	path     string
-	interval time.Duration
-	current  atomic.Pointer[Config]
 	lastMod  time.Time
+	current  atomic.Pointer[Config]
 	errs     chan error
 	stop     chan struct{}
-	stopped  atomic.Bool
+	onChange func(*Config)
+	path     string
+	interval time.Duration
 
 	// onChangeMu guards onChange so SetOnChange can replace the callback
 	// concurrently with checkAndReload reading it. The callback itself runs
 	// in the watcher goroutine; long-running subscribers should detach work
 	// onto their own goroutine to avoid blocking the polling loop.
 	onChangeMu sync.RWMutex
-	onChange   func(*Config)
+
+	stopped atomic.Bool
 }
 
 // NewWatcher loads the file once and returns a Watcher seeded with that

@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_token_create",
-  "description": "Personal access token create: the POST body once confirmed. Confirm text and field-type rejections diverge (see report).",
+  "description": "Personal access token create: the POST body once confirmed. Confirm text and field-type rejections diverge (see report). A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "creates a personal access token",
@@ -16,6 +16,18 @@
       "name": "requires confirm",
       "args": {"label": "my-token", "scopes": "linodes:read_only"},
       "expect_error": "This creates a personal access token. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "label": "my-token", "scopes": "linodes:read_only", "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "label": "my-token", "scopes": "linodes:read_only", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

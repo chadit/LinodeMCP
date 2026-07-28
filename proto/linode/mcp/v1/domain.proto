@@ -4,6 +4,28 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+// DomainType is the primary/secondary role a domain is created with. Values are
+// the exact Linode API wire strings from POST /domains. See the enum-wrapper
+// convention in nodebalancer_config.proto.
+message DomainType {
+  enum Value {
+    unspecified = 0;
+    master = 1;
+    slave = 2;
+  }
+}
+
+// DomainCreateStatus is the status POST /domains accepts. It is deliberately
+// narrower than the update endpoint's status, which also takes edit_mode: the
+// create operation documents only these two.
+message DomainCreateStatus {
+  enum Value {
+    unspecified = 0;
+    active = 1;
+    disabled = 2;
+  }
+}
+
 // Domain mirrors the Linode DNS domain object. master_ips, axfr_ips, and tags are
 // repeated fields, emitted as [] when empty.
 message Domain {
@@ -73,10 +95,10 @@ message DomainGetInput {
 message DomainCreateInput {
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1;
-  // The domain name (e.g., 'example.com').
+  // The domain name, 1 to 253 characters (e.g., 'example.com').
   string domain = 2;
   // Domain type: 'master' (primary) or 'slave' (secondary).
-  string type = 3;
+  DomainType.Value type = 3;
   // Start of Authority email address (required for master domains).
   optional string soa_email = 4;
   // A description for the domain (optional).
@@ -88,6 +110,22 @@ message DomainCreateInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 8;
+  // IP addresses allowed to perform a zone transfer (optional).
+  repeated string axfr_ips = 9;
+  // SOA expire time in seconds (optional).
+  optional int32 expire_sec = 10;
+  // Deprecated display group (optional).
+  optional string group = 11;
+  // Primary DNS server IPs; at least one is required for slave domains.
+  repeated string master_ips = 12;
+  // SOA refresh time in seconds (optional).
+  optional int32 refresh_sec = 13;
+  // SOA retry time in seconds (optional).
+  optional int32 retry_sec = 14;
+  // Domain status: 'active' or 'disabled' (optional, default 'active').
+  optional DomainCreateStatus.Value status = 15;
+  // Tags applied to the new domain (optional).
+  repeated string tags = 16;
 }
 
 // DomainUpdateInput is the input contract for linode_domain_update.

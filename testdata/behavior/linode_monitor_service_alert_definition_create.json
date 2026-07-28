@@ -1,6 +1,6 @@
 {
   "tool": "linode_monitor_service_alert_definition_create",
-  "description": "Alert-definition entity IDs are strings in the Linode Metrics API, unlike the integer entity IDs the token endpoint takes; these cases pin that split plus the positivity rule on channel_ids.",
+  "description": "Alert-definition entity IDs are strings in the Linode Metrics API, unlike the integer entity IDs the token endpoint takes; these cases pin that split plus the positivity rule on channel_ids. A body that will not parse must fail rather than turn into a made-up record. The two languages frame the parse failure differently, so the shared assertion is the parser's position marker.",
   "cases": [
     {
       "name": "rejects integer entity ids",
@@ -69,6 +69,36 @@
         "entity_ids": ["12345"]
       },
       "expect_error": "This creates a monitor alert definition. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
+        "trigger_conditions": { "criteria_condition": "ALL" },
+        "channel_ids": [10000],
+        "entity_ids": ["12345"],
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
+        "trigger_conditions": { "criteria_condition": "ALL" },
+        "channel_ids": [10000],
+        "entity_ids": ["12345"],
+        "confirm": true
+      },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
     }
   ]
 }

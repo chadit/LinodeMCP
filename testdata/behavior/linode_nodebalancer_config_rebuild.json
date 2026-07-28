@@ -1,6 +1,6 @@
 {
   "tool": "linode_nodebalancer_config_rebuild",
-  "description": "Pins the rebuild POST method and path (body omitted: Go sends no body, Python sends {}). Rejection paths diverge (see report).",
+  "description": "Pins the rebuild POST method and path (body omitted: Go sends no body, Python sends {}). Rejection paths diverge (see report). A response that is not a JSON object must fail rather than yield a zeroed config; the bare-array shape of that case is withheld because Python still fabricates a success from it (see report).",
   "cases": [
     {
       "name": "posts the rebuild request",
@@ -12,6 +12,12 @@
       "name": "requires confirm",
       "args": {"nodebalancer_id": 5, "config_id": 7},
       "expect_error": "This rebuilds a NodeBalancer config. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to rebuild"
     }
   ]
 }

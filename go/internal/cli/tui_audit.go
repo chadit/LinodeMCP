@@ -46,12 +46,12 @@ type AuditEventRow struct {
 func AuditEventRows(payload string) ([]AuditEventRow, error) {
 	var decoded struct {
 		Events []struct {
+			PlanID     *string `json:"plan_id"`
 			TS         string  `json:"ts"`
 			Tool       string  `json:"tool"`
 			Capability string  `json:"tool_capability"`
 			Mode       string  `json:"mode"`
 			Status     string  `json:"status"`
-			PlanID     *string `json:"plan_id"`
 		} `json:"events"`
 	}
 
@@ -118,14 +118,14 @@ const (
 // through the shared server and renders the projected events in a
 // scrollable viewport, so the user sees the TUI's own recent activity.
 type auditModel struct {
-	srv       *server.Server
-	viewport  viewport.Model
-	cancel    context.CancelFunc
-	loaded    bool
 	err       error
+	srv       *server.Server
+	cancel    context.CancelFunc
+	viewport  viewport.Model
 	requestID uint64
 	width     int
 	height    int
+	loaded    bool
 }
 
 // newAuditModel builds the audit viewer over an open server. The first
@@ -183,10 +183,10 @@ func (m *auditModel) cancelRefresh() {
 // auditLoadedMsg carries a finished linode_audit_recent dispatch back into
 // the update loop.
 type auditLoadedMsg struct {
-	model     *auditModel
-	requestID uint64
-	result    CallResult
 	err       error
+	model     *auditModel
+	result    CallResult
+	requestID uint64
 }
 
 // handleLoaded records a finished refresh and loads the rendered events

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -192,8 +193,8 @@ func TestSaveUpdatesExistingProfile(t *testing.T) {
 			AllowedTools: []string{toolHello},
 		},
 	}
-	if err := config.WriteAtomic(path, priorCfg); err != nil {
-		t.Errorf("unexpected error: %v", err)
+	if writeErr := config.WriteAtomic(path, priorCfg); writeErr != nil {
+		t.Errorf("unexpected error: %v", writeErr)
 	}
 
 	reg := builder.NewRegistry()
@@ -452,5 +453,88 @@ func TestSaveResultIsValidJSON(t *testing.T) {
 
 	if _, ok := payload["changed_fields"]; !ok {
 		t.Errorf("payload missing key %v", "changed_fields")
+	}
+}
+
+// readOnlyConfigDir stages a minimal config in a directory the process cannot
+// write to, and returns the config path. WriteAtomic lands its temp file beside
+// the target, so a read-only directory is what a config on a read-only mount
+// looks like from the handler's side.
+func readOnlyConfigDir(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+
+	if err := os.WriteFile(path, []byte(minimalConfigYAML), 0o600); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Restore before TempDir's own cleanup, which needs the write bit back to
+	// remove the directory. Cleanups run last-registered-first.
+	t.Cleanup(func() {
+		if err := os.Chmod(dir, 0o700); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	probe, probeErr := os.CreateTemp(dir, "probe.*")
+	if probeErr == nil {
+		if err := probe.Close(); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		t.Skip("this process writes through a read-only directory (running as root?)")
+	}
+
+	return path
+}
+
+// TestSaveReportsWriteFailure covers the branch where the config loads but
+// cannot be written back. The draft has already been merged into the in-memory
+// config by then, so a swallowed write error would report a saved profile that
+// only exists in this process and vanishes on restart.
+func TestSaveReportsWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	path := readOnlyConfigDir(t)
+
+	reg := builder.NewRegistry()
+
+	draft, err := reg.Create(saveDraftName, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	draft.AllowedTools = []string{toolHello}
+
+	_, _, handler := tools.NewLinodeProfileDraftSaveTool(reg, staticConfigPath(path))
+
+	req := mcp.CallToolRequest{}
+	req.Params.Arguments = map[string]any{
+		keyName:    saveDraftName,
+		keyConfirm: true,
+	}
+
+	result, saveErr := handler(t.Context(), req)
+	if !errors.Is(saveErr, fs.ErrPermission) {
+		t.Errorf("saveErr = %v, want the refused write to stay in the chain", saveErr)
+	}
+
+	if result != nil {
+		t.Errorf("result = %+v, want nil", result)
+	}
+
+	reloaded, loadErr := config.Load(path)
+	if loadErr != nil {
+		t.Fatalf("unexpected error: %v", loadErr)
+	}
+
+	if _, saved := reloaded.Profiles[saveDraftName]; saved {
+		t.Error("the profile reached disk despite the write failure")
 	}
 }

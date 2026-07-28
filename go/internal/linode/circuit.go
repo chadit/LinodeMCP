@@ -22,12 +22,12 @@ const (
 //
 // Threshold of 0 disables the breaker entirely (Allow always returns nil).
 type CircuitBreaker struct {
-	mu                  sync.Mutex
+	openedAt            time.Time
 	state               circuitState
 	consecutiveFailures int
-	openedAt            time.Time
 	threshold           int
 	timeout             time.Duration
+	mu                  sync.Mutex
 }
 
 // NewCircuitBreaker constructs a breaker. A non-positive threshold yields a

@@ -1,6 +1,6 @@
 {
   "tool": "linode_image_upload",
-  "description": "Pins the upload POST body. label/region/confirm rejections diverge in text and order (see report).",
+  "description": "Pins the upload POST body. label/region/confirm rejections diverge in text and order (see report). A success body that is not a JSON object must fail rather than turn into a zeroed upload record.",
   "cases": [
     {
       "name": "creates an upload target",
@@ -12,6 +12,42 @@
       "name": "requires confirm",
       "args": {"label": "custom-image", "region": "us-east"},
       "expect_error": "This creates an image upload. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a null API response",
+      "args": { "label": "custom-image", "region": "us-east", "confirm": true },
+      "api_response": null,
+      "expect_api_error": "Failed to upload"
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "label": "custom-image", "region": "us-east", "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to upload"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "label": "custom-image", "region": "us-east", "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to upload"
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "label": "custom-image", "region": "us-east", "confirm": true },
+      "api_response": "not-an-object",
+      "expect_api_error": "Failed to upload"
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "label": "custom-image", "region": "us-east", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to upload"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "label": "custom-image", "region": "us-east", "confirm": true },
+      "api_response": true,
+      "expect_api_error": "Failed to upload"
     }
   ]
 }

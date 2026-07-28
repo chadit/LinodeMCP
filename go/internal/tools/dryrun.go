@@ -49,9 +49,9 @@ type DryRunDetails struct {
 // DryRunRequest captures the HTTP method, path, and optional sanitized body
 // the mutating call would have made.
 type DryRunRequest struct {
+	Body   any    `json:"body,omitempty"`
 	Method string `json:"method"`
 	Path   string `json:"path"`
-	Body   any    `json:"body,omitempty"`
 }
 
 // IsDryRun reports whether the request's dry_run argument is the
@@ -239,8 +239,8 @@ func toProtoValue(value any) (*structpb.Value, error) {
 	}
 
 	var generic any
-	if err := json.Unmarshal(data, &generic); err != nil {
-		return nil, fmt.Errorf("unmarshal value for proto: %w", err)
+	if unmarshalErr := json.Unmarshal(data, &generic); unmarshalErr != nil {
+		return nil, fmt.Errorf("unmarshal value for proto: %w", unmarshalErr)
 	}
 
 	protoValue, err := structpb.NewValue(generic)

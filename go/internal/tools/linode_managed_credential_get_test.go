@@ -189,8 +189,8 @@ func TestLinodeManagedCredentialGetToolInvalidCredentialId(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingCredentialID, args: map[string]any{}},
 		{name: caseZeroCredentialID, args: map[string]any{managedCredentialIDParam: 0}},

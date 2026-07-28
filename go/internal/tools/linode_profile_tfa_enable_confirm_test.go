@@ -261,8 +261,8 @@ func TestLinodeProfileTFAEnableConfirmToolTfaCodeRequiredBeforeConfirmAndClient(
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		code any
+		name string
 	}{
 		{name: caseMissing},
 		{name: caseEmpty, code: ""},
@@ -317,8 +317,8 @@ func TestLinodeProfileTFAEnableConfirmToolConfirmRequiredBeforeClient(t *testing
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},

@@ -53,19 +53,20 @@ type FormFieldSpec struct {
 // reference: building the request is pure, so the parent model performs
 // the dispatch.
 type formModel struct {
-	tool       string
 	schema     mcp.ToolInputSchema
+	tool       string
+	mode       string
 	fields     []formField
 	envChoices []string
 
-	focus   int
-	dryRun  bool
-	confirm bool
-	mode    string
-	envIdx  int
+	focus  int
+	envIdx int
 
 	width  int
 	height int
+
+	dryRun  bool
+	confirm bool
 }
 
 // newFormModel builds a form for one tool from its input schema and the

@@ -3047,8 +3047,8 @@ func TestLinodeAccountInvoiceGetToolInvalidInvoiceIdRejectsBeforeClient(t *testi
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: "missing invoice id", args: map[string]any{}},
 		{name: "string invoice id", args: map[string]any{keyInvoiceID: "12345"}},
@@ -3627,8 +3627,8 @@ func TestLinodeProfileTFAEnableToolConfirmRequiredBeforeClient(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},
@@ -3911,8 +3911,8 @@ func TestLinodeProfilePhoneNumberSendToolConfirmRequiredBeforeClient(t *testing.
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},
@@ -4186,8 +4186,8 @@ func TestLinodeProfilePhoneNumberDeleteToolConfirmRequiredBeforeClient(t *testin
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},
@@ -4466,8 +4466,8 @@ func TestLinodeProfilePhoneNumberVerifyToolConfirmRequiredBeforeClient(t *testin
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},
@@ -5025,6 +5025,11 @@ func TestLinodeAccountChildAccountGetToolSuccess(t *testing.T) {
 		},
 	}
 
+	// The extra field the proto does not model must be dropped by the
+	// DiscardUnknown decode, proving the output routes through the proto
+	// serializer rather than the legacy struct.
+	wrapped := withUnmodeledField(t, childAccount)
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
@@ -5039,15 +5044,6 @@ func TestLinodeAccountChildAccountGetToolSuccess(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-
-		// The extra field the proto does not model must be dropped by the
-		// DiscardUnknown decode, proving the output routes through the proto
-		// serializer rather than the legacy struct.
-		wrapped := struct {
-			linode.ChildAccount
-
-			NotInProto string `json:"not_in_proto"`
-		}{ChildAccount: childAccount, NotInProto: valNotInProto}
 
 		if err := json.NewEncoder(w).Encode(wrapped); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -5974,8 +5970,8 @@ func TestLinodeProfileLoginGetToolInvalidLoginIdRejectsBeforeClient(t *testing.T
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissing, args: map[string]any{}},
 		{name: loginIDCaseZero, args: map[string]any{keyLoginID: 0}},
@@ -6175,8 +6171,8 @@ func TestLinodeAccountLoginGetToolInvalidLoginIdRejectsBeforeClient(t *testing.T
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissing, args: map[string]any{}},
 		{name: loginIDCaseZero, args: map[string]any{keyLoginID: 0}},
@@ -6634,8 +6630,8 @@ func TestLinodeProfileAppDeleteToolConfirmRequiredBeforeClient(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},
@@ -7125,8 +7121,8 @@ func TestLinodeProfileDeviceRevokeToolConfirmRequiredBeforeClient(t *testing.T) 
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},
@@ -7660,8 +7656,8 @@ func TestLinodeAccountOAuthClientUpdateToolConfirmRequiredBeforeClient(t *testin
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 		include bool
 	}{
 		{name: caseMissing},
@@ -7915,8 +7911,8 @@ func TestLinodeAccountOAuthClientThumbnailUpdateToolConfirmRequiredBeforeClient(
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 		include bool
 	}{
 		{name: caseMissing},
@@ -8381,8 +8377,8 @@ func TestLinodeAccountOAuthClientDeleteToolConfirmRequiredBeforeClient(t *testin
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 		include bool
 	}{
 		{name: caseMissing},
@@ -8617,8 +8613,8 @@ func TestLinodeAccountOAuthClientResetSecretToolConfirmRequiredBeforeClient(t *t
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 		include bool
 	}{
 		{name: caseMissing},
@@ -8860,8 +8856,8 @@ func TestLinodeAccountOAuthClientCreateToolConfirmRequiredBeforeClient(t *testin
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 		include bool
 	}{
 		{name: caseMissing},
@@ -9546,6 +9542,10 @@ func TestLinodeAccountPaymentMethodGetToolDefinition(t *testing.T) {
 func TestLinodeAccountPaymentMethodGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	// The extra top-level field the proto does not model must be dropped by
+	// the DiscardUnknown decode, proving proto-canonical output.
+	method := withUnmodeledField(t, linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}})
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
@@ -9564,17 +9564,6 @@ func TestLinodeAccountPaymentMethodGetToolSuccess(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-
-		// The extra top-level field the proto does not model must be dropped by
-		// the DiscardUnknown decode, proving proto-canonical output.
-		method := struct {
-			linode.AccountPaymentMethod
-
-			NotInProto string `json:"not_in_proto"`
-		}{
-			AccountPaymentMethod: linode.AccountPaymentMethod{ID: 123, Type: paymentMethodCreditCard, IsDefault: true, Data: map[string]any{keyLastFour: paymentMethodLastFour}},
-			NotInProto:           valNotInProto,
-		}
 
 		if err := json.NewEncoder(w).Encode(method); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -9888,8 +9877,8 @@ func TestLinodeAccountPaymentMethodCreateToolConfirmRejectsBeforeClient(t *testi
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: casePaymentMethodConfirmFalse, confirm: false},
@@ -10117,8 +10106,8 @@ func TestLinodeAccountPaymentMethodDeleteToolConfirmRejectsBeforeClient(t *testi
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: casePaymentMethodConfirmFalse, confirm: false},
@@ -10339,8 +10328,8 @@ func TestLinodeAccountPaymentMethodMakeDefaultToolConfirmRejectsBeforeClient(t *
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: casePaymentMethodConfirmFalse, confirm: false},
@@ -11531,8 +11520,8 @@ func TestLinodeAccountEventSeenToolConfirmRequiredBeforeClientCall(t *testing.T)
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -11998,8 +11987,8 @@ func TestLinodeAccountServiceTransferCreateToolConfirmRequiredBeforeClientCall(t
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -12280,8 +12269,8 @@ func TestLinodeAccountServiceTransferAcceptToolConfirmRequiredBeforeClientCall(t
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm},
@@ -12527,8 +12516,8 @@ func TestLinodeAccountServiceTransferDeleteToolConfirmRequiredBeforeClientCall(t
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -12996,8 +12985,8 @@ func TestLinodeAccountChildAccountTokenToolConfirmRequiredBeforeClientCall(t *te
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -13259,8 +13248,8 @@ func TestLinodeAccountBetaEnrollToolConfirmRequiredBeforeClientCall(t *testing.T
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -13745,8 +13734,8 @@ func TestLinodeAccountAgreementsAcknowledgeToolConfirmRequiredBeforeClientCall(t
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -15315,6 +15304,40 @@ func createRequestWithArgs(t *testing.T, args map[string]any) mcp.CallToolReques
 	}
 }
 
+// withUnmodeledField renders value as a JSON object carrying one extra
+// top-level key the proto message does not model, so a success test can assert
+// the DiscardUnknown decode drops it. Splicing the key in beats wrapping value
+// in a struct that embeds it: embeddedstructfieldcheck pins the embedded field
+// first while fieldalignment wants the trailing string ahead of it, and no
+// field order satisfies both.
+func withUnmodeledField(t *testing.T, value any) json.RawMessage {
+	t.Helper()
+
+	encoded, encodeErr := json.Marshal(value)
+	if encodeErr != nil {
+		t.Fatalf("unexpected error: %v", encodeErr)
+	}
+
+	fields := map[string]json.RawMessage{}
+	if decodeErr := json.Unmarshal(encoded, &fields); decodeErr != nil {
+		t.Fatalf("unexpected error: %v", decodeErr)
+	}
+
+	extra, extraErr := json.Marshal(valNotInProto)
+	if extraErr != nil {
+		t.Fatalf("unexpected error: %v", extraErr)
+	}
+
+	fields[keyNotInProto] = extra
+
+	merged, mergeErr := json.Marshal(fields)
+	if mergeErr != nil {
+		t.Fatalf("unexpected error: %v", mergeErr)
+	}
+
+	return merged
+}
+
 // listResponseCount parses a proto-list tool response and returns its count
 // field. Proto-backed list tools serialize through protojson, which varies the
 // whitespace after the colon between runs, so the count must be read from the
@@ -15370,8 +15393,8 @@ func TestLinodeAccountCancelToolConfirmRequiredBeforeClientCall(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -15612,8 +15635,8 @@ func TestLinodeAccountUpdateToolConfirmRequiredBeforeClientCall(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},
@@ -16163,14 +16186,7 @@ func TestLinodeSSHKeyGetToolNegativeSshkeyId(t *testing.T) {
 func TestLinodeSSHKeyGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
-	sshKey := struct {
-		linode.SSHKey
-
-		NotInProto string `json:"not_in_proto"`
-	}{
-		SSHKey:     linode.SSHKey{ID: 42, Label: testKeyLabel, SSHKey: "ssh-rsa AAAA test@example.com", Created: "2024-01-01T00:00:00Z"},
-		NotInProto: valNotInProto,
-	}
+	sshKey := withUnmodeledField(t, linode.SSHKey{ID: 42, Label: testKeyLabel, SSHKey: "ssh-rsa AAAA test@example.com", Created: "2024-01-01T00:00:00Z"})
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/profile/sshkeys/42" {
@@ -16301,8 +16317,8 @@ func TestLinodeDomainZoneFileGetToolInvalidDomainIdRejectedBeforeClientCall(t *t
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},
@@ -16747,8 +16763,8 @@ func TestLinodeAccountSettingsManagedEnableToolConfirmRequiredBeforeClientCall(t
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},
@@ -16947,8 +16963,8 @@ func TestLinodeAccountSettingsUpdateToolConfirmRequiredBeforeClientCall(t *testi
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},

@@ -187,6 +187,31 @@ func TestBuildDryRunResponseOmitsEmptyEnvironment(t *testing.T) {
 	}
 }
 
+// TestBuildDryRunResponseRejectsUndecodableState covers the second half of the
+// current_state conversion: the value encodes to JSON cleanly and then fails to
+// decode back. json.Number carries the literal text through the encoder
+// untouched, so a magnitude no float64 can hold only blows up on the way back
+// in. The preview has to fail rather than ship a current_state the operator
+// would read as the real resource before approving a destructive call.
+func TestBuildDryRunResponseRejectsUndecodableState(t *testing.T) {
+	t.Parallel()
+
+	result, err := tools.BuildDryRunResponse(
+		"linode_instance_delete",
+		"",
+		"DELETE",
+		"/linode/instances/123",
+		map[string]any{"transfer_bytes": json.Number("1e1000")},
+	)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	if result != nil {
+		t.Errorf("result = %+v, want nil", result)
+	}
+}
+
 // assertDryRunRequest checks the would_execute preview of a decoded dry-run or
 // plan body carries the expected method and path. The dry-run and plan
 // envelopes serialize through protojson now, which varies colon spacing, so the

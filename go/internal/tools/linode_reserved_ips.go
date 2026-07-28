@@ -52,10 +52,10 @@ func NewLinodeReservedIPGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 
 		raw, err := client.GetReservedIPRaw(ctx, address)
 		if err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to get reserved IPv4 address: %v", err)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("%s: %v", reservedIPGetFailure, err)), nil
 		}
 
-		return marshalReservedIPResponse(raw)
+		return reservedIPObjectResponse(raw, reservedIPGetFailure)
 	}
 
 	return tool, profiles.CapRead, handler
@@ -158,10 +158,10 @@ func handleReservedIPCreateRequest(ctx context.Context, request *mcp.CallToolReq
 
 	raw, err := client.CreateReservedIPRaw(ctx, region, tags)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to reserve public IPv4 address: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", reservedIPCreateFailure, err)), nil
 	}
 
-	return marshalReservedIPResponse(raw)
+	return reservedIPObjectResponse(raw, reservedIPCreateFailure)
 }
 
 // NewLinodeReservedIPUpdateTool creates a tool for replacing the tags on a
@@ -214,10 +214,10 @@ func handleReservedIPUpdateRequest(ctx context.Context, request *mcp.CallToolReq
 
 	raw, err := client.UpdateReservedIPRaw(ctx, address, tags)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to replace reserved IPv4 tags: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("%s: %v", reservedIPUpdateFailure, err)), nil
 	}
 
-	return marshalReservedIPResponse(raw)
+	return reservedIPObjectResponse(raw, reservedIPUpdateFailure)
 }
 
 // reservedIPRegionFromTool validates the documented lowercase region slug.
@@ -265,6 +265,23 @@ func reservedIPTagsFromTool(args map[string]any, required bool) ([]string, bool,
 	}
 
 	return tags, true, ""
+}
+
+// reservedIPObjectResponse renders one address body, rejecting anything that
+// is not a JSON object before it reaches the proto decode.
+//
+// The guard is load-bearing on both sides. protojson fails on a bare array or
+// scalar with a Go error, which leaves the transport rather than the tool
+// reporting the problem, and Python's ParseDict is worse: it finds no members
+// to copy out of a list or string and hands back a zero-valued address as a
+// success. failure carries the tool's action text so the two languages emit
+// the same sentence.
+func reservedIPObjectResponse(raw json.RawMessage, failure string) (*mcp.CallToolResult, error) {
+	if !linode.IsObjectBody(raw) {
+		return mcp.NewToolResultError(failure + ": " + reservedIPResponseNotObject), nil
+	}
+
+	return marshalReservedIPResponse(raw)
 }
 
 // marshalReservedIPResponse renders one reserved address the way the list path
@@ -353,6 +370,14 @@ const (
 	// The dry-run contract's stand-in when a monthly change cannot be
 	// estimated, which reserved IPv4 pricing cannot be without a region price.
 	reservedIPBillingUnknown = "unknown"
+	// The action halves of the address tools' error text, shared by the
+	// client-failure and malformed-body paths so both read the same way.
+	reservedIPCreateFailure = "Failed to reserve public IPv4 address"
+	reservedIPUpdateFailure = "Failed to replace reserved IPv4 tags"
+	reservedIPGetFailure    = "Failed to get reserved IPv4 address"
+	// The sentence both languages emit for a body that is not a JSON object,
+	// which is what the shared behavior fixture matches on.
+	reservedIPResponseNotObject = "reserved IP response must be an object"
 )
 
 // reservedIPRegionPattern is the documented lowercase region slug shape, kept
@@ -419,8 +444,8 @@ func reservedIPListPagination(args map[string]any) (int, int, string) {
 }
 
 type reservedIPListJSON struct {
-	Count       int32                   `json:"count"`
 	ReservedIPs []reservedIPAddressJSON `json:"reserved_ips"`
+	Count       int32                   `json:"count"`
 }
 
 type reservedIPAddressJSON struct {

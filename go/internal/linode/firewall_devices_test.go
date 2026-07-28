@@ -163,10 +163,10 @@ func TestClientGetFirewallDeviceRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
+		wantErr    error
 		name       string
 		firewallID int
 		deviceID   int
-		wantErr    error
 	}{
 		{name: caseZeroFirewallDeviceParentID, firewallID: 0, deviceID: 456, wantErr: linode.ErrFirewallIDPositive},
 		{name: caseZeroFirewallDeviceID, firewallID: 123, deviceID: 0, wantErr: linode.ErrFirewallDeviceIDPositive},
@@ -305,10 +305,10 @@ func TestClientDeleteFirewallDeviceRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
+		wantErr    error
 		name       string
 		firewallID int
 		deviceID   int
-		wantErr    error
 	}{
 		{name: caseZeroFirewallDeviceParentID, firewallID: 0, deviceID: 456, wantErr: linode.ErrFirewallIDPositive},
 		{name: caseZeroFirewallDeviceID, firewallID: 123, deviceID: 0, wantErr: linode.ErrFirewallDeviceIDPositive},

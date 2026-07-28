@@ -808,8 +808,8 @@ func TestLinodeInstanceConfigInterfaceDeleteToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeInstanceConfigInterfaceDeleteTool(cfg)
 
 	confirmTests := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},

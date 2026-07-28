@@ -27,6 +27,9 @@ const (
 	caseEmptyTag             = "empty tag"
 	caseNoConfirmation       = "no confirmation"
 	caseIPv6Address          = "ipv6 address"
+	// The malformed-body half of both write tools' error text, shared with the
+	// Python twin through testdata/behavior so neither side can drift.
+	reservedIPNotObjectText = "reserved IP response must be an object"
 )
 
 // reservedIPBodyFixture is the documented single-address response, carrying the
@@ -538,27 +541,94 @@ func reservedIPErrorServer(t *testing.T) *config.Config {
 }
 
 // reservedIPToolFactory is one of the family's constructors, named so a failure
-// says which tool left an error branch unhandled.
+// says which tool left an error branch unhandled. shapeError is the whole tool
+// error a non-object response body has to produce, set for the three tools that
+// decode one address; type_list reaches the shared list decoder instead and
+// fails with its wording, not this one.
 type reservedIPToolFactory struct {
-	name string
-	tool func(*config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error))
-	args map[string]any
+	name       string
+	tool       func(*config.Config) (mcp.Tool, profiles.Capability, func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error))
+	args       map[string]any
+	shapeError string
 }
 
 func reservedIPToolFactories() []reservedIPToolFactory {
 	return []reservedIPToolFactory{
-		{name: "get", tool: tools.NewLinodeReservedIPGetTool, args: map[string]any{keyAddress: reservedIPAddressFixture}},
+		{
+			name:       "get",
+			tool:       tools.NewLinodeReservedIPGetTool,
+			args:       map[string]any{keyAddress: reservedIPAddressFixture},
+			shapeError: "Failed to get reserved IPv4 address: " + reservedIPNotObjectText,
+		},
 		{name: "type_list", tool: tools.NewLinodeReservedIPTypeListTool, args: map[string]any{}},
 		{
-			name: "create",
-			tool: tools.NewLinodeReservedIPCreateTool,
-			args: map[string]any{keyRegion: regionUSEast, keyConfirm: true},
+			name:       "create",
+			tool:       tools.NewLinodeReservedIPCreateTool,
+			args:       map[string]any{keyRegion: regionUSEast, keyConfirm: true},
+			shapeError: "Failed to reserve public IPv4 address: " + reservedIPNotObjectText,
 		},
 		{
-			name: "update",
-			tool: tools.NewLinodeReservedIPUpdateTool,
-			args: map[string]any{keyAddress: reservedIPAddressFixture, keyReservedIPTags: []any{reservedIPTagFixture}, keyConfirm: true},
+			name:       "update",
+			tool:       tools.NewLinodeReservedIPUpdateTool,
+			args:       map[string]any{keyAddress: reservedIPAddressFixture, keyReservedIPTags: []any{reservedIPTagFixture}, keyConfirm: true},
+			shapeError: "Failed to replace reserved IPv4 tags: " + reservedIPNotObjectText,
 		},
+	}
+}
+
+// reservedIPAddressToolFactories narrows the family to the tools that decode a
+// single-address response body, which are the ones the malformed-body case
+// attacks.
+func reservedIPAddressToolFactories() []reservedIPToolFactory {
+	decoders := make([]reservedIPToolFactory, 0, 3)
+
+	for _, factory := range reservedIPToolFactories() {
+		if factory.shapeError != "" {
+			decoders = append(decoders, factory)
+		}
+	}
+
+	return decoders
+}
+
+// TestReservedIPToolsRejectNonObjectBodies proves a get, create or update
+// response that is not a JSON object fails as a tool error carrying the shared
+// sentence, rather than rendering as an address with every field empty. The
+// exact text is pinned because the Python twin has to emit the same one.
+func TestReservedIPToolsRejectNonObjectBodies(t *testing.T) {
+	t.Parallel()
+
+	bodies := map[string]any{
+		"bare array":  []any{},
+		"json null":   nil,
+		"bare string": "reserved",
+		"bare number": 42,
+		"boolean":     true,
+	}
+
+	for _, factory := range reservedIPAddressToolFactories() {
+		for bodyName, body := range bodies {
+			t.Run(factory.name+"/"+bodyName, func(t *testing.T) {
+				t.Parallel()
+
+				cfg, _, _ := reservedIPServer(t, body)
+				_, _, handler := factory.tool(cfg)
+
+				result, err := handler(t.Context(), createRequestWithArgs(t, factory.args))
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+
+				textContent, isText := result.Content[0].(mcp.TextContent)
+				if !result.IsError || !isText {
+					t.Fatalf("result = %+v, want a tool error", result)
+				}
+
+				if textContent.Text != factory.shapeError {
+					t.Errorf("text = %q, want %q", textContent.Text, factory.shapeError)
+				}
+			})
+		}
 	}
 }
 
@@ -610,18 +680,20 @@ func TestReservedIPToolsSurfaceConfigErrors(t *testing.T) {
 	}
 }
 
-// TestReservedIPGetToolRejectsAMalformedBody proves a response that is not an
-// object fails loudly instead of rendering as an empty address.
+// TestReservedIPGetToolRejectsAMalformedBody covers the half of the malformed
+// surface the shape guard deliberately leaves alone: an object whose fields do
+// not fit the proto is still a hard decode error, because only the wrong
+// top-level JSON type has a sentence the Python twin can match.
 func TestReservedIPGetToolRejectsAMalformedBody(t *testing.T) {
 	t.Parallel()
 
-	cfg, _, _ := reservedIPServer(t, []any{})
+	cfg, _, _ := reservedIPServer(t, map[string]any{keyReservedIPPrefix: "not-an-integer"})
 	_, _, handler := tools.NewLinodeReservedIPGetTool(cfg)
 
 	_, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
 		keyAddress: reservedIPAddressFixture,
 	}))
 	if err == nil {
-		t.Fatal("expected a decode error for a non-object response body")
+		t.Fatal("expected a decode error for a body the proto cannot accept")
 	}
 }

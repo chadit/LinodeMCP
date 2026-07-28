@@ -415,8 +415,8 @@ func TestLinodeLongviewClientUpdateToolConfirmRejectsBeforeClient(t *testing.T) 
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},
@@ -663,8 +663,8 @@ func TestLinodeLongviewClientDeleteToolConfirmRejectsBeforeClient(t *testing.T) 
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},

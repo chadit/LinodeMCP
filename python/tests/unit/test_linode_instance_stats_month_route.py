@@ -70,18 +70,26 @@ async def test_get_instance_stats_by_year_month_rejects_invalid_path_params(
     await client.close()
 
 
-async def test_get_instance_stats_by_year_month_handles_non_object_json() -> None:
-    """Client returns an empty mapping for unexpected non-object stats responses."""
+@pytest.mark.parametrize("body", [[], "stats", 5, True, None])
+async def test_get_instance_stats_by_year_month_rejects_non_object_json(
+    body: object,
+) -> None:
+    """Client rejects a non-object stats body instead of emptying it.
+
+    An empty mapping would serialize into a zero-valued InstanceStats and reach
+    the caller as a successful read with no graphs, hiding the malformed body.
+    Go decodes this endpoint with protojson, which rejects every one of these.
+    """
     client = Client("https://api.linode.com/v4", "test-token")
     response = MagicMock()
-    response.json.return_value = []
+    response.json.return_value = body
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = response
 
-        result = await client.get_instance_stats_by_year_month(123, 2024, 7)
+        with pytest.raises(TypeError, match="instance stats response"):
+            await client.get_instance_stats_by_year_month(123, 2024, 7)
 
-    assert result == {}
     mock_request.assert_awaited_once_with("GET", "/linode/instances/123/stats/2024/7")
 
     await client.close()

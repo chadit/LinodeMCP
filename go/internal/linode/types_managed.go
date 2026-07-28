@@ -18,15 +18,15 @@ type CreateManagedContactPhoneRequest struct {
 
 // CreateManagedServiceRequest contains fields for POST /managed/services.
 type CreateManagedServiceRequest struct {
+	Body              *string `json:"body,omitempty"`
+	ConsultationGroup *string `json:"consultation_group,omitempty"`
+	Notes             *string `json:"notes,omitempty"`
+	Region            *string `json:"region,omitempty"`
 	Label             string  `json:"label"`
 	ServiceType       string  `json:"service_type"`
 	Address           string  `json:"address"`
-	Timeout           int     `json:"timeout"`
-	Body              *string `json:"body,omitempty"`
-	ConsultationGroup *string `json:"consultation_group,omitempty"`
 	Credentials       []int   `json:"credentials,omitempty"`
-	Notes             *string `json:"notes,omitempty"`
-	Region            *string `json:"region,omitempty"`
+	Timeout           int     `json:"timeout"`
 }
 
 // UpdateManagedServiceRequest contains mutable fields for PUT /managed/services/{serviceID}.
@@ -45,12 +45,12 @@ type UpdateManagedServiceRequest struct {
 
 // ManagedContact represents a contact for Linode Managed service alerts.
 type ManagedContact struct {
-	ID      int                 `json:"id"`
+	Phone   ManagedContactPhone `json:"phone"`
+	Group   *string             `json:"group"`
 	Name    string              `json:"name"`
 	Email   string              `json:"email"`
-	Group   *string             `json:"group"`
-	Phone   ManagedContactPhone `json:"phone"`
 	Updated string              `json:"updated"`
+	ID      int                 `json:"id"`
 }
 
 // ManagedContactPhone contains primary and secondary phone numbers for a Managed contact.
@@ -61,18 +61,18 @@ type ManagedContactPhone struct {
 
 // ManagedLinodeSettings represents Managed service settings for a Linode.
 type ManagedLinodeSettings struct {
-	ID    int                      `json:"id"`
 	Label string                   `json:"label"`
 	Group string                   `json:"group"`
 	SSH   ManagedLinodeSettingsSSH `json:"ssh"`
+	ID    int                      `json:"id"`
 }
 
 // ManagedLinodeSettingsSSH contains SSH access settings for Managed service responders.
 type ManagedLinodeSettingsSSH struct {
-	Access bool    `json:"access"`
-	IP     string  `json:"ip"`
 	Port   *int    `json:"port"`
 	User   *string `json:"user"`
+	IP     string  `json:"ip"`
+	Access bool    `json:"access"`
 }
 
 // UpdateManagedLinodeSettingsRequest contains mutable Managed Linode settings fields.
@@ -90,35 +90,35 @@ type UpdateManagedLinodeSettingsSSH struct {
 
 // ManagedService represents a service monitored by Linode Managed.
 type ManagedService struct {
-	ID                int     `json:"id"`
-	Label             string  `json:"label"`
-	ServiceType       string  `json:"service_type"`
+	Body              *string `json:"body"`
+	Region            *string `json:"region"`
+	Notes             *string `json:"notes"`
 	Status            string  `json:"status"`
 	Address           string  `json:"address"`
-	Body              *string `json:"body"`
 	ConsultationGroup string  `json:"consultation_group"`
 	Created           string  `json:"created"`
-	Credentials       []int   `json:"credentials"`
-	Notes             *string `json:"notes"`
-	Region            *string `json:"region"`
-	Timeout           int     `json:"timeout"`
+	ServiceType       string  `json:"service_type"`
+	Label             string  `json:"label"`
 	Updated           string  `json:"updated"`
+	Credentials       []int   `json:"credentials"`
+	ID                int     `json:"id"`
+	Timeout           int     `json:"timeout"`
 }
 
 // ManagedIssue represents an issue detected by Linode Managed service monitors.
 type ManagedIssue struct {
-	ID       int                `json:"id"`
+	Entity   ManagedIssueEntity `json:"entity"`
 	Created  string             `json:"created"`
 	Services []int              `json:"services"`
-	Entity   ManagedIssueEntity `json:"entity"`
+	ID       int                `json:"id"`
 }
 
 // ManagedIssueEntity identifies the support ticket opened for a Managed issue.
 type ManagedIssueEntity struct {
-	ID    int    `json:"id"`
 	Label string `json:"label"`
 	Type  string `json:"type"`
 	URL   string `json:"url"`
+	ID    int    `json:"id"`
 }
 
 // UpdateManagedContactRequest contains mutable Managed contact fields.

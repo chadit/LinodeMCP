@@ -214,8 +214,8 @@ func TestLinodeSSHKeyUpdateToolConfirmMustBeLiteralTrueBeforeClientCall(t *testi
 	_, _, successHandler := tools.NewLinodeSSHKeyUpdateTool(successCfg)
 
 	tests := []struct {
-		name    string
 		confirm any
+		name    string
 		set     bool
 	}{
 		{name: "missing"},
@@ -2302,8 +2302,8 @@ func TestLinodeDomainImportToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeDomainImportTool(cfg)
 
 	confirmTests := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},
@@ -2541,8 +2541,8 @@ func TestLinodeDomainCloneToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeDomainCloneTool(cfg)
 
 	confirmTests := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},
@@ -2832,7 +2832,7 @@ func TestLinodeDomainCreateToolSuccessfulCreation(t *testing.T) {
 	req := createRequestWithArgs(t, map[string]any{
 		keyDomain:   domainExample,
 		keyType:     keyMaster,
-		keySoaEmail: "admin@example.com",
+		keySoaEmail: domainSOAEmailExample,
 		keyConfirm:  true,
 	})
 

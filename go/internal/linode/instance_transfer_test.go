@@ -332,11 +332,11 @@ func TestClientGetInstanceTransferByYearMonthValidatesPathParams(t *testing.T) {
 	client := linode.NewClient("https://example.invalid", "my-token", nil, linode.WithMaxRetries(0))
 
 	cases := []struct {
+		wantErr error
 		name    string
 		id      int
 		year    int
 		mon     int
-		wantErr error
 	}{
 		{name: "zero linode id", id: 0, year: 2024, mon: 1, wantErr: linode.ErrLinodeIDPositive},
 		{name: "zero year", id: 123, year: 0, mon: 1, wantErr: linode.ErrTransferYearPositive},

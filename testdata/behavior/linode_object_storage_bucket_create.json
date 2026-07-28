@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_bucket_create",
-  "description": "Pins the shared label/region validation (behind confirm) and the create POST body. The confirm-gate message text itself diverges, so every case carries confirm:true.",
+  "description": "Pins the shared label/region validation (behind confirm) and the create POST body. The confirm-gate message text itself diverges, so every case carries confirm:true. A success body that is not a JSON object must fail rather than turn into a zeroed bucket record.",
   "cases": [
     {
       "name": "rejects label shorter than 3 characters",
@@ -31,6 +31,24 @@
       "name": "requires confirm",
       "args": {"label": "test-bucket", "region": "us-east", "acl": "private"},
       "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "label": "test-bucket", "region": "us-east", "acl": "private", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create bucket"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "label": "test-bucket", "region": "us-east", "acl": "private", "confirm": true },
+      "api_response": true,
+      "expect_api_error": "Failed to create bucket"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "label": "test-bucket", "region": "us-east", "acl": "private", "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to create bucket"
     }
   ]
 }

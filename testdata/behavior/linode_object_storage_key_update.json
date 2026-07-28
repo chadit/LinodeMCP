@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_key_update",
-  "description": "Pins the shared key_id validation (with confirm) and the key update PUT body. The key_id case carries confirm:true because Go validates behind the confirm gate while Python validates ahead of it; they only agree once confirm is set.",
+  "description": "Pins the shared key_id validation (with confirm) and the key update PUT body. The key_id case carries confirm:true because Go validates behind the confirm gate while Python validates ahead of it; they only agree once confirm is set. A success body that is not a JSON object must fail rather than turn into a zeroed key record; the two languages word that failure differently, so only the key subject is shared.",
   "cases": [
     {
       "name": "requires positive key_id",
@@ -21,6 +21,24 @@
       "name": "requires confirm",
       "args": {"key_id": 123, "label": "renamed-key"},
       "expect_error": "This modifies access key permissions. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "key_id": 123, "label": "renamed-key", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "access key 123"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "key_id": 123, "label": "renamed-key", "confirm": true },
+      "api_response": true,
+      "expect_api_error": "access key 123"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "key_id": 123, "label": "renamed-key", "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "access key 123"
     }
   ]
 }

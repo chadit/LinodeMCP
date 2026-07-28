@@ -114,7 +114,10 @@ async def handle_linode_volume_create(
         body["linode_id"] = arguments.get("linode_id")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.post_raw("/volumes", body)
+        # retry=False because POST /volumes is not idempotent: the API assigns
+        # the ID, so replaying after a transient failure leaves a second
+        # billable volume the caller never learns about.
+        raw = await client.post_raw("/volumes", body, retry=False)
         vol_label = raw_str(raw, "label")
         vol_id = raw_int(raw, "id")
         vol_region = raw_str(raw, "region")
@@ -201,7 +204,10 @@ async def handle_linode_volume_clone(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         endpoint = f"/volumes/{int(volume_id)}/clone"
-        raw = await client.post_raw(endpoint, {"label": label})
+        # retry=False because the clone POST creates a new volume with its own
+        # API-assigned ID, so replaying after a transient failure leaves a
+        # second billable copy the caller never learns about.
+        raw = await client.post_raw(endpoint, {"label": label}, retry=False)
         vol_label = raw_str(raw, "label")
         return serialize_api_response(
             {
@@ -283,6 +289,9 @@ async def handle_linode_volume_attach(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         endpoint = f"/volumes/{int(volume_id)}/attach"
+        # Retry stays on: attach names both sides of an existing pairing and
+        # creates nothing, so a replay converges on the same attachment rather
+        # than leaving a duplicate behind.
         raw = await client.post_raw(endpoint, body)
         return serialize_api_response(
             {
@@ -457,6 +466,8 @@ async def handle_linode_volume_resize(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         endpoint = f"/volumes/{int(volume_id)}/resize"
+        # Retry stays on: resize states a target size on an existing volume, so
+        # a replay asks for the same end state rather than creating anything.
         raw = await client.post_raw(endpoint, {"size": int(size)})
         return serialize_api_response(
             {

@@ -73,22 +73,22 @@ type Mode string
 // omitted) so every record has the same shape.
 type Event struct {
 	TS                   time.Time      `json:"ts"`
-	TSUnixNS             int64          `json:"ts_unix_ns"`
+	PlanID               *string        `json:"plan_id"`
+	Error                *string        `json:"error"`
+	Args                 map[string]any `json:"args"`
 	EventID              string         `json:"event_id"`
 	Tool                 string         `json:"tool"`
 	ToolCapability       Capability     `json:"tool_capability"`
 	Environment          string         `json:"environment"`
 	Profile              string         `json:"profile"`
 	Mode                 Mode           `json:"mode"`
-	PlanID               *string        `json:"plan_id"`
-	Args                 map[string]any `json:"args"`
-	ArgsRedacted         []string       `json:"args_redacted"`
 	Status               Status         `json:"status"`
-	LatencyMS            int64          `json:"latency_ms"`
 	ResultSummary        string         `json:"result_summary"`
-	Error                *string        `json:"error"`
 	LinodemcpVersion     string         `json:"linodemcp_version"`
 	SessionID            string         `json:"session_id"`
+	ArgsRedacted         []string       `json:"args_redacted"`
+	TSUnixNS             int64          `json:"ts_unix_ns"`
+	LatencyMS            int64          `json:"latency_ms"`
 	CredentialGeneration uint64         `json:"credential_generation"`
 }
 

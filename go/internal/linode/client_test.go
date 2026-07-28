@@ -1644,6 +1644,67 @@ func TestClientUpdateProfilePreferencesMalformedJSON(t *testing.T) {
 	}
 }
 
+// TestClientProfilePreferencesResponseShape pins which success bodies the two
+// preferences calls accept. Both decode into a map, where encoding/json leaves a
+// null body alone without erroring, so null is an empty-preferences success and
+// every other non-object is a failure. The Python client mirrors this split: it
+// used to answer any of these with an empty object and report success.
+func TestClientProfilePreferencesResponseShape(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		body      string
+		wantError bool
+	}{
+		{name: "top-level object", body: `{"theme":"dark"}`},
+		{name: "top-level null", body: domainCreateJSONNull},
+		{name: "top-level array", body: jsonBodyArray, wantError: true},
+		{name: "top-level string", body: `"not-an-object"`, wantError: true},
+		{name: "top-level number", body: `7`, wantError: true},
+		{name: "top-level boolean", body: jsonBodyTrue, wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tcApplicationJSON)
+
+				if _, err := w.Write([]byte(tt.body)); err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}))
+			defer srv.Close()
+
+			client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+			got, err := client.GetProfilePreferences(t.Context())
+			if tt.wantError && err == nil {
+				t.Fatalf("GetProfilePreferences() = %v, want an error", got)
+			}
+
+			if !tt.wantError && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			updated, err := client.UpdateProfilePreferences(t.Context(), linode.ProfilePreferences{profilePreferenceKeyTheme: profilePreferenceValueDark})
+			if tt.wantError {
+				if err == nil {
+					t.Fatalf("UpdateProfilePreferences() = %v, want an error", updated)
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
 func TestClientUpdateProfileNetworkError(t *testing.T) {
 	t.Parallel()
 

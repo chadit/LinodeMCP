@@ -4272,12 +4272,14 @@ func (c *Client) GetSSHKeyProto(ctx context.Context, sshKeyID int) (*linodev1.SS
 	return sshKey, err
 }
 
-// CreateSSHKeyProto creates an SSH key and returns it as a proto message with
-// automatic retry on transient failures.
+// CreateSSHKeyProto creates an SSH key and returns it as a proto message. POST
+// /profile/sshkeys is not idempotent and the API assigns the ID, so a replayed
+// attempt after a transient failure adds a second key the caller never learns
+// about. One circuit-protected attempt only.
 func (c *Client) CreateSSHKeyProto(ctx context.Context, req CreateSSHKeyRequest) (*linodev1.SSHKey, error) {
 	var sshKey *linodev1.SSHKey
 
-	err := c.executeWithRetry(ctx, "CreateSSHKey", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateSSHKey", func() error {
 		var err error
 
 		sshKey, err = c.httpCreateSSHKeyProto(ctx, req)
@@ -4332,12 +4334,14 @@ func (c *Client) ShutdownInstance(ctx context.Context, instanceID int) error {
 	})
 }
 
-// CreateInstanceProto creates an instance as a proto message with automatic
-// retry on transient failures.
+// CreateInstanceProto creates an instance as a proto message. POST
+// /linode/instances is not idempotent and the API assigns the ID, so a replayed
+// attempt after a transient failure leaves a second billable Linode running
+// that the caller never learns about. One circuit-protected attempt only.
 func (c *Client) CreateInstanceProto(ctx context.Context, req *CreateInstanceRequest) (*linodev1.Instance, error) {
 	var instance *linodev1.Instance
 
-	err := c.executeWithRetry(ctx, "CreateInstance", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateInstance", func() error {
 		var err error
 
 		instance, err = c.httpCreateInstanceProto(ctx, req)
@@ -4386,11 +4390,14 @@ func (c *Client) DeleteFirewall(ctx context.Context, firewallID int) error {
 }
 
 // CreateFirewallProto creates a firewall and decodes the response into the
-// Firewall proto element with automatic retry on transient failures.
+// Firewall proto element. POST /networking/firewalls is not idempotent and the
+// API assigns the ID, so a replayed attempt after a transient failure leaves a
+// second firewall behind, possibly already attached to the same devices. One
+// circuit-protected attempt only.
 func (c *Client) CreateFirewallProto(ctx context.Context, req CreateFirewallRequest) (*linodev1.Firewall, error) {
 	var firewall *linodev1.Firewall
 
-	err := c.executeWithRetry(ctx, "CreateFirewall", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateFirewall", func() error {
 		var err error
 
 		firewall, err = c.httpCreateFirewallProto(ctx, req)
@@ -4448,12 +4455,14 @@ func (c *Client) CreateTagProto(ctx context.Context, req *CreateTagRequest) (*li
 	return c.httpCreateTagProto(ctx, req)
 }
 
-// CreateDomainProto creates a domain as a proto message with automatic retry on
-// transient failures.
+// CreateDomainProto creates a domain as a proto message. POST /domains is not
+// idempotent and the API assigns the ID, so a replayed attempt after a
+// transient failure can leave a duplicate zone behind that the caller never
+// learns about. One circuit-protected attempt only.
 func (c *Client) CreateDomainProto(ctx context.Context, req *CreateDomainRequest) (*linodev1.Domain, error) {
 	var domain *linodev1.Domain
 
-	err := c.executeWithRetry(ctx, "CreateDomain", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateDomain", func() error {
 		var err error
 
 		domain, err = c.httpCreateDomainProto(ctx, req)
@@ -4518,12 +4527,15 @@ func (c *Client) GetDomainRecordProto(ctx context.Context, domainID, recordID in
 	return record, err
 }
 
-// CreateDomainRecordProto creates a domain record as a proto message with automatic
-// retry on transient failures.
+// CreateDomainRecordProto creates a domain record as a proto message. POST
+// /domains/{id}/records is not idempotent and the zone accepts identical
+// records side by side, so a replayed attempt after a transient failure leaves
+// a duplicate RR the caller never learns about. One circuit-protected attempt
+// only.
 func (c *Client) CreateDomainRecordProto(ctx context.Context, domainID int, req *CreateDomainRecordRequest) (*linodev1.DomainRecord, error) {
 	var record *linodev1.DomainRecord
 
-	err := c.executeWithRetry(ctx, "CreateDomainRecord", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateDomainRecord", func() error {
 		var err error
 
 		record, err = c.httpCreateDomainRecordProto(ctx, domainID, req)
@@ -4573,12 +4585,14 @@ func (c *Client) ListVolumeTypesProto(ctx context.Context) ([]*linodev1.LinodeTy
 	return types, err
 }
 
-// CreateVolumeProto creates a volume as a proto message with automatic retry on
-// transient failures.
+// CreateVolumeProto creates a volume as a proto message. POST /volumes is not
+// idempotent and the API assigns the ID, so a replayed attempt after a
+// transient failure leaves a second billable volume the caller never learns
+// about. One circuit-protected attempt only.
 func (c *Client) CreateVolumeProto(ctx context.Context, req *CreateVolumeRequest) (*linodev1.Volume, error) {
 	var volume *linodev1.Volume
 
-	err := c.executeWithRetry(ctx, "CreateVolume", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateVolume", func() error {
 		var err error
 
 		volume, err = c.httpCreateVolumeProto(ctx, req)
@@ -5020,8 +5034,11 @@ func (c *Client) GetObjectStorageBucketAccessProto(ctx context.Context, region, 
 	return access, err
 }
 
-// CreateObjectStorageBucketProto creates an Object Storage bucket as a proto message
-// with automatic retry on transient failures.
+// CreateObjectStorageBucketProto creates an Object Storage bucket as a proto
+// message with automatic retry on transient failures. Unlike the other creates
+// here the caller names the resource, so region plus label already identifies
+// it and a replay addresses the bucket the first attempt made rather than
+// leaving a second one behind.
 func (c *Client) CreateObjectStorageBucketProto(ctx context.Context, req CreateObjectStorageBucketRequest) (*linodev1.ObjectStorageBucket, error) {
 	var bucket *linodev1.ObjectStorageBucket
 
@@ -5055,12 +5072,15 @@ func (c *Client) AllowObjectStorageBucketAccess(ctx context.Context, region, lab
 	return c.httpAllowObjectStorageBucketAccess(ctx, region, label, req)
 }
 
-// CreateObjectStorageKeyProto creates an Object Storage key as a proto message with
-// automatic retry on transient failures.
+// CreateObjectStorageKeyProto creates an Object Storage key as a proto message.
+// POST /object-storage/keys is not idempotent and each call mints a fresh
+// access key pair, so a replayed attempt after a transient failure leaves a
+// live credential nobody is tracking. The secret is returned once, which means
+// the orphan cannot even be recovered. One circuit-protected attempt only.
 func (c *Client) CreateObjectStorageKeyProto(ctx context.Context, req CreateObjectStorageKeyRequest) (*linodev1.ObjectStorageKey, error) {
 	var key *linodev1.ObjectStorageKey
 
-	err := c.executeWithRetry(ctx, "CreateObjectStorageKey", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateObjectStorageKey", func() error {
 		var err error
 
 		key, err = c.httpCreateObjectStorageKeyProto(ctx, req)
@@ -5095,7 +5115,9 @@ func (c *Client) DeleteObjectStorageKey(ctx context.Context, keyID int) error {
 }
 
 // CreatePresignedURLProto generates a presigned URL decoded into the
-// PresignedURLResponse proto element with automatic retry.
+// PresignedURLResponse proto element with automatic retry. The "create" is a
+// signature over the request, not a stored object, so a replay costs an extra
+// signed URL and nothing on the account.
 func (c *Client) CreatePresignedURLProto(ctx context.Context, region, label string, req PresignedURLRequest) (*linodev1.PresignedURLResponse, error) {
 	var result *linodev1.PresignedURLResponse
 
@@ -5260,12 +5282,15 @@ func (c *Client) GetLKEClusterProto(ctx context.Context, clusterID int) (*linode
 	return cluster, err
 }
 
-// CreateLKEClusterProto creates an LKE cluster as a proto message with automatic
-// retry on transient failures.
+// CreateLKEClusterProto creates an LKE cluster as a proto message. POST
+// /lke/clusters is not idempotent and the API assigns the ID, so a replayed
+// attempt after a transient failure leaves a second cluster, and every node
+// pool it provisions, billing against the account. One circuit-protected
+// attempt only.
 func (c *Client) CreateLKEClusterProto(ctx context.Context, req *CreateLKEClusterRequest) (*linodev1.LKECluster, error) {
 	var cluster *linodev1.LKECluster
 
-	err := c.executeWithRetry(ctx, "CreateLKECluster", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateLKECluster", func() error {
 		var err error
 
 		cluster, err = c.httpCreateLKEClusterProto(ctx, req)
@@ -5392,11 +5417,13 @@ func (c *Client) GetLKENodePoolProto(ctx context.Context, clusterID, poolID int)
 }
 
 // CreateLKENodePoolProto creates a node pool and decodes the response into the
-// proto element with automatic retry on transient failures.
+// proto element. POST /lke/clusters/{id}/pools is not idempotent and the API
+// assigns the ID, so a replayed attempt after a transient failure doubles the
+// billable nodes attached to the cluster. One circuit-protected attempt only.
 func (c *Client) CreateLKENodePoolProto(ctx context.Context, clusterID int, req *CreateLKENodePoolRequest) (*linodev1.LKENodePool, error) {
 	var pool *linodev1.LKENodePool
 
-	err := c.executeWithRetry(ctx, "CreateLKENodePool", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateLKENodePool", func() error {
 		var retryErr error
 
 		pool, retryErr = c.httpCreateLKENodePoolProto(ctx, clusterID, req)
@@ -5749,12 +5776,14 @@ func (c *Client) DeletePlacementGroup(ctx context.Context, groupID int) error {
 	return c.httpDeletePlacementGroup(ctx, groupID)
 }
 
-// CreateVPCProto creates a VPC as a proto message with automatic retry on
-// transient failures.
+// CreateVPCProto creates a VPC as a proto message. POST /vpcs is not idempotent
+// and the API assigns the ID, so a replayed attempt after a transient failure
+// leaves a second VPC, along with any subnets declared in the same body. One
+// circuit-protected attempt only.
 func (c *Client) CreateVPCProto(ctx context.Context, req CreateVPCRequest) (*linodev1.Vpc, error) {
 	var vpc *linodev1.Vpc
 
-	err := c.executeWithRetry(ctx, "CreateVPC", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateVPC", func() error {
 		var retryErr error
 
 		vpc, retryErr = c.httpCreateVPCProto(ctx, req)
@@ -5882,12 +5911,14 @@ func (c *Client) GetVPCSubnetProto(ctx context.Context, vpcID, subnetID int) (*l
 	return subnet, err
 }
 
-// CreateVPCSubnetProto creates a subnet as a proto message with automatic retry on
-// transient failures.
+// CreateVPCSubnetProto creates a subnet as a proto message. POST
+// /vpcs/{id}/subnets is not idempotent and the API assigns the ID, so a
+// replayed attempt after a transient failure consumes a second block of the
+// VPC address space. One circuit-protected attempt only.
 func (c *Client) CreateVPCSubnetProto(ctx context.Context, vpcID int, req CreateSubnetRequest) (*linodev1.VpcSubnet, error) {
 	var subnet *linodev1.VpcSubnet
 
-	err := c.executeWithRetry(ctx, "CreateVPCSubnet", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateVPCSubnet", func() error {
 		var retryErr error
 
 		subnet, retryErr = c.httpCreateVPCSubnetProto(ctx, vpcID, req)
@@ -6582,12 +6613,16 @@ func (c *Client) DeleteInstanceIP(ctx context.Context, linodeID int, address str
 	})
 }
 
-// CloneInstanceProto clones an instance as a proto message with automatic retry
-// on transient failures.
+// CloneInstanceProto clones an instance as a proto message. POST
+// /linode/instances/{id}/clone is not idempotent and the API assigns the new
+// ID, so a replayed attempt after a transient failure leaves a second billable
+// Linode running that the caller never learns about. Same hazard as
+// CreateInstance, and the same treatment CloneVolume and CloneDomain already
+// get. One circuit-protected attempt only.
 func (c *Client) CloneInstanceProto(ctx context.Context, linodeID int, req *CloneInstanceRequest) (*linodev1.Instance, error) {
 	var instance *linodev1.Instance
 
-	err := c.executeWithRetry(ctx, "CloneInstance", func() error {
+	err := c.executeWithoutRetry(ctx, "CloneInstance", func() error {
 		var retryErr error
 
 		instance, retryErr = c.httpCloneInstanceProto(ctx, linodeID, req)
@@ -6598,12 +6633,15 @@ func (c *Client) CloneInstanceProto(ctx context.Context, linodeID int, req *Clon
 	return instance, err
 }
 
-// CreateInstanceConfigProto creates a configuration profile and returns the proto
-// element, with automatic retry on transient failures.
+// CreateInstanceConfigProto creates a configuration profile and returns the
+// proto element. POST /linode/instances/{id}/configs is not idempotent and the
+// API assigns the ID, so a replayed attempt after a transient failure leaves a
+// duplicate profile that can boot the Linode with unintended devices. One
+// circuit-protected attempt only.
 func (c *Client) CreateInstanceConfigProto(ctx context.Context, linodeID int, req *CreateConfigRequest) (*linodev1.InstanceConfig, error) {
 	var config *linodev1.InstanceConfig
 
-	err := c.executeWithRetry(ctx, "CreateInstanceConfig", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateInstanceConfig", func() error {
 		var retryErr error
 
 		config, retryErr = c.httpCreateInstanceConfigProto(ctx, linodeID, req)
@@ -6630,13 +6668,16 @@ func (c *Client) UpdateInstanceConfigProto(ctx context.Context, linodeID, config
 	return config, err
 }
 
-// AddInstanceConfigInterfaceProto appends a network interface to a configuration
-// profile and returns the proto element, with automatic retry on transient
-// failures.
+// AddInstanceConfigInterfaceProto appends a network interface to a
+// configuration profile and returns the proto element. POST
+// /linode/instances/{id}/configs/{configID}/interfaces is not idempotent and
+// the API assigns the interface ID, so a replayed attempt after a transient
+// failure appends a duplicate interface to the profile. Python has always
+// bypassed replay here; this brings Go to the same behavior.
 func (c *Client) AddInstanceConfigInterfaceProto(ctx context.Context, linodeID, configID int, req *ConfigInterface) (*linodev1.ConfigInterfaceResponse, error) {
 	var configInterface *linodev1.ConfigInterfaceResponse
 
-	err := c.executeWithRetry(ctx, "AddInstanceConfigInterface", func() error {
+	err := c.executeWithoutRetry(ctx, "AddInstanceConfigInterface", func() error {
 		var retryErr error
 
 		configInterface, retryErr = c.httpAddInstanceConfigInterfaceProto(ctx, linodeID, configID, req)
@@ -6663,12 +6704,15 @@ func (c *Client) UpdateInstanceConfigInterfaceProto(ctx context.Context, linodeI
 	return configInterface, err
 }
 
-// CreateInstanceDiskProto creates a disk and returns the proto element, with
-// automatic retry on transient failures.
+// CreateInstanceDiskProto creates a disk and returns the proto element. POST
+// /linode/instances/{id}/disks is not idempotent and the API assigns the ID, so
+// a replayed attempt after a transient failure claims a second slice of the
+// Linode's storage allotment, which the next disk create then fails to find.
+// One circuit-protected attempt only.
 func (c *Client) CreateInstanceDiskProto(ctx context.Context, linodeID int, req *CreateDiskRequest) (*linodev1.InstanceDisk, error) {
 	var disk *linodev1.InstanceDisk
 
-	err := c.executeWithRetry(ctx, "CreateInstanceDisk", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateInstanceDisk", func() error {
 		var retryErr error
 
 		disk, retryErr = c.httpCreateInstanceDiskProto(ctx, linodeID, req)
@@ -6695,12 +6739,15 @@ func (c *Client) UpdateInstanceDiskProto(ctx context.Context, linodeID, diskID i
 	return disk, err
 }
 
-// CloneInstanceDiskProto clones a disk and returns the proto element, with
-// automatic retry on transient failures.
+// CloneInstanceDiskProto clones a disk and returns the proto element. POST
+// /linode/instances/{id}/disks/{diskID}/clone is not idempotent and the API
+// assigns the new ID, so a replayed attempt after a transient failure claims a
+// second slice of the Linode's storage allotment, which the next disk create
+// then fails to find. One circuit-protected attempt only.
 func (c *Client) CloneInstanceDiskProto(ctx context.Context, linodeID, diskID int) (*linodev1.InstanceDisk, error) {
 	var disk *linodev1.InstanceDisk
 
-	err := c.executeWithRetry(ctx, "CloneInstanceDisk", func() error {
+	err := c.executeWithoutRetry(ctx, "CloneInstanceDisk", func() error {
 		var retryErr error
 
 		disk, retryErr = c.httpCloneInstanceDiskProto(ctx, linodeID, diskID)
@@ -6712,11 +6759,14 @@ func (c *Client) CloneInstanceDiskProto(ctx context.Context, linodeID, diskID in
 }
 
 // CreateInstanceBackupProto takes a manual snapshot and returns the proto
-// element, with automatic retry on transient failures.
+// element. POST /linode/instances/{id}/backups is not idempotent: the API
+// assigns the ID and each call overwrites the instance's single manual
+// snapshot slot, so a replayed attempt after a transient failure destroys the
+// snapshot the first attempt just took. One circuit-protected attempt only.
 func (c *Client) CreateInstanceBackupProto(ctx context.Context, linodeID int, label string) (*linodev1.InstanceBackup, error) {
 	var backup *linodev1.InstanceBackup
 
-	err := c.executeWithRetry(ctx, "CreateInstanceBackup", func() error {
+	err := c.executeWithoutRetry(ctx, "CreateInstanceBackup", func() error {
 		var retryErr error
 
 		backup, retryErr = c.httpCreateInstanceBackupProto(ctx, linodeID, label)

@@ -17,8 +17,8 @@ func TestLinodeMonitorServiceAlertDefinitionUpdateToolConfirmRequired(t *testing
 		t.Parallel()
 
 		cases := []struct {
-			name  string
 			value any
+			name  string
 			set   bool
 		}{
 			{name: caseMissing, set: false},

@@ -20,9 +20,9 @@ const catalogUncategorized = "other"
 // bubbles list.Item interface requires). The schema is the heavy field;
 // keeping it behind a pointer keeps each list item cheap to copy.
 type toolMeta struct {
+	schema     mcp.ToolInputSchema
 	name       string
 	capability profiles.Capability
-	schema     mcp.ToolInputSchema
 }
 
 // catalogItem is one tool row in the catalog list. It pairs a tool's

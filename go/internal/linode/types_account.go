@@ -8,11 +8,11 @@ type Profile struct {
 	Username           string `json:"username"`
 	Email              string `json:"email"`
 	Timezone           string `json:"timezone"`
+	Scopes             string `json:"scopes,omitempty"`
 	UID                int    `json:"uid"`
 	EmailNotifications bool   `json:"email_notifications"`
 	Restricted         bool   `json:"restricted"`
 	TwoFactorAuth      bool   `json:"two_factor_auth"`
-	Scopes             string `json:"scopes,omitempty"`
 }
 
 // CreateProfileTokenRequest contains optional fields for POST /profile/tokens.
@@ -67,9 +67,9 @@ type GrantPermission string
 // category (linode, domain, nodebalancer, etc); each entry inside the
 // category names a specific resource the token has access to.
 type Grant struct {
-	ID          int             `json:"id"`
 	Label       string          `json:"label"`
 	Permissions GrantPermission `json:"permissions"`
+	ID          int             `json:"id"`
 }
 
 // Grants represents the full /profile/grants response for OAuth tokens.
@@ -81,7 +81,6 @@ type Grant struct {
 // PATs always return an empty Grants object; their scope information is
 // on Profile.Scopes instead. Phase 6's profile loader checks both.
 type Grants struct {
-	Global       GlobalGrants `json:"global"`
 	Linode       []Grant      `json:"linode"`
 	Domain       []Grant      `json:"domain"`
 	NodeBalancer []Grant      `json:"nodebalancer"`
@@ -93,13 +92,14 @@ type Grants struct {
 	Firewall     []Grant      `json:"firewall"`
 	VPC          []Grant      `json:"vpc"`
 	LKECluster   []Grant      `json:"lkecluster"`
+	Global       GlobalGrants `json:"global"`
 }
 
 // SecurityQuestionAnswer pairs a security question ID with its plaintext
 // answer for POST /profile/security-questions.
 type SecurityQuestionAnswer struct {
-	QuestionID int    `json:"question_id"`
 	Response   string `json:"response"`
+	QuestionID int    `json:"question_id"`
 }
 
 // AnswerProfileSecurityQuestionsRequest contains the body for POST /profile/security-questions.
@@ -130,8 +130,8 @@ type UpdateAccountUserGrantsRequest struct {
 // excludes Grant.Label because labels are returned by read APIs but are not part
 // of the update payload.
 type UpdateAccountUserGrant struct {
-	ID          int              `json:"id"`
 	Permissions *GrantPermission `json:"permissions"`
+	ID          int              `json:"id"`
 }
 
 // UpdateAccountUserGlobalGrants contains optional global grant fields for
@@ -177,10 +177,10 @@ type GlobalGrants struct {
 
 // AccountTransfer represents account network transfer usage returned by GET /account/transfer.
 type AccountTransfer struct {
+	RegionTransfers []AccountRegionTransfer `json:"region_transfers"`
 	Billable        int                     `json:"billable"`
 	Quota           int                     `json:"quota"`
 	Used            int                     `json:"used"`
-	RegionTransfers []AccountRegionTransfer `json:"region_transfers"`
 }
 
 // AccountRegionTransfer represents network transfer usage for a region.
@@ -193,13 +193,13 @@ type AccountRegionTransfer struct {
 
 // AccountSettings represents account-wide settings returned by GET /account/settings.
 type AccountSettings struct {
-	BackupsEnabled          bool    `json:"backups_enabled"`
-	Managed                 bool    `json:"managed"`
-	NetworkHelper           bool    `json:"network_helper"`
 	LongviewSubscription    *string `json:"longview_subscription"`
 	ObjectStorage           *string `json:"object_storage"`
 	InterfacesForNewLinodes string  `json:"interfaces_for_new_linodes"`
 	MaintenancePolicy       string  `json:"maintenance_policy"`
+	BackupsEnabled          bool    `json:"backups_enabled"`
+	Managed                 bool    `json:"managed"`
+	NetworkHelper           bool    `json:"network_helper"`
 }
 
 // UpdateAccountSettingsRequest contains editable fields for PUT /v4/account/settings.
@@ -224,9 +224,9 @@ type AccountAgreements struct {
 
 // ManagedCredential represents one stored credential returned by GET /managed/credentials.
 type ManagedCredential struct {
-	ID            int    `json:"id"`
 	Label         string `json:"label"`
 	LastDecrypted string `json:"last_decrypted"`
+	ID            int    `json:"id"`
 }
 
 // UpdateManagedCredentialRequest contains mutable fields for PUT /managed/credentials/{credentialID}.
@@ -237,32 +237,32 @@ type UpdateManagedCredentialRequest struct {
 
 // UpdateManagedCredentialUsernamePasswordRequest contains the fields for POST /managed/credentials/{credential_id}/update.
 type UpdateManagedCredentialUsernamePasswordRequest struct {
-	Password string  `json:"password"`
 	Username *string `json:"username,omitempty"`
+	Password string  `json:"password"`
 }
 
 // CreateManagedCredentialRequest contains the fields for POST /managed/credentials.
 type CreateManagedCredentialRequest struct {
+	Username *string `json:"username,omitempty"`
 	Label    string  `json:"label"`
 	Password string  `json:"password"`
-	Username *string `json:"username,omitempty"`
 }
 
 // AccountMaintenance represents one account maintenance record.
 type AccountMaintenance struct {
-	Entity AccountMaintenanceEntity `json:"entity"`
 	Reason string                   `json:"reason"`
 	Status string                   `json:"status"`
 	Type   string                   `json:"type"`
 	When   string                   `json:"when"`
+	Entity AccountMaintenanceEntity `json:"entity"`
 }
 
 // AccountMaintenanceEntity identifies the entity attached to a maintenance record.
 type AccountMaintenanceEntity struct {
-	ID    int    `json:"id"`
 	Label string `json:"label"`
 	Type  string `json:"type"`
 	URL   string `json:"url"`
+	ID    int    `json:"id"`
 }
 
 // MaintenancePolicy represents one available Linode maintenance policy.
@@ -278,12 +278,12 @@ type MaintenancePolicy struct {
 // AccountNotification represents one account notification returned by GET /account/notifications.
 type AccountNotification struct {
 	Entity   *AccountNotificationEntity `json:"entity"`
+	Until    *string                    `json:"until"`
+	When     *string                    `json:"when"`
 	Label    string                     `json:"label"`
 	Message  string                     `json:"message"`
 	Severity string                     `json:"severity"`
 	Type     string                     `json:"type"`
-	Until    *string                    `json:"until"`
-	When     *string                    `json:"when"`
 }
 
 // AccountNotificationEntity identifies the entity attached to an account notification.
@@ -303,14 +303,14 @@ type AccountAvailability struct {
 
 // BetaProgram represents a beta program available for account enrollment.
 type BetaProgram struct {
-	BetaClass      string  `json:"class"`
 	Description    *string `json:"description"`
 	Ended          *string `json:"ended"`
-	GreenlightOnly bool    `json:"greenlight_only"`
+	BetaClass      string  `json:"class"`
 	ID             string  `json:"id"`
 	Label          string  `json:"label"`
 	MoreInfo       string  `json:"more_info"`
 	Started        string  `json:"started"`
+	GreenlightOnly bool    `json:"greenlight_only"`
 }
 
 // AccountBetaProgram represents a beta program that the account is enrolled in.
@@ -325,19 +325,19 @@ type AccountBetaProgram struct {
 
 // AccountEvent represents an account event returned by GET /account/events.
 type AccountEvent struct {
-	Action          string              `json:"action"`
-	Created         string              `json:"created"`
+	PercentComplete *int                `json:"percent_complete"`
 	Duration        *float64            `json:"duration"`
 	Entity          *AccountEventEntity `json:"entity"`
-	ID              int                 `json:"id"`
-	Message         string              `json:"message"`
-	PercentComplete *int                `json:"percent_complete"`
 	Rate            *string             `json:"rate"`
 	SecondaryEntity *AccountEventEntity `json:"secondary_entity"`
-	Seen            bool                `json:"seen"`
-	Status          string              `json:"status"`
 	TimeRemaining   *string             `json:"time_remaining"`
+	Created         string              `json:"created"`
+	Message         string              `json:"message"`
+	Action          string              `json:"action"`
+	Status          string              `json:"status"`
 	Username        string              `json:"username"`
+	ID              int                 `json:"id"`
+	Seen            bool                `json:"seen"`
 }
 
 // AccountEventEntity identifies the primary or secondary entity attached to an account event.
@@ -352,9 +352,9 @@ type AccountEventEntity struct {
 // Restricted is a pointer so an omitted value is distinguishable from an
 // explicit false.
 type CreateAccountUserRequest struct {
+	Restricted *bool  `json:"restricted,omitempty"`
 	Username   string `json:"username"`
 	Email      string `json:"email"`
-	Restricted *bool  `json:"restricted,omitempty"`
 }
 
 // UpdateAccountUserRequest contains editable fields for PUT /account/users/{username}.
@@ -368,15 +368,15 @@ type UpdateAccountUserRequest struct {
 
 // AccountUser represents one user returned by account user endpoints.
 type AccountUser struct {
-	Email               string                `json:"email"`
 	LastLogin           *AccountUserLastLogin `json:"last_login"`
 	PasswordCreated     *string               `json:"password_created"`
-	Restricted          bool                  `json:"restricted"`
-	SSHKeys             []string              `json:"ssh_keys"`
-	TFAEnabled          bool                  `json:"tfa_enabled"`
+	VerifiedPhoneNumber *string               `json:"verified_phone_number"`
+	Email               string                `json:"email"`
 	UserType            string                `json:"user_type"`
 	Username            string                `json:"username"`
-	VerifiedPhoneNumber *string               `json:"verified_phone_number"`
+	SSHKeys             []string              `json:"ssh_keys"`
+	Restricted          bool                  `json:"restricted"`
+	TFAEnabled          bool                  `json:"tfa_enabled"`
 }
 
 // AccountUserLastLogin contains the most recent login attempt for an account user.
@@ -388,32 +388,32 @@ type AccountUserLastLogin struct {
 // AccountLogin represents one user login returned by GET /account/logins.
 type AccountLogin struct {
 	Datetime   string `json:"datetime"`
-	ID         int    `json:"id"`
 	IP         string `json:"ip"`
-	Restricted bool   `json:"restricted"`
 	Status     string `json:"status"`
 	Username   string `json:"username"`
+	ID         int    `json:"id"`
+	Restricted bool   `json:"restricted"`
 }
 
 // AccountInvoice represents one account invoice.
 type AccountInvoice struct {
-	ID    int     `json:"id"`
 	Date  string  `json:"date"`
 	Label string  `json:"label"`
+	ID    int     `json:"id"`
 	Total float64 `json:"total"`
 }
 
 // AccountPayment represents one account payment.
 type AccountPayment struct {
-	ID   int     `json:"id"`
 	Date string  `json:"date"`
+	ID   int     `json:"id"`
 	USD  float64 `json:"usd"`
 }
 
 // CreateAccountPaymentRequest contains the request body for POST /account/payments.
 type CreateAccountPaymentRequest struct {
-	PaymentMethodID int    `json:"payment_method_id,omitempty"`
 	USD             string `json:"usd,omitempty"`
+	PaymentMethodID int    `json:"payment_method_id,omitempty"`
 }
 
 // AddAccountPromoCreditRequest contains the request body for POST /account/promo-codes.
@@ -423,44 +423,44 @@ type AddAccountPromoCreditRequest struct {
 
 // AccountInvoiceItem represents one line item on an account invoice.
 type AccountInvoiceItem struct {
-	Amount    float64 `json:"amount"`
 	From      string  `json:"from"`
 	Label     string  `json:"label"`
+	To        string  `json:"to"`
+	Type      string  `json:"type"`
+	Amount    float64 `json:"amount"`
 	Quantity  int     `json:"quantity"`
 	Tax       float64 `json:"tax"`
-	To        string  `json:"to"`
 	Total     float64 `json:"total"`
-	Type      string  `json:"type"`
 	UnitPrice float64 `json:"unit_price"`
 }
 
 // ProfileApp represents an OAuth app authorized for the current profile.
 type ProfileApp struct {
-	ID      int    `json:"id"`
 	Label   string `json:"label"`
 	Scopes  string `json:"scopes"`
 	Website string `json:"website"`
+	ID      int    `json:"id"`
 }
 
 // AuthorizedApp represents an OAuth app authorization for the authenticated profile.
 type AuthorizedApp struct {
-	ID           int     `json:"id"`
+	Expiry       *string `json:"expiry"`
+	ThumbnailURL *string `json:"thumbnail_url"`
 	Label        string  `json:"label"`
 	Scopes       string  `json:"scopes"`
 	Website      string  `json:"website"`
 	Created      string  `json:"created"`
-	Expiry       *string `json:"expiry"`
-	ThumbnailURL *string `json:"thumbnail_url"`
+	ID           int     `json:"id"`
 }
 
 // OAuthClient represents an OAuth client registered on the account.
 type OAuthClient struct {
 	ID           string `json:"id"`
 	Label        string `json:"label"`
-	Public       bool   `json:"public"`
 	RedirectURI  string `json:"redirect_uri"`
 	Status       string `json:"status"`
 	ThumbnailURL string `json:"thumbnail_url"`
+	Public       bool   `json:"public"`
 }
 
 // LongviewApps describes the application monitors enabled for a Longview client.
@@ -472,11 +472,11 @@ type LongviewApps struct {
 
 // LongviewClient represents a Longview client monitor.
 type LongviewClient struct {
-	Apps    LongviewApps `json:"apps"`
 	Created string       `json:"created"`
-	ID      int          `json:"id"`
 	Label   string       `json:"label"`
 	Updated string       `json:"updated"`
+	ID      int          `json:"id"`
+	Apps    LongviewApps `json:"apps"`
 }
 
 // UpdateLongviewClientRequest contains editable fields for PUT /v4/longview/clients/{clientId}.
@@ -491,16 +491,16 @@ type UpdateLongviewPlanRequest struct {
 
 // AccountPaymentMethod represents a payment method available on the account.
 type AccountPaymentMethod struct {
-	ID        int            `json:"id"`
-	Type      string         `json:"type"`
-	IsDefault bool           `json:"is_default"`
 	Data      map[string]any `json:"data"`
+	Type      string         `json:"type"`
+	ID        int            `json:"id"`
+	IsDefault bool           `json:"is_default"`
 }
 
 // CreateAccountPaymentMethodRequest contains the required fields for POST /account/payment-methods.
 type CreateAccountPaymentMethodRequest struct {
-	Type      string         `json:"type"`
 	Data      map[string]any `json:"data"`
+	Type      string         `json:"type"`
 	IsDefault bool           `json:"is_default"`
 }
 
@@ -532,25 +532,25 @@ type UpdateOAuthClientRequest struct {
 
 // ChildAccount represents a child-level account available to a parent account.
 type ChildAccount struct {
-	ActiveSince       string                 `json:"active_since"`
-	Address1          string                 `json:"address_1"`
-	Address2          string                 `json:"address_2"`
-	Balance           float64                `json:"balance"`
-	BalanceUninvoiced float64                `json:"balance_uninvoiced"`
+	CreditCard        ChildAccountCreditCard `json:"credit_card"`
+	EUUID             string                 `json:"euuid"`
+	LastName          string                 `json:"last_name"`
+	Zip               string                 `json:"zip"`
+	TaxID             string                 `json:"tax_id"`
 	BillingSource     string                 `json:"billing_source"`
-	Capabilities      []string               `json:"capabilities"`
+	State             string                 `json:"state"`
 	City              string                 `json:"city"`
 	Company           string                 `json:"company"`
-	Country           string                 `json:"country"`
-	CreditCard        ChildAccountCreditCard `json:"credit_card"`
+	Address2          string                 `json:"address_2"`
 	Email             string                 `json:"email"`
-	EUUID             string                 `json:"euuid"`
+	Address1          string                 `json:"address_1"`
+	ActiveSince       string                 `json:"active_since"`
 	FirstName         string                 `json:"first_name"`
-	LastName          string                 `json:"last_name"`
+	Country           string                 `json:"country"`
 	Phone             string                 `json:"phone"`
-	State             string                 `json:"state"`
-	TaxID             string                 `json:"tax_id"`
-	Zip               string                 `json:"zip"`
+	Capabilities      []string               `json:"capabilities"`
+	BalanceUninvoiced float64                `json:"balance_uninvoiced"`
+	Balance           float64                `json:"balance"`
 }
 
 // ChildAccountCreditCard contains masked credit card details for a child account.
@@ -563,21 +563,21 @@ type ChildAccountCreditCard struct {
 type ProxyUserToken struct {
 	Created string `json:"created"`
 	Expiry  string `json:"expiry"`
-	ID      int    `json:"id"`
 	Label   string `json:"label"`
 	Scopes  string `json:"scopes"`
 	Token   string `json:"token"`
+	ID      int    `json:"id"`
 }
 
 // AccountEntityTransfer represents an account entity transfer request.
 type AccountEntityTransfer struct {
 	Created  string                        `json:"created"`
-	Entities AccountEntityTransferEntities `json:"entities"`
 	Expiry   string                        `json:"expiry"`
-	IsSender bool                          `json:"is_sender"`
 	Status   string                        `json:"status"`
 	Token    string                        `json:"token"`
 	Updated  string                        `json:"updated"`
+	Entities AccountEntityTransferEntities `json:"entities"`
+	IsSender bool                          `json:"is_sender"`
 }
 
 // AccountEntityTransferEntities groups transferred entities by type.
@@ -617,24 +617,24 @@ type CancelAccountResponse struct {
 
 // Account represents a Linode account.
 type Account struct {
-	FirstName         string   `json:"first_name"`
-	LastName          string   `json:"last_name"`
+	Zip               string   `json:"zip"`
+	Phone             string   `json:"phone"`
 	Email             string   `json:"email"`
 	Company           string   `json:"company"`
 	Address1          string   `json:"address_1"`
 	Address2          string   `json:"address_2"`
 	City              string   `json:"city"`
 	State             string   `json:"state"`
-	Zip               string   `json:"zip"`
+	LastName          string   `json:"last_name"`
+	FirstName         string   `json:"first_name"`
 	Country           string   `json:"country"`
-	Phone             string   `json:"phone"`
-	Balance           float64  `json:"balance"`
-	BalanceUninvoiced float64  `json:"balance_uninvoiced"`
-	Capabilities      []string `json:"capabilities"`
-	ActiveSince       string   `json:"active_since"`
-	EUUID             string   `json:"euuid"`
 	BillingSource     string   `json:"billing_source"`
+	EUUID             string   `json:"euuid"`
+	ActiveSince       string   `json:"active_since"`
+	Capabilities      []string `json:"capabilities"`
 	ActivePromotions  []Promo  `json:"active_promotions"`
+	BalanceUninvoiced float64  `json:"balance_uninvoiced"`
+	Balance           float64  `json:"balance"`
 }
 
 // UpdateAccountRequest contains the editable fields for PUT /v4/account.

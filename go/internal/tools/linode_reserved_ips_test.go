@@ -280,8 +280,8 @@ func TestLinodeReservedIPListToolSuccess(t *testing.T) {
 	}
 
 	var body struct {
-		Count       int              `json:"count"`
 		ReservedIPs []map[string]any `json:"reserved_ips"`
+		Count       int              `json:"count"`
 	}
 	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
 		t.Fatalf("unmarshal tool response: %v", err)

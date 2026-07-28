@@ -1,6 +1,6 @@
 {
   "tool": "linode_sshkey_update",
-  "description": "Shared label-required rejection and the update PUT body once confirmed. Missing-ssh_key_id text and confirm text diverge (see report).",
+  "description": "Shared label-required rejection and the update PUT body once confirmed. Missing-ssh_key_id text and confirm text diverge (see report). A response that is not a decodable JSON object must fail rather than turn into a made-up key. The two languages frame the parse failure differently, so the shared assertion on an unparseable body is the parser's position marker.",
   "cases": [
     {
       "name": "rejects negative ssh_key_id",
@@ -42,6 +42,24 @@
       "name": "requires confirm",
       "args": {"ssh_key_id": 123, "label": "renamed-key"},
       "expect_error": "This updates an SSH key in your Linode profile. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "ssh_key_id": 123, "label": "renamed-key", "confirm": true },
+      "api_response": [],
+      "expect_api_error": "SSH key"
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "ssh_key_id": 123, "label": "renamed-key", "confirm": true },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "ssh_key_id": 123, "label": "renamed-key", "confirm": true },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
     }
   ]
 }

@@ -36,8 +36,8 @@ type Draft struct {
 // concurrent tool calls so a `_show` can race with a `_add_tools`. The
 // RWMutex serializes the operations.
 type Registry struct {
-	mu     sync.RWMutex
 	drafts map[string]*Draft
+	mu     sync.RWMutex
 }
 
 // NewRegistry returns an empty registry.

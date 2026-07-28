@@ -22,16 +22,16 @@ const metricsEndpointNote = "Prometheus metrics: scrape the server's /metrics en
 // healthSnapshot is the subset of the linode_audit_health payload the view
 // renders. Decoded from JSON so the field names match the tool's output.
 type healthSnapshot struct {
-	JSONLPath        string `json:"jsonl_path"`
-	ActiveLogExists  bool   `json:"active_log_exists"`
-	RotatedFileCount int    `json:"rotated_file_count"`
-	DiskBytes        int64  `json:"disk_bytes"`
-	DroppedEvents    int64  `json:"dropped_events"`
-	SQLite           *struct {
+	SQLite *struct {
 		Path       string `json:"path"`
 		EventCount int64  `json:"event_count"`
 		DBBytes    int64  `json:"db_bytes"`
 	} `json:"sqlite"`
+	JSONLPath        string `json:"jsonl_path"`
+	RotatedFileCount int    `json:"rotated_file_count"`
+	DiskBytes        int64  `json:"disk_bytes"`
+	DroppedEvents    int64  `json:"dropped_events"`
+	ActiveLogExists  bool   `json:"active_log_exists"`
 }
 
 // HealthLines projects the audit-health JSON payload and the build/version
@@ -99,12 +99,12 @@ func healthAuditLines(payload string) []string {
 // endpoint.
 type healthModel struct {
 	srv       *server.Server
-	viewport  viewport.Model
 	cancel    context.CancelFunc
-	loaded    bool
+	viewport  viewport.Model
 	requestID uint64
 	width     int
 	height    int
+	loaded    bool
 }
 
 // newHealthModel builds the health view over an open server. The first
@@ -158,10 +158,10 @@ func (m *healthModel) cancelRefresh() {
 // healthLoadedMsg carries a finished linode_audit_health dispatch back into
 // the update loop.
 type healthLoadedMsg struct {
-	model     *healthModel
-	requestID uint64
-	result    CallResult
 	err       error
+	model     *healthModel
+	result    CallResult
+	requestID uint64
 }
 
 // handleLoaded records a finished refresh and loads the rendered health

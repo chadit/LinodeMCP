@@ -20,8 +20,8 @@ import (
 // decode and assert on it. The canonical serializer emits int64 counters
 // as JSON numbers, so the full audit.Event decodes the response directly.
 type auditRecentResult struct {
-	Count  int           `json:"count"`
 	Events []audit.Event `json:"events"`
+	Count  int           `json:"count"`
 }
 
 // TestLinodeAuditRecentDefinition pins the tool's identity: name,

@@ -120,10 +120,10 @@ func TestClientListInstanceConfigInterfacesProtoRejectsInvalidIDs(t *testing.T) 
 	client := linode.NewClient("invalid://upstream", "test-token", nil, linode.WithMaxRetries(0))
 
 	for _, tt := range []struct {
+		wantErr  error
 		name     string
 		linodeID int
 		configID int
-		wantErr  error
 	}{
 		{name: "non-positive linode id", linodeID: 0, configID: 456, wantErr: linode.ErrLinodeIDPositive},
 		{name: "negative linode id", linodeID: -1, configID: 456, wantErr: linode.ErrLinodeIDPositive},

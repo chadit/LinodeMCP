@@ -1,21 +1,158 @@
 {
   "tool": "linode_database_postgresql_instance_update",
-  "description": "Confirm-gated update PUT body. Instance-id and empty-payload error text diverge between languages (see report).",
+  "description": "Confirm-gated update PUT body. Instance-id and empty-payload error text diverge between languages (see report). The dry-run case pins the full Tier B preview from docs/dry-run.md: the PUT body, the fetched current_state (the instance exists, so the preview reads it), and the side effect plus warning the update implies.",
   "cases": [
     {
       "name": "updates a postgresql instance label",
-      "args": { "instance_id": 123, "label": "renamed-pg", "confirm": true },
-      "api_response": { "id": 123, "label": "renamed-pg" },
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-pg",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "renamed-pg"
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/databases/postgresql/instances/123",
-        "body": { "label": "renamed-pg" }
+        "body": {
+          "label": "renamed-pg"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": { "instance_id": 123, "label": "renamed-db" },
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-db"
+      },
       "expect_error": "This updates a PostgreSQL Managed Database instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "detaches the vpc on an explicit null private network",
+      "args": {
+        "instance_id": 123,
+        "private_network": null,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "renamed-pg"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/databases/postgresql/instances/123",
+        "body": {
+          "private_network": null
+        }
+      }
+    },
+    {
+      "name": "zero-fills null and unknown response fields",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-pg",
+        "confirm": true
+      },
+      "api_response": {
+        "id": null,
+        "label": null,
+        "future_field": "ignored"
+      },
+      "expect_result": {
+        "message": "PostgreSQL Managed Database instance '' (ID: 0) updated",
+        "database_instance": {
+          "id": 0,
+          "status": "",
+          "label": "",
+          "region": "",
+          "type": "",
+          "engine": "",
+          "version": "",
+          "cluster_size": 0,
+          "replication_type": "",
+          "ssl_connection": false,
+          "encrypted": false,
+          "allow_list": [],
+          "created": "",
+          "updated": ""
+        }
+      }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {
+        "instance_id": 123,
+        "label": "renamed-pg",
+        "confirm": true
+      },
+      "api_response": [],
+      "expect_api_error": "Failed to update PostgreSQL Managed Database"
+    },
+    {
+      "name": "dry run previews the update without sending it",
+      "args": {
+        "dry_run": true,
+        "instance_id": 123,
+        "label": "renamed-pg"
+      },
+      "api_responses": {
+        "GET /databases/postgresql/instances/123": {
+          "id": 123,
+          "status": "active",
+          "label": "prod-pg",
+          "region": "us-east",
+          "type": "g6-dedicated-2",
+          "engine": "postgresql",
+          "version": "16.4",
+          "cluster_size": 3,
+          "replication_type": "asynch",
+          "ssl_connection": true,
+          "encrypted": false,
+          "allow_list": [
+            "203.0.113.1/32"
+          ],
+          "created": "2026-01-02T03:04:05",
+          "updated": "2026-01-03T04:05:06"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_postgresql_instance_update",
+        "would_execute": {
+          "method": "PUT",
+          "path": "/databases/postgresql/instances/123",
+          "body": {
+            "label": "renamed-pg"
+          }
+        },
+        "current_state": {
+          "id": 123,
+          "status": "active",
+          "label": "prod-pg",
+          "region": "us-east",
+          "type": "g6-dedicated-2",
+          "engine": "postgresql",
+          "version": "16.4",
+          "cluster_size": 3,
+          "replication_type": "asynch",
+          "ssl_connection": true,
+          "encrypted": false,
+          "allow_list": [
+            "203.0.113.1/32"
+          ],
+          "created": "2026-01-02T03:04:05",
+          "updated": "2026-01-03T04:05:06"
+        },
+        "dependencies": [],
+        "side_effects": [
+          "PostgreSQL Managed Database 123 will be updated."
+        ],
+        "warnings": [
+          "Updating a Managed Database can change service behavior."
+        ]
+      }
     }
   ]
 }

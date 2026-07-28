@@ -1,6 +1,6 @@
 {
   "tool": "linode_firewall_create",
-  "description": "Firewall create gates on confirm then requires a label, then POSTs the label plus default policies. Both languages send only inbound_policy/outbound_policy under rules (Go no longer emits null inbound/outbound arrays).",
+  "description": "Firewall create gates on confirm then requires a label, then POSTs the label plus default policies. Both languages send only inbound_policy/outbound_policy under rules (Go no longer emits null inbound/outbound arrays). A response that is not a JSON object must fail rather than yield a zeroed firewall.",
   "cases": [
     {
       "name": "requires confirm before creating",
@@ -42,6 +42,18 @@
       "name": "rejects an invalid outbound_policy (proto FirewallPolicy enum)",
       "args": { "confirm": true, "label": "web-fw", "outbound_policy": "MAYBE" },
       "expect_error": "outbound_policy must be one of: ACCEPT, DROP"
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "confirm": true, "label": "web-fw" },
+      "api_response": [],
+      "expect_api_error": "Failed to create firewall"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "confirm": true, "label": "web-fw" },
+      "api_response": 7,
+      "expect_api_error": "Failed to create firewall"
     }
   ]
 }

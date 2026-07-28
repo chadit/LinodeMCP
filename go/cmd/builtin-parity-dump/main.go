@@ -45,8 +45,8 @@ func run() error {
 	}
 
 	var raw []inputTool
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parse fixture: %w", err)
+	if parseErr := json.Unmarshal(data, &raw); parseErr != nil {
+		return fmt.Errorf("parse fixture: %w", parseErr)
 	}
 
 	catalog := make([]profiles.ToolDescriptor, 0, len(raw))

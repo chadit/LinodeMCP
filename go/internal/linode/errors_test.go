@@ -120,11 +120,11 @@ func TestRetryableError(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
+		unwrapTarget   error
 		err            *linode.RetryableError
+		name           string
 		mustContain    []string
 		mustNotContain []string
-		unwrapTarget   error
 	}{
 		{
 			name:        "with retry delay",

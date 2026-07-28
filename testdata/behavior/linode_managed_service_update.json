@@ -1,6 +1,6 @@
 {
   "tool": "linode_managed_service_update",
-  "description": "Service update: shared id rejection, the timeout range rejection (Python's text now matches Go's 'between 1 and 255'), confirm gate, and the PUT body once confirmed.",
+  "description": "Service update: shared id rejection, the timeout range rejection (Python's text now matches Go's 'between 1 and 255'), confirm gate, and the PUT body once confirmed. A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "rejects non-positive service_id",
@@ -31,6 +31,12 @@
       "name": "requires confirm",
       "args": {"service_id": 8, "label": "web2"},
       "expect_error": "This updates a Managed service monitor. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "service_id": 8, "label": "web2", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to update"
     }
   ]
 }

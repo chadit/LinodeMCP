@@ -40,6 +40,11 @@ const (
 
 	dbMessagePrefixMySQL      = "Managed Database"
 	dbMessagePrefixPostgreSQL = "PostgreSQL Managed Database"
+
+	// Engine display names for messages that name the engine on its own
+	// rather than through a message prefix (the MySQL prefix above omits it).
+	dbEngineLabelMySQL      = "MySQL"
+	dbEngineLabelPostgreSQL = "PostgreSQL"
 )
 
 // NewLinodeDatabaseEngineListTool creates a tool for listing Managed Database engines.
@@ -723,7 +728,7 @@ func handleDatabaseCredentialsGet(
 func handleDatabaseInstanceCredentialsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return handleDatabaseCredentialsGet(
 		ctx, request, cfg,
-		"linode_database_mysql_instance_credentials_get", dbMySQLInstancesPath, "MySQL",
+		"linode_database_mysql_instance_credentials_get", dbMySQLInstancesPath, dbEngineLabelMySQL,
 		func(ctx context.Context, c *linode.Client, id int) (any, error) {
 			return c.GetDatabaseInstance(ctx, id)
 		},
@@ -736,7 +741,7 @@ func handleDatabaseInstanceCredentialsGetRequest(ctx context.Context, request *m
 func handleDatabasePostgreSQLInstanceCredentialsGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	return handleDatabaseCredentialsGet(
 		ctx, request, cfg,
-		"linode_database_postgresql_instance_credentials_get", dbPostgreSQLInstancesPath, "PostgreSQL",
+		"linode_database_postgresql_instance_credentials_get", dbPostgreSQLInstancesPath, dbEngineLabelPostgreSQL,
 		func(ctx context.Context, c *linode.Client, id int) (any, error) {
 			return c.GetDatabasePostgreSQLInstance(ctx, id)
 		},
@@ -873,7 +878,7 @@ func runDatabaseInstanceCreate(
 	ctx context.Context,
 	request *mcp.CallToolRequest,
 	cfg *config.Config,
-	toolName, instancesPath, confirmMessage, messagePrefix string,
+	toolName, instancesPath, confirmMessage, messagePrefix, engineLabel string,
 	create func(context.Context, *linode.Client, *linode.CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error),
 ) (*mcp.CallToolResult, error) {
 	req, validationMessage := databaseInstanceCreateRequestFromTool(request)
@@ -882,7 +887,10 @@ func runDatabaseInstanceCreate(
 	}
 
 	if IsDryRun(request) {
-		return RunDryRunPreview(ctx, request, cfg, toolName, httpMethodPost, instancesPath, nil)
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, toolName, httpMethodPost, instancesPath, req, nil,
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return databaseInstanceCreateSideEffects(ctx, engineLabel, req.Label)
+			})
 	}
 
 	if result := RequireConfirm(request, confirmMessage); result != nil {
@@ -909,7 +917,7 @@ func handleDatabaseInstanceCreateRequest(ctx context.Context, request *mcp.CallT
 	return runDatabaseInstanceCreate(ctx, request, cfg,
 		"linode_database_mysql_instance_create", dbMySQLInstancesPath,
 		"This creates a billable Managed Database instance. Set confirm=true to proceed.",
-		dbMessagePrefixMySQL,
+		dbMessagePrefixMySQL, dbEngineLabelMySQL,
 		func(ctx context.Context, c *linode.Client, req *linode.CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
 			return c.CreateDatabaseInstanceProto(ctx, req)
 		})
@@ -919,7 +927,7 @@ func handleDatabasePostgreSQLInstanceCreateRequest(ctx context.Context, request 
 	return runDatabaseInstanceCreate(ctx, request, cfg,
 		"linode_database_postgresql_instance_create", dbPostgreSQLInstancesPath,
 		"This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed.",
-		dbMessagePrefixPostgreSQL,
+		dbMessagePrefixPostgreSQL, dbEngineLabelPostgreSQL,
 		func(ctx context.Context, c *linode.Client, req *linode.CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
 			return c.CreateDatabasePostgreSQLInstanceProto(ctx, req)
 		})
@@ -939,7 +947,7 @@ func handleDatabaseInstanceUpdateRequest(ctx context.Context, request *mcp.CallT
 		func(ctx context.Context, client *linode.Client, instanceID int, req *linode.UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
 			return client.UpdateDatabaseInstanceProto(ctx, instanceID, req)
 		},
-		dbMessagePrefixMySQL,
+		dbMessagePrefixMySQL, dbEngineLabelMySQL,
 		formatDatabaseInstanceUpdateError,
 	)
 }
@@ -958,7 +966,7 @@ func handleDatabasePostgreSQLInstanceUpdateRequest(ctx context.Context, request 
 		func(ctx context.Context, client *linode.Client, instanceID int, req *linode.UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
 			return client.UpdateDatabasePostgreSQLInstanceProto(ctx, instanceID, req)
 		},
-		dbMessagePrefixPostgreSQL,
+		dbMessagePrefixPostgreSQL, dbEngineLabelPostgreSQL,
 		formatDatabasePostgreSQLInstanceUpdateError,
 	)
 }
@@ -970,7 +978,7 @@ func handleDatabaseInstanceUpdateRequestWithClient(
 	toolName, instancesPath, confirmMessage string,
 	fetchState func(context.Context, *linode.Client, int) (any, error),
 	update func(context.Context, *linode.Client, int, *linode.UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error),
-	messagePrefix string,
+	messagePrefix, engineLabel string,
 	formatError func(error) string,
 ) (*mcp.CallToolResult, error) {
 	if IsDryRun(request) {
@@ -979,10 +987,20 @@ func handleDatabaseInstanceUpdateRequestWithClient(
 			return mcp.NewToolResultError(validationMessage), nil
 		}
 
-		return RunDryRunPreview(ctx, request, cfg, toolName, "PUT",
-			fmt.Sprintf(instancesPath+"/%d", instanceID),
+		// The preview shows the PUT body, so it validates the update args
+		// before previewing rather than only on the execute path.
+		req, validationMessage := databaseInstanceUpdateRequestFromTool(request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, toolName, "PUT",
+			fmt.Sprintf(instancesPath+"/%d", instanceID), req,
 			func(ctx context.Context, c *linode.Client) (any, error) {
 				return fetchState(ctx, c, instanceID)
+			},
+			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
+				return databaseInstanceUpdateSideEffects(ctx, engineLabel, instanceID)
 			})
 	}
 
@@ -1093,14 +1111,14 @@ func runDatabaseInstanceActionDryRun(
 // one place. Without this, the MySQL and PostgreSQL handler pairs are
 // near-identical and trip the dupl linter once the dry-run branch lands.
 type databaseInstanceActionSpec struct {
+	FetchState     func(context.Context, *linode.Client, int) (any, error)
+	Execute        func(context.Context, *linode.Client, int) error
+	FormatError    func(int, error) string
 	ToolName       string
 	InstancesPath  string
 	Verb           string
 	ConfirmMessage string
 	MessagePrefix  string
-	FetchState     func(context.Context, *linode.Client, int) (any, error)
-	Execute        func(context.Context, *linode.Client, int) error
-	FormatError    func(int, error) string
 }
 
 func runDatabaseInstanceAction(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config, spec *databaseInstanceActionSpec) (*mcp.CallToolResult, error) {

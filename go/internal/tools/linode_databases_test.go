@@ -1577,6 +1577,8 @@ func TestLinodeDatabaseInstanceGetToolDefinition(t *testing.T) {
 func TestLinodeDatabaseInstanceGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	body := withUnmodeledField(t, linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive})
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
@@ -1595,15 +1597,6 @@ func TestLinodeDatabaseInstanceGetToolSuccess(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-
-		body := struct {
-			linode.DatabaseInstance
-
-			NotInProto string `json:"not_in_proto"`
-		}{
-			DatabaseInstance: linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: databaseEngineName, Version: databaseVersion, Status: statusActive},
-			NotInProto:       valNotInProto,
-		}
 
 		if err := json.NewEncoder(w).Encode(body); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -1722,8 +1715,8 @@ func TestLinodeDatabaseInstanceGetToolInstanceIdValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceGetTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
@@ -1806,6 +1799,8 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolDefinition(t *testing.T) {
 func TestLinodeDatabasePostgreSQLInstanceGetToolSuccess(t *testing.T) {
 	t.Parallel()
 
+	body := withUnmodeledField(t, linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseVersion, Status: statusActive})
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodGet)
@@ -1824,15 +1819,6 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolSuccess(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-
-		body := struct {
-			linode.DatabaseInstance
-
-			NotInProto string `json:"not_in_proto"`
-		}{
-			DatabaseInstance: linode.DatabaseInstance{ID: databaseInstanceID, Label: databaseInstanceLabel, Region: regionUSEast, Type: databaseInstanceType, Engine: "postgresql", Version: databaseVersion, Status: statusActive},
-			NotInProto:       valNotInProto,
-		}
 
 		if err := json.NewEncoder(w).Encode(body); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -1929,8 +1915,8 @@ func TestLinodeDatabasePostgreSQLInstanceGetToolInstanceIdValidation(t *testing.
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceGetTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
@@ -2145,8 +2131,8 @@ func TestLinodeDatabaseInstanceSSLGetToolInstanceIdValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceSSLGetTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
@@ -2361,8 +2347,8 @@ func TestLinodeDatabasePostgreSQLInstanceSSLGetToolInstanceIdValidation(t *testi
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSSLGetTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
@@ -2575,8 +2561,8 @@ func TestLinodeDatabaseInstanceCredentialsGetToolInstanceIdValidation(t *testing
 	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsGetTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123"}},
@@ -2663,8 +2649,8 @@ func TestLinodeDatabaseInstanceCredentialsResetToolConfirmValidation(t *testing.
 	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -2849,8 +2835,8 @@ func TestLinodeDatabaseInstanceCredentialsResetToolInstanceIdValidation(t *testi
 	_, _, handler := tools.NewLinodeDatabaseInstanceCredentialsResetTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
@@ -2933,8 +2919,8 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolConfirmValidation(t
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -3109,8 +3095,8 @@ func TestLinodeDatabasePostgreSQLInstanceCredentialsResetToolInstanceIdValidatio
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCredentialsResetTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
@@ -3193,8 +3179,8 @@ func TestLinodeDatabaseInstanceCreateToolConfirmValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceCreateTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -3445,8 +3431,8 @@ func TestLinodeDatabasePostgreSQLInstanceCreateToolConfirmValidation(t *testing.
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceCreateTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{{name: caseMissingConfirm}, {name: caseFalseConfirm, value: false}, {name: caseStringConfirm, value: boolStringTrue}, {name: caseNumericConfirm, value: 1}}
 
 	for _, testCase := range cases {
@@ -3689,8 +3675,8 @@ func TestLinodeDatabaseInstanceUpdateToolConfirmValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceUpdateTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -4104,8 +4090,8 @@ func TestLinodeDatabasePostgreSQLInstanceUpdateToolConfirmValidation(t *testing.
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceUpdateTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -4371,8 +4357,8 @@ func TestLinodeDatabaseInstanceDeleteToolConfirmValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -4483,8 +4469,8 @@ func TestLinodeDatabaseInstanceDeleteToolInputValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceDeleteTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true, keyConfirmedDryRun: true}},
@@ -4716,8 +4702,8 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolConfirmValidation(t *testing.
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -4828,8 +4814,8 @@ func TestLinodeDatabasePostgreSQLInstanceDeleteToolInputValidation(t *testing.T)
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceDeleteTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true, keyConfirmedDryRun: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true, keyConfirmedDryRun: true}},
@@ -5057,8 +5043,8 @@ func TestLinodeDatabaseInstancePatchToolConfirmValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstancePatchTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -5169,8 +5155,8 @@ func TestLinodeDatabaseInstancePatchToolInputValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstancePatchTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
@@ -5294,8 +5280,8 @@ func TestLinodeDatabaseInstanceSuspendToolConfirmValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceSuspendTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -5406,8 +5392,8 @@ func TestLinodeDatabaseInstanceSuspendToolInputValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceSuspendTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
@@ -5531,8 +5517,8 @@ func TestLinodeDatabaseInstanceResumeToolConfirmValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceResumeTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -5643,8 +5629,8 @@ func TestLinodeDatabaseInstanceResumeToolInputValidation(t *testing.T) {
 	_, _, handler := tools.NewLinodeDatabaseInstanceResumeTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
@@ -5768,8 +5754,8 @@ func TestLinodeDatabasePostgreSQLInstanceSuspendToolConfirmValidation(t *testing
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -5880,8 +5866,8 @@ func TestLinodeDatabasePostgreSQLInstanceSuspendToolInputValidation(t *testing.T
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceSuspendTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},
@@ -6005,8 +5991,8 @@ func TestLinodeDatabasePostgreSQLInstanceResumeToolConfirmValidation(t *testing.
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceResumeTool(cfg)
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirm, value: false},
@@ -6117,8 +6103,8 @@ func TestLinodeDatabasePostgreSQLInstanceResumeToolInputValidation(t *testing.T)
 	_, _, handler := tools.NewLinodeDatabasePostgreSQLInstanceResumeTool(cfg)
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingInstanceID, args: map[string]any{keyConfirm: true}},
 		{name: caseStringInstanceID, args: map[string]any{databaseInstanceIDParam: "123", keyConfirm: true}},

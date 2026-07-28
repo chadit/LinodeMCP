@@ -1,6 +1,6 @@
 {
   "tool": "linode_lke_cluster_create",
-  "description": "Pins the label/region/k8s_version-required rejections (checked in order) and the confirmed POST body. The node_pools-required text and the confirm-required text both diverge (see report), so those cases are reported, not pinned.",
+  "description": "Pins the label/region/k8s_version-required rejections (checked in order) and the confirmed POST body. The node_pools-required text and the confirm-required text both diverge (see report), so those cases are reported, not pinned. A response that is not a JSON object must fail rather than yield a zeroed cluster.",
   "cases": [
     {
       "name": "rejects missing label",
@@ -42,6 +42,30 @@
       "name": "requires confirm",
       "args": {"label": "prod", "region": "us-east", "k8s_version": "1.31", "node_pools": [{"type": "g6-standard-1", "count": 3}]},
       "expect_error": "This creates billable Kubernetes resources. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [ { "type": "g6-standard-1", "count": 3 } ],
+        "confirm": true
+      },
+      "api_response": [],
+      "expect_api_error": "Failed to create LKE cluster"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [ { "type": "g6-standard-1", "count": 3 } ],
+        "confirm": true
+      },
+      "api_response": 7,
+      "expect_api_error": "Failed to create LKE cluster"
     }
   ]
 }

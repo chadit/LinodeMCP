@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import re
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote
 
 import httpx
@@ -26,6 +27,25 @@ from linodemcp.twostage.hash_ignore import hash_ignore_fields
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
+
+
+# The domain-name pattern POST /domains documents. Rejecting locally keeps a
+# malformed name from burning an API call, and pinning the documented pattern
+# (rather than a looser hand-rolled one) is what keeps both languages rejecting
+# the same set of names.
+_DOMAIN_CREATE_NAME_PATTERN = re.compile(
+    r"^(\*\.)?([a-zA-Z0-9-_]{1,63}\.)+"
+    r"([a-zA-Z]{2,3}\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$"
+)
+_DOMAIN_CREATE_NAME_MAX_LENGTH = 253
+_DOMAIN_CREATE_ARRAY_FIELDS = ("axfr_ips", "master_ips", "tags")
+_DOMAIN_CREATE_INTEGER_FIELDS = (
+    "expire_sec",
+    "refresh_sec",
+    "retry_sec",
+    "ttl_sec",
+)
+_DOMAIN_CREATE_STRING_FIELDS = ("description", "group", "soa_email", "status")
 
 
 def _required_string_argument(arguments: dict[str, Any], name: str) -> str | None:
@@ -89,7 +109,10 @@ async def handle_linode_domain_import(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.post_raw("/domains/import", request_body)
+        # retry=False because POST /domains/import is not idempotent: the API
+        # assigns the ID, so replaying after a transient failure leaves a
+        # duplicate zone the caller never learns about.
+        raw = await client.post_raw("/domains/import", request_body, retry=False)
         domain_id = raw_int(raw, "id")
         domain_label = raw_str(raw, "domain")
         return serialize_api_response(
@@ -159,7 +182,12 @@ async def handle_linode_domain_clone(
         return error_response("This clones a DNS domain. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.post_raw(f"/domains/{encoded_domain_id}/clone", request_body)
+        # retry=False because the clone POST creates a new zone with its own
+        # API-assigned ID, so replaying after a transient failure leaves a
+        # duplicate the caller never learns about.
+        raw = await client.post_raw(
+            f"/domains/{encoded_domain_id}/clone", request_body, retry=False
+        )
         new_id = raw_int(raw, "id")
         new_label = raw_str(raw, "domain")
         return serialize_api_response(
@@ -184,62 +212,165 @@ def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-def _domain_create_field_error(arguments: dict[str, Any]) -> list[TextContent] | None:
-    """Validate domain create fields; return an error response or None."""
-    if not arguments.get("domain"):
-        return error_response("domain is required")
-    # type has no safe default; Go requires it, so require it here too rather
-    # than silently defaulting to "master".
-    if not arguments.get("type"):
-        return error_response("type is required")
+def _domain_create_name_error(domain_name: Any) -> str | None:
+    """Return the domain-name validation error, if any."""
+    if not isinstance(domain_name, str) or not domain_name:
+        return "domain is required"
+    if len(domain_name) > _DOMAIN_CREATE_NAME_MAX_LENGTH:
+        return "domain must be between 1 and 253 characters"
+    if _DOMAIN_CREATE_NAME_PATTERN.fullmatch(domain_name) is None:
+        return "domain must match the documented domain-name pattern"
     return None
+
+
+def _domain_create_type_error(domain_type: Any) -> str | None:
+    """Return the domain-type validation error, if any."""
+    if not isinstance(domain_type, str) or not domain_type:
+        return "type is required"
+    if domain_type not in ("master", "slave"):
+        return "type must be one of: master, slave"
+    return None
+
+
+def _domain_create_integer_fields_error(arguments: dict[str, Any]) -> str | None:
+    """Return an integer-field type error, if any.
+
+    ``type(value) is int`` rather than ``isinstance`` because ``bool`` is an
+    ``int`` subclass, and ``true`` is not an interval the API accepts. A float
+    is allowed only when it is exactly integral, which also rejects NaN and the
+    infinities.
+    """
+    for name in _DOMAIN_CREATE_INTEGER_FIELDS:
+        if name not in arguments:
+            continue
+        value = arguments[name]
+        if type(value) is int:
+            continue
+        if not isinstance(value, float) or not value.is_integer():
+            return f"{name} must be an integer"
+
+    return None
+
+
+def _domain_create_status_error(arguments: dict[str, Any]) -> str | None:
+    """Return a status type or enum validation error, if any."""
+    if "status" not in arguments:
+        return None
+    status = arguments["status"]
+    if not isinstance(status, str):
+        return "status must be a string"
+    if status not in ("active", "disabled"):
+        return "status must be one of: active, disabled"
+    return None
+
+
+def _domain_create_optional_fields_error(arguments: dict[str, Any]) -> str | None:
+    """Return an optional-field type or enum validation error, if any."""
+    status_error = _domain_create_status_error(arguments)
+    if status_error is not None:
+        return status_error
+
+    for name in _DOMAIN_CREATE_ARRAY_FIELDS:
+        if name not in arguments:
+            continue
+        value: object = arguments[name]
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in cast("list[object]", value)
+        ):
+            return f"{name} must be an array of strings"
+
+    integer_error = _domain_create_integer_fields_error(arguments)
+    if integer_error is not None:
+        return integer_error
+
+    for name in _DOMAIN_CREATE_STRING_FIELDS:
+        if name in arguments and not isinstance(arguments[name], str):
+            return f"{name} must be a string"
+
+    return None
+
+
+def _domain_create_request(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any], str | None]:
+    """Build the POST /domains body, or return the first validation failure.
+
+    Optional fields are copied by presence rather than by truthiness, so an
+    explicit "" or 0 still reaches the API instead of being dropped as if the
+    caller had said nothing.
+    """
+    domain_name = arguments.get("domain")
+    domain_type = arguments.get("type")
+
+    for message in (
+        _domain_create_name_error(domain_name),
+        _domain_create_type_error(domain_type),
+        _domain_create_optional_fields_error(arguments),
+    ):
+        if message is not None:
+            return {}, message
+
+    if domain_type == "master" and not arguments.get("soa_email"):
+        return {}, "soa_email is required for master domains"
+    if domain_type == "slave" and not arguments.get("master_ips"):
+        return {}, "master_ips must include at least one value for slave domains"
+
+    body: dict[str, Any] = {"domain": domain_name, "type": domain_type}
+    for name in (
+        *_DOMAIN_CREATE_ARRAY_FIELDS,
+        *_DOMAIN_CREATE_INTEGER_FIELDS,
+        *_DOMAIN_CREATE_STRING_FIELDS,
+    ):
+        if name in arguments:
+            value = arguments[name]
+            body[name] = (
+                int(value)
+                if name in _DOMAIN_CREATE_INTEGER_FIELDS and isinstance(value, float)
+                else value
+            )
+
+    return body, None
 
 
 async def handle_linode_domain_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_create tool request."""
-    domain_name = arguments.get("domain", "")
+    body, validation_message = _domain_create_request(arguments)
 
     if is_dry_run(arguments):
-        fields_error = _domain_create_field_error(arguments)
-        if fields_error is not None:
-            return fields_error
-        domain_type = arguments.get("type", "")
+        if validation_message is not None:
+            return error_response(validation_message)
         return build_dry_run_response(
             "linode_domain_create",
             arguments.get("environment", ""),
             "POST",
             "/domains",
             None,
+            request_body=body,
             side_effects=[
-                f"A new {domain_type} DNS domain {domain_name!r} will be created."
+                f'A new {body["type"]} DNS domain "{body["domain"]}" will be created.'
             ],
         )
 
-    if not arguments.get("confirm"):
+    if arguments.get("confirm") is not True:
         return error_response("This creates a DNS domain. Set confirm=true to proceed.")
 
-    fields_error = _domain_create_field_error(arguments)
-    if fields_error is not None:
-        return fields_error
-
-    body: dict[str, Any] = {
-        "domain": domain_name,
-        "type": arguments.get("type", ""),
-    }
-    soa_email = arguments.get("soa_email")
-    if soa_email:
-        body["soa_email"] = soa_email
-    description = arguments.get("description")
-    if description:
-        body["description"] = description
-    ttl_sec = arguments.get("ttl_sec")
-    if ttl_sec is not None:
-        body["ttl_sec"] = ttl_sec
+    if validation_message is not None:
+        return error_response(validation_message)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.post_raw("/domains", body)
+        # retry=False because POST /domains is not idempotent: replaying it
+        # after a transient failure can leave a duplicate zone the caller never
+        # learns about.
+        try:
+            raw = await client.post_raw("/domains", body, retry=False)
+        except ValueError as exc:
+            msg = f"domain create response is invalid: {exc}"
+            raise ValueError(msg) from exc
+        if not isinstance(raw, dict):
+            msg = "domain create response must be a JSON object"
+            raise TypeError(msg)
         new_id = raw_int(raw, "id")
         new_label = raw_str(raw, "domain")
         return serialize_api_response(

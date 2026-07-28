@@ -66,8 +66,8 @@ func callListTools(t *testing.T, args map[string]any) []map[string]any {
 	}
 
 	var out struct {
-		Count int              `json:"count"`
 		Tools []map[string]any `json:"tools"`
+		Count int              `json:"count"`
 	}
 
 	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
@@ -306,8 +306,8 @@ func TestListToolsEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	}
 
 	var out struct {
-		Count int               `json:"count"`
 		Tools *[]map[string]any `json:"tools"`
+		Count int               `json:"count"`
 	}
 
 	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
@@ -479,8 +479,8 @@ func TestListCategoriesEmptyCatalogReturnsEmptyArray(t *testing.T) {
 	textContent, _ := result.Content[0].(mcp.TextContent)
 
 	var out struct {
-		Count      int               `json:"count"`
 		Categories *[]map[string]any `json:"categories"`
+		Count      int               `json:"count"`
 	}
 
 	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {

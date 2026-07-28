@@ -1,6 +1,6 @@
 {
   "tool": "linode_database_postgresql_instance_create",
-  "description": "Confirm-gated create POST body. Create-arg validation messages diverge between languages (see report).",
+  "description": "Confirm-gated create POST body. Create-arg validation messages diverge between languages (see report). The dry-run case pins the full Tier B preview from docs/dry-run.md: the POST body, a null current_state (nothing exists to read yet), and the side effect plus billing warning the create implies.",
   "cases": [
     {
       "name": "creates a postgresql instance",
@@ -11,7 +11,10 @@
         "region": "us-east",
         "confirm": true
       },
-      "api_response": { "id": 123, "label": "prod-pg" },
+      "api_response": {
+        "id": 123,
+        "label": "prod-pg"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/databases/postgresql/instances",
@@ -25,8 +28,137 @@
     },
     {
       "name": "requires confirm",
-      "args": { "label": "prod-pg", "type": "g6-nanode-1", "engine": "postgresql/16", "region": "us-east" },
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east"
+      },
       "expect_error": "This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "sends the private network object",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "private_network": {
+          "vpc_id": 101,
+          "subnet_id": 202,
+          "public_access": false
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "id": 123,
+        "label": "prod-pg"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/databases/postgresql/instances",
+        "body": {
+          "label": "prod-pg",
+          "type": "g6-nanode-1",
+          "engine": "postgresql/16",
+          "region": "us-east",
+          "private_network": {
+            "vpc_id": 101,
+            "subnet_id": 202,
+            "public_access": false
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects a null private network",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "private_network": null,
+        "confirm": true
+      },
+      "expect_error": "private_network must be an object"
+    },
+    {
+      "name": "zero-fills null and unknown response fields",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": {
+        "id": null,
+        "label": null,
+        "future_field": "ignored"
+      },
+      "expect_result": {
+        "message": "PostgreSQL Managed Database instance '' (ID: 0) created",
+        "database_instance": {
+          "id": 0,
+          "status": "",
+          "label": "",
+          "region": "",
+          "type": "",
+          "engine": "",
+          "version": "",
+          "cluster_size": 0,
+          "replication_type": "",
+          "ssl_connection": false,
+          "encrypted": false,
+          "allow_list": [],
+          "created": "",
+          "updated": ""
+        }
+      }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": {
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east",
+        "confirm": true
+      },
+      "api_response": [],
+      "expect_api_error": "Failed to create PostgreSQL Managed Database"
+    },
+    {
+      "name": "dry run previews the create without sending it",
+      "args": {
+        "dry_run": true,
+        "label": "prod-pg",
+        "type": "g6-nanode-1",
+        "engine": "postgresql/16",
+        "region": "us-east"
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_database_postgresql_instance_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/databases/postgresql/instances",
+          "body": {
+            "label": "prod-pg",
+            "type": "g6-nanode-1",
+            "engine": "postgresql/16",
+            "region": "us-east"
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": [
+          "A PostgreSQL Managed Database 'prod-pg' will be created or restored."
+        ],
+        "warnings": [
+          "Creating a Managed Database can incur billing."
+        ]
+      }
     }
   ]
 }

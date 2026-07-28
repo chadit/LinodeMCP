@@ -29,12 +29,12 @@ const MaxRecentLimit = 200
 // syntax); Capability and Status are exact matches; Since and Until
 // bound the event timestamp (inclusive lower, inclusive upper).
 type RecentQuery struct {
-	Limit       int
 	Since       time.Time
 	Until       time.Time
 	Tool        string
 	Capability  Capability
 	Status      Status
+	Limit       int
 	IncludeMeta bool
 }
 
@@ -208,8 +208,8 @@ func orderedAuditFiles(root *os.Root) ([]string, error) {
 // rotatedFile pairs a rotated file name with its parsed day so the
 // scan can sort by date without re-parsing.
 type rotatedFile struct {
-	name string
 	day  time.Time
+	name string
 }
 
 // readEventsFromFile decodes every JSON line in name into an Event,

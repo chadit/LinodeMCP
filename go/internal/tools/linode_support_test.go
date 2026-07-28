@@ -646,8 +646,8 @@ func TestLinodeSupportTicketCloseToolRequiresConfirmBeforeClient(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -698,8 +698,8 @@ func TestLinodeSupportTicketCloseToolRejectsInvalidTicketId(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingTicketID, args: map[string]any{keyConfirm: true}},
 		{name: caseZeroTicketID, args: map[string]any{supportTicketIDKey: float64(0), keyConfirm: true}},

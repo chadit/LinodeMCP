@@ -76,8 +76,8 @@ func TestLinodeInterfacesUpgradeToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeInterfacesUpgradeTool(cfg)
 
 	confirmTests := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},

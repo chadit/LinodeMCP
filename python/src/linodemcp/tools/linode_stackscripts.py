@@ -266,7 +266,10 @@ async def handle_linode_stackscript_create(
         body["rev_note"] = arguments["rev_note"]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.post_raw("/linode/stackscripts", body)
+        # retry=False because POST /linode/stackscripts is not idempotent: the
+        # API assigns the ID, so replaying after a transient failure leaves a
+        # second StackScript the caller never learns about.
+        raw = await client.post_raw("/linode/stackscripts", body, retry=False)
         return serialize_api_response(
             {
                 "message": (

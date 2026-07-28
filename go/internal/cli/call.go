@@ -99,11 +99,11 @@ func RunCallCommand(args []string, stdout, stderr io.Writer) int {
 
 // parsedCall holds the flag-parse output for a call invocation.
 type parsedCall struct {
+	safety  SafetyFlags
 	tool    string
 	jsonArg string
-	kvArgs  []string
 	output  string
-	safety  SafetyFlags
+	kvArgs  []string
 }
 
 // parseCallArgs parses the call flags. The third return reports whether

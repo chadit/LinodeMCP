@@ -1,6 +1,6 @@
 {
   "tool": "linode_managed_linode_settings_update",
-  "description": "Managed Linode settings update: shared id + ssh.access rejections and the PUT body once confirmed. Confirm-gate and missing-ssh text diverge (see report).",
+  "description": "Managed Linode settings update: shared id + ssh.access rejections and the PUT body once confirmed. Confirm-gate and missing-ssh text diverge (see report). A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "rejects non-positive linode_id",
@@ -26,6 +26,12 @@
       "name": "requires confirm",
       "args": {"linode_id": 5, "ssh": {"access": true}},
       "expect_error": "This updates Managed Linode settings. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "linode_id": 5, "ssh": { "access": true }, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to update"
     }
   ]
 }

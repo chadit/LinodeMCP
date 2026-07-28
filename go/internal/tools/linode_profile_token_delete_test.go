@@ -180,8 +180,8 @@ func TestLinodeProfileTokenDeleteToolConfirmGuardRejectsBeforeClientCall(t *test
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 		set     bool
 	}{
 		{name: caseMissing},

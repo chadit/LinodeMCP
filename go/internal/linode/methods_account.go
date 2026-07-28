@@ -952,8 +952,13 @@ func (c *Client) httpListAccountNotificationsProto(ctx context.Context, page, pa
 // httpListProfileDevicesProto retrieves trusted devices as proto messages for the
 // proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListProfileDevices.
+//
+// The list names the browsers holding a live Remember Me session, so a body the
+// lenient decode path would report as zero devices is a wrong answer a caller
+// acts on. It decodes through the required-data path to fail closed on a missing
+// or null data member, matching what the Python client already does.
 func (c *Client) httpListProfileDevicesProto(ctx context.Context, page, pageSize int) ([]*linodev1.TrustedDevice, error) {
-	return listProtoElementsPaginated(ctx, c, "ListProfileDevices", endpointProfileDevices, page, pageSize,
+	return listProtoElementsPaginatedRequiredData(ctx, c, "ListProfileDevices", endpointProfileDevices, page, pageSize,
 		func() *linodev1.TrustedDevice { return &linodev1.TrustedDevice{} })
 }
 

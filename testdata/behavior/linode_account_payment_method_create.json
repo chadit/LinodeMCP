@@ -1,6 +1,6 @@
 {
   "tool": "linode_account_payment_method_create",
-  "description": "Account payment method create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report).",
+  "description": "Account payment method create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report). A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "requires type",
@@ -36,6 +36,12 @@
       "name": "requires confirm",
       "args": {"type": "credit_card", "data": {"card_token": "tok_123"}, "is_default": false},
       "expect_error": "This creates a payment method. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "type": "credit_card", "data": { "card_token": "tok_123" }, "is_default": false, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

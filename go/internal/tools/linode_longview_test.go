@@ -59,8 +59,8 @@ func TestLinodeLongviewClientCreateToolConfirmRequiredBeforeClient(t *testing.T)
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 		include bool
 	}{
 		{name: caseMissing},
@@ -107,8 +107,8 @@ func TestLinodeLongviewClientCreateToolMissingLabelRejectsBeforeClient(t *testin
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissing, args: map[string]any{keyConfirm: true}},
 		{name: caseBlank, args: map[string]any{keyConfirm: true, keyLabel: blankString}},
@@ -234,14 +234,14 @@ func assertLongviewClientCreateResponse(t *testing.T, text string) {
 	t.Helper()
 
 	var body struct {
+		Client         any    `json:"client"`
 		Warning        string `json:"warning"`
 		LongviewClient struct {
 			APIKey      string `json:"api_key"`
-			ID          int    `json:"id"`
 			InstallCode string `json:"install_code"`
 			Label       string `json:"label"`
+			ID          int    `json:"id"`
 		} `json:"longview_client"`
-		Client any `json:"client"`
 	}
 	if err := json.Unmarshal([]byte(text), &body); err != nil {
 		t.Fatalf("unexpected error decoding response: %v", err)

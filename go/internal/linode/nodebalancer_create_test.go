@@ -19,9 +19,9 @@ const (
 )
 
 type nodeBalancerCreateCase struct {
-	name     string
 	ipv4     *string
 	wantBody map[string]any
+	name     string
 }
 
 func TestClientCreateNodeBalancerProtoRequestAndResponse(t *testing.T) {

@@ -430,6 +430,72 @@ async def test_reserved_ip_existing_resource_dry_runs_fetch_without_mutating(
     getattr(mock_linode_client, mutation).assert_not_called()
 
 
+@pytest.mark.parametrize("body", [[], "reserved", None, 42, True, 1.5])
+@pytest.mark.parametrize(
+    ("handler", "arguments", "client_method", "message"),
+    [
+        (
+            handle_linode_networking_reserved_ip_create,
+            {"region": "us-east", "confirm": True},
+            "create_reserved_ip",
+            (
+                "Failed to reserve public IPv4 address: "
+                "reserved IP response must be an object"
+            ),
+        ),
+        (
+            handle_linode_networking_reserved_ip_update,
+            {"address": "192.0.2.10", "tags": ["prod"], "confirm": True},
+            "update_reserved_ip",
+            (
+                "Failed to replace reserved IPv4 tags: "
+                "reserved IP response must be an object"
+            ),
+        ),
+        (
+            handle_linode_networking_reserved_ip_get,
+            {"address": "192.0.2.10"},
+            "get_reserved_ip",
+            (
+                "Failed to get reserved IPv4 address: "
+                "reserved IP response must be an object"
+            ),
+        ),
+        (
+            handle_linode_networking_reserved_ip_list,
+            {},
+            "list_reserved_ips",
+            "Failed to list reserved IPv4 addresses: list response must be an object",
+        ),
+        (
+            handle_linode_networking_reserved_ip_type_list,
+            {},
+            "list_reserved_ip_types",
+            "Failed to list reserved IPv4 pricing: list response must be an object",
+        ),
+    ],
+)
+async def test_reserved_ip_tools_reject_non_object_response_bodies(
+    mock_linode_client: AsyncMock,
+    sample_config: Config,
+    body: object,
+    handler: Callable[[dict[str, Any], Config], Any],
+    arguments: dict[str, Any],
+    client_method: str,
+    message: str,
+) -> None:
+    """A body that is not an object fails instead of reporting a blank result.
+
+    ParseDict copies nothing out of a list or string, so without the guard the
+    address tools answer with every field at its zero value and no sign
+    anything went wrong. The text is pinned whole because Go's twin has to emit
+    the same sentence after its own action prefix.
+    """
+    getattr(mock_linode_client, client_method).return_value = body
+    result = await handler(arguments, sample_config)
+    assert result[0].text == message
+
+
 async def test_reserved_ip_tool_maps_client_error(
     mock_linode_client: AsyncMock, sample_config: Config
 ) -> None:

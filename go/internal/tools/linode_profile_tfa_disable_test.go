@@ -230,8 +230,8 @@ func TestLinodeProfileTFADisableToolConfirmRequiredBeforeClient(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},

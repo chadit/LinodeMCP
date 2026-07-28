@@ -1,6 +1,6 @@
 {
   "tool": "linode_networking_reserved_ip_create",
-  "description": "Reserved-IP create validates the region slug and tag list, requires explicit confirmation because reserving starts billing, previews without reserving, and POSTs only the fields the caller supplied.",
+  "description": "Reserved-IP create validates the region slug and tag list, requires explicit confirmation because reserving starts billing, previews without reserving, and POSTs only the fields the caller supplied. A response body that is not a JSON object fails with the same sentence in both languages instead of rendering as an address with every field empty.",
   "cases": [
     {
       "name": "rejects a missing region",
@@ -122,6 +122,24 @@
         "type": "ipv4",
         "vpc_nat_1_1": null
       }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "region": "us-east", "confirm": true },
+      "api_response": [],
+      "expect_api_error": "reserved IP response must be an object"
+    },
+    {
+      "name": "rejects a JSON null API response",
+      "args": { "region": "us-east", "confirm": true },
+      "api_response_raw": "null",
+      "expect_api_error": "reserved IP response must be an object"
+    },
+    {
+      "name": "rejects a bare-string API response",
+      "args": { "region": "us-east", "confirm": true },
+      "api_response_raw": "\"reserved\"",
+      "expect_api_error": "reserved IP response must be an object"
     },
     {
       "name": "dry_run_preview",

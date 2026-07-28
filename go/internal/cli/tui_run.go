@@ -26,9 +26,9 @@ const (
 // transport/JSON-RPC failure (nil on a normal tool result, including a
 // tool-level error which lands in result.IsError instead).
 type runResultMsg struct {
+	err    error
 	model  *runModel
 	result CallResult
-	err    error
 }
 
 // runModel is the run-and-result screen. It shows the pending request,
@@ -37,21 +37,21 @@ type runResultMsg struct {
 // explicit confirm step (and surfaces a dry-run/plan preview) before the
 // real call, matching the safety posture the dispatch already enforces.
 type runModel struct {
-	srv      *server.Server
-	tool     string
+	err      error
 	args     map[string]any
-	cap      profiles.Capability
-	viewport viewport.Model
+	srv      *server.Server
 	cancel   context.CancelFunc
-
-	awaitingConfirm bool
-	done            bool
-	result          CallResult
-	err             error
-	format          resultFormat
+	tool     string
+	result   CallResult
+	viewport viewport.Model
+	cap      profiles.Capability
+	format   resultFormat
 
 	width  int
 	height int
+
+	done            bool
+	awaitingConfirm bool
 }
 
 // newRunModel builds the run screen for a prepared request. capability

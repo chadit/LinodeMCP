@@ -390,8 +390,8 @@ func TestLinodeInstanceConfigDeleteToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeInstanceConfigDeleteTool(cfg)
 
 	confirmTests := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},
@@ -734,11 +734,11 @@ func TestLinodeInstanceConfigInterfacesListToolSuccess(t *testing.T) {
 	}
 
 	var output struct {
-		Count      int `json:"count"`
 		Interfaces []struct {
-			ID      int    `json:"id"`
 			Purpose string `json:"purpose"`
+			ID      int    `json:"id"`
 		} `json:"interfaces"`
+		Count int `json:"count"`
 	}
 	if err := json.Unmarshal([]byte(textContent.Text), &output); err != nil {
 		t.Fatalf("unmarshal tool output: %v", err)

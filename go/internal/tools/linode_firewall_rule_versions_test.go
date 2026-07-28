@@ -90,10 +90,10 @@ func TestLinodeFirewallRuleVersionsListToolSuccess(t *testing.T) {
 	}
 
 	var out struct {
-		Count                int `json:"count"`
 		FirewallRuleVersions []struct {
 			Version int `json:"version"`
 		} `json:"firewall_rule_versions"`
+		Count int `json:"count"`
 	}
 	if err := json.Unmarshal([]byte(textContent.Text), &out); err != nil {
 		t.Fatalf("unmarshal output: %v", err)

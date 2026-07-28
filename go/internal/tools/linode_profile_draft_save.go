@@ -125,8 +125,8 @@ func NewLinodeProfileDraftSaveTool(
 
 		cfg.Profiles[name] = draftCfg
 
-		if err := config.WriteAtomic(path, cfg); err != nil {
-			return nil, fmt.Errorf("write config to %q: %w", path, err)
+		if writeErr := config.WriteAtomic(path, cfg); writeErr != nil {
+			return nil, fmt.Errorf("write config to %q: %w", path, writeErr)
 		}
 
 		saveProto, err := draftSaveProto(diff)

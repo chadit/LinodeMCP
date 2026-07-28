@@ -1,6 +1,6 @@
 {
   "tool": "linode_account_payment_create",
-  "description": "Account payment create: missing usd agrees and the POST body once confirmed. Confirm-gate and invalid-usd texts diverge (see report).",
+  "description": "Account payment create: missing usd agrees and the POST body once confirmed. Confirm-gate and invalid-usd texts diverge (see report). A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "requires usd",
@@ -21,6 +21,12 @@
       "name": "requires confirm",
       "args": {"usd": "10.00"},
       "expect_error": "This makes an account payment. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "usd": "10.00", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

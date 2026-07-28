@@ -1,6 +1,6 @@
 {
   "tool": "linode_networking_reserved_ip_delete",
-  "description": "Reserved-IP delete validates the IPv4 address and explicit confirmation, returns a stable success response, previews safely, and DELETEs the address without query or body when authorized.",
+  "description": "Reserved-IP delete validates the IPv4 address and explicit confirmation, returns a stable success response, previews safely, and DELETEs the address without query or body when authorized. Its success payload is built locally from the address, so unlike the other reserved-IP tools it never decodes the DELETE response body and a malformed one cannot reach the caller.",
   "cases": [
     {
       "name": "rejects missing confirmation without mutation",
@@ -42,6 +42,24 @@
       "api_responses": {
         "DELETE /networking/reserved/ips/192.0.2.10": {}
       },
+      "expect_result": {
+        "address": "192.0.2.10",
+        "message": "Reserved IP 192.0.2.10 unreserved successfully"
+      }
+    },
+    {
+      "name": "keeps the stable success response when the API body is a bare array",
+      "args": { "address": "192.0.2.10", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response": [],
+      "expect_result": {
+        "address": "192.0.2.10",
+        "message": "Reserved IP 192.0.2.10 unreserved successfully"
+      }
+    },
+    {
+      "name": "keeps the stable success response when the API body is a bare string",
+      "args": { "address": "192.0.2.10", "confirm": true, "confirm_bypass_dry_run": true },
+      "api_response_raw": "\"gone\"",
       "expect_result": {
         "address": "192.0.2.10",
         "message": "Reserved IP 192.0.2.10 unreserved successfully"

@@ -12,16 +12,16 @@ import (
 
 // recordedToolCall captures one RecordToolCall invocation for assertions.
 type recordedToolCall struct {
-	tool string
 	err  error
+	tool string
 }
 
 // fakeMetricsRecorder satisfies server.MetricsRecorder and records what the
 // dispatch chokepoint hands it. Guarded by a mutex so the race detector is
 // satisfied even though HandleMessage dispatches synchronously.
 type fakeMetricsRecorder struct {
-	mu        sync.Mutex
 	toolCalls []recordedToolCall
+	mu        sync.Mutex
 }
 
 func (f *fakeMetricsRecorder) RecordToolCall(_ context.Context, toolName string, _ time.Duration, err error) {

@@ -258,8 +258,8 @@ func TestLinodeProfilePreferencesUpdateToolConfirmRequiredBeforeClient(t *testin
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},
@@ -315,8 +315,8 @@ func TestLinodeProfilePreferencesUpdateToolPreferencesBodyRequiredBeforeClient(t
 	t.Parallel()
 
 	cases := []struct {
-		name        string
 		preferences any
+		name        string
 	}{
 		{name: caseMissing},
 		{name: "empty object", preferences: map[string]any{}},

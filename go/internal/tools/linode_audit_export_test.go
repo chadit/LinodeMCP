@@ -85,8 +85,8 @@ func TestLinodeAuditExportWritesNDJSON(t *testing.T) {
 
 	var decoded exportResult
 
-	if err := json.Unmarshal([]byte(textContent.Text), &decoded); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if unmarshalErr := json.Unmarshal([]byte(textContent.Text), &decoded); unmarshalErr != nil {
+		t.Fatalf("unexpected error: %v", unmarshalErr)
 	}
 
 	if decoded.Format != "ndjson" {

@@ -2147,3 +2147,41 @@ func instanceDiskDeleteDependencyWalk(ctx context.Context, client *linode.Client
 
 	return details, nil
 }
+
+// databaseInstanceCreateSideEffects is the Tier B preview for the Managed
+// Database create tools. engine is the display name ("MySQL"/"PostgreSQL").
+// The create endpoint also restores a fork, so the effect covers both
+// (arg-only, no fetch). The label is single-quoted to match the string
+// Python's repr produces, keeping one shared behavior fixture for both
+// languages.
+func databaseInstanceCreateSideEffects(ctx context.Context, engine, label string) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("database-create side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		fmt.Sprintf("A %s Managed Database '%s' will be created or restored.", engine, label))
+	details.Warnings = append(details.Warnings, "Creating a Managed Database can incur billing.")
+
+	return details, nil
+}
+
+// databaseInstanceUpdateSideEffects is the Tier B preview for the Managed
+// Database update tools. The PUT can resize the cluster or swap the engine
+// version, so the warning covers service behavior rather than naming one
+// field (arg-only, no fetch).
+func databaseInstanceUpdateSideEffects(ctx context.Context, engine string, instanceID int) (DryRunDetails, error) {
+	var details DryRunDetails
+
+	if err := ctx.Err(); err != nil {
+		return details, fmt.Errorf("database-update side-effect walk canceled: %w", err)
+	}
+
+	details.SideEffects = append(details.SideEffects,
+		fmt.Sprintf("%s Managed Database %d will be updated.", engine, instanceID))
+	details.Warnings = append(details.Warnings, "Updating a Managed Database can change service behavior.")
+
+	return details, nil
+}

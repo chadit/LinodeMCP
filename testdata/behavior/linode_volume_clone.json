@@ -1,6 +1,6 @@
 {
   "tool": "linode_volume_clone",
-  "description": "Volume clone: volume_id-required and label-required rejections both languages agree on (confirm set so both reach them), plus the clone POST. Confirm-gate text and negative-id handling diverge (see report).",
+  "description": "Volume clone: volume_id-required and label-required rejections both languages agree on (confirm set so both reach them), plus the clone POST. Confirm-gate text and negative-id handling diverge (see report). A success body that is not a JSON object must fail rather than turn into a zeroed volume record.",
   "cases": [
     {
       "name": "requires volume_id",
@@ -31,6 +31,24 @@
       "name": "requires confirm",
       "args": {"volume_id": 123, "label": "clone-vol"},
       "expect_error": "This operation creates a billable cloned volume. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "confirm": true, "volume_id": 123, "label": "clone-vol" },
+      "api_response": 7,
+      "expect_api_error": "Failed to clone volume"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "confirm": true, "volume_id": 123, "label": "clone-vol" },
+      "api_response": true,
+      "expect_api_error": "Failed to clone volume"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "confirm": true, "volume_id": 123, "label": "clone-vol" },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to clone volume"
     }
   ]
 }

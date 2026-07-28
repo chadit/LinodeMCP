@@ -1,6 +1,6 @@
 {
   "tool": "linode_networking_reserved_ip_list",
-  "description": "Reserved-IP list validates optional pagination, GETs the paginated collection, and preserves the complete IPv4 response shape including documented explicit nulls.",
+  "description": "Reserved-IP list validates optional pagination, GETs the paginated collection, and preserves the complete IPv4 response shape including documented explicit nulls. A page that is not a JSON object is named as such by both languages rather than swallowed into an empty result or reported through a Go type name.",
   "cases": [
     {
       "name": "rejects non-integer page",
@@ -133,6 +133,24 @@
           }
         ]
       }
+    },
+    {
+      "name": "rejects a bare-array page",
+      "args": {},
+      "api_response": [],
+      "expect_api_error": "list response must be an object"
+    },
+    {
+      "name": "rejects a JSON null page",
+      "args": {},
+      "api_response_raw": "null",
+      "expect_api_error": "list response must be an object"
+    },
+    {
+      "name": "rejects a bare-string page",
+      "args": {},
+      "api_response_raw": "\"reserved\"",
+      "expect_api_error": "list response must be an object"
     }
   ]
 }

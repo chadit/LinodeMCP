@@ -1,6 +1,6 @@
 {
   "tool": "linode_account_oauth_client_update",
-  "description": "OAuth client update: confirm gate and the PUT body once confirmed. Missing client_id and empty-field texts diverge (see report).",
+  "description": "OAuth client update: confirm gate and the PUT body once confirmed. Missing client_id and empty-field texts diverge (see report). A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "requires confirm before updating",
@@ -21,6 +21,12 @@
       "name": "requires confirm",
       "args": {"client_id": "abc123", "label": "new-label"},
       "expect_error": "This updates an OAuth client. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "client_id": "abc123", "label": "new-label", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to update"
     }
   ]
 }

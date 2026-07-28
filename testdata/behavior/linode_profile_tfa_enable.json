@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_tfa_enable",
-  "description": "Generates a TFA secret with a single POST once confirmed. Confirm text diverges (see report).",
+  "description": "Generates a TFA secret with a single POST once confirmed. Confirm text diverges (see report). A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "generates a two-factor secret",
@@ -12,6 +12,18 @@
       "name": "requires confirm",
       "args": {},
       "expect_error": "This generates a two-factor authentication secret. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to generate"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to generate"
     }
   ]
 }

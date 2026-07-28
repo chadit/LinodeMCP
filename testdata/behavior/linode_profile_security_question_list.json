@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_security_question_list",
-  "description": "Pins the bare security-questions GET path both languages issue, plus the keyed response shapes: accepted empty members and rejected response, member, and element shapes.",
+  "description": "Pins the bare security-questions GET path both languages issue, the keyed success shape (count, element order, an unanswered response omitted, falsey fields kept, unknown fields dropped), the rejected response, member, element, and field-type shapes, and the default API error path.",
   "cases": [
     {
       "name": "lists profile security questions",
@@ -24,6 +24,54 @@
       }
     },
     {
+      "name": "omits the response of an unanswered question",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": "Gotham" },
+          { "id": 12, "question": "What was the name of your first pet?", "response": null }
+        ]
+      },
+      "expect_result": {
+        "count": 2,
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": "Gotham" },
+          { "id": 12, "question": "What was the name of your first pet?" }
+        ]
+      }
+    },
+    {
+      "name": "keeps falsey security question fields",
+      "args": {},
+      "api_response": {
+        "security_questions": [{ "id": 0, "question": "", "response": "" }]
+      },
+      "expect_result": {
+        "count": 1,
+        "security_questions": [{ "id": 0, "question": "", "response": "" }]
+      }
+    },
+    {
+      "name": "ignores unknown security question fields",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          {
+            "id": 11,
+            "question": "In what city were you born?",
+            "response": "Gotham",
+            "future_field": "ignored"
+          }
+        ]
+      },
+      "expect_result": {
+        "count": 1,
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": "Gotham" }
+        ]
+      }
+    },
+    {
       "name": "accepts a missing security_questions member",
       "args": {},
       "api_response": {},
@@ -33,6 +81,12 @@
       "name": "accepts a null security_questions member",
       "args": {},
       "api_response": { "security_questions": null },
+      "expect_result": { "count": 0, "security_questions": [] }
+    },
+    {
+      "name": "accepts an empty security_questions member",
+      "args": {},
+      "api_response": { "security_questions": [] },
       "expect_result": { "count": 0, "security_questions": [] }
     },
     {
@@ -118,6 +172,48 @@
       "args": {},
       "api_response": { "security_questions": [false] },
       "expect_api_error": "element"
+    },
+    {
+      "name": "rejects an incompatible id type",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          { "id": true, "question": "In what city were you born?" }
+        ]
+      },
+      "expect_api_error": "id"
+    },
+    {
+      "name": "rejects an incompatible question type",
+      "args": {},
+      "api_response": { "security_questions": [{ "id": 11, "question": 1 }] },
+      "expect_api_error": "question"
+    },
+    {
+      "name": "rejects an incompatible response type",
+      "args": {},
+      "api_response": {
+        "security_questions": [
+          { "id": 11, "question": "In what city were you born?", "response": 1 }
+        ]
+      },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "surfaces the reason from a default API error",
+      "args": {},
+      "api_status": 400,
+      "api_response": {
+        "errors": [{ "reason": "security question request rejected" }]
+      },
+      "expect_api_error": "security question request rejected"
+    },
+    {
+      "name": "falls back to the status when an error body carries no reasons",
+      "args": {},
+      "api_status": 400,
+      "api_response": { "errors": [] },
+      "expect_api_error": "API request failed with status 400"
     }
   ]
 }

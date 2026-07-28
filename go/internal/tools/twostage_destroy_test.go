@@ -673,11 +673,11 @@ func twoStageJSONServer(
 
 // twoStageSingleIDCase drives one single-ID delete tool through plan then apply.
 type twoStageSingleIDCase struct {
-	name      string
-	handlerOf func(*config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
-	idKey     string
 	idVal     any
+	handlerOf func(*config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	baseState map[string]any
+	name      string
+	idKey     string
 }
 
 // twoStageSingleIDCases lists the opted-in single-ID delete tools whose fetched
@@ -1023,13 +1023,13 @@ func TestTwoStageTwoIDDeleteTools(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
+		driftVal  any
 		handlerOf func(*config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
+		baseState map[string]any
+		name      string
 		outerKey  string
 		innerKey  string
-		baseState map[string]any
 		cosmetic  string
-		driftVal  any
 	}{
 		{
 			name: "instance_disk_delete",
@@ -1299,6 +1299,45 @@ func TestTwoStagePlanFetchError(t *testing.T) {
 	}
 }
 
+// TestTwoStagePlanRejectsUndecodableState covers the plan path's state-hash
+// guard. FetchState is the destroy flow's per-tool extension point, so whatever
+// it returns reaches the hasher untouched; json.Number carries its literal text
+// through the encoder, which lets a magnitude no float64 can hold encode fine
+// and then refuse to decode back into an object. A plan stored under a hash
+// derived from a half-read state would refuse a legitimate apply or wave one
+// through after real drift, so the plan fails here instead.
+func TestTwoStagePlanRejectsUndecodableState(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+		envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+	}}
+
+	store := twostage.NewPlanStore()
+	ctx := tools.WithPlanStore(t.Context(), store)
+	request := createRequestWithArgs(t, map[string]any{keyMode: twostage.ModePlan})
+
+	result, err := tools.RunDestructiveAction(ctx, &request, cfg, &tools.DestructiveAction{
+		ToolName: "linode_instance_delete",
+		Method:   http.MethodDelete,
+		Path:     instanceUpdatePath,
+		FetchState: func(context.Context, *linode.Client) (any, error) {
+			return map[string]any{"transfer_bytes": json.Number("1e1000")}, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("plan returned transport error: %v", err)
+	}
+
+	if !result.IsError || !strings.Contains(dryRunResultText(t, result), "unmarshal state for hash") {
+		t.Errorf("plan with an undecodable state should error, got: %s", dryRunResultText(t, result))
+	}
+
+	if store.Len() != 0 {
+		t.Errorf("no plan should be stored on a hash failure, Len = %d", store.Len())
+	}
+}
+
 func asString(value any) string {
 	s, _ := value.(string)
 
@@ -1321,10 +1360,10 @@ func decodeBody(t *testing.T, text string) map[string]any {
 // node id, an IPv6 range, a tag label). args is the tool's full non-control
 // argument set, replayed identically on plan and apply.
 type twoStageMultiArgCase struct {
-	name      string
 	handlerOf func(*config.Config) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	args      map[string]any
 	baseState map[string]any
+	name      string
 }
 
 // twoStageMultiArgCases lists the opted-in delete tools that take a non-int-ID

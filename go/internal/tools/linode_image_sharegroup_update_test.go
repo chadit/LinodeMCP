@@ -61,8 +61,8 @@ func TestLinodeImageShareGroupUpdateRequiresConfirm(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissingConfirm, set: false},

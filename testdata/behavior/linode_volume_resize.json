@@ -1,6 +1,6 @@
 {
   "tool": "linode_volume_resize",
-  "description": "Volume resize: volume_id-required and size-below-10GB rejections both languages agree on (confirm set so both reach them), plus the resize POST. Confirm-gate text and the missing-size message diverge (see report).",
+  "description": "Volume resize: volume_id-required and size-below-10GB rejections both languages agree on (confirm set so both reach them), plus the resize POST. Confirm-gate text and the missing-size message diverge (see report). A success body that is not a JSON object must fail rather than turn into a zeroed volume record.",
   "cases": [
     {
       "name": "requires volume_id",
@@ -26,6 +26,24 @@
       "name": "requires confirm",
       "args": {"volume_id": 123, "size": 40},
       "expect_error": "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "confirm": true, "volume_id": 123, "size": 40 },
+      "api_response": 7,
+      "expect_api_error": "Failed to resize volume"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "confirm": true, "volume_id": 123, "size": 40 },
+      "api_response": true,
+      "expect_api_error": "Failed to resize volume"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "confirm": true, "volume_id": 123, "size": 40 },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to resize volume"
     }
   ]
 }

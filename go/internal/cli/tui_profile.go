@@ -19,9 +19,9 @@ import (
 // active marking (the part worth testing) need no Bubble Tea widgets.
 type ProfileEntry struct {
 	Name     string
+	Summary  string
 	Active   bool
 	Disabled bool
-	Summary  string
 }
 
 // ProfileListEntries builds the sorted list of selectable profiles from a
@@ -103,8 +103,8 @@ func (i profileItem) FilterValue() string {
 // update loop: the new active name and whether the write succeeded. On
 // success the parent reloads the server profile and rebuilds the catalog.
 type profileSwitchedMsg struct {
-	name string
 	err  error
+	name string
 }
 
 // profileModel is the profile switcher screen: a list of profiles with the

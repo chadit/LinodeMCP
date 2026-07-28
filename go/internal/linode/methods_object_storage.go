@@ -89,9 +89,9 @@ func (c *Client) httpGetObjectStorageBucketProto(ctx context.Context, region, la
 // metadata (is_truncated and next_marker) the standard {data,page,...} envelope
 // does not carry.
 type ObjectStorageBucketContentsPage struct {
+	NextMarker  string
 	Objects     []*linodev1.ObjectStorageObject
 	IsTruncated bool
-	NextMarker  string
 }
 
 // httpListObjectStorageBucketContentsProto lists objects in a bucket as proto
@@ -122,13 +122,13 @@ func (c *Client) httpListObjectStorageBucketContentsProto(ctx context.Context, r
 	defer drainClose(resp)
 
 	var envelope struct {
+		NextMarker  string            `json:"next_marker"`
 		Data        []json.RawMessage `json:"data"`
 		IsTruncated bool              `json:"is_truncated"`
-		NextMarker  string            `json:"next_marker"`
 	}
 
-	if err := c.handleResponse(resp, &envelope); err != nil {
-		return nil, err
+	if decodeErr := c.handleResponse(resp, &envelope); decodeErr != nil {
+		return nil, decodeErr
 	}
 
 	objects, err := decodeRawProtoItems(envelope.Data, "ListObjectStorageBucketContents",

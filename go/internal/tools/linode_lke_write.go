@@ -319,16 +319,17 @@ func NewLinodeLKEClusterRecycleTool(cfg *config.Config) (mcp.Tool, profiles.Capa
 // lkeClusterActionSpec describes a single-cluster POST action (recycle,
 // regenerate) so the dry-run + confirm + execute flow stays in one place.
 type lkeClusterActionSpec struct {
-	ToolName       string
-	Verb           string
-	ConfirmMessage string
-	FailureFormat  string
-	Execute        func(ctx context.Context, c *linode.Client, clusterID int) error
+	Execute func(ctx context.Context, c *linode.Client, clusterID int) error
 
 	// SuccessProto builds the proto-canonical success body from the cluster ID,
 	// routing output through MarshalProtoToolResponse so it matches the Python
 	// side byte for byte. Every cluster action sets it.
 	SuccessProto func(clusterID int) proto.Message
+
+	ToolName       string
+	Verb           string
+	ConfirmMessage string
+	FailureFormat  string
 }
 
 // runLKEClusterAction wires dry-run preview, confirm gating, and execution

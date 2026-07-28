@@ -1,7 +1,17 @@
 {
   "tool": "linode_instance_interface_list",
-  "description": "Pins the documented keyed instance-interface list response, including accepted empty shapes and rejected response, member, and element shapes.",
+  "description": "Pins the documented linode_id path parameter, the plain unpaginated GET, every documented interface field including all three config arms, the documented error statuses, and the accepted empty and rejected response, member, and element shapes.",
   "cases": [
+    {
+      "name": "rejects missing linode_id",
+      "args": {},
+      "expect_error": "linode_id is required"
+    },
+    {
+      "name": "rejects non-positive linode_id",
+      "args": { "linode_id": 0 },
+      "expect_error": "linode_id must be a positive integer"
+    },
     {
       "name": "lists interfaces",
       "args": { "linode_id": 123 },
@@ -22,6 +32,81 @@
           { "id": 789, "mac_address": "22:00:AB:CD:EF:01" }
         ]
       }
+    },
+    {
+      "name": "returns every documented interface field and config arm in API order",
+      "args": { "linode_id": 123 },
+      "api_response": {
+        "interfaces": [
+          {
+            "id": 789,
+            "mac_address": "22:00:AB:CD:EF:01",
+            "version": 1,
+            "created": "2026-01-02T03:04:05",
+            "updated": "2026-01-02T03:04:06",
+            "firewall_id": 55,
+            "default_route": { "ipv4": true, "ipv6": false },
+            "public": {
+              "ipv4": { "addresses": [{ "address": "192.0.2.10", "primary": true }] },
+              "ipv6": { "ranges": [{ "range": "2001:db8::/64" }] }
+            }
+          },
+          {
+            "id": 790,
+            "vpc": {
+              "subnet_id": 42,
+              "ipv4": { "addresses": [{ "address": "10.0.0.5", "primary": false }] }
+            }
+          },
+          {
+            "id": 791,
+            "vlan": { "vlan_label": "vlan-a", "ipam_address": "10.0.0.1/24" }
+          }
+        ]
+      },
+      "expect_result": {
+        "count": 3,
+        "interfaces": [
+          {
+            "id": 789,
+            "mac_address": "22:00:AB:CD:EF:01",
+            "version": 1,
+            "created": "2026-01-02T03:04:05",
+            "updated": "2026-01-02T03:04:06",
+            "firewall_id": 55,
+            "default_route": { "ipv4": true, "ipv6": false },
+            "public": {
+              "ipv4": { "addresses": [{ "address": "192.0.2.10", "primary": true }] },
+              "ipv6": { "ranges": [{ "range": "2001:db8::/64" }] }
+            }
+          },
+          {
+            "id": 790,
+            "vpc": {
+              "subnet_id": 42,
+              "ipv4": { "addresses": [{ "address": "10.0.0.5", "primary": false }] }
+            }
+          },
+          {
+            "id": 791,
+            "vlan": { "vlan_label": "vlan-a", "ipam_address": "10.0.0.1/24" }
+          }
+        ]
+      }
+    },
+    {
+      "name": "reports the documented forbidden status",
+      "args": { "linode_id": 123 },
+      "api_status": 403,
+      "api_response": { "errors": [{ "reason": "Unauthorized" }] },
+      "expect_api_error": "Linode API error (status 403): Unauthorized"
+    },
+    {
+      "name": "reports the documented not-found status",
+      "args": { "linode_id": 123 },
+      "api_status": 404,
+      "api_response": { "errors": [{ "reason": "Not found" }] },
+      "expect_api_error": "Linode API error (status 404): Not found"
     },
     {
       "name": "accepts a missing interfaces member",

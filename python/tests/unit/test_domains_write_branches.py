@@ -90,6 +90,7 @@ async def test_create_threads_description_into_body(sample_config: Config) -> No
             {
                 "domain": "x.com",
                 "type": "master",
+                "soa_email": "admin@example.com",
                 "description": "my zone",
                 "confirm": True,
             },
@@ -97,7 +98,14 @@ async def test_create_threads_description_into_body(sample_config: Config) -> No
         )
 
     client.post_raw.assert_awaited_once_with(
-        "/domains", {"domain": "x.com", "type": "master", "description": "my zone"}
+        "/domains",
+        {
+            "domain": "x.com",
+            "type": "master",
+            "soa_email": "admin@example.com",
+            "description": "my zone",
+        },
+        retry=False,
     )
 
 

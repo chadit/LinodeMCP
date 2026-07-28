@@ -1,6 +1,6 @@
 {
   "tool": "linode_lke_pool_create",
-  "description": "Pins the cluster_id/type-required rejections (checked in order) and the confirmed POST body. The count-required text and the confirm-required text both diverge (see report), so those cases are reported, not pinned.",
+  "description": "Pins the cluster_id/type-required rejections (checked in order) and the confirmed POST body. The count-required text and the confirm-required text both diverge (see report), so those cases are reported, not pinned. A response that is not a JSON object must fail rather than yield a zeroed pool.",
   "cases": [
     {
       "name": "rejects missing cluster_id",
@@ -26,6 +26,18 @@
       "name": "requires confirm",
       "args": {"cluster_id": 12345, "type": "g6-standard-1", "count": 3},
       "expect_error": "This creates billable compute resources. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "cluster_id": 12345, "type": "g6-standard-1", "count": 3, "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "cluster_id": 12345, "type": "g6-standard-1", "count": 3, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

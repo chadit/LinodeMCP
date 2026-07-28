@@ -933,20 +933,13 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		// does not model must be dropped by the DiscardUnknown decode,
 		// proving the output routes through the proto serializer.
 		wrapped := map[string]any{
-			keyACL: struct {
-				linode.LKEControlPlaneACL
-
-				NotInProto string `json:"not_in_proto"`
-			}{
-				LKEControlPlaneACL: linode.LKEControlPlaneACL{
-					Enabled: true,
-					Addresses: linode.LKEControlPlaneACLAddresses{
-						IPv4: []string{cidrV4},
-						IPv6: []string{cidrV6},
-					},
+			keyACL: withUnmodeledField(t, linode.LKEControlPlaneACL{
+				Enabled: true,
+				Addresses: linode.LKEControlPlaneACLAddresses{
+					IPv4: []string{cidrV4},
+					IPv6: []string{cidrV6},
 				},
-				NotInProto: valNotInProto,
-			},
+			}),
 		}
 
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -2194,9 +2187,9 @@ func TestLinodeLKEPoolCreateToolSuccessfulCreation(t *testing.T) {
 	var payload struct {
 		Message string `json:"message"`
 		Pool    struct {
+			Type      string `json:"type"`
 			ID        int    `json:"id"`
 			ClusterID int    `json:"cluster_id"`
-			Type      string `json:"type"`
 			Count     int    `json:"count"`
 		} `json:"pool"`
 	}
@@ -2886,8 +2879,8 @@ func TestLinodeLKEServiceTokenDeleteToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeLKEServiceTokenDeleteTool(cfg)
 
 	confirmCases := []struct {
-		name  string
 		value any
+		name  string
 	}{
 		{name: caseMissingConfirm},
 		{name: caseFalseConfirmRejected, value: false},
@@ -3010,8 +3003,8 @@ func TestLinodeLKEACLUpdateToolRejectsNonTrueConfirmBeforeClientCall(t *testing.
 	t.Parallel()
 
 	tests := []struct {
-		name    string
 		confirm any
+		name    string
 		include bool
 	}{
 		{name: caseMissingConfirm},
@@ -3156,11 +3149,11 @@ func TestLinodeLKEACLUpdateToolSuccessfulUpdate(t *testing.T) {
 	var envelope struct {
 		Message string `json:"message"`
 		ACL     struct {
-			Enabled   bool `json:"enabled"`
 			Addresses struct {
 				IPv4 []string `json:"ipv4"`
 				IPv6 []string `json:"ipv6"`
 			} `json:"addresses"`
+			Enabled bool `json:"enabled"`
 		} `json:"acl"`
 	}
 	if err := json.Unmarshal([]byte(textContent.Text), &envelope); err != nil {

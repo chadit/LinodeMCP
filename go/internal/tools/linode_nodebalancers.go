@@ -711,9 +711,9 @@ func handleLinodeNodeBalancerConfigUpdateDryRun(ctx context.Context, request *mc
 	}
 
 	currentState := struct {
+		Configs        []linode.NodeBalancerConfig `json:"configs"`
 		NodeBalancerID int                         `json:"nodebalancer_id"`
 		ConfigID       int                         `json:"config_id"`
-		Configs        []linode.NodeBalancerConfig `json:"configs"`
 	}{
 		NodeBalancerID: nodeBalancerID,
 		ConfigID:       configID,
@@ -800,8 +800,8 @@ func handleLinodeNodeBalancerConfigCreateDryRun(ctx context.Context, request *mc
 	}
 
 	currentState := struct {
-		NodeBalancerID int                         `json:"nodebalancer_id"`
 		Configs        []linode.NodeBalancerConfig `json:"configs"`
+		NodeBalancerID int                         `json:"nodebalancer_id"`
 	}{
 		NodeBalancerID: nodeBalancerID,
 		Configs:        configs,

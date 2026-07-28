@@ -75,22 +75,22 @@ type TokenInspector interface {
 // with the comparison: a Missing set is always a hard fail, an Excess
 // set is a warn by default, fail under strict mode.
 type ScopeValidationResult struct {
-	// Kind tells whether the active token is a PAT or OAuth.
-	Kind TokenKind
+	// Profile is the /profile response, for callers that want the
+	// username, restricted flag, or UID for logging. Never nil on a
+	// successful return.
+	Profile *linode.Profile
+
+	// Comparison holds the Missing/Excess diff against the required
+	// scope list ValidateScopes was given.
+	Comparison ScopeComparison
 
 	// ActualScopes is the deduplicated, sorted scope set the token
 	// actually carries. For PATs this comes from Profile.Scopes; for
 	// OAuth it comes from FlattenGrants.
 	ActualScopes []Scope
 
-	// Comparison holds the Missing/Excess diff against the required
-	// scope list ValidateScopes was given.
-	Comparison ScopeComparison
-
-	// Profile is the /profile response, for callers that want the
-	// username, restricted flag, or UID for logging. Never nil on a
-	// successful return.
-	Profile *linode.Profile
+	// Kind tells whether the active token is a PAT or OAuth.
+	Kind TokenKind
 }
 
 // ValidateScopes inspects the token's actual scopes and returns the

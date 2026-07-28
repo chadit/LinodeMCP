@@ -24,9 +24,9 @@ type HealthStatus struct {
 
 // HealthResponse represents the response from the health endpoint.
 type HealthResponse struct {
-	Status    string                  `json:"status"`
 	Timestamp time.Time               `json:"timestamp"`
 	Checks    map[string]HealthStatus `json:"checks"`
+	Status    string                  `json:"status"`
 }
 
 const (

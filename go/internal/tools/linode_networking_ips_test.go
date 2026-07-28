@@ -916,13 +916,13 @@ func TestLinodeNetworkingIPAssignToolSuccess(t *testing.T) {
 
 // networkingIPAssignResponseBody decodes the id-echo proto the assign tools emit.
 type networkingIPAssignResponseBody struct {
+	Response    any    `json:"response"`
 	Message     string `json:"message"`
 	Region      string `json:"region"`
 	Assignments []struct {
 		Address  string `json:"address"`
 		LinodeID int    `json:"linode_id"`
 	} `json:"assignments"`
-	Response any `json:"response"`
 }
 
 // assertNetworkingIPAssignResponse checks the assign id-echo proto shape: the
@@ -1559,10 +1559,10 @@ func TestLinodeNetworkingIPv4ShareToolSuccess(t *testing.T) {
 
 // networkingIPShareResponseBody decodes the id-echo proto the share tools emit.
 type networkingIPShareResponseBody struct {
-	Message  string   `json:"message"`
-	LinodeID int      `json:"linode_id"`
-	IPs      []string `json:"ips"`
 	Result   any      `json:"result"`
+	Message  string   `json:"message"`
+	IPs      []string `json:"ips"`
+	LinodeID int      `json:"linode_id"`
 }
 
 // assertNetworkingIPShareResponse checks the share id-echo proto shape: the

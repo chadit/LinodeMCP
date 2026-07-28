@@ -117,8 +117,8 @@ func TestLinodeManagedCredentialRevokeToolConfirmRequiredBeforeClientCall(t *tes
 	t.Parallel()
 
 	cases := []struct {
-		name  string
 		value any
+		name  string
 		set   bool
 	}{
 		{name: caseMissing, set: false},
@@ -175,8 +175,8 @@ func TestLinodeManagedCredentialRevokeToolInvalidCredentialIdRejectsBeforeClient
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingCredentialID, args: map[string]any{keyConfirm: true}},
 		{name: caseZeroCredentialID, args: map[string]any{managedCredentialIDParam: 0, keyConfirm: true}},

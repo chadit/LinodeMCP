@@ -1,6 +1,6 @@
 {
   "tool": "linode_managed_contact_update",
-  "description": "Contact update: shared id rejection, empty email/name rejections (ported to Go, strictest-wins), confirm gate, and the PUT body once confirmed.",
+  "description": "Contact update: shared id rejection, empty email/name rejections (ported to Go, strictest-wins), confirm gate, and the PUT body once confirmed. A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "rejects missing contact_id",
@@ -51,6 +51,12 @@
         "name": "NewName"
       },
       "expect_error": "This updates a Managed contact. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "contact_id": 7, "name": "NewName", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to update"
     }
   ]
 }

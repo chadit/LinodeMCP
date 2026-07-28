@@ -74,8 +74,8 @@ func TestLinodeAccountUserGrantsUpdateRequiresConfirm(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyUsername: accountLoginUsername, keyGrantLinode: []any{map[string]any{keyBetaID: float64(123), keyPermissions: grantPermissionReadWrite}}}},
 		{name: caseConfirmFalse, args: map[string]any{keyUsername: accountLoginUsername, keyGrantLinode: []any{map[string]any{keyBetaID: float64(123), keyPermissions: grantPermissionReadWrite}}, keyConfirm: false}},

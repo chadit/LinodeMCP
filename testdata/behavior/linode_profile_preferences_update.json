@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_preferences_update",
-  "description": "Preferences update: the PUT body once confirmed, and the non-empty-object rejection now agrees in both languages (Python gained Go's check and message).",
+  "description": "Preferences update: the PUT body once confirmed, the non-empty-object rejection, and the response shape. A bare-array body is rejected in both languages now that Python's client raises instead of swapping any non-object body for an empty object. JSON null stays a success in both: Go decodes preferences into a map, where encoding/json leaves a null body alone without erroring.",
   "cases": [
     {
       "name": "rejects an empty preferences object",
@@ -15,6 +15,21 @@
         "method": "PUT",
         "path": "/profile/preferences",
         "body": { "theme": "dark" }
+      }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "preferences": { "theme": "dark" }, "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "reads a null body as empty preferences",
+      "args": { "preferences": { "theme": "dark" }, "confirm": true },
+      "api_response_raw": "null",
+      "expect_result": {
+        "message": "Profile preferences updated successfully",
+        "preferences": {}
       }
     },
     {

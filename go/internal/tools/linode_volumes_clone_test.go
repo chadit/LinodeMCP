@@ -205,18 +205,18 @@ func TestLinodeVolumeCloneToolDryRun(t *testing.T) {
 
 		var requestCount atomic.Int32
 
-		srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		noCallSrv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			requestCount.Add(1)
 			t.Fatalf("dry_run with invalid label must not call the client")
 		}))
-		t.Cleanup(srv.Close)
+		t.Cleanup(noCallSrv.Close)
 
-		cfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
-			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		noCallCfg := &config.Config{Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: noCallSrv.URL, Token: tokenTest}},
 		}}
-		_, _, handler := tools.NewLinodeVolumeCloneTool(cfg)
+		_, _, noCallHandler := tools.NewLinodeVolumeCloneTool(noCallCfg)
 
-		result, err := handler(t.Context(), createRequestWithArgs(t, map[string]any{
+		result, err := noCallHandler(t.Context(), createRequestWithArgs(t, map[string]any{
 			keyVolumeID: float64(333),
 			keyLabel:    "",
 			keyDryRun:   true,

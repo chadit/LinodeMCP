@@ -69,8 +69,8 @@ func TestExportEventsSQLiteFullRecord(t *testing.T) {
 
 	sink.Write(t.Context(), &evt)
 
-	if err := sink.Close(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if closeErr := sink.Close(); closeErr != nil {
+		t.Fatalf("unexpected error: %v", closeErr)
 	}
 
 	query := &audit.RecentQuery{Limit: audit.DefaultExportMaxRecords, IncludeMeta: true}

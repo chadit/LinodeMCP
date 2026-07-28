@@ -98,8 +98,8 @@ func TestLinodeTagDeleteToolSuccess(t *testing.T) {
 	}
 
 	var body struct {
-		Message string `json:"message"`
 		Deleted any    `json:"deleted"`
+		Message string `json:"message"`
 	}
 	if err := json.Unmarshal([]byte(textContent.Text), &body); err != nil {
 		t.Fatalf("unexpected error decoding response: %v", err)
@@ -119,8 +119,8 @@ func TestLinodeTagDeleteToolConfirmRejectsBeforeClient(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissing, args: map[string]any{tagLabelParamTest: envProd}},
 		{name: caseFalse, args: map[string]any{tagLabelParamTest: envProd, keyConfirm: false}},
@@ -794,8 +794,8 @@ func TestLinodeTagCreateToolConfirmRejectsBeforeClient(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: caseMissing},
 		{name: caseFalse, confirm: false},

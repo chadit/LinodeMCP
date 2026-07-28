@@ -18,6 +18,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     PARAM_DRY_RUN,
     TWO_STAGE_NOTE,
+    DryRunDetails,
     build_dry_run_response,
     error_response,
     execute_dry_run,
@@ -26,6 +27,8 @@ from linodemcp.tools.helpers import (
     pagination_int_argument,
 )
 from linodemcp.tools.proto_response import (
+    raw_int,
+    raw_str,
     serialize_api_response,
     serialize_list_response,
     serialize_struct_response,
@@ -144,13 +147,11 @@ def _copy_database_object_field(
 def _copy_database_private_network(
     arguments: dict[str, Any], payload: dict[str, Any]
 ) -> str | None:
-    if "private_network" not in arguments:
-        return None
-    private_network = arguments["private_network"]
-    if private_network is not None and not isinstance(private_network, dict):
-        return "private_network must be an object or null"
-    payload["private_network"] = private_network
-    return None
+    # Create-only. A new instance has no VPC binding to detach, so the proto
+    # input contract says "omit for no private networking" here and reserves
+    # the explicit-null detach for update (see _copy_mysql_update_objects).
+    # Go's create rejects null the same way.
+    return _copy_database_object_field(arguments, payload, "private_network")
 
 
 def _copy_database_ssl_connection(
@@ -826,6 +827,38 @@ def create_linode_database_postgresql_config_get_tool() -> tuple[Tool, Capabilit
     ), Capability.Read
 
 
+def _database_instance_write_response(
+    instance: Any, message_prefix: str, verb: str
+) -> dict[str, Any]:
+    """Build the {message, database_instance} envelope from a create/update body.
+
+    The dict guard is load-bearing: ParseDict finds no items to copy in a list
+    or string and would hand back a zero-valued instance as a success, hiding a
+    malformed body that Go's protojson decode rejects outright. Raising here
+    surfaces it as the tool's "Failed to ..." text, the same way
+    serialize_list_response guards a malformed list page.
+
+    raw_str and raw_int keep the message on Go's zero-value getters, which read
+    an explicit null as "" and 0 rather than propagating it into the text.
+    """
+    if not isinstance(instance, dict):
+        msg = "database instance response must be an object"
+        raise TypeError(msg)
+
+    body = cast("dict[str, Any]", instance)
+
+    return serialize_api_response(
+        {
+            "message": (
+                f"{message_prefix} instance '{raw_str(body, 'label')}'"
+                f" (ID: {raw_int(body, 'id')}) {verb}"
+            ),
+            "database_instance": body,
+        },
+        database_instance_pb2.DatabaseInstanceWriteResponse(),
+    )
+
+
 async def handle_linode_database_mysql_instance_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -859,16 +892,8 @@ async def handle_linode_database_mysql_instance_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.create_mysql_database_instance(payload)
-        return serialize_api_response(
-            {
-                # Match Go's zero-value getters on the API body: label "", id 0.
-                "message": (
-                    f"Managed Database instance '{instance.get('label', '')}'"
-                    f" (ID: {instance.get('id', 0)}) created"
-                ),
-                "database_instance": instance,
-            },
-            database_instance_pb2.DatabaseInstanceWriteResponse(),
+        return _database_instance_write_response(
+            instance, "Managed Database", "created"
         )
 
     return await execute_tool(cfg, arguments, "create MySQL Managed Database", _call)
@@ -907,17 +932,8 @@ async def handle_linode_database_postgresql_instance_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.create_postgresql_database_instance(payload)
-        return serialize_api_response(
-            {
-                # Match Go's zero-value getters on the API body: label "", id 0.
-                "message": (
-                    f"PostgreSQL Managed Database instance"
-                    f" '{instance.get('label', '')}'"
-                    f" (ID: {instance.get('id', 0)}) created"
-                ),
-                "database_instance": instance,
-            },
-            database_instance_pb2.DatabaseInstanceWriteResponse(),
+        return _database_instance_write_response(
+            instance, "PostgreSQL Managed Database", "created"
         )
 
     return await execute_tool(
@@ -1076,14 +1092,29 @@ async def handle_linode_database_mysql_instance_update(
 
     encoded_instance_id = quote(str(instance_id), safe="")
     if is_dry_run(arguments):
-        return build_dry_run_response(
+        # The instance already exists, so docs/dry-run.md wants current_state
+        # populated: the preview reads it with a GET and never sends the PUT.
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_database_mysql_instance(instance_id)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [
+                    f"MySQL Managed Database {instance_id} will be updated."
+                ],
+                "warnings": [
+                    "Updating a Managed Database can change service behavior."
+                ],
+            }
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_database_mysql_instance_update",
-            arguments.get("environment", ""),
             "PUT",
             f"/databases/mysql/instances/{encoded_instance_id}",
-            None,
-            side_effects=[f"MySQL Managed Database {instance_id} will be updated."],
-            warnings=["Updating a Managed Database can change service behavior."],
+            _fetch,
+            _walk,
             request_body=payload,
         )
 
@@ -1094,16 +1125,8 @@ async def handle_linode_database_mysql_instance_update(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         instance = await client.update_mysql_database_instance(instance_id, payload)
-        return serialize_api_response(
-            {
-                # Match Go's zero-value getters on the API body: label "", id 0.
-                "message": (
-                    f"Managed Database instance '{instance.get('label', '')}'"
-                    f" (ID: {instance.get('id', 0)}) updated"
-                ),
-                "database_instance": instance,
-            },
-            database_instance_pb2.DatabaseInstanceWriteResponse(),
+        return _database_instance_write_response(
+            instance, "Managed Database", "updated"
         )
 
     return await execute_tool(
@@ -1167,16 +1190,29 @@ async def handle_linode_database_postgresql_instance_update(
 
     encoded_instance_id = quote(str(instance_id), safe="")
     if is_dry_run(arguments):
-        return build_dry_run_response(
+        # The instance already exists, so docs/dry-run.md wants current_state
+        # populated: the preview reads it with a GET and never sends the PUT.
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_database_postgresql_instance(instance_id)
+
+        async def _walk(_client: RetryableClient, _state: Any) -> DryRunDetails:
+            return {
+                "side_effects": [
+                    f"PostgreSQL Managed Database {instance_id} will be updated."
+                ],
+                "warnings": [
+                    "Updating a Managed Database can change service behavior."
+                ],
+            }
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
             "linode_database_postgresql_instance_update",
-            arguments.get("environment", ""),
             "PUT",
             f"/databases/postgresql/instances/{encoded_instance_id}",
-            None,
-            side_effects=[
-                f"PostgreSQL Managed Database {instance_id} will be updated."
-            ],
-            warnings=["Updating a Managed Database can change service behavior."],
+            _fetch,
+            _walk,
             request_body=payload,
         )
 
@@ -1190,17 +1226,8 @@ async def handle_linode_database_postgresql_instance_update(
         instance = await client.update_postgresql_database_instance(
             instance_id, payload
         )
-        return serialize_api_response(
-            {
-                # Match Go's zero-value getters on the API body: label "", id 0.
-                "message": (
-                    f"PostgreSQL Managed Database instance"
-                    f" '{instance.get('label', '')}'"
-                    f" (ID: {instance.get('id', 0)}) updated"
-                ),
-                "database_instance": instance,
-            },
-            database_instance_pb2.DatabaseInstanceWriteResponse(),
+        return _database_instance_write_response(
+            instance, "PostgreSQL Managed Database", "updated"
         )
 
     return await execute_tool(

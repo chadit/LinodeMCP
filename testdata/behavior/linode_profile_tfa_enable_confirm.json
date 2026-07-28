@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_tfa_enable_confirm",
-  "description": "Shared tfa_code rejection and the confirm POST body. Confirm text diverges (see report).",
+  "description": "Shared tfa_code rejection and the confirm POST body. Confirm text diverges (see report). Response-shape coverage is missing. Python fabricates a zeroed success record from every non-object body where Go errors, so no shared case passes yet (see report).",
   "cases": [
     {
       "name": "rejects missing tfa_code",

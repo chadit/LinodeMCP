@@ -1,6 +1,6 @@
 {
   "tool": "linode_profile_device_list",
-  "description": "Shared non-integer pagination rejections and the bare trusted-device list GET.",
+  "description": "Shared pagination rejections, request path, trusted-device output shape, the malformed page envelopes both clients must refuse instead of reporting zero remembered sessions, and the non-2xx paths: a documented reason must reach the caller, and an error body with nothing to quote falls back to the status.",
   "cases": [
     {
       "name": "rejects non-integer page",
@@ -17,6 +17,167 @@
       "args": {},
       "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
       "expect_request": { "method": "GET", "path": "/profile/devices" }
+    },
+    {
+      "name": "requests one explicit page",
+      "args": { "page": 2, "page_size": 25 },
+      "api_response": {
+        "data": [{ "id": 456, "user_agent": "curl/8.0" }],
+        "page": 2,
+        "pages": 4,
+        "results": 4
+      },
+      "expect_request": {
+        "method": "GET",
+        "path": "/profile/devices?page=2&page_size=25"
+      }
+    },
+    {
+      "name": "returns complete trusted devices in API order",
+      "args": {},
+      "api_response": {
+        "data": [
+          {
+            "id": 456,
+            "created": "2026-01-02T03:04:05",
+            "expiry": "2026-02-01T03:04:05",
+            "last_authenticated": "2026-01-20T09:10:11",
+            "last_remote_addr": "203.0.113.7",
+            "user_agent": "curl/8.0"
+          },
+          {
+            "id": 123,
+            "created": "2025-12-01T00:00:00",
+            "last_authenticated": "2025-12-31T23:59:59",
+            "last_remote_addr": "198.51.100.4",
+            "user_agent": "Mozilla/5.0"
+          }
+        ],
+        "page": 1,
+        "pages": 1,
+        "results": 2
+      },
+      "expect_result": {
+        "count": 2,
+        "profile_devices": [
+          {
+            "id": 456,
+            "created": "2026-01-02T03:04:05",
+            "expiry": "2026-02-01T03:04:05",
+            "last_authenticated": "2026-01-20T09:10:11",
+            "last_remote_addr": "203.0.113.7",
+            "user_agent": "curl/8.0"
+          },
+          {
+            "id": 123,
+            "created": "2025-12-01T00:00:00",
+            "last_authenticated": "2025-12-31T23:59:59",
+            "last_remote_addr": "198.51.100.4",
+            "user_agent": "Mozilla/5.0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "rejects a missing data member",
+      "args": {},
+      "api_response": { "page": 1, "pages": 1, "results": 0 },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a null data member",
+      "args": {},
+      "api_response": { "data": null, "page": 1, "pages": 1, "results": 0 },
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects an object data member",
+      "args": {},
+      "api_response": { "data": {}, "page": 1, "pages": 1, "results": 0 },
+      "expect_api_error": "list"
+    },
+    {
+      "name": "rejects a top-level array response",
+      "args": {},
+      "api_response": [],
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level null response",
+      "args": {},
+      "api_response": null,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level string response",
+      "args": {},
+      "api_response": "invalid",
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level numeric response",
+      "args": {},
+      "api_response": 1,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a top-level boolean response",
+      "args": {},
+      "api_response": false,
+      "expect_api_error": "response"
+    },
+    {
+      "name": "rejects a null trusted-device element",
+      "args": {},
+      "api_response": { "data": [null], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects an array trusted-device element",
+      "args": {},
+      "api_response": { "data": [[]], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects a string trusted-device element",
+      "args": {},
+      "api_response": {
+        "data": ["invalid"],
+        "page": 1,
+        "pages": 1,
+        "results": 1
+      },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects a numeric trusted-device element",
+      "args": {},
+      "api_response": { "data": [1], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "rejects a boolean trusted-device element",
+      "args": {},
+      "api_response": { "data": [false], "page": 1, "pages": 1, "results": 1 },
+      "expect_api_error": "Failed to "
+    },
+    {
+      "name": "surfaces the reason from an unauthorized response",
+      "args": {},
+      "api_status": 401,
+      "api_response": {
+        "errors": [
+          { "reason": "Your OAuth token is not authorized to use this endpoint." }
+        ]
+      },
+      "expect_api_error": "Your OAuth token is not authorized to use this endpoint."
+    },
+    {
+      "name": "falls back to the status when an error body carries no reasons",
+      "args": {},
+      "api_status": 404,
+      "api_response": { "errors": [] },
+      "expect_api_error": "API request failed with status 404"
     }
   ]
 }

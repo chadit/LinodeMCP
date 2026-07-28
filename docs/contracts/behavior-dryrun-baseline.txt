@@ -39,16 +39,12 @@ linode_database_mysql_instance_credentials_reset  # accepted 2026-07-17 pre-gate
 linode_database_mysql_instance_patch  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_database_mysql_instance_resume  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_database_mysql_instance_suspend  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
-linode_database_mysql_instance_update  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
-linode_database_postgresql_instance_create  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_database_postgresql_instance_credentials_get  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_database_postgresql_instance_credentials_reset  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_database_postgresql_instance_patch  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_database_postgresql_instance_resume  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_database_postgresql_instance_suspend  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
-linode_database_postgresql_instance_update  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_domain_clone  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
-linode_domain_create  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_domain_import  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_domain_record_create  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md
 linode_domain_record_update  # accepted 2026-07-17 pre-gate backlog; pin the dry-run preview per docs/dry-run.md

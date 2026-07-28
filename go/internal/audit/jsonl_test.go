@@ -113,8 +113,8 @@ func TestJSONLSinkRotatesOnDayBoundary(t *testing.T) {
 	}
 
 	defer func() {
-		if err := sink.Close(); err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if closeErr := sink.Close(); closeErr != nil {
+			t.Fatalf("unexpected error: %v", closeErr)
 		}
 	}()
 

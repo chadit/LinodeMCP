@@ -35,11 +35,11 @@ const rotatedFilePrefix = "audit-"
 // are scoped to a *os.Root opened on the audit directory, keeping
 // deletions inside the directory and out of gosec's traversal path.
 type RetentionSweeper struct {
+	clock         func() time.Time
+	log           *slog.Logger
 	dir           string
 	retentionDays int
 	interval      time.Duration
-	clock         func() time.Time
-	log           *slog.Logger
 }
 
 // RetentionSweeperOption configures a RetentionSweeper at

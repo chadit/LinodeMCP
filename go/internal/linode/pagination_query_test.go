@@ -40,9 +40,9 @@ func TestPaginatedListsSendPageQuery(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
+		call func(client *linode.Client) error
 		name string
 		path string
-		call func(client *linode.Client) error
 	}{
 		{
 			name: "regions",

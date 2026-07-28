@@ -7115,7 +7115,18 @@ async def test_database_cluster_create_rejects_non_true_confirm(
                 "private_network": "vpc",
                 "confirm": True,
             },
-            "private_network must be an object or null",
+            "private_network must be an object",
+        ),
+        (
+            {
+                "label": "primary-db",
+                "type": "g6-dedicated-2",
+                "engine": "mysql/8.0",
+                "region": "us-east",
+                "private_network": None,
+                "confirm": True,
+            },
+            "private_network must be an object",
         ),
     ],
 )
@@ -7305,6 +7316,67 @@ async def test_database_postgresql_instance_create_dispatches_from_registry(
     )
 
 
+async def test_database_postgresql_instance_create_zero_fills_null_response_fields(
+    sample_config: Config,
+) -> None:
+    """Null id and label read as the proto zero values Go's getters return."""
+    arguments: dict[str, Any] = {
+        "label": "primary-pg",
+        "type": "g6-dedicated-2",
+        "engine": "postgresql/17",
+        "region": "us-east",
+        "confirm": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_postgresql_database_instance.return_value = {
+            "id": None,
+            "label": None,
+            "future_field": "ignored",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_create", arguments
+        )
+
+    assert json.loads(result[0].text) == _database_instance_write_envelope(
+        "PostgreSQL Managed Database instance '' (ID: 0) created", {}
+    )
+
+
+@pytest.mark.parametrize("body", [[], "oops", 7])
+async def test_database_postgresql_instance_create_rejects_non_object_response(
+    sample_config: Config, body: object
+) -> None:
+    """A create body that is not an object fails instead of reporting success."""
+    arguments: dict[str, Any] = {
+        "label": "primary-pg",
+        "type": "g6-dedicated-2",
+        "engine": "postgresql/17",
+        "region": "us-east",
+        "confirm": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.create_postgresql_database_instance.return_value = body
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_create", arguments
+        )
+
+    assert result[0].text.startswith("Failed to create PostgreSQL Managed Database")
+
+
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
 async def test_database_postgresql_instance_create_rejects_non_true_confirm(
     sample_config: Config, confirm: object
@@ -7367,6 +7439,17 @@ async def test_database_postgresql_instance_create_rejects_non_true_confirm(
                 "confirm": True,
             },
             "unsupported argument: unknown",
+        ),
+        (
+            {
+                "label": "primary-pg",
+                "type": "g6-dedicated-2",
+                "engine": "postgresql/17",
+                "region": "us-east",
+                "private_network": None,
+                "confirm": True,
+            },
+            "private_network must be an object",
         ),
         (
             {
@@ -8855,11 +8938,13 @@ async def test_database_mysql_instance_update_dry_run_previews_without_client_ca
         "confirm": True,
         "dry_run": True,
     }
+    current = {"id": 123, "label": "old-db", "status": "active"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
+        mock_client.get_database_mysql_instance.return_value = current
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
@@ -8872,6 +8957,9 @@ async def test_database_mysql_instance_update_dry_run_previews_without_client_ca
         "path": "/databases/mysql/instances/123",
         "body": {"label": "primary-db"},
     }
+    assert payload["current_state"] == current
+    assert payload["side_effects"] == ["MySQL Managed Database 123 will be updated."]
+    mock_client.get_database_mysql_instance.assert_awaited_once_with(123)
     mock_client.update_mysql_database_instance.assert_not_called()
 
 
@@ -9012,6 +9100,91 @@ async def test_database_postgresql_instance_update_dispatches_from_registry(
     )
 
 
+async def test_database_postgresql_instance_update_detaches_private_network(
+    sample_config: Config,
+) -> None:
+    """An explicit null reaches the PUT body so the API detaches the VPC."""
+    arguments: dict[str, Any] = {
+        "instance_id": 321,
+        "private_network": None,
+        "confirm": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_postgresql_database_instance.return_value = {
+            "id": 321,
+            "label": "pg-primary",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        await srv.dispatch("linode_database_postgresql_instance_update", arguments)
+
+    mock_client.update_postgresql_database_instance.assert_awaited_once_with(
+        321, {"private_network": None}
+    )
+
+
+async def test_database_postgresql_instance_update_zero_fills_null_response_fields(
+    sample_config: Config,
+) -> None:
+    """Null id and label read as the proto zero values Go's getters return."""
+    arguments: dict[str, Any] = {
+        "instance_id": 321,
+        "label": "pg-primary",
+        "confirm": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_postgresql_database_instance.return_value = {
+            "id": None,
+            "label": None,
+            "future_field": "ignored",
+        }
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_update", arguments
+        )
+
+    assert json.loads(result[0].text) == _database_instance_write_envelope(
+        "PostgreSQL Managed Database instance '' (ID: 0) updated", {}
+    )
+
+
+@pytest.mark.parametrize("body", [[], "oops", 7])
+async def test_database_postgresql_instance_update_rejects_non_object_response(
+    sample_config: Config, body: object
+) -> None:
+    """An update body that is not an object fails instead of reporting success."""
+    arguments: dict[str, Any] = {
+        "instance_id": 321,
+        "label": "pg-primary",
+        "confirm": True,
+    }
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.update_postgresql_database_instance.return_value = body
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        srv = Server(_full_access_config(sample_config))
+        result = await srv.dispatch(
+            "linode_database_postgresql_instance_update", arguments
+        )
+
+    assert result[0].text.startswith("Failed to update PostgreSQL Managed Database")
+
+
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
 async def test_database_postgresql_instance_update_rejects_non_true_confirm(
     sample_config: Config, confirm: object
@@ -9131,11 +9304,13 @@ async def test_database_postgresql_instance_update_dry_run_previews_without_clie
         "confirm": True,
         "dry_run": True,
     }
+    current = {"id": 321, "label": "old-pg", "status": "active"}
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
+        mock_client.get_database_postgresql_instance.return_value = current
         mock_client_class.return_value = mock_client
 
         srv = Server(_full_access_config(sample_config))
@@ -9150,6 +9325,11 @@ async def test_database_postgresql_instance_update_dry_run_previews_without_clie
         "path": "/databases/postgresql/instances/321",
         "body": {"label": "pg-primary"},
     }
+    assert payload["current_state"] == current
+    assert payload["side_effects"] == [
+        "PostgreSQL Managed Database 321 will be updated."
+    ]
+    mock_client.get_database_postgresql_instance.assert_awaited_once_with(321)
     mock_client.update_postgresql_database_instance.assert_not_called()
 
 

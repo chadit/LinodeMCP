@@ -1,6 +1,6 @@
 {
   "tool": "linode_volume_update",
-  "description": "Volume update: volume_id-required rejection both languages agree on (confirm set so both reach it), plus the label PUT. Confirm-gate text and the label-or-tags message diverge (see report).",
+  "description": "Volume update: volume_id-required rejection both languages agree on (confirm set so both reach it), plus the label PUT. Confirm-gate text and the label-or-tags message diverge (see report). A success body that is not a JSON object must fail rather than turn into a zeroed volume record; the two languages word that failure differently, so only the subject is shared.",
   "cases": [
     {
       "name": "requires volume_id",
@@ -21,6 +21,24 @@
       "name": "requires confirm",
       "args": {"volume_id": 123, "label": "new-label"},
       "expect_error": "This updates a block storage volume. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "confirm": true, "volume_id": 123, "label": "new-label" },
+      "api_response": 7,
+      "expect_api_error": "volume"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "confirm": true, "volume_id": 123, "label": "new-label" },
+      "api_response": true,
+      "expect_api_error": "volume"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "confirm": true, "volume_id": 123, "label": "new-label" },
+      "api_response": [1, 2],
+      "expect_api_error": "volume"
     }
   ]
 }

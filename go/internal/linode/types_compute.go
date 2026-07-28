@@ -8,32 +8,31 @@ const CurrentInterfaceGeneration = "linode"
 
 // Instance represents a Linode instance.
 type Instance struct {
-	ID                  int                 `json:"id"`
-	Label               string              `json:"label"`
-	Status              string              `json:"status"`
+	Backups             Backups             `json:"backups"`
+	Hypervisor          string              `json:"hypervisor"`
+	Group               string              `json:"group"`
 	Type                string              `json:"type"`
 	Region              string              `json:"region"`
 	Image               string              `json:"image"`
-	IPv4                []string            `json:"ipv4"`
-	IPv6                string              `json:"ipv6"`
-	Hypervisor          string              `json:"hypervisor"`
-	Specs               Specs               `json:"specs"`
-	Alerts              Alerts              `json:"alerts"`
-	Backups             Backups             `json:"backups"`
-	Created             string              `json:"created"`
-	Updated             string              `json:"updated"`
-	Group               string              `json:"group"`
-	Tags                []string            `json:"tags"`
-	WatchdogEnabled     bool                `json:"watchdog_enabled"`
 	InterfaceGeneration string              `json:"interface_generation,omitempty"`
+	IPv6                string              `json:"ipv6"`
+	Updated             string              `json:"updated"`
+	Status              string              `json:"status"`
+	Label               string              `json:"label"`
+	Created             string              `json:"created"`
+	Tags                []string            `json:"tags"`
+	IPv4                []string            `json:"ipv4"`
 	Interfaces          []InstanceInterface `json:"interfaces,omitempty"`
+	Alerts              Alerts              `json:"alerts"`
+	Specs               Specs               `json:"specs"`
+	ID                  int                 `json:"id"`
+	WatchdogEnabled     bool                `json:"watchdog_enabled"`
 }
 
 // InstanceInterface represents a network interface on a Linode instance under
 // the current Interfaces generation. Exactly one of Public, VPC, or VLAN is set
 // per interface.
 type InstanceInterface struct {
-	ID           int                    `json:"id,omitempty"`
 	Public       *InterfacePublicConfig `json:"public,omitempty"`
 	VPC          *InterfaceVPCConfig    `json:"vpc,omitempty"`
 	VLAN         *InterfaceVLANConfig   `json:"vlan,omitempty"`
@@ -42,17 +41,18 @@ type InstanceInterface struct {
 	MACAddress   string                 `json:"mac_address,omitempty"`
 	Created      string                 `json:"created,omitempty"`
 	Updated      string                 `json:"updated,omitempty"`
+	ID           int                    `json:"id,omitempty"`
 	Version      int                    `json:"version,omitempty"`
 }
 
 // InstanceInterfaceHistory represents a historical version of a Linode interface.
 type InstanceInterfaceHistory struct {
+	InterfaceData      any    `json:"interface_data"`
+	Created            string `json:"created"`
 	InterfaceHistoryID int    `json:"interface_history_id"`
 	InterfaceID        int    `json:"interface_id"`
 	LinodeID           int    `json:"linode_id"`
 	Version            int    `json:"version"`
-	Created            string `json:"created"`
-	InterfaceData      any    `json:"interface_data"`
 }
 
 // AddInstanceInterfaceRequest represents the request body for adding a Linode
@@ -83,21 +83,21 @@ type UpgradeLinodeInterfacesRequest struct {
 
 // UpgradeLinodeInterfacesResponse represents the upgraded Linode interface preview or result.
 type UpgradeLinodeInterfacesResponse struct {
+	Interfaces []InstanceInterface `json:"interfaces"`
 	ConfigID   int                 `json:"config_id"`
 	DryRun     bool                `json:"dry_run"`
-	Interfaces []InstanceInterface `json:"interfaces"`
 }
 
 // UpdateInstanceInterfaceVPCConfig holds VPC settings for an existing Linode interface.
 type UpdateInstanceInterfaceVPCConfig struct {
-	SubnetID int                       `json:"subnet_id"`
 	IPv4     *AddInstanceInterfaceIPv4 `json:"ipv4,omitempty"`
+	SubnetID int                       `json:"subnet_id"`
 }
 
 // AddInstanceInterfaceVPCConfig holds VPC settings for a new Linode interface.
 type AddInstanceInterfaceVPCConfig struct {
-	SubnetID int                       `json:"subnet_id"`
 	IPv4     *AddInstanceInterfaceIPv4 `json:"ipv4,omitempty"`
+	SubnetID int                       `json:"subnet_id"`
 }
 
 // AddInstanceInterfaceIPv4 holds IPv4 settings for a new VPC interface.
@@ -108,9 +108,9 @@ type AddInstanceInterfaceIPv4 struct {
 
 // AddInterfaceIPv4Address represents an IPv4 address assignment for a new interface.
 type AddInterfaceIPv4Address struct {
-	Address      string  `json:"address"`
 	NAT11Address *string `json:"nat_1_1_address,omitempty"`
 	Primary      *bool   `json:"primary,omitempty"`
+	Address      string  `json:"address"`
 }
 
 // InterfaceIPv4Range represents an IPv4 range on an interface.
@@ -157,8 +157,8 @@ type InterfaceIPv6Range struct {
 
 // InterfaceVPCConfig holds VPC-attached-interface configuration.
 type InterfaceVPCConfig struct {
-	SubnetID int               `json:"subnet_id"`
 	IPv4     *InterfaceVPCIPv4 `json:"ipv4,omitempty"`
+	SubnetID int               `json:"subnet_id"`
 }
 
 // InterfaceVPCIPv4 is the VPC IPv4 sub-config.
@@ -200,8 +200,8 @@ type Alerts struct {
 
 // Backups represents backup settings.
 type Backups struct {
-	Schedule  Schedule `json:"schedule"`
 	Last      *Backup  `json:"last_successful"`
+	Schedule  Schedule `json:"schedule"`
 	Enabled   bool     `json:"enabled"`
 	Available bool     `json:"available"`
 }
@@ -214,7 +214,6 @@ type Schedule struct {
 
 // Backup represents a backup snapshot.
 type Backup struct {
-	ID       int    `json:"id"`
 	Label    string `json:"label"`
 	Status   string `json:"status"`
 	Type     string `json:"type"`
@@ -222,17 +221,18 @@ type Backup struct {
 	Created  string `json:"created"`
 	Updated  string `json:"updated"`
 	Finished string `json:"finished"`
+	ID       int    `json:"id"`
 }
 
 // Region represents a Linode region (datacenter).
 type Region struct {
+	Resolvers    Resolver `json:"resolvers"`
 	ID           string   `json:"id"`
 	Label        string   `json:"label"`
 	Country      string   `json:"country"`
-	Capabilities []string `json:"capabilities"`
 	Status       string   `json:"status"`
-	Resolvers    Resolver `json:"resolvers"`
 	SiteType     string   `json:"site_type"`
+	Capabilities []string `json:"capabilities"`
 }
 
 // RegionAvailability represents compute instance type availability for a region.
@@ -253,27 +253,27 @@ type Kernel struct {
 	ID           string `json:"id"`
 	Label        string `json:"label"`
 	Version      string `json:"version"`
-	KVM          bool   `json:"kvm"`
 	Architecture string `json:"architecture"`
+	Built        string `json:"built"`
+	KVM          bool   `json:"kvm"`
 	PVOPS        bool   `json:"pvops"`
 	Deprecated   bool   `json:"deprecated"`
-	Built        string `json:"built"`
 }
 
 // InstanceType represents a Linode instance type (plan).
 type InstanceType struct {
+	Successor  *string `json:"successor"`
 	ID         string  `json:"id"`
 	Label      string  `json:"label"`
 	Class      string  `json:"class"`
+	Price      Price   `json:"price"`
+	Addons     Addons  `json:"addons"`
 	Disk       int     `json:"disk"`
 	Memory     int     `json:"memory"`
 	VCPUs      int     `json:"vcpus"`
 	GPUs       int     `json:"gpus"`
 	NetworkOut int     `json:"network_out"`
 	Transfer   int     `json:"transfer"`
-	Price      Price   `json:"price"`
-	Addons     Addons  `json:"addons"`
-	Successor  *string `json:"successor"`
 }
 
 // Price represents pricing for a Linode type.
@@ -325,26 +325,26 @@ type UpdateImageRequest struct {
 
 // ImageShareGroup represents an owned image share group.
 type ImageShareGroup struct {
-	ID           int     `json:"id"`
-	UUID         string  `json:"uuid"`
-	Label        string  `json:"label"`
 	Description  *string `json:"description"`
-	IsSuspended  bool    `json:"is_suspended"`
-	Created      string  `json:"created"`
 	Updated      *string `json:"updated"`
 	Expiry       *string `json:"expiry"`
+	UUID         string  `json:"uuid"`
+	Label        string  `json:"label"`
+	Created      string  `json:"created"`
+	ID           int     `json:"id"`
 	ImagesCount  int     `json:"images_count"`
 	MembersCount int     `json:"members_count"`
+	IsSuspended  bool    `json:"is_suspended"`
 }
 
 // ImageShareGroupMember represents a member linked to an image share group.
 type ImageShareGroupMember struct {
+	Updated   *string `json:"updated"`
+	Expiry    *string `json:"expiry"`
 	TokenUUID string  `json:"token_uuid"`
 	Status    string  `json:"status"`
 	Label     string  `json:"label"`
 	Created   string  `json:"created"`
-	Updated   *string `json:"updated"`
-	Expiry    *string `json:"expiry"`
 }
 
 // ImageShareGroupImage represents an image to add when creating an image share group.
@@ -416,11 +416,11 @@ type UpdateImageShareGroupMemberRequest struct {
 
 // CreateImageRequest represents the request body for creating a private image from a Linode disk.
 type CreateImageRequest struct {
-	DiskID      int      `json:"disk_id"`
 	Label       string   `json:"label,omitempty"`
 	Description string   `json:"description,omitempty"`
-	CloudInit   bool     `json:"cloud_init,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	DiskID      int      `json:"disk_id"`
+	CloudInit   bool     `json:"cloud_init,omitempty"`
 }
 
 // UploadImageRequest represents the request body for uploading a custom image.
@@ -428,14 +428,14 @@ type UploadImageRequest struct {
 	Label       string   `json:"label"`
 	Region      string   `json:"region"`
 	Description string   `json:"description,omitempty"`
-	CloudInit   bool     `json:"cloud_init,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
+	CloudInit   bool     `json:"cloud_init,omitempty"`
 }
 
 // UploadImageResponse represents the image upload target returned by the API.
 type UploadImageResponse struct {
-	Image    Image  `json:"image"`
 	UploadTo string `json:"upload_to"`
+	Image    Image  `json:"image"`
 }
 
 // StackScript represents a Linode StackScript for automated deployments.
@@ -471,20 +471,20 @@ type UDF struct {
 type CreateStackScriptRequest struct {
 	Label       string   `json:"label"`
 	Script      string   `json:"script"`
-	Images      []string `json:"images"`
 	Description string   `json:"description,omitempty"`
-	IsPublic    bool     `json:"is_public,omitempty"`
 	RevNote     string   `json:"rev_note,omitempty"`
+	Images      []string `json:"images"`
+	IsPublic    bool     `json:"is_public,omitempty"`
 }
 
 // UpdateStackScriptRequest represents the request body for updating a StackScript.
 type UpdateStackScriptRequest struct {
 	Label       *string  `json:"label,omitempty"`
 	Script      *string  `json:"script,omitempty"`
-	Images      []string `json:"images,omitempty"`
 	Description *string  `json:"description,omitempty"`
 	IsPublic    *bool    `json:"is_public,omitempty"`
 	RevNote     *string  `json:"rev_note,omitempty"`
+	Images      []string `json:"images,omitempty"`
 }
 
 // CreateInstanceRequest represents the request body for creating a Linode
@@ -492,21 +492,21 @@ type UpdateStackScriptRequest struct {
 // and Interfaces are required on the wire; the Linode API rejects with
 // "must have at least 1 interface defined to boot" when Interfaces is empty.
 type CreateInstanceRequest struct {
-	Region              string              `json:"region"`
+	StackScriptData     any                 `json:"stackscript_data,omitempty"`
+	SwapSize            *int                `json:"swap_size,omitempty"`
+	StackScriptID       *int                `json:"stackscript_id,omitempty"`
+	Booted              *bool               `json:"booted,omitempty"`
 	Type                string              `json:"type"`
 	Label               string              `json:"label,omitempty"`
 	Image               string              `json:"image,omitempty"`
 	RootPass            string              `json:"root_pass,omitempty"`
-	AuthorizedKeys      []string            `json:"authorized_keys,omitempty"`
-	AuthorizedUsers     []string            `json:"authorized_users,omitempty"`
-	StackScriptID       *int                `json:"stackscript_id,omitempty"`
-	StackScriptData     any                 `json:"stackscript_data,omitempty"`
-	BackupsEnabled      bool                `json:"backups_enabled,omitempty"`
-	SwapSize            *int                `json:"swap_size,omitempty"`
-	Tags                []string            `json:"tags,omitempty"`
-	Booted              *bool               `json:"booted,omitempty"`
 	InterfaceGeneration string              `json:"interface_generation"`
+	Region              string              `json:"region"`
+	AuthorizedUsers     []string            `json:"authorized_users,omitempty"`
+	Tags                []string            `json:"tags,omitempty"`
+	AuthorizedKeys      []string            `json:"authorized_keys,omitempty"`
 	Interfaces          []InstanceInterface `json:"interfaces"`
+	BackupsEnabled      bool                `json:"backups_enabled,omitempty"`
 }
 
 // ResizeInstanceRequest represents the request body for resizing a Linode instance.
@@ -519,10 +519,10 @@ type ResizeInstanceRequest struct {
 // UpdateInstanceRequest represents the request body for updating a Linode
 // instance. All fields are optional; only provided fields are updated.
 type UpdateInstanceRequest struct {
-	Label             string   `json:"label,omitempty"`
-	Group             string   `json:"group,omitempty"`
-	Tags              []string `json:"tags,omitempty"`
 	WatchdogEnabled   *bool    `json:"watchdog_enabled,omitempty"`
 	Alerts            *Alerts  `json:"alerts,omitempty"`
+	Label             string   `json:"label,omitempty"`
+	Group             string   `json:"group,omitempty"`
 	MaintenancePolicy string   `json:"maintenance_policy,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
 }

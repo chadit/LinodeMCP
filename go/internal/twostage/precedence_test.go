@@ -15,58 +15,58 @@ func TestResolveTable(t *testing.T) {
 
 	cases := []struct {
 		name       string
-		req        twostage.Request
 		wantBranch twostage.Branch
 		wantErr    string
+		req        twostage.Request
 	}{
 		// Reads and meta short-circuit regardless of flags.
-		{"read executes as single step", twostage.Request{Capability: profiles.CapRead}, twostage.BranchSingleStep, ""},
-		{"read ignores dry_run", twostage.Request{Capability: profiles.CapRead, DryRun: true}, twostage.BranchSingleStep, ""},
-		{"meta ignores yolo", twostage.Request{Capability: profiles.CapMeta, Yolo: true, ProfileAllowYolo: true}, twostage.BranchSingleStep, ""},
-		{"read ignores apply", twostage.Request{Capability: profiles.CapRead, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupValid}, twostage.BranchSingleStep, ""},
+		{"read executes as single step", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapRead}},
+		{"read ignores dry_run", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapRead, DryRun: true}},
+		{"meta ignores yolo", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapMeta, Yolo: true, ProfileAllowYolo: true}},
+		{"read ignores apply", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapRead, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupValid}},
 
 		// Yolo dominates every other flag for a mutator.
-		{"yolo permitted on destroy", twostage.Request{Capability: profiles.CapDestroy, Yolo: true, ProfileAllowYolo: true}, twostage.BranchYolo, ""},
-		{"yolo dominates apply", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupValid, Yolo: true, ProfileAllowYolo: true}, twostage.BranchYolo, ""},
-		{"yolo dominates dry_run", twostage.Request{Capability: profiles.CapWrite, DryRun: true, Yolo: true, ProfileAllowYolo: true}, twostage.BranchYolo, ""},
-		{"yolo not permitted refuses", twostage.Request{Capability: profiles.CapDestroy, Yolo: true, ProfileAllowYolo: false}, twostage.BranchRefuse, twostage.ErrCodeYoloNotPermitted},
+		{"yolo permitted on destroy", twostage.BranchYolo, "", twostage.Request{Capability: profiles.CapDestroy, Yolo: true, ProfileAllowYolo: true}},
+		{"yolo dominates apply", twostage.BranchYolo, "", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupValid, Yolo: true, ProfileAllowYolo: true}},
+		{"yolo dominates dry_run", twostage.BranchYolo, "", twostage.Request{Capability: profiles.CapWrite, DryRun: true, Yolo: true, ProfileAllowYolo: true}},
+		{"yolo not permitted refuses", twostage.BranchRefuse, twostage.ErrCodeYoloNotPermitted, twostage.Request{Capability: profiles.CapDestroy, Yolo: true, ProfileAllowYolo: false}},
 
 		// Contradictory bypass flags are malformed input.
-		{"both bypass flags conflict", twostage.Request{Capability: profiles.CapDestroy, Confirm: true, BypassDryRun: true, ConfirmedDryRun: true}, twostage.BranchRefuse, twostage.ErrCodeBypassFlagsConflict},
-		{"yolo beats bypass conflict", twostage.Request{Capability: profiles.CapDestroy, Yolo: true, ProfileAllowYolo: true, BypassDryRun: true, ConfirmedDryRun: true}, twostage.BranchYolo, ""},
+		{"both bypass flags conflict", twostage.BranchRefuse, twostage.ErrCodeBypassFlagsConflict, twostage.Request{Capability: profiles.CapDestroy, Confirm: true, BypassDryRun: true, ConfirmedDryRun: true}},
+		{"yolo beats bypass conflict", twostage.BranchYolo, "", twostage.Request{Capability: profiles.CapDestroy, Yolo: true, ProfileAllowYolo: true, BypassDryRun: true, ConfirmedDryRun: true}},
 
 		// Apply branch and its refusals (opted-in tool).
-		{"apply valid", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupValid}, twostage.BranchApply, ""},
-		{"apply expired", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupExpired}, twostage.BranchRefuse, twostage.ErrCodePlanExpired},
-		{"apply unknown", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupUnknown}, twostage.BranchRefuse, twostage.ErrCodePlanNotFound},
-		{"apply args mismatch", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupArgsMismatch}, twostage.BranchRefuse, twostage.ErrCodePlanArgsMismatch},
-		{"apply drifted", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupDrifted}, twostage.BranchRefuse, twostage.ErrCodePlanDrift},
-		{"apply with no plan id", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanLookup: twostage.PlanLookupValid}, twostage.BranchRefuse, twostage.ErrCodePlanNotFound},
+		{"apply valid", twostage.BranchApply, "", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupValid}},
+		{"apply expired", twostage.BranchRefuse, twostage.ErrCodePlanExpired, twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupExpired}},
+		{"apply unknown", twostage.BranchRefuse, twostage.ErrCodePlanNotFound, twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupUnknown}},
+		{"apply args mismatch", twostage.BranchRefuse, twostage.ErrCodePlanArgsMismatch, twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupArgsMismatch}},
+		{"apply drifted", twostage.BranchRefuse, twostage.ErrCodePlanDrift, twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanID: planX, PlanLookup: twostage.PlanLookupDrifted}},
+		{"apply with no plan id", twostage.BranchRefuse, twostage.ErrCodePlanNotFound, twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModeApply, PlanLookup: twostage.PlanLookupValid}},
 
 		// Plan branch (opted-in tool).
-		{"plan produces a plan", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModePlan}, twostage.BranchPlan, ""},
-		{"admin plan produces a plan", twostage.Request{Capability: profiles.CapAdmin, TwoStageOptedIn: true, Mode: twostage.ModePlan}, twostage.BranchPlan, ""},
+		{"plan produces a plan", twostage.BranchPlan, "", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, Mode: twostage.ModePlan}},
+		{"admin plan produces a plan", twostage.BranchPlan, "", twostage.Request{Capability: profiles.CapAdmin, TwoStageOptedIn: true, Mode: twostage.ModePlan}},
 
 		// Mode on an opted-out tool falls through to the dry_run and confirm paths.
-		{"apply on opted-out falls through to confirm", twostage.Request{Capability: profiles.CapWrite, TwoStageOptedIn: false, Mode: twostage.ModeApply, PlanID: planX, Confirm: true}, twostage.BranchSingleStep, ""},
-		{"plan on opted-out with no intent refuses", twostage.Request{Capability: profiles.CapWrite, TwoStageOptedIn: false, Mode: twostage.ModePlan}, twostage.BranchRefuse, twostage.ErrCodeMissingConfirm},
+		{"apply on opted-out falls through to confirm", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapWrite, TwoStageOptedIn: false, Mode: twostage.ModeApply, PlanID: planX, Confirm: true}},
+		{"plan on opted-out with no intent refuses", twostage.BranchRefuse, twostage.ErrCodeMissingConfirm, twostage.Request{Capability: profiles.CapWrite, TwoStageOptedIn: false, Mode: twostage.ModePlan}},
 
 		// Dry-run preview.
-		{"dry_run on write", twostage.Request{Capability: profiles.CapWrite, DryRun: true}, twostage.BranchDryRun, ""},
-		{"dry_run on destroy", twostage.Request{Capability: profiles.CapDestroy, DryRun: true}, twostage.BranchDryRun, ""},
-		{"dry_run on opted-in tool with empty mode", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, DryRun: true}, twostage.BranchDryRun, ""},
+		{"dry_run on write", twostage.BranchDryRun, "", twostage.Request{Capability: profiles.CapWrite, DryRun: true}},
+		{"dry_run on destroy", twostage.BranchDryRun, "", twostage.Request{Capability: profiles.CapDestroy, DryRun: true}},
+		{"dry_run on opted-in tool with empty mode", twostage.BranchDryRun, "", twostage.Request{Capability: profiles.CapDestroy, TwoStageOptedIn: true, DryRun: true}},
 
 		// Single-step confirm.
-		{"write confirm single step", twostage.Request{Capability: profiles.CapWrite, Confirm: true}, twostage.BranchSingleStep, ""},
-		{"admin confirm single step", twostage.Request{Capability: profiles.CapAdmin, Confirm: true}, twostage.BranchSingleStep, ""},
-		{"destroy confirm without assertion refuses", twostage.Request{Capability: profiles.CapDestroy, Confirm: true}, twostage.BranchRefuse, twostage.ErrCodeMissingConfirm},
-		{"destroy confirm with confirmed_dry_run", twostage.Request{Capability: profiles.CapDestroy, Confirm: true, ConfirmedDryRun: true}, twostage.BranchSingleStep, ""},
-		{"destroy confirm with bypass", twostage.Request{Capability: profiles.CapDestroy, Confirm: true, BypassDryRun: true}, twostage.BranchSingleStep, ""},
+		{"write confirm single step", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapWrite, Confirm: true}},
+		{"admin confirm single step", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapAdmin, Confirm: true}},
+		{"destroy confirm without assertion refuses", twostage.BranchRefuse, twostage.ErrCodeMissingConfirm, twostage.Request{Capability: profiles.CapDestroy, Confirm: true}},
+		{"destroy confirm with confirmed_dry_run", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapDestroy, Confirm: true, ConfirmedDryRun: true}},
+		{"destroy confirm with bypass", twostage.BranchSingleStep, "", twostage.Request{Capability: profiles.CapDestroy, Confirm: true, BypassDryRun: true}},
 
 		// No execution intent at all.
-		{"write with no intent refuses", twostage.Request{Capability: profiles.CapWrite}, twostage.BranchRefuse, twostage.ErrCodeMissingConfirm},
-		{"destroy with no intent refuses", twostage.Request{Capability: profiles.CapDestroy}, twostage.BranchRefuse, twostage.ErrCodeMissingConfirm},
-		{"unknown capability with no intent refuses", twostage.Request{Capability: profiles.CapUnknown}, twostage.BranchRefuse, twostage.ErrCodeMissingConfirm},
+		{"write with no intent refuses", twostage.BranchRefuse, twostage.ErrCodeMissingConfirm, twostage.Request{Capability: profiles.CapWrite}},
+		{"destroy with no intent refuses", twostage.BranchRefuse, twostage.ErrCodeMissingConfirm, twostage.Request{Capability: profiles.CapDestroy}},
+		{"unknown capability with no intent refuses", twostage.BranchRefuse, twostage.ErrCodeMissingConfirm, twostage.Request{Capability: profiles.CapUnknown}},
 	}
 
 	for _, testCase := range cases {

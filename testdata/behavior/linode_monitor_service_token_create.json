@@ -1,6 +1,6 @@
 {
   "tool": "linode_monitor_service_token_create",
-  "description": "Handler-level behavior contract: argument validation and the HTTP request the handler builds. Both language runners replay these cases against the real dispatch path with the HTTP transport faked; no network, no credentials.",
+  "description": "Handler-level behavior contract: argument validation and the HTTP request the handler builds. Both language runners replay these cases against the real dispatch path with the HTTP transport faked; no network, no credentials. A response that is not a decodable JSON object must fail rather than turn into a made-up token. The two languages frame the parse failure differently, so the shared assertion on an unparseable body is the parser's position marker.",
   "cases": [
     {
       "name": "rejects non-positive entity ids",
@@ -31,6 +31,24 @@
       "name": "requires confirm",
       "args": { "service_type": "dbaas", "entity_ids": [10, 20] },
       "expect_error": "This creates a monitor service token. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "service_type": "dbaas", "entity_ids": [10, 20], "confirm": true },
+      "api_response": [],
+      "expect_api_error": "monitor"
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "service_type": "dbaas", "entity_ids": [10, 20], "confirm": true },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "service_type": "dbaas", "entity_ids": [10, 20], "confirm": true },
+      "api_response_raw": "",
+      "expect_api_error": "line 1"
     }
   ]
 }

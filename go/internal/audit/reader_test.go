@@ -301,8 +301,8 @@ func TestReadRecentSkipsCorruptLines(t *testing.T) {
 	}
 
 	content := "{ this is not json\n" + string(line) + "\n"
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if writeErr := os.WriteFile(path, []byte(content), 0o600); writeErr != nil {
+		t.Fatalf("unexpected error: %v", writeErr)
 	}
 
 	got, err := audit.ReadRecent(dir, &audit.RecentQuery{})

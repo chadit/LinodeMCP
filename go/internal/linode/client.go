@@ -47,11 +47,11 @@ type Option func(*retryConfig)
 // failure.
 type Client struct {
 	httpClient *http.Client
+	circuit    *CircuitBreaker
+	limiter    *RateLimiter
 	baseURL    string
 	token      string
 	retryCfg   retryConfig
-	circuit    *CircuitBreaker
-	limiter    *RateLimiter
 }
 
 // WithMaxRetries sets the maximum number of retry attempts.

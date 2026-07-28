@@ -64,8 +64,8 @@ func TestLinodeManagedIssueGetToolInvalidIssueIdRejectedBeforeClientCall(t *test
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: "missing issue id", args: map[string]any{}},
 		{name: "zero issue id", args: map[string]any{managedIssueIDParam: 0}},

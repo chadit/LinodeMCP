@@ -41,6 +41,8 @@ type behaviorFixture struct {
 // implementations may fetch equivalent data from different endpoints, and
 // the contract these fixtures pin is the OUTPUT, not the fetch pattern.
 // Without APIResponses the single APIResponse (or {}) answers every request.
+// APIResponseRaw serves exact bytes instead, including empty or malformed JSON,
+// and APIStatus overrides HTTP 200 in single-response mode.
 //
 // A case whose args include dry_run:true additionally asserts that every
 // captured request is a GET: a dry run may read whatever it needs to build
@@ -49,6 +51,8 @@ type behaviorCase struct {
 	Name           string                     `json:"name"`
 	Args           map[string]any             `json:"args"`
 	APIResponse    json.RawMessage            `json:"api_response"`
+	APIResponseRaw *string                    `json:"api_response_raw"`
+	APIStatus      *int                       `json:"api_status"`
 	APIResponses   map[string]json.RawMessage `json:"api_responses"`
 	ExpectAPIError string                     `json:"expect_api_error"`
 	ExpectError    string                     `json:"expect_error"`
@@ -226,19 +230,30 @@ func TestBehaviorOutcomeCount(t *testing.T) {
 // resolveBehaviorResponse picks the body and status for one fake-API request.
 // Routed mode (api_responses) matches on "METHOD /path" with the query string
 // stripped; a miss serves 404 and reports notFound so the case fails loudly.
-func resolveBehaviorResponse(testCase *behaviorCase, method, path string) (json.RawMessage, int, bool) {
+func resolveBehaviorResponse(testCase *behaviorCase, method, path string) ([]byte, int, bool) {
 	if testCase.APIResponses == nil {
-		response := testCase.APIResponse
-		if response == nil {
-			response = json.RawMessage(`{}`)
+		var response []byte
+
+		switch {
+		case testCase.APIResponseRaw != nil:
+			response = []byte(*testCase.APIResponseRaw)
+		case testCase.APIResponse != nil:
+			response = testCase.APIResponse
+		default:
+			response = []byte(`{}`)
 		}
 
-		return response, http.StatusOK, true
+		status := http.StatusOK
+		if testCase.APIStatus != nil {
+			status = *testCase.APIStatus
+		}
+
+		return response, status, true
 	}
 
 	response, ok := testCase.APIResponses[method+" "+path]
 	if !ok {
-		return json.RawMessage(`{}`), http.StatusNotFound, false
+		return []byte(`{}`), http.StatusNotFound, false
 	}
 
 	return response, http.StatusOK, true
@@ -250,6 +265,15 @@ func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 
 	if count := behaviorOutcomeCount(testCase); count != 1 {
 		t.Fatalf("outcome fields set = %d, want exactly 1 non-empty outcome", count)
+	}
+
+	if testCase.APIResponse != nil && testCase.APIResponseRaw != nil {
+		t.Fatal("api_response and api_response_raw are mutually exclusive")
+	}
+
+	if testCase.APIResponses != nil &&
+		(testCase.APIResponse != nil || testCase.APIResponseRaw != nil || testCase.APIStatus != nil) {
+		t.Fatal("api_responses cannot be combined with single-response fields")
 	}
 
 	var (
@@ -326,6 +350,58 @@ func runBehaviorCase(t *testing.T, toolName string, testCase *behaviorCase) {
 	default:
 		checkBehaviorRequest(t, isError, text, captured, testCase.ExpectRequest)
 	}
+}
+
+func TestResolveBehaviorResponse(t *testing.T) {
+	t.Parallel()
+
+	t.Run("raw empty body and status", func(t *testing.T) {
+		t.Parallel()
+
+		var empty string
+
+		status := http.StatusBadRequest
+		body, gotStatus, matched := resolveBehaviorResponse(
+			&behaviorCase{APIResponseRaw: &empty, APIStatus: &status},
+			http.MethodPost,
+			"/domains",
+		)
+
+		if !matched {
+			t.Fatal("matched = false, want true")
+		}
+
+		if gotStatus != status {
+			t.Errorf("status = %d, want %d", gotStatus, status)
+		}
+
+		if len(body) != 0 {
+			t.Errorf("body = %q, want empty", body)
+		}
+	})
+
+	t.Run("raw malformed body", func(t *testing.T) {
+		t.Parallel()
+
+		raw := `{"id":`
+		body, status, matched := resolveBehaviorResponse(
+			&behaviorCase{APIResponseRaw: &raw},
+			http.MethodPost,
+			"/domains",
+		)
+
+		if !matched {
+			t.Fatal("matched = false, want true")
+		}
+
+		if status != http.StatusOK {
+			t.Errorf("status = %d, want %d", status, http.StatusOK)
+		}
+
+		if string(body) != raw {
+			t.Errorf("body = %q, want %q", body, raw)
+		}
+	})
 }
 
 // checkBehaviorNoMutation asserts a dry-run case only ever read: the walk may

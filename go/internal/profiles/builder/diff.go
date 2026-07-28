@@ -26,11 +26,11 @@ type FieldDiff struct {
 // fields appear. Either way the response is small and easy for the
 // model to summarize.
 type Diff struct {
+	ChangedFields map[string]FieldDiff `json:"changed_fields"`
 	Name          string               `json:"name"`
-	IsNew         bool                 `json:"is_new"`
 	AddedTools    []string             `json:"added_tools"`
 	RemovedTools  []string             `json:"removed_tools"`
-	ChangedFields map[string]FieldDiff `json:"changed_fields"`
+	IsNew         bool                 `json:"is_new"`
 }
 
 // DraftAsUserProfile converts a Draft into the config-file shape so

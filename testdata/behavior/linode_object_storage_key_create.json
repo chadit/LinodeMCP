@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_key_create",
-  "description": "Pins the shared label validation (behind confirm) and the key create POST body. The secret_key is returned by design; only request behavior is pinned. Every case carries confirm:true because the confirm-gate message text diverges.",
+  "description": "Pins the shared label validation (behind confirm) and the key create POST body. The secret_key is returned by design; only request behavior is pinned. Every case carries confirm:true because the confirm-gate message text diverges. A success body that is not a JSON object must fail rather than turn into a zeroed key record.",
   "cases": [
     {
       "name": "requires label",
@@ -31,6 +31,24 @@
       "name": "requires confirm",
       "args": {"label": "test-key"},
       "expect_error": "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "label": "test-key", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create access key"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "label": "test-key", "confirm": true },
+      "api_response": true,
+      "expect_api_error": "Failed to create access key"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "label": "test-key", "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to create access key"
     }
   ]
 }

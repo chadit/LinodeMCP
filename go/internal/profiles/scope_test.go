@@ -47,8 +47,8 @@ func TestRequiredScopesReadVsWrite(t *testing.T) {
 	tests := []struct {
 		name       string
 		toolName   string
-		capability profiles.Capability
 		want       []profiles.Scope
+		capability profiles.Capability
 	}{
 		{
 			name:       "tags list",
@@ -251,8 +251,8 @@ func TestRequiredScopesReconciledFamilies(t *testing.T) {
 	tests := []struct {
 		name       string
 		toolName   string
-		capability profiles.Capability
 		want       []profiles.Scope
+		capability profiles.Capability
 	}{
 		{
 			name:       "profile token create",
@@ -622,8 +622,8 @@ func TestRequiredScopesSSHAndMonitorScopes(t *testing.T) {
 	tests := []struct {
 		name string
 		tool string
-		cap  profiles.Capability
 		want profiles.Scope
+		cap  profiles.Capability
 	}{
 		{
 			name: "sshkeys list read",
@@ -734,8 +734,8 @@ func TestRequiredScopesDocumentedQuirks(t *testing.T) {
 	tests := []struct {
 		name       string
 		toolName   string
-		capability profiles.Capability
 		want       []profiles.Scope
+		capability profiles.Capability
 	}{
 		{
 			name:       "firewall settings update is account gated",

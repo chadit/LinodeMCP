@@ -1,6 +1,6 @@
 {
   "tool": "linode_nodebalancer_config_create",
-  "description": "Pins the config-create POST body plus Go's port/check/ssl body validation now ported to Python (strictest-wins). Rejection cases set confirm:true so both languages reach the body check despite the confirm-vs-body ordering difference.",
+  "description": "Pins the config-create POST body plus Go's port/check/ssl body validation now ported to Python (strictest-wins). Rejection cases set confirm:true so both languages reach the body check despite the confirm-vs-body ordering difference. A response that is not a JSON object must fail rather than yield a zeroed config.",
   "cases": [
     {
       "name": "posts the config create body",
@@ -76,6 +76,18 @@
       "name": "requires ssl_cert and ssl_key for https",
       "args": {"nodebalancer_id": 100, "port": 443, "protocol": "https", "confirm": true},
       "expect_error": "ssl_cert and ssl_key are required when protocol is https"
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "nodebalancer_id": 100, "port": 8080, "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "nodebalancer_id": 100, "port": 8080, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

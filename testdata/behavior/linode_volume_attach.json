@@ -1,6 +1,6 @@
 {
   "tool": "linode_volume_attach",
-  "description": "Volume attach: volume_id and linode_id rejections (confirm set so Go reaches them), the confirm gate, and the attach POST. Both languages omit persist_across_boots unless the caller sets it true (API applies its own default); a true value is sent.",
+  "description": "Volume attach: volume_id and linode_id rejections (confirm set so Go reaches them), the confirm gate, and the attach POST. Both languages omit persist_across_boots unless the caller sets it true (API applies its own default); a true value is sent. A success body that is not a JSON object must fail rather than turn into a zeroed volume record.",
   "cases": [
     {
       "name": "requires volume_id",
@@ -66,6 +66,36 @@
           "persist_across_boots": true
         }
       }
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "linode_id": 456
+      },
+      "api_response": 7,
+      "expect_api_error": "Failed to attach volume"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "linode_id": 456
+      },
+      "api_response": true,
+      "expect_api_error": "Failed to attach volume"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": {
+        "confirm": true,
+        "volume_id": 123,
+        "linode_id": 456
+      },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to attach volume"
     }
   ]
 }

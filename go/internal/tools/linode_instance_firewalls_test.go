@@ -475,8 +475,8 @@ func TestLinodeInstanceFirewallsUpdateToolConfirm(t *testing.T) {
 	t.Parallel()
 
 	confirmTests := []struct {
-		name    string
 		confirm any
+		name    string
 	}{
 		{name: "missing confirm"},
 		{name: caseFalseConfirm, confirm: false},

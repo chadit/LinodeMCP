@@ -157,6 +157,7 @@ async def test_handle_linode_domain_import_success(
     mock_linode_client.post_raw.assert_awaited_once_with(
         "/domains/import",
         {"domain": "example.com", "remote_nameserver": "ns1.example.net"},
+        retry=False,
     )
 
 

@@ -19,6 +19,14 @@ var (
 // instead of decoding into an empty snapshot.
 var ErrFirewallHistoryNotObject = errors.New("firewall history response is not a firewall object")
 
+// ErrReservedIPListNotObject reports a reserved IP list body that is not the
+// documented {data:[...]} object. Decoding straight into the envelope struct
+// rejects such a body too, but the text it produces names a Go type, so the
+// two clients end up failing the same response with sentences that share
+// nothing for a behavior fixture to match on. This wording is the one the
+// Python client already emits.
+var ErrReservedIPListNotObject = errors.New("list response must be an object")
+
 // ErrCircuitOpen is returned when the circuit breaker is open and rejecting
 // requests. Callers can check this sentinel to distinguish "we never tried"
 // from "we tried and the upstream failed".
@@ -165,15 +173,15 @@ var ErrFirewallRuleVersionPositive = errors.New("version must be a positive inte
 // RetryAfter carries the server's Retry-After hint when present so the retry
 // loop can honor it instead of computing its own backoff.
 type APIError struct {
-	StatusCode int           `json:"status_code"`
-	Message    string        `json:"message"`
-	Field      string        `json:"field,omitempty"`
-	RetryAfter time.Duration `json:"retry_after,omitempty"`
+	Message string `json:"message"`
+	Field   string `json:"field,omitempty"`
 	// Method is the HTTP method of the request that produced this error. It
 	// drives retry safety for 5xx responses: a server error on a
 	// non-idempotent request (POST) may have been applied before the error
 	// surfaced, so it must not be replayed. Not part of the API payload.
-	Method string `json:"-"`
+	Method     string        `json:"-"`
+	StatusCode int           `json:"status_code"`
+	RetryAfter time.Duration `json:"retry_after,omitempty"`
 }
 
 func (e *APIError) Error() string {
@@ -200,8 +208,8 @@ func (e *APIError) IsServerError() bool {
 
 // NetworkError represents a network-related error.
 type NetworkError struct {
-	Operation string
 	Err       error
+	Operation string
 }
 
 func (e *NetworkError) Error() string {
@@ -262,8 +270,8 @@ func (e *RetryableError) Unwrap() error { return e.Err }
 // (POST) may have reached and been processed by the server before the error
 // surfaced locally, so replaying it could duplicate the side effect.
 type requestError struct {
-	Method string
 	Err    error
+	Method string
 }
 
 func (e *requestError) Error() string { return "request failed: " + e.Err.Error() }

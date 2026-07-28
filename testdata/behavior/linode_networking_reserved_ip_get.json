@@ -1,6 +1,6 @@
 {
   "tool": "linode_networking_reserved_ip_get",
-  "description": "Reserved-IP get validates the IPv4 path argument, GETs the address without query or body, and preserves the documented explicit nulls protojson would otherwise drop.",
+  "description": "Reserved-IP get validates the IPv4 path argument, GETs the address without query or body, and preserves the documented explicit nulls protojson would otherwise drop. A response body that is not a JSON object fails with the same sentence in both languages instead of rendering as an address with every field empty.",
   "cases": [
     {
       "name": "rejects a missing address",
@@ -122,6 +122,24 @@
         "type": "ipv4",
         "vpc_nat_1_1": null
       }
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "address": "192.0.2.10" },
+      "api_response": [],
+      "expect_api_error": "reserved IP response must be an object"
+    },
+    {
+      "name": "rejects a JSON null API response",
+      "args": { "address": "192.0.2.10" },
+      "api_response_raw": "null",
+      "expect_api_error": "reserved IP response must be an object"
+    },
+    {
+      "name": "rejects a bare-string API response",
+      "args": { "address": "192.0.2.10" },
+      "api_response_raw": "\"reserved\"",
+      "expect_api_error": "reserved IP response must be an object"
     }
   ]
 }

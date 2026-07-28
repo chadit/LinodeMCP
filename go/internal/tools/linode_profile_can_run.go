@@ -50,25 +50,25 @@ const (
 // canRunCallResult is the per-call verdict row in the response.
 type canRunCallResult struct {
 	Tool    string `json:"tool"`
-	Allowed bool   `json:"allowed"`
 	Reason  string `json:"reason,omitempty"`
 	Remedy  string `json:"remedy,omitempty"`
+	Allowed bool   `json:"allowed"`
 }
 
 // canRunSummary collapses the per-call verdicts into counts. BlockedByReason
 // holds the four bucket keys; its sum is <= Blocked (a future uncategorized
 // reason would increment Blocked without a bucket).
 type canRunSummary struct {
+	BlockedByReason map[string]int `json:"blocked_by_reason"`
 	Total           int            `json:"total"`
 	Allowed         int            `json:"allowed"`
 	Blocked         int            `json:"blocked"`
-	BlockedByReason map[string]int `json:"blocked_by_reason"`
 }
 
 // canRunResponse is the full wire shape of linode_profile_can_run.
 type canRunResponse struct {
-	ActiveProfile string             `json:"active_profile"`
 	Results       []canRunCallResult `json:"results"`
+	ActiveProfile string             `json:"active_profile"`
 	Summary       canRunSummary      `json:"summary"`
 }
 

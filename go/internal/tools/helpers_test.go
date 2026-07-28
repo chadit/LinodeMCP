@@ -41,10 +41,10 @@ func TestRequireConfirm(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
 		args      map[string]any
-		wantNil   bool
+		name      string
 		checkBody string
+		wantNil   bool
 	}{
 		{
 			name:    "true boolean",
@@ -131,10 +131,10 @@ func TestFilterByField(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		items     []testItem
 		filter    string
-		wantLen   int
+		items     []testItem
 		wantNames []string
+		wantLen   int
 	}{
 		{
 			name: "exact match",
@@ -206,10 +206,10 @@ func TestFilterByContains(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		items     []testItem
 		substr    string
-		wantLen   int
+		items     []testItem
 		wantNames []string
+		wantLen   int
 	}{
 		{
 			name: "substring match",

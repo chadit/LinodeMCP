@@ -30,15 +30,9 @@ const DefaultPlanTTL = 5 * time.Minute
 // and the capability-default opt-in), so a caller without config can pass
 // Settings{} and get the same answers the package-level helpers give.
 type Settings struct {
-	// DefaultTTL overrides DefaultPlanTTL for every tool. Non-positive means
-	// "unset": fall back to DefaultPlanTTL.
+	ToolTTL    map[string]time.Duration
+	OptIn      map[string]bool
 	DefaultTTL time.Duration
-	// ToolTTL overrides DefaultTTL for the named tools. A non-positive entry
-	// is ignored.
-	ToolTTL map[string]time.Duration
-	// OptIn forces a tool in (true) or out (false) of the flow by name,
-	// overriding the capability default.
-	OptIn map[string]bool
 }
 
 // OptedIn reports whether a tool participates in the two-stage flow under these

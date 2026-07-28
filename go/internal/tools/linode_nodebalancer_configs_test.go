@@ -853,8 +853,8 @@ func TestLinodeNodeBalancerConfigCreateToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeNodeBalancerConfigCreateTool(cfg)
 
 	confirmTests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80)}},
 		{name: caseFalseConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyConfirm: false}},
@@ -1064,9 +1064,9 @@ func TestLinodeNodeBalancerConfigCreateToolEmitsProtoConfig(t *testing.T) {
 	var payload struct {
 		Message string `json:"message"`
 		Config  struct {
+			Protocol       string `json:"protocol"`
 			ID             int    `json:"id"`
 			Port           int    `json:"port"`
-			Protocol       string `json:"protocol"`
 			NodeBalancerID int    `json:"nodebalancer_id"`
 		} `json:"config"`
 	}
@@ -1496,8 +1496,8 @@ func TestLinodeNodeBalancerNodeCreateToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeNodeBalancerNodeCreateTool(cfg)
 
 	confirmTests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress}},
 		{name: caseFalseConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyLabel: nodeBalancerNodeLabelWeb1, keyAddress: nodeBalancerNodeAddress, keyConfirm: false}},
@@ -1799,8 +1799,8 @@ func TestLinodeNodeBalancerNodeDeleteToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeNodeBalancerNodeDeleteTool(cfg)
 
 	confirmTests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789)}},
 		{name: caseFalseConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyConfirm: false}},
@@ -2114,8 +2114,8 @@ func TestLinodeNodeBalancerNodeUpdateToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeNodeBalancerNodeUpdateTool(cfg)
 
 	confirmTests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1}},
 		{name: caseFalseConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyNodeID: float64(789), keyLabel: nodeBalancerNodeLabelWeb1, keyConfirm: false}},
@@ -2285,11 +2285,11 @@ func TestLinodeNodeBalancerNodeUpdateToolSuccess(t *testing.T) {
 	var payload struct {
 		Message string `json:"message"`
 		Node    struct {
-			ID             int    `json:"id"`
 			Label          string `json:"label"`
 			Address        string `json:"address"`
 			Status         string `json:"status"`
 			Mode           string `json:"mode"`
+			ID             int    `json:"id"`
 			NodeBalancerID int    `json:"nodebalancer_id"`
 			ConfigID       int    `json:"config_id"`
 		} `json:"node"`
@@ -2475,8 +2475,8 @@ func TestLinodeNodeBalancerConfigRebuildToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeNodeBalancerConfigRebuildTool(cfg)
 
 	confirmTests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456)}},
 		{name: caseFalseConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: false}},
@@ -2746,8 +2746,8 @@ func TestLinodeNodeBalancerConfigUpdateToolConfirm(t *testing.T) {
 	_, _, handler := tools.NewLinodeNodeBalancerConfigUpdateTool(cfg)
 
 	confirmTests := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingConfirm, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443)}},
 		{name: caseFalseConfirmRejected, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyConfirm: false}},
@@ -3283,5 +3283,78 @@ func TestLinodeNodeBalancerFirewallUpdateToolClientError(t *testing.T) {
 
 	if text, ok := result.Content[0].(mcp.TextContent); !ok || !strings.Contains(text.Text, errForbidden) {
 		t.Errorf("error text %q does not contain %q", text.Text, errForbidden)
+	}
+}
+
+// TestLinodeNodeBalancerConfigCreateToolDryRun covers the create preview, which
+// reads the NodeBalancer's existing configs so the operator can see the port
+// they are about to add next to the ports already listening. It must read only:
+// a POST leaking out of a preview would create the config it was asked to
+// describe.
+func TestLinodeNodeBalancerConfigCreateToolDryRun(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("dry_run must NOT issue any non-GET request; got %s", r.Method)
+		}
+
+		if r.URL.Path != tcNodebalancers123Configs {
+			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			keyData: []map[string]any{{keyID: 456, keyPort: 80, keyProtocol: protocolHTTP, keyNodeBalancerID: 123}},
+			keyPage: 1, keyPages: 1, keyResults: 1,
+		}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigCreateTool(srvCfg)
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{
+		keyNodeBalancerID: float64(123),
+		keyPort:           float64(8080),
+		keyProtocol:       protocolHTTP,
+		keyDryRun:         true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("result.IsError = true, want false; text: %s", dryRunResultText(t, result))
+	}
+
+	body := decodeBody(t, dryRunResultText(t, result))
+
+	if body["tool"] != "linode_nodebalancer_config_create" {
+		t.Errorf("body[tool] = %v, want %v", body["tool"], "linode_nodebalancer_config_create")
+	}
+
+	assertDryRunRequest(t, body, http.MethodPost, tcNodebalancers123Configs)
+
+	state, _ := body["current_state"].(map[string]any)
+	if !reflect.DeepEqual(state[keyNodeBalancerID], float64(123)) {
+		t.Errorf("state[%s] = %v, want %v", keyNodeBalancerID, state[keyNodeBalancerID], float64(123))
+	}
+
+	configs, _ := state["configs"].([]any)
+	if len(configs) != 1 {
+		t.Fatalf("len(configs) = %v, want %v", len(configs), 1)
+	}
+
+	existing, _ := configs[0].(map[string]any)
+	if !reflect.DeepEqual(existing[keyPort], float64(80)) {
+		t.Errorf("existing[%s] = %v, want %v", keyPort, existing[keyPort], float64(80))
 	}
 }

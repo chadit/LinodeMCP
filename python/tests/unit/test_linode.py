@@ -164,13 +164,44 @@ async def test_get_profile_preferences_sends_get_to_preferences_route() -> None:
     await client.close()
 
 
-async def test_get_profile_preferences_non_dict_response_empty() -> None:
-    """Unexpected profile preferences GET response shapes return an empty object."""
+@pytest.mark.parametrize("body", [[], "preferences", 5, True])
+async def test_get_profile_preferences_non_dict_response_rejected(
+    body: object,
+) -> None:
+    """A non-object profile preferences GET body is an error, not empty success.
+
+    Returning {} here would report success carrying no preferences, where Go's
+    map decode of the same body fails.
+    """
     client = Client("https://api.linode.com/v4", "test-token")
 
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = []
+    mock_response.json.return_value = body
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        with pytest.raises(TypeError) as excinfo:
+            await client.get_profile_preferences()
+
+    assert "profile preferences response must be an object" in str(excinfo.value)
+    mock_request.assert_called_once_with("GET", "/profile/preferences")
+
+    await client.close()
+
+
+async def test_get_profile_preferences_null_response_empty() -> None:
+    """A null profile preferences GET body reads as empty preferences.
+
+    Go decodes this endpoint into a map, and encoding/json leaves the map alone
+    on a null body without erroring, so null stays a success on both sides.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = None
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
@@ -234,13 +265,44 @@ async def test_update_profile_preferences_sends_put_to_preferences_route() -> No
     await client.close()
 
 
-async def test_update_profile_preferences_non_dict_response_empty() -> None:
-    """Unexpected profile preferences response shapes return an empty object."""
+@pytest.mark.parametrize("body", [[], "preferences", 5, True])
+async def test_update_profile_preferences_non_dict_response_rejected(
+    body: object,
+) -> None:
+    """A non-object profile preferences PUT body is an error, not empty success.
+
+    Reporting success on a body that carries no preferences would tell the
+    caller the write round-tripped when nothing came back; Go's map decode of
+    the same body fails.
+    """
     client = Client("https://api.linode.com/v4", "test-token")
 
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = []
+    mock_response.json.return_value = body
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = mock_response
+
+        with pytest.raises(TypeError) as excinfo:
+            await client.update_profile_preferences({})
+
+    assert "profile preferences response must be an object" in str(excinfo.value)
+    mock_request.assert_called_once_with("PUT", "/profile/preferences", {})
+
+    await client.close()
+
+
+async def test_update_profile_preferences_null_response_empty() -> None:
+    """A null profile preferences PUT body reads as empty preferences.
+
+    Matches Go, whose map decode accepts a null body without erroring.
+    """
+    client = Client("https://api.linode.com/v4", "test-token")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = None
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
@@ -17839,6 +17901,26 @@ async def test_list_profile_devices_fetches_all_pages() -> None:
         ("GET", "/profile/devices"),
         ("GET", "/profile/devices?page=2"),
     ]
+    await client.close()
+
+
+async def test_list_profile_devices_explicit_page_fetches_only_that_page() -> None:
+    """An explicit page past the first is still requested, exactly once."""
+    client = Client("https://api.linode.com/v4", "test-token")
+    response = MagicMock()
+    response.json.return_value = {
+        "data": [{"id": 456, "user_agent": "curl/8.0"}],
+        "page": 2,
+        "pages": 4,
+        "results": 4,
+    }
+
+    with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = response
+        result = await client.list_profile_devices(page=2, page_size=25)
+
+    assert result == [{"id": 456, "user_agent": "curl/8.0"}]
+    mock_request.assert_awaited_once_with("GET", "/profile/devices?page=2&page_size=25")
     await client.close()
 
 

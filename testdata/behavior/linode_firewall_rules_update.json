@@ -1,6 +1,6 @@
 {
   "tool": "linode_firewall_rules_update",
-  "description": "Firewall rules update requires both inbound and outbound rule arrays once confirmed, then PUTs them. Both languages send only inbound/outbound (Go no longer emits empty inbound_policy/outbound_policy strings, which the API treats as optional). Rule objects are forwarded verbatim: Go must not pad a rule with empty label/description or a null ipv6 the caller never sent, so the wire bytes match the Python client.",
+  "description": "Firewall rules update requires both inbound and outbound rule arrays once confirmed, then PUTs them. Both languages send only inbound/outbound (Go no longer emits empty inbound_policy/outbound_policy strings, which the API treats as optional). Rule objects are forwarded verbatim: Go must not pad a rule with empty label/description or a null ipv6 the caller never sent, so the wire bytes match the Python client. A response that is not a JSON object must fail rather than yield a zeroed ruleset; the bare-array shape of that case is withheld because Python still fabricates a success from it (see report).",
   "cases": [
     {
       "name": "requires confirm",
@@ -162,6 +162,17 @@
           ]
         }
       }
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": {
+        "confirm": true,
+        "firewall_id": 123,
+        "inbound": [],
+        "outbound": []
+      },
+      "api_response": 7,
+      "expect_api_error": "Failed to update"
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "tool": "linode_nodebalancer_config_update",
-  "description": "Pins the config-update PUT body plus Go's at-least-one-field/port/check/ssl body validation now ported to Python (strictest-wins). Rejection cases set confirm:true so both languages reach the body check despite the confirm-vs-body ordering difference.",
+  "description": "Pins the config-update PUT body plus Go's at-least-one-field/port/check/ssl body validation now ported to Python (strictest-wins). Rejection cases set confirm:true so both languages reach the body check despite the confirm-vs-body ordering difference. A response that is not a JSON object must fail rather than yield a zeroed config.",
   "cases": [
     {
       "name": "puts the config update body",
@@ -36,6 +36,18 @@
       "name": "requires ssl_cert and ssl_key for https",
       "args": {"nodebalancer_id": 100, "config_id": 7, "protocol": "https", "confirm": true},
       "expect_error": "ssl_cert and ssl_key are required when protocol is https"
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "nodebalancer_id": 100, "config_id": 7, "port": 9090, "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to update"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "nodebalancer_id": 100, "config_id": 7, "port": 9090, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to update"
     }
   ]
 }

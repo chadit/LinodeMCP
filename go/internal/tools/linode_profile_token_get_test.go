@@ -61,8 +61,8 @@ func TestLinodeProfileTokenGetToolInvalidTokenIdRejectedBeforeClientCall(t *test
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: "missing token_id", args: map[string]any{}},
 		{name: "zero token_id", args: map[string]any{keyTokenID: 0}},

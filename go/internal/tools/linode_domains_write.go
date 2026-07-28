@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/proto"
@@ -13,6 +14,24 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
+)
+
+const (
+	domainCreateNameMaxLength   = 253
+	domainCreateTypeMaster      = "master"
+	domainCreateTypeSlave       = "slave"
+	domainCreateStatusActive    = "active"
+	domainCreateStatusDisabled  = "disabled"
+	errDomainCreateNameRequired = "domain is required"
+	errDomainCreateTypeRequired = "type is required"
+)
+
+// domainCreateNamePattern is the domain-name pattern POST /domains documents.
+// Rejecting locally keeps a malformed name from burning an API call, and
+// pinning the documented pattern (rather than a looser hand-rolled one) is
+// what keeps both languages rejecting the same set of names.
+var domainCreateNamePattern = regexp.MustCompile(
+	`^(\*\.)?([a-zA-Z0-9-_]{1,63}\.)+([a-zA-Z]{2,3}\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$`,
 )
 
 // NewLinodeDomainImportTool creates a tool for importing a domain zone.
@@ -162,24 +181,15 @@ func NewLinodeDomainCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 }
 
 func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	domain := request.GetString("domain", "")
-	domainType := request.GetString("type", "")
-	soaEmail := request.GetString("soa_email", "")
-	description := request.GetString("description", "")
-	ttlSec := request.GetInt("ttl_sec", 0)
-
 	if IsDryRun(request) {
-		if domain == "" {
-			return mcp.NewToolResultError("domain is required"), nil
+		req, validationMessage := domainCreateRequestFromTool(request)
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
 		}
 
-		if domainType == "" {
-			return mcp.NewToolResultError("type is required"), nil
-		}
-
-		return RunDryRunPreviewDetailed(ctx, request, cfg, "linode_domain_create", httpMethodPost, "/domains", nil,
+		return RunDryRunPreviewWithBodyDetailed(ctx, request, cfg, "linode_domain_create", httpMethodPost, "/domains", req, nil,
 			func(ctx context.Context, _ *linode.Client, _ any) (DryRunDetails, error) {
-				return domainCreateSideEffects(ctx, domainType, domain)
+				return domainCreateSideEffects(ctx, req.Type, req.Domain)
 			})
 	}
 
@@ -187,25 +197,14 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 		return result, nil
 	}
 
-	if domain == "" {
-		return mcp.NewToolResultError("domain is required"), nil
-	}
-
-	if domainType == "" {
-		return mcp.NewToolResultError("type is required"), nil
+	req, validationMessage := domainCreateRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	req := linode.CreateDomainRequest{
-		Domain:      domain,
-		Type:        domainType,
-		SOAEmail:    soaEmail,
-		Description: description,
-		TTLSec:      ttlSec,
 	}
 
 	createdDomain, err := client.CreateDomainProto(ctx, &req)
@@ -219,6 +218,196 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	return MarshalProtoToolResponse(response)
+}
+
+// domainCreateRequestFromTool builds the POST /domains body from the tool
+// arguments, returning a non-empty message when the arguments do not satisfy
+// the documented create contract. The dry-run and live branches share it so a
+// preview cannot advertise a body the live call would reject, or vice versa.
+func domainCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateDomainRequest, string) {
+	req := linode.CreateDomainRequest{
+		Domain: request.GetString("domain", ""),
+		Type:   request.GetString("type", ""),
+	}
+
+	if validationMessage := validateDomainCreateIdentity(&req); validationMessage != "" {
+		return linode.CreateDomainRequest{}, validationMessage
+	}
+
+	if validationMessage := populateDomainCreateOptionals(request, &req); validationMessage != "" {
+		return linode.CreateDomainRequest{}, validationMessage
+	}
+
+	if validationMessage := validateDomainCreateConditionals(&req); validationMessage != "" {
+		return linode.CreateDomainRequest{}, validationMessage
+	}
+
+	return req, ""
+}
+
+func validateDomainCreateIdentity(req *linode.CreateDomainRequest) string {
+	if req.Domain == "" {
+		return errDomainCreateNameRequired
+	}
+
+	if len(req.Domain) > domainCreateNameMaxLength {
+		return "domain must be between 1 and 253 characters"
+	}
+
+	if !domainCreateNamePattern.MatchString(req.Domain) {
+		return "domain must match the documented domain-name pattern"
+	}
+
+	if req.Type == "" {
+		return errDomainCreateTypeRequired
+	}
+
+	if req.Type != domainCreateTypeMaster && req.Type != domainCreateTypeSlave {
+		return "type must be one of: master, slave"
+	}
+
+	return ""
+}
+
+func populateDomainCreateOptionals(request *mcp.CallToolRequest, req *linode.CreateDomainRequest) string {
+	var validationMessage string
+
+	if req.SOAEmail, validationMessage = domainCreateOptionalString(request, "soa_email"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.Description, validationMessage = domainCreateOptionalString(request, "description"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.Group, validationMessage = domainCreateOptionalString(request, "group"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.Status, validationMessage = domainCreateOptionalString(request, "status"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.AXFRIPs, validationMessage = domainCreateStringSlice(request, "axfr_ips"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.MasterIPs, validationMessage = domainCreateStringSlice(request, "master_ips"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.Tags, validationMessage = domainCreateStringSlice(request, "tags"); validationMessage != "" {
+		return validationMessage
+	}
+
+	return populateDomainCreateIntervals(request, req)
+}
+
+func populateDomainCreateIntervals(request *mcp.CallToolRequest, req *linode.CreateDomainRequest) string {
+	var validationMessage string
+
+	if req.ExpireSec, validationMessage = domainCreateOptionalInt(request, "expire_sec"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.RefreshSec, validationMessage = domainCreateOptionalInt(request, "refresh_sec"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.RetrySec, validationMessage = domainCreateOptionalInt(request, "retry_sec"); validationMessage != "" {
+		return validationMessage
+	}
+
+	if req.TTLSec, validationMessage = domainCreateOptionalInt(request, "ttl_sec"); validationMessage != "" {
+		return validationMessage
+	}
+
+	return ""
+}
+
+// validateDomainCreateConditionals enforces the two cross-field rules POST
+// /domains documents: a master zone needs an SOA email to answer with, and a
+// slave zone needs somewhere to transfer from.
+func validateDomainCreateConditionals(req *linode.CreateDomainRequest) string {
+	if req.Status != nil && *req.Status != domainCreateStatusActive && *req.Status != domainCreateStatusDisabled {
+		return "status must be one of: active, disabled"
+	}
+
+	if req.Type == domainCreateTypeMaster && (req.SOAEmail == nil || *req.SOAEmail == "") {
+		return "soa_email is required for master domains"
+	}
+
+	if req.Type == domainCreateTypeSlave && (req.MasterIPs == nil || len(*req.MasterIPs) == 0) {
+		return "master_ips must include at least one value for slave domains"
+	}
+
+	return ""
+}
+
+// domainCreateOptionalString reads an optional string argument by presence
+// rather than by value, so an explicit "" still reaches the API instead of
+// being indistinguishable from an omitted field.
+func domainCreateOptionalString(request *mcp.CallToolRequest, name string) (*string, string) {
+	raw, present := request.GetArguments()[name]
+	if !present {
+		return nil, ""
+	}
+
+	value, ok := raw.(string)
+	if !ok {
+		return nil, name + " must be a string"
+	}
+
+	return &value, ""
+}
+
+// domainCreateOptionalInt accepts the int and float64 shapes a JSON-RPC
+// argument can arrive as, rejecting any float that is not exactly integral
+// (which also rejects NaN and the infinities).
+func domainCreateOptionalInt(request *mcp.CallToolRequest, name string) (*int, string) {
+	raw, present := request.GetArguments()[name]
+	if !present {
+		return nil, ""
+	}
+
+	switch value := raw.(type) {
+	case int:
+		return &value, ""
+	case float64:
+		integer := int(value)
+		if float64(integer) == value {
+			return &integer, ""
+		}
+	}
+
+	return nil, name + " must be an integer"
+}
+
+func domainCreateStringSlice(request *mcp.CallToolRequest, name string) (*[]string, string) {
+	raw, present := request.GetArguments()[name]
+	if !present {
+		return nil, ""
+	}
+
+	switch value := raw.(type) {
+	case []any:
+		result := make([]string, 0, len(value))
+
+		for _, item := range value {
+			text, ok := item.(string)
+			if !ok {
+				return nil, name + " must be an array of strings"
+			}
+
+			result = append(result, text)
+		}
+
+		return &result, ""
+	case []string:
+		return &value, ""
+	default:
+		return nil, name + " must be an array of strings"
+	}
 }
 
 // NewLinodeDomainUpdateTool creates a tool for updating a domain.

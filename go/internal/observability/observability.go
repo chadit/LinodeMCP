@@ -26,25 +26,26 @@ import (
 // Observability bundles tracing, metrics, logging, and health endpoints.
 // All fields are owned by the instance; nothing leaks to package globals.
 type Observability struct {
-	logger *slog.Logger
-	tracer trace.Tracer
-
-	traceProvider *sdktrace.TracerProvider
-	meterProvider *sdkmetric.MeterProvider
-
+	tracer          trace.Tracer
 	requestsTotal   metric.Int64Counter
 	requestDuration metric.Float64Histogram
 	errorsTotal     metric.Int64Counter
 	apiRequests     metric.Int64Counter
 	apiRequestDur   metric.Float64Histogram
-	metricsServer   *http.Server
 
-	healthMu     sync.RWMutex
-	healthChecks map[string]HealthCheck
-	healthServer *http.Server
+	logger        *slog.Logger
+	traceProvider *sdktrace.TracerProvider
+	meterProvider *sdkmetric.MeterProvider
+	metricsServer *http.Server
+	healthChecks  map[string]HealthCheck
+	healthServer  *http.Server
 
-	shutdownMu    sync.Mutex
 	shutdownFuncs []func(context.Context) error
+
+	// The pointer-free mutexes sit last so the garbage collector can stop
+	// scanning the struct early; govet fieldalignment enforces this shape.
+	healthMu   sync.RWMutex
+	shutdownMu sync.Mutex
 }
 
 // New constructs and starts an Observability stack.

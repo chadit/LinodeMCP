@@ -62,8 +62,8 @@ func TestLinodeManagedServiceGetToolInvalidServiceIdRejectedBeforeClientCall(t *
 	t.Parallel()
 
 	cases := []struct {
-		name string
 		args map[string]any
+		name string
 	}{
 		{name: caseMissingServiceID, args: map[string]any{}},
 		{name: caseZeroServiceID, args: map[string]any{keyManagedServiceID: 0}},

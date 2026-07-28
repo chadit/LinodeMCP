@@ -2,14 +2,14 @@ package linode
 
 // PlacementGroup represents a Linode placement group.
 type PlacementGroup struct {
-	ID                   int                       `json:"id"`
+	Migrations           *PlacementGroupMigrations `json:"migrations,omitempty"`
 	Label                string                    `json:"label"`
 	Region               string                    `json:"region"`
 	PlacementGroupType   string                    `json:"placement_group_type"`
 	PlacementGroupPolicy string                    `json:"placement_group_policy"`
-	IsCompliant          bool                      `json:"is_compliant"`
 	Members              []PlacementGroupMember    `json:"members,omitempty"`
-	Migrations           *PlacementGroupMigrations `json:"migrations,omitempty"`
+	ID                   int                       `json:"id"`
+	IsCompliant          bool                      `json:"is_compliant"`
 }
 
 // PlacementGroupMember represents one Linode instance assigned to a placement group.

@@ -1,6 +1,7 @@
 package linode
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -37,6 +38,17 @@ const (
 	endpointNodeBalancerNodes         = endpointNodeBalancerConfigs + "/%d/nodes"
 )
 
+// IsObjectBody reports whether a decoded API body is a JSON object. The raw
+// routes hand their bodies to callers untouched so documented explicit nulls
+// survive, which leaves the object check to whoever consumes them. The bytes
+// have already parsed as valid JSON by then, so the opening token settles it
+// without a second full decode.
+func IsObjectBody(raw json.RawMessage) bool {
+	opening := bytes.TrimLeft(raw, " \t\r\n")
+
+	return len(opening) > 0 && opening[0] == '{'
+}
+
 // httpListReservedIPsProto retrieves reserved public IPv4 addresses with their
 // raw API objects so the tool can preserve documented explicit null fields.
 func (c *Client) httpListReservedIPsProto(ctx context.Context, page, pageSize int) (*ReservedIPListPage, error) {
@@ -52,20 +64,41 @@ func (c *Client) httpListReservedIPsProto(ctx context.Context, page, pageSize in
 
 	defer drainClose(resp)
 
-	var envelope struct {
-		Data []json.RawMessage `json:"data"`
+	var body json.RawMessage
+	if decodeErr := c.handleResponse(resp, &body); decodeErr != nil {
+		return nil, decodeErr
 	}
-	if err := c.handleResponse(resp, &envelope); err != nil {
+
+	data, err := reservedIPListData(body)
+	if err != nil {
 		return nil, err
 	}
 
-	reservedIPs, err := decodeRawProtoItems(envelope.Data, "ListReservedIPs",
+	reservedIPs, err := decodeRawProtoItems(data, "ListReservedIPs",
 		func() *linodev1.ReservedIPAddress { return &linodev1.ReservedIPAddress{} })
 	if err != nil {
 		return nil, err
 	}
 
-	return &ReservedIPListPage{ReservedIPs: reservedIPs, RawReservedIPs: envelope.Data}, nil
+	return &ReservedIPListPage{ReservedIPs: reservedIPs, RawReservedIPs: data}, nil
+}
+
+// reservedIPListData pulls the data[] page out of a list body, rejecting a body
+// that is not an object first so the failure names the shape rather than a Go
+// type.
+func reservedIPListData(body json.RawMessage) ([]json.RawMessage, error) {
+	if !IsObjectBody(body) {
+		return nil, ErrReservedIPListNotObject
+	}
+
+	var envelope struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return envelope.Data, nil
 }
 
 // httpGetReservedIPRaw retrieves one reserved public IPv4 address while

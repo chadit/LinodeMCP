@@ -319,6 +319,35 @@ func TestClientGetInstanceStatsByYearMonthRejectsInvalidPathParams(t *testing.T)
 	}
 }
 
+// TestClientGetInstanceStatsByYearMonthRejectsNonObjectBody pins the rejection
+// the Python client had to grow: it used to swap a non-object body for an empty
+// object and report success, so the two clients disagreed on every body here.
+func TestClientGetInstanceStatsByYearMonthRejectsNonObjectBody(t *testing.T) {
+	t.Parallel()
+
+	for _, body := range []string{jsonBodyArray, `"stats"`, "5", jsonBodyTrue, domainCreateJSONNull} {
+		t.Run(body, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tcApplicationJSON)
+
+				if _, err := w.Write([]byte(body)); err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}))
+			t.Cleanup(srv.Close)
+
+			client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+			got, err := client.GetInstanceStatsByYearMonthProto(t.Context(), 123, 2024, 8)
+			if err == nil {
+				t.Fatalf("got = %v, want an error", got)
+			}
+		})
+	}
+}
+
 func TestClientGetInstanceStatsByYearMonthRetriesTransientError(t *testing.T) {
 	t.Parallel()
 

@@ -21,9 +21,9 @@ import (
 type reportResult struct {
 	Name        string             `json:"name"`
 	Output      string             `json:"output"`
-	TotalEvents int                `json:"total_events"`
 	Rows        []audit.SummaryRow `json:"rows"`
 	Events      []audit.Event      `json:"events"`
+	TotalEvents int                `json:"total_events"`
 }
 
 // TestLinodeAuditReportDefinition pins the tool identity.

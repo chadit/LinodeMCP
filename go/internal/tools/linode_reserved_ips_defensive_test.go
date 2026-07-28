@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/proto"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
@@ -15,9 +16,9 @@ func TestMarshalReservedIPListResponseErrors(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
-		page   *linode.ReservedIPListPage
 		wantIs error
+		page   *linode.ReservedIPListPage
+		name   string
 	}{
 		{
 			name:   "typed and raw item counts differ",
@@ -120,6 +121,32 @@ func TestMarshalReservedIPResponseDecodeError(t *testing.T) {
 	result, err := marshalReservedIPResponse(json.RawMessage(`[]`))
 	if result != nil || err == nil {
 		t.Errorf("result = %v, err = %v, want a decode error", result, err)
+	}
+}
+
+// TestReservedIPObjectResponseRejectsNonObject proves the guard keeps the
+// caller's action text in front of the shared sentence, which is the half the
+// Python twin has to match.
+func TestReservedIPObjectResponseRejectsNonObject(t *testing.T) {
+	t.Parallel()
+
+	result, err := reservedIPObjectResponse(json.RawMessage(`[]`), "Failed to do the thing")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !result.IsError {
+		t.Fatalf("result = %+v, want a tool error", result)
+	}
+
+	textContent, isText := result.Content[0].(mcp.TextContent)
+	if !isText {
+		t.Fatalf("result.Content[0] = %T, want mcp.TextContent", result.Content[0])
+	}
+
+	want := "Failed to do the thing: " + reservedIPResponseNotObject
+	if textContent.Text != want {
+		t.Errorf("text = %q, want %q", textContent.Text, want)
 	}
 }
 

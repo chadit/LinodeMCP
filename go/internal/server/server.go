@@ -33,35 +33,14 @@ type toolHandler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.Call
 // only for entries whose name appears in the resolved profile's AllowedTools.
 type toolEntry struct {
 	tool       mcp.Tool
-	capability profiles.Capability
 	handler    toolHandler
+	capability profiles.Capability
 }
 
 // Server represents a LinodeMCP server.
 type Server struct {
-	config        *config.Config
-	mcp           *server.MCPServer
-	tools         []contracts.Tool
-	activeProfile profiles.Profile
-
-	// shutdownMu serializes positive inflight.Add calls with Shutdown's
-	// inflight.Wait call. sync.WaitGroup requires Add to happen before Wait
-	// when the counter is zero, so tool dispatch must pass this gate first.
-	shutdownMu   sync.Mutex
-	shuttingDown bool
-	inflight     sync.WaitGroup
-
-	// allEntries holds every tool the server could register, regardless of
-	// the active profile. Built once in New and reused by ReloadProfile so a
-	// profile change can re-add tools that were filtered out at startup
-	// without re-running the per-category collectors.
-	allEntries []toolEntry
-
-	// profileMu guards activeProfile, tools, and registered against
-	// concurrent reads from Tools/ActiveProfile/ToolInfos and writes from
-	// ReloadProfile. mcp-go's internal mutex protects its own tool map, but
-	// the Server's view of which tools are live needs its own gate.
-	profileMu sync.RWMutex
+	config *config.Config
+	mcp    *server.MCPServer
 
 	// registered tracks the tools currently live in mcp-go by name, so
 	// ReloadProfile can compute additions and removals without walking the
@@ -81,15 +60,6 @@ type Server struct {
 	// assert handler-call events.
 	auditSink audit.Sink
 
-	// auditRedactPII selects which redaction tier the capture
-	// middleware uses (Phase 4c). False applies the always-on
-	// credential list only; true also applies the PII list. main wires
-	// this to cfg.Audit.RedactPII via SetAuditRedactPII at startup.
-	// Default false so tests that build a Server without going through
-	// main keep credential-only redaction behavior; production startup
-	// flips it to true unless the operator opts out.
-	auditRedactPII bool
-
 	// planStore holds outstanding two-stage plans for the life of the
 	// process. The capture middleware attaches it to every call's context
 	// so a two-stage-aware destroy handler can produce a plan and later
@@ -104,6 +74,40 @@ type Server struct {
 	// recording middleware is built but never reached, so the /metrics
 	// endpoint carries no application series.
 	metrics MetricsRecorder
+
+	tools []contracts.Tool
+
+	// allEntries holds every tool the server could register, regardless of
+	// the active profile. Built once in New and reused by ReloadProfile so a
+	// profile change can re-add tools that were filtered out at startup
+	// without re-running the per-category collectors.
+	allEntries []toolEntry
+
+	activeProfile profiles.Profile
+
+	inflight sync.WaitGroup
+
+	// profileMu guards activeProfile, tools, and registered against
+	// concurrent reads from Tools/ActiveProfile/ToolInfos and writes from
+	// ReloadProfile. mcp-go's internal mutex protects its own tool map, but
+	// the Server's view of which tools are live needs its own gate.
+	profileMu sync.RWMutex
+
+	// shutdownMu serializes positive inflight.Add calls with Shutdown's
+	// inflight.Wait call. sync.WaitGroup requires Add to happen before Wait
+	// when the counter is zero, so tool dispatch must pass this gate first.
+	shutdownMu sync.Mutex
+
+	// auditRedactPII selects which redaction tier the capture
+	// middleware uses (Phase 4c). False applies the always-on
+	// credential list only; true also applies the PII list. main wires
+	// this to cfg.Audit.RedactPII via SetAuditRedactPII at startup.
+	// Default false so tests that build a Server without going through
+	// main keep credential-only redaction behavior; production startup
+	// flips it to true unless the operator opts out.
+	auditRedactPII bool
+
+	shuttingDown bool
 }
 
 // New creates a new LinodeMCP server. Returns an error if config is nil or if
@@ -343,10 +347,10 @@ func parseRequiredScopes(stored []string) []profiles.Scope {
 // minimal; this accessor lives on Server so tests in package server_test can
 // inspect the capability tag without widening the public contract.
 type ToolInfo struct {
-	Name           string
-	Capability     profiles.Capability
 	InputSchema    mcp.ToolInputSchema
+	Name           string
 	RawInputSchema json.RawMessage
+	Capability     profiles.Capability
 }
 
 // ToolInfos returns one entry per registered tool, exposing the capability

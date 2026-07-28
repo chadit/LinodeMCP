@@ -1,6 +1,6 @@
 {
   "tool": "linode_account_oauth_client_create",
-  "description": "OAuth client create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report).",
+  "description": "OAuth client create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report). A successful response must be a decodable JSON object.",
   "cases": [
     {
       "name": "requires label",
@@ -26,6 +26,12 @@
       "name": "requires confirm",
       "args": {"label": "my-app", "redirect_uri": "https://example.com/callback"},
       "expect_error": "This creates an OAuth client. The secret is only shown once. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": { "label": "my-app", "redirect_uri": "https://example.com/callback", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

@@ -178,8 +178,8 @@ func createTagRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateTagRe
 	args := request.GetArguments()
 
 	for _, field := range []struct {
-		name string
 		dest *[]int
+		name string
 	}{
 		{name: tagDomainsParam, dest: &req.Domains},
 		{name: tagLinodesParam, dest: &req.Linodes},

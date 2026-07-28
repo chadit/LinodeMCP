@@ -6,9 +6,9 @@ type ObjectStorageBucket struct {
 	Region   string `json:"region"`
 	Hostname string `json:"hostname"`
 	Created  string `json:"created"`
+	Cluster  string `json:"cluster"`
 	Objects  int    `json:"objects"`
 	Size     int    `json:"size"`
-	Cluster  string `json:"cluster"`
 }
 
 // ObjectStorageEndpoint represents an Object Storage endpoint.
@@ -22,9 +22,9 @@ type ObjectStorageEndpoint struct {
 type ObjectStorageType struct {
 	ID           string                     `json:"id"`
 	Label        string                     `json:"label"`
+	RegionPrices []ObjectStorageRegionPrice `json:"region_prices"`
 	Price        Price                      `json:"price"`
 	Transfer     int                        `json:"transfer"`
-	RegionPrices []ObjectStorageRegionPrice `json:"region_prices"`
 }
 
 // ObjectStorageRegionPrice represents region-specific Object Storage pricing.
@@ -39,22 +39,22 @@ type ObjectStorageQuota map[string]any
 
 // CreateObjectStorageBucketRequest represents the request body for creating an Object Storage bucket.
 type CreateObjectStorageBucketRequest struct {
+	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
 	Label       string `json:"label"`
 	Region      string `json:"region"`
 	ACL         string `json:"acl,omitempty"`
-	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
 }
 
 // UpdateObjectStorageBucketAccessRequest represents the request body for updating bucket access.
 type UpdateObjectStorageBucketAccessRequest struct {
-	ACL         string `json:"acl,omitempty"`
 	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
+	ACL         string `json:"acl,omitempty"`
 }
 
 // AllowObjectStorageBucketAccessRequest represents the request body for applying bucket access settings.
 type AllowObjectStorageBucketAccessRequest struct {
-	ACL         string `json:"acl,omitempty"`
 	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
+	ACL         string `json:"acl,omitempty"`
 }
 
 // ObjectStorageKeyBucketAccess represents bucket-level permissions for an access key.
@@ -125,8 +125,8 @@ type ObjectStorageKeyRegion struct {
 
 // ObjectStorageQuotaUsage represents Object Storage quota usage data.
 type ObjectStorageQuotaUsage struct {
-	QuotaLimit int  `json:"quota_limit"`
 	Usage      *int `json:"usage"`
+	QuotaLimit int  `json:"quota_limit"`
 }
 
 // ObjectStorageTransfer represents Object Storage transfer usage.

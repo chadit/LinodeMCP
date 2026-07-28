@@ -23,7 +23,9 @@ A request with no matching key fails the case, but an unused key does not:
 implementations may fetch equivalent data from different endpoints, and the
 contract these fixtures pin is the OUTPUT, not the fetch pattern. Without
 ``api_responses`` the single ``api_response`` (or ``{}``) answers every
-request. A case whose args include ``dry_run: true`` additionally asserts
+request. ``api_response_raw`` serves exact bytes instead, including empty or
+malformed JSON, and ``api_status`` overrides HTTP 200 in single-response mode.
+A case whose args include ``dry_run: true`` additionally asserts
 every captured request is a GET: a dry run may read whatever it needs for
 its preview but must never mutate.
 """
@@ -87,10 +89,13 @@ def _behavior_outcome_count(case: dict[str, Any]) -> int:
 def _resolve_response(
     api_responses: dict[str, Any] | None,
     api_response: Any,
+    api_response_present: bool,
+    api_response_raw: str | None,
+    api_status: int | None,
     method: str,
     url: str,
     unmatched: list[str],
-) -> tuple[int, Any]:
+) -> tuple[int, bytes]:
     """Pick the fake reply for one request.
 
     Routed mode (``api_responses``) matches on "METHOD /path" with the query
@@ -98,15 +103,21 @@ def _resolve_response(
     ``unmatched`` so the test fails loudly, and served as a 404.
     """
     if api_responses is None:
-        return 200, api_response
+        if api_response_raw is not None:
+            body = api_response_raw.encode()
+        elif api_response_present:
+            body = json.dumps(api_response).encode()
+        else:
+            body = b"{}"
+        return 200 if api_status is None else api_status, body
 
     path = url.removeprefix(_FAKE_API_URL).split("?", 1)[0]
     key = f"{method} {path}"
     if key not in api_responses:
         unmatched.append(key)
-        return 404, {}
+        return 404, b"{}"
 
-    return 200, api_responses[key]
+    return 200, json.dumps(api_responses[key]).encode()
 
 
 @pytest.mark.asyncio
@@ -124,22 +135,38 @@ async def test_behavior_conformance(
         f"{tool}/{case_name}: {outcome_count} outcome fields set; "
         "want exactly 1 non-empty outcome"
     )
+    assert not ("api_response" in case and "api_response_raw" in case), (
+        f"{tool}/{case_name}: api_response and api_response_raw are mutually exclusive"
+    )
+    assert not (
+        "api_responses" in case
+        and any(
+            name in case for name in ("api_response", "api_response_raw", "api_status")
+        )
+    ), f"{tool}/{case_name}: api_responses cannot use single-response fields"
 
     captured: list[tuple[str, str, Any]] = []
     unmatched: list[str] = []
-    api_response = case.get("api_response", {})
+    api_response = case.get("api_response")
     api_responses: dict[str, Any] | None = case.get("api_responses")
 
     async def _fake_request(
         _self: httpx.AsyncClient, method: str, url: str, **kwargs: Any
     ) -> httpx.Response:
         captured.append((method, url, kwargs.get("json")))
-        status, body = _resolve_response(
-            api_responses, api_response, method, url, unmatched
+        status, content = _resolve_response(
+            api_responses,
+            api_response,
+            "api_response" in case,
+            case.get("api_response_raw"),
+            case.get("api_status"),
+            method,
+            url,
+            unmatched,
         )
         return httpx.Response(
             status,
-            content=json.dumps(body).encode(),
+            content=content,
             request=httpx.Request(method, url),
             headers={"content-type": "application/json"},
         )
@@ -237,3 +264,32 @@ async def test_behavior_conformance(
 def test_behavior_outcome_count(case: dict[str, Any], expected: int) -> None:
     """Outcome validation rejects empty and ambiguous fixture contracts."""
     assert _behavior_outcome_count(case) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "status", "expected_body", "expected_status"),
+    [
+        ("", 400, b"", 400),
+        ('{"id":', None, b'{"id":', 200),
+    ],
+    ids=["empty-error", "malformed-success"],
+)
+def test_resolve_response_preserves_raw_body_and_status(
+    raw: str,
+    status: int | None,
+    expected_body: bytes,
+    expected_status: int,
+) -> None:
+    """Single-response mode preserves non-JSON bodies and non-200 status."""
+    got_status, got_body = _resolve_response(
+        None,
+        None,
+        False,
+        raw,
+        status,
+        "POST",
+        _FAKE_API_URL + "/domains",
+        [],
+    )
+    assert got_status == expected_status
+    assert got_body == expected_body

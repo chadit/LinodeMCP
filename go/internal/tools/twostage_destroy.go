@@ -284,8 +284,8 @@ func stateHashAndFields(state any, ignore []string) (string, map[string]any, err
 	}
 
 	var obj map[string]any
-	if err := json.Unmarshal(data, &obj); err != nil {
-		return "", nil, fmt.Errorf("unmarshal state for hash: %w", err)
+	if unmarshalErr := json.Unmarshal(data, &obj); unmarshalErr != nil {
+		return "", nil, fmt.Errorf("unmarshal state for hash: %w", unmarshalErr)
 	}
 
 	for _, field := range ignore {

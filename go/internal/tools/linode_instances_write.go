@@ -528,9 +528,9 @@ type instanceResizeState struct {
 // instanceResizeDiskInfo is one disk's drift-relevant fields. Disk sizes matter
 // because allow_auto_disk_resize resizes them as part of the plan change.
 type instanceResizeDiskInfo struct {
+	Filesystem string `json:"filesystem"`
 	ID         int    `json:"id"`
 	Size       int    `json:"size"`
-	Filesystem string `json:"filesystem"`
 }
 
 // fetchInstanceResizeState builds the composite resize projection: the instance

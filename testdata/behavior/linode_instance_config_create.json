@@ -1,6 +1,6 @@
 {
   "tool": "linode_instance_config_create",
-  "description": "Pins the shared missing-linode_id and missing-label rejections and the config-create POST body. devices/size rejection text diverges (see report).",
+  "description": "Pins the shared missing-linode_id and missing-label rejections and the config-create POST body. devices/size rejection text diverges (see report). A success body that is not a JSON object must fail rather than turn into a zeroed config record; the two languages name the subject differently, so only the failure verb is shared.",
   "cases": [
     {
       "name": "rejects missing linode_id",
@@ -41,6 +41,42 @@
       "name": "rejects an invalid device slot",
       "args": { "linode_id": 123, "label": "boot", "devices": { "sdz": { "disk_id": 111 } }, "confirm": true },
       "expect_error": "device slot sdz must be one of sda through sdh"
+    },
+    {
+      "name": "rejects a null API response",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "api_response": null,
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a bare-array API response",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "api_response": [],
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a string API response",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "api_response": "not-an-object",
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "linode_id": 123, "label": "boot", "devices": { "sda": { "disk_id": 111 } }, "confirm": true },
+      "api_response": true,
+      "expect_api_error": "Failed to create"
     }
   ]
 }

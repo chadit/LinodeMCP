@@ -274,17 +274,17 @@ func TestReloadProfileRepeatedReloadsConverge(t *testing.T) {
 	defaultCfg := baseTestConfig()
 
 	for range 3 {
-		if err := srv.ReloadProfile(full); err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if reloadErr := srv.ReloadProfile(full); reloadErr != nil {
+			t.Fatalf("unexpected error: %v", reloadErr)
 		}
 
-		if err := srv.ReloadProfile(defaultCfg); err != nil {
-			t.Fatalf("unexpected error: %v", err)
+		if reloadErr := srv.ReloadProfile(defaultCfg); reloadErr != nil {
+			t.Fatalf("unexpected error: %v", reloadErr)
 		}
 	}
 
-	if err := srv.ReloadProfile(full); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if reloadErr := srv.ReloadProfile(full); reloadErr != nil {
+		t.Fatalf("unexpected error: %v", reloadErr)
 	}
 
 	if srv.ActiveProfile().Name != profiles.BuiltinFullAccess {

@@ -1,10 +1,20 @@
 {
   "tool": "linode_domain_create",
-  "description": "Domain create requires domain and type (with confirm), then POSTs domain/type. Both languages now require type (Python's silent \"master\" default was dropped).",
+  "description": "Domain create requires domain and type with a literal boolean confirmation, validates the documented name pattern and enums, and forwards every explicitly supplied optional including its zero value. master requires soa_email, slave requires non-empty master_ips. A successful response must be a decodable JSON object.",
   "cases": [
     {
+      "name": "requires confirm",
+      "args": { "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "expect_error": "This creates a DNS domain. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects false confirm",
+      "args": { "confirm": false, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "expect_error": "This creates a DNS domain. Set confirm=true to proceed."
+    },
+    {
       "name": "requires domain",
-      "args": { "confirm": true },
+      "args": { "confirm": true, "type": "master", "soa_email": "admin@example.com" },
       "expect_error": "domain is required"
     },
     {
@@ -13,19 +23,320 @@
       "expect_error": "type is required"
     },
     {
-      "name": "creates a master domain",
-      "args": { "confirm": true, "domain": "example.com", "type": "master" },
+      "name": "rejects invalid domain pattern",
+      "args": { "confirm": true, "domain": "bad domain", "type": "master", "soa_email": "admin@example.com" },
+      "expect_error": "domain must match the documented domain-name pattern"
+    },
+    {
+      "name": "rejects domain without a tld",
+      "args": { "confirm": true, "domain": "localhost", "type": "master", "soa_email": "admin@example.com" },
+      "expect_error": "domain must match the documented domain-name pattern"
+    },
+    {
+      "name": "rejects domain label longer than 63 characters",
+      "args": { "confirm": true, "domain": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com", "type": "master", "soa_email": "admin@example.com" },
+      "expect_error": "domain must match the documented domain-name pattern"
+    },
+    {
+      "name": "rejects numeric tld",
+      "args": { "confirm": true, "domain": "example.123", "type": "master", "soa_email": "admin@example.com" },
+      "expect_error": "domain must match the documented domain-name pattern"
+    },
+    {
+      "name": "accepts documented wildcard domain pattern",
+      "args": { "confirm": true, "domain": "*.example.com", "type": "master", "soa_email": "admin@example.com" },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/domains",
-        "body": { "domain": "example.com", "type": "master" }
+        "body": { "domain": "*.example.com", "type": "master", "soa_email": "admin@example.com" }
       }
     },
     {
-      "name": "requires confirm",
-      "args": {"domain": "example.com", "type": "master"},
-      "expect_error": "This creates a DNS domain. Set confirm=true to proceed."
+      "name": "rejects invalid type",
+      "args": { "confirm": true, "domain": "example.com", "type": "primary" },
+      "expect_error": "type must be one of: master, slave"
+    },
+    {
+      "name": "rejects invalid status",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com", "status": "edit_mode" },
+      "expect_error": "status must be one of: active, disabled"
+    },
+    {
+      "name": "rejects non-string status",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com", "status": 1 },
+      "expect_error": "status must be a string"
+    },
+    {
+      "name": "master requires soa_email",
+      "args": { "confirm": true, "domain": "example.com", "type": "master" },
+      "expect_error": "soa_email is required for master domains"
+    },
+    {
+      "name": "slave requires non-empty master_ips",
+      "args": { "confirm": true, "domain": "example.com", "type": "slave", "master_ips": [] },
+      "expect_error": "master_ips must include at least one value for slave domains"
+    },
+    {
+      "name": "rejects json encoded master_ips string",
+      "args": { "confirm": true, "domain": "example.com", "type": "slave", "master_ips": "[\"192.0.2.20\"]" },
+      "expect_error": "master_ips must be an array of strings"
+    },
+    {
+      "name": "rejects non-integer retry_sec",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com", "retry_sec": 1.5 },
+      "expect_error": "retry_sec must be an integer"
+    },
+    {
+      "name": "normalizes integral json number",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com", "retry_sec": 1.0 },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/domains",
+        "body": { "domain": "example.com", "type": "master", "soa_email": "admin@example.com", "retry_sec": 1 }
+      }
+    },
+    {
+      "name": "forwards every optional with explicit empty and default values",
+      "args": {
+        "confirm": true,
+        "domain": "example.com",
+        "type": "slave",
+        "axfr_ips": [],
+        "description": "",
+        "expire_sec": 604800,
+        "group": "",
+        "master_ips": ["192.0.2.20"],
+        "refresh_sec": 14400,
+        "retry_sec": 0,
+        "soa_email": "",
+        "status": "active",
+        "tags": [],
+        "ttl_sec": 300
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "POST",
+        "path": "/domains",
+        "body": {
+          "domain": "example.com",
+          "type": "slave",
+          "axfr_ips": [],
+          "description": "",
+          "expire_sec": 604800,
+          "group": "",
+          "master_ips": ["192.0.2.20"],
+          "refresh_sec": 14400,
+          "retry_sec": 0,
+          "soa_email": "",
+          "status": "active",
+          "tags": [],
+          "ttl_sec": 300
+        }
+      }
+    },
+    {
+      "name": "dry run preserves exact explicit body",
+      "args": {
+        "dry_run": true,
+        "domain": "example.com",
+        "type": "slave",
+        "axfr_ips": [],
+        "description": "",
+        "expire_sec": 0,
+        "group": "",
+        "master_ips": ["192.0.2.20"],
+        "refresh_sec": 0,
+        "retry_sec": 0,
+        "soa_email": "",
+        "status": "active",
+        "tags": [],
+        "ttl_sec": 0
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_domain_create",
+        "would_execute": {
+          "method": "POST",
+          "path": "/domains",
+          "body": {
+            "domain": "example.com",
+            "type": "slave",
+            "axfr_ips": [],
+            "description": "",
+            "expire_sec": 0,
+            "group": "",
+            "master_ips": ["192.0.2.20"],
+            "refresh_sec": 0,
+            "retry_sec": 0,
+            "soa_email": "",
+            "status": "active",
+            "tags": [],
+            "ttl_sec": 0
+          }
+        },
+        "current_state": null,
+        "dependencies": [],
+        "side_effects": ["A new slave DNS domain \"example.com\" will be created."],
+        "warnings": []
+      }
+    },
+    {
+      "name": "returns canonical full domain object",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": {
+        "id": 123,
+        "domain": "example.com",
+        "type": "master",
+        "status": "active",
+        "soa_email": "admin@example.com",
+        "description": "production zone",
+        "retry_sec": 3600,
+        "master_ips": [],
+        "axfr_ips": ["192.0.2.10"],
+        "expire_sec": 604800,
+        "refresh_sec": 14400,
+        "ttl_sec": 300,
+        "tags": ["dns", "production"],
+        "created": "2026-07-27T00:00:00",
+        "updated": "2026-07-27T00:01:00",
+        "group": "legacy"
+      },
+      "expect_result": {
+        "message": "Domain 'example.com' (ID: 123) created successfully",
+        "domain": {
+          "id": 123,
+          "domain": "example.com",
+          "type": "master",
+          "status": "active",
+          "soa_email": "admin@example.com",
+          "description": "production zone",
+          "retry_sec": 3600,
+          "master_ips": [],
+          "axfr_ips": ["192.0.2.10"],
+          "expire_sec": 604800,
+          "refresh_sec": 14400,
+          "ttl_sec": 300,
+          "tags": ["dns", "production"],
+          "created": "2026-07-27T00:00:00",
+          "updated": "2026-07-27T00:01:00",
+          "group": "legacy"
+        }
+      }
+    },
+    {
+      "name": "accepts empty object",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": {},
+      "expect_result": {
+        "message": "Domain '' (ID: 0) created successfully",
+        "domain": {
+          "id": 0,
+          "domain": "",
+          "type": "",
+          "status": "",
+          "soa_email": "",
+          "description": "",
+          "retry_sec": 0,
+          "master_ips": [],
+          "axfr_ips": [],
+          "expire_sec": 0,
+          "refresh_sec": 0,
+          "ttl_sec": 0,
+          "tags": [],
+          "created": "",
+          "updated": "",
+          "group": ""
+        }
+      }
+    },
+    {
+      "name": "accepts unknown-only object",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": { "future_field": { "nested": true } },
+      "expect_result": {
+        "message": "Domain '' (ID: 0) created successfully",
+        "domain": {
+          "id": 0,
+          "domain": "",
+          "type": "",
+          "status": "",
+          "soa_email": "",
+          "description": "",
+          "retry_sec": 0,
+          "master_ips": [],
+          "axfr_ips": [],
+          "expire_sec": 0,
+          "refresh_sec": 0,
+          "ttl_sec": 0,
+          "tags": [],
+          "created": "",
+          "updated": "",
+          "group": ""
+        }
+      }
+    },
+    {
+      "name": "rejects top-level null",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": null,
+      "expect_api_error": "domain"
+    },
+    {
+      "name": "rejects top-level array",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": [],
+      "expect_api_error": "domain"
+    },
+    {
+      "name": "rejects top-level string",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": "not-an-object",
+      "expect_api_error": "domain"
+    },
+    {
+      "name": "rejects top-level number",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": 7,
+      "expect_api_error": "domain"
+    },
+    {
+      "name": "rejects top-level boolean",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": true,
+      "expect_api_error": "domain"
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response_raw": "{\"id\":",
+      "expect_api_error": "domain"
+    },
+    {
+      "name": "rejects empty success body",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response_raw": "",
+      "expect_api_error": "domain"
+    },
+    {
+      "name": "rejects trailing JSON success body",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response_raw": "{}{}",
+      "expect_api_error": "domain"
+    },
+    {
+      "name": "rejects incompatible known field type",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_response": { "id": [] },
+      "expect_api_error": "create domain"
+    },
+    {
+      "name": "surfaces standard non-2xx errors array",
+      "args": { "confirm": true, "domain": "example.com", "type": "master", "soa_email": "admin@example.com" },
+      "api_status": 400,
+      "api_response": { "errors": [{ "field": "soa_email", "reason": "invalid soa_email" }] },
+      "expect_api_error": "invalid soa_email"
     }
   ]
 }

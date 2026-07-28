@@ -92,10 +92,10 @@ func TestMarshalProtoJSONLeavesStructStringsAlone(t *testing.T) {
 	}
 
 	var decoded struct {
+		Args                 map[string]any `json:"args"`
 		TSUnixNs             int64          `json:"ts_unix_ns"`
 		LatencyMs            int64          `json:"latency_ms"`
 		CredentialGeneration uint64         `json:"credential_generation"`
-		Args                 map[string]any `json:"args"`
 	}
 
 	if err := json.Unmarshal(data, &decoded); err != nil {

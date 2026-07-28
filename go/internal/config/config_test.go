@@ -247,11 +247,11 @@ func TestSelectEnvironment(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name      string
+		wantErr   error
 		cfg       *config.Config
+		name      string
 		input     string
 		wantLabel string
-		wantErr   error
 	}{
 		{
 			name: "exact match",

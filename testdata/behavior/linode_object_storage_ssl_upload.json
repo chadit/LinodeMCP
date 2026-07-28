@@ -1,6 +1,6 @@
 {
   "tool": "linode_object_storage_ssl_upload",
-  "description": "Pins the shared certificate/private_key validation (behind confirm) and the SSL upload POST body. Every case carries confirm:true because the confirm-gate message text diverges.",
+  "description": "Pins the shared certificate/private_key validation (behind confirm) and the SSL upload POST body. Every case carries confirm:true because the confirm-gate message text diverges. A success body that is not a JSON object must fail rather than turn into a zeroed ssl record.",
   "cases": [
     {
       "name": "requires certificate",
@@ -26,6 +26,30 @@
       "name": "requires confirm",
       "args": {"region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem"},
       "expect_error": "This uploads an SSL certificate to the bucket. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects a null API response",
+      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
+      "api_response": null,
+      "expect_api_error": "Failed to upload SSL certificate"
+    },
+    {
+      "name": "rejects a numeric API response",
+      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
+      "api_response": 7,
+      "expect_api_error": "Failed to upload SSL certificate"
+    },
+    {
+      "name": "rejects a boolean API response",
+      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
+      "api_response": true,
+      "expect_api_error": "Failed to upload SSL certificate"
+    },
+    {
+      "name": "rejects a populated-array API response",
+      "args": { "region": "us-east", "label": "my-bucket", "certificate": "cert-pem", "private_key": "key-pem", "confirm": true },
+      "api_response": [1, 2],
+      "expect_api_error": "Failed to upload SSL certificate"
     }
   ]
 }

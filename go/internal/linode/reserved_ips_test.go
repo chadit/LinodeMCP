@@ -286,6 +286,105 @@ func TestClientListReservedIPsProtoDecodeError(t *testing.T) {
 	}
 }
 
+// TestClientListReservedIPsProtoRejectsANonObjectPage proves a page that is not
+// the documented {data:[...]} object fails by naming the shape. The wording is
+// the Python client's, so one behavior fixture can pin both languages instead
+// of Go leaking a Go type name into the tool's error text.
+func TestClientListReservedIPsProtoRejectsANonObjectPage(t *testing.T) {
+	t.Parallel()
+
+	for name, body := range map[string]string{
+		"bare array":  jsonBodyArray,
+		"bare string": `"reserved"`,
+		"json null":   domainCreateJSONNull,
+		"bare number": `42`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tcApplicationJSON)
+
+				if _, err := w.Write([]byte(body)); err != nil {
+					t.Errorf("write response: %v", err)
+				}
+			}))
+			t.Cleanup(srv.Close)
+
+			client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+			page, err := client.ListReservedIPsProto(t.Context(), 0, 0)
+			if !errors.Is(err, linode.ErrReservedIPListNotObject) {
+				t.Fatalf("err = %v, want %v", err, linode.ErrReservedIPListNotObject)
+			}
+
+			if page != nil {
+				t.Errorf("page = %v, want nil", page)
+			}
+		})
+	}
+}
+
+// TestClientListReservedIPsProtoRejectsANonArrayData covers the branch past the
+// shape guard: the page is an object, so the failure is the envelope decode
+// rather than the named shape error.
+func TestClientListReservedIPsProtoRejectsANonArrayData(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", tcApplicationJSON)
+
+		if _, err := w.Write([]byte(`{"data":5}`)); err != nil {
+			t.Errorf("write response: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(0))
+
+	page, err := client.ListReservedIPsProto(t.Context(), 0, 0)
+
+	// A nil err has to fail loudly on its own branch: errors.Is reports false
+	// for nil, so folding these into one check would let a missing error pass
+	// the shape assertion below.
+	switch {
+	case err == nil:
+		t.Fatal("expected an error, got nil")
+	case errors.Is(err, linode.ErrReservedIPListNotObject):
+		t.Errorf("err = %v, want the envelope decode error, not the shape error", err)
+	}
+
+	if page != nil {
+		t.Errorf("page = %v, want nil", page)
+	}
+}
+
+// TestIsObjectBody covers the inputs a live route cannot produce: an empty body
+// never reaches the predicate because the JSON decode fails first, and a body
+// carrying leading whitespace still has to read as an object.
+func TestIsObjectBody(t *testing.T) {
+	t.Parallel()
+
+	for name, testCase := range map[string]struct {
+		raw  string
+		want bool
+	}{
+		"address object":         {raw: `{"address":"192.0.2.10"}`, want: true},
+		"object behind newlines": {raw: "\r\n\t {}", want: true},
+		"empty":                  {raw: "", want: false},
+		"whitespace only":        {raw: "   ", want: false},
+		"array behind spaces":    {raw: "  []", want: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := linode.IsObjectBody([]byte(testCase.raw)); got != testCase.want {
+				t.Errorf("IsObjectBody(%q) = %v, want %v", testCase.raw, got, testCase.want)
+			}
+		})
+	}
+}
+
 // TestClientCreateReservedIPRawDoesNotRetry pins the reason create is the one
 // reserved-IP route that never retries: the POST allocates a new address, so a
 // retried request can reserve a second one and bill for it.

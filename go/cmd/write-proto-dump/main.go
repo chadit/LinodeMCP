@@ -126,11 +126,11 @@ const (
 // RunDestructiveAction calls it also carries the result of inspecting the
 // DestructiveAction literal's Success closure.
 type callRecord struct {
-	name string
 	// successIsProto is non-nil only for RunDestructiveAction calls where the
 	// Success closure was successfully inspected. true = returns a proto
 	// pointer; false = returns a map.
 	successIsProto *bool
+	name           string
 }
 
 // packageCallGraph maps function name to the list of outgoing calls it makes

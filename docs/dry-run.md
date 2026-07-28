@@ -48,8 +48,8 @@ without `dry_run`. (The apply-by-id flow is the separate two-stage-writes spec.)
 
 | Field | When present | Meaning |
 | --- | --- | --- |
-| `would_execute` | always | the HTTP method + path the real call would issue |
-| `current_state` | when the resource exists | the resource as it is now (credential-safe: secrets are never surfaced, since token/credential previews fetch the parent resource's metadata, never the secret) |
+| `would_execute` | always | the HTTP method + path the real call would issue, plus the sanitized `body` it would send when the call carries one |
+| `current_state` | when the resource exists | the resource as it is now (credential-safe: secrets are never surfaced, since token/credential previews fetch the parent resource's metadata, never the secret). A create has no existing resource, so its preview reports `null`; an update previews the resource the call targets |
 | `dependencies` | Tier A destroys | other resources the call cascades to: each has `kind`, `id`, `label`, `action` (`detached`/`released`/`removed`/`cascade_deleted`), and a `note` |
 | `side_effects` | Tier B creates/updates | plain-language description of what changes |
 | `billing_delta` | some Tier A/B | estimated monthly cost change |
