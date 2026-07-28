@@ -59,7 +59,7 @@ def test_domain_create_is_exported_registered_scoped_and_schema_backed() -> None
         "dry_run",
     }
     assert set(tool.inputSchema["required"]) == {"domain", "type", "confirm"}
-    assert tool.inputSchema["properties"]["type"]["enum"] == ["master", "slave"]
+    assert tool.inputSchema["properties"]["type"]["type"] == "string"
     assert tool.inputSchema["properties"]["status"]["enum"] == [
         "active",
         "disabled",

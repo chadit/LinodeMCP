@@ -92,6 +92,7 @@ _MONTH_NUMBERS = {
 # an API request field (audit export format, S3 presign method); the API side
 # cannot be checked, so it is asserted stable against the baseline only.
 ENUM_SPEC_MAP: dict[str, tuple[str, str] | str] = {
+    "DomainCreateStatus": ("status", "/domains"),
     "NodeBalancerProtocol": ("protocol", "/nodebalancers"),
     "NodeBalancerAlgorithm": ("algorithm", "/nodebalancers"),
     "NodeBalancerStickiness": ("stickiness", "/nodebalancers"),

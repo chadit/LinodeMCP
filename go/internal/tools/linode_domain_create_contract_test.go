@@ -61,8 +61,18 @@ func TestLinodeDomainCreateContract(t *testing.T) {
 		}
 	}
 
+	var typeProperty struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(schema.Properties[keyType], &typeProperty); err != nil {
+		t.Fatalf("unmarshal %s schema: %v", keyType, err)
+	}
+
+	if typeProperty.Type != caseString {
+		t.Errorf("%s type = %q, want string", keyType, typeProperty.Type)
+	}
+
 	for field, want := range map[string][]string{
-		keyType:   {keyMaster, domainSlave},
 		keyStatus: {statusActive, statusDisabled},
 	} {
 		var property struct {

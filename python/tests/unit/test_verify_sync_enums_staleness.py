@@ -6,7 +6,7 @@ import importlib.util
 import json
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -28,6 +28,42 @@ def _load_script() -> ModuleType:
 
 
 sync_enums = _load_script()
+
+
+def test_domain_create_status_enum_maps_to_api_contract() -> None:
+    mapping = cast(
+        "tuple[str, str]",
+        sync_enums.ENUM_SPEC_MAP["DomainCreateStatus"],
+    )
+    assert mapping == ("status", "/domains")
+
+    field, path_substring = mapping
+    spec = {
+        "paths": {
+            "/{apiVersion}/domains": {
+                "post": {
+                    "requestBody": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "enum": ["active", "disabled"],
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    assert sync_enums.spec_enum(spec, field, path_substring) == {
+        "active",
+        "disabled",
+    }
 
 
 class _Response:

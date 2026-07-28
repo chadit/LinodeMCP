@@ -4,15 +4,6 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
-// DomainType is the primary/secondary role accepted when creating a domain.
-message DomainType {
-  enum Value {
-    unspecified = 0;
-    master = 1;
-    slave = 2;
-  }
-}
-
 // DomainCreateStatus is the status accepted when creating a domain.
 message DomainCreateStatus {
   enum Value {
@@ -94,7 +85,7 @@ message DomainCreateInput {
   // The domain name (1-253 characters, e.g. 'example.com').
   string domain = 2;
   // Domain type: 'master' (primary) or 'slave' (secondary).
-  DomainType.Value type = 3;
+  string type = 3;
   // Start of Authority email address (required for master domains).
   optional string soa_email = 4;
   // A description for the domain (optional; omit to use the API's null value).
