@@ -23,7 +23,7 @@ const (
 	errDomainCreateTypeRequired = "type is required"
 )
 
-var domainCreateNamePattern = regexp.MustCompile(`^(\*\.)?([a-zA-Z0-9-_]{1,63}\.)+([a-zA-Z]{2,3}\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$`)
+var domainCreateNamePattern = regexp.MustCompile(`^(\*\.)?([a-zA-Z0-9_-]{1,63}\.)+([a-zA-Z]{2,3}\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$`)
 
 // NewLinodeDomainImportTool creates a tool for importing a domain zone.
 func NewLinodeDomainImportTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {

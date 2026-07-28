@@ -28,6 +28,11 @@
       "expect_error": "domain must match the documented domain-name pattern"
     },
     {
+      "name": "rejects punctuation within a domain label",
+      "args": { "confirm": true, "domain": "bad;name.example.com", "type": "master", "soa_email": "admin@example.com" },
+      "expect_error": "domain must match the documented domain-name pattern"
+    },
+    {
       "name": "accepts documented wildcard domain pattern",
       "args": { "confirm": true, "domain": "*.example.com", "type": "master", "soa_email": "admin@example.com" },
       "api_response": {},

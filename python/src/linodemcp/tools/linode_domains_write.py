@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 _DOMAIN_CREATE_NAME_PATTERN = re.compile(
-    r"^(\*\.)?([a-zA-Z0-9-_]{1,63}\.)+"
+    r"^(\*\.)?([a-zA-Z0-9_-]{1,63}\.)+"
     r"([a-zA-Z]{2,3}\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$"
 )
 _DOMAIN_CREATE_NAME_MAX_LENGTH = 253
