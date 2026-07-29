@@ -1343,6 +1343,23 @@ func (c *Client) CreateMonitorServiceAlertDefinitionProto(ctx context.Context, s
 	return definition, err
 }
 
+// CloneMonitorServiceAlertDefinitionProto clones an alert definition and
+// decodes the response into the MonitorAlertDefinition proto element without
+// retrying the non-idempotent request.
+func (c *Client) CloneMonitorServiceAlertDefinitionProto(ctx context.Context, serviceType string, alertID int, request *CloneAlertDefinitionRequest) (*linodev1.MonitorAlertDefinition, error) {
+	var definition *linodev1.MonitorAlertDefinition
+
+	err := c.executeWithoutRetry(ctx, "CloneMonitorServiceAlertDefinition", func() error {
+		var retryErr error
+
+		definition, retryErr = c.httpCloneMonitorServiceAlertDefinitionProto(ctx, serviceType, alertID, request)
+
+		return retryErr
+	})
+
+	return definition, err
+}
+
 // GetMonitorServiceAlertDefinition retrieves one alert definition for one monitoring service type with automatic retry on transient failures.
 func (c *Client) GetMonitorServiceAlertDefinition(ctx context.Context, serviceType string, alertID int) (AlertDefinition, error) {
 	var definition AlertDefinition

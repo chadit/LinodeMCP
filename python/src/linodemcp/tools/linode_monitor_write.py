@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import math
 import re
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
@@ -22,11 +24,32 @@ from linodemcp.tools.proto_response import (
 from linodemcp.tools.toolschemas import schema
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
 
 
 _SERVICE_TYPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+_MONITOR_SERVICE_TYPE_SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
+
+
+def _is_string_array(value: object) -> bool:
+    """Report whether value is an array of strings."""
+    return isinstance(value, list) and all(
+        isinstance(item, str) for item in cast("list[object]", value)
+    )
+
+
+def _coerce_integral_number(value: object) -> int | None:
+    """Return an int for non-boolean ints and finite integral floats."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and math.isfinite(value) and value.is_integer():
+        return int(value)
+    return None
 
 
 def create_linode_monitor_service_list_tool() -> tuple[Tool, Capability]:
@@ -144,6 +167,20 @@ def create_linode_monitor_service_alert_definition_create_tool() -> tuple[
         name="linode_monitor_service_alert_definition_create",
         description="Creates an alert definition for a Linode Metrics service type.",
         inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionCreateInput"),
+    ), Capability.Write
+
+
+def create_linode_monitor_service_alert_definition_clone_tool() -> tuple[
+    Tool, Capability
+]:
+    """Create the linode_monitor_service_alert_definition_clone tool."""
+    return Tool(
+        name="linode_monitor_service_alert_definition_clone",
+        description=(
+            "Clones an alert definition for a Linode Metrics service type."
+            " Requires confirm=true. Pass dry_run=true to preview without cloning."
+        ),
+        inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionCloneInput"),
     ), Capability.Write
 
 
@@ -589,6 +626,160 @@ async def handle_linode_monitor_service_alert_definition_create(
     return await execute_tool(
         cfg, arguments, "create monitor service alert definition", _call
     )
+
+
+def _build_alert_definition_clone_body(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Validate clone body fields while preserving optional-field presence."""
+    raw_label = arguments.get("label")
+    if not isinstance(raw_label, str) or not raw_label.strip():
+        return None, "label must be a non-empty string"
+
+    body: dict[str, Any] = {"label": raw_label.strip()}
+    if "channel_ids" in arguments:
+        raw_channel_ids = arguments["channel_ids"]
+        if not isinstance(raw_channel_ids, list):
+            return None, "channel_ids must be an array of integers"
+        channel_ids = [
+            _coerce_integral_number(value)
+            for value in cast("list[object]", raw_channel_ids)
+        ]
+        if any(value is None for value in channel_ids):
+            return None, "channel_ids must be an array of integers"
+        body["channel_ids"] = cast("list[int]", channel_ids)
+
+    if "severity" in arguments:
+        severity = _coerce_integral_number(arguments["severity"])
+        if severity is None or severity not in {0, 1, 2, 3}:
+            return None, "severity must be an integer from 0 through 3"
+        body["severity"] = severity
+
+    validators: dict[str, tuple[Callable[[object], bool], str]] = {
+        "description": (
+            lambda value: isinstance(value, str),
+            "description must be a string",
+        ),
+        "group_by": (_is_string_array, "group_by must be an array of strings"),
+        "rule_criteria": (
+            lambda value: isinstance(value, dict),
+            "rule_criteria must be an object",
+        ),
+        "trigger_conditions": (
+            lambda value: isinstance(value, dict),
+            "trigger_conditions must be an object",
+        ),
+    }
+
+    validation_error: str | None = None
+    for field, (validator, message) in validators.items():
+        if field not in arguments:
+            continue
+        value = arguments[field]
+        if not validator(value):
+            validation_error = message
+            break
+        body[field] = value
+    return (None, validation_error) if validation_error else (body, None)
+
+
+def _validate_clone_alert_target(
+    arguments: dict[str, Any],
+) -> tuple[str | None, int | None, str | None]:
+    """Validate the service slug and positive alert ID used by clone."""
+    if "service_type" not in arguments:
+        return None, None, "service_type is required"
+
+    raw_service_type = arguments["service_type"]
+    if not isinstance(raw_service_type, str):
+        return None, None, "service_type must be a string"
+    if (
+        raw_service_type != raw_service_type.strip()
+        or not _MONITOR_SERVICE_TYPE_SLUG_RE.fullmatch(raw_service_type)
+    ):
+        return (
+            None,
+            None,
+            "service_type must be a single non-empty service type slug",
+        )
+
+    if "alert_id" not in arguments:
+        return None, None, "alert_id is required"
+
+    alert_id = _coerce_integral_number(arguments["alert_id"])
+    if alert_id is None or alert_id <= 0:
+        return None, None, "alert_id must be a positive integer"
+
+    return raw_service_type, alert_id, None
+
+
+async def handle_linode_monitor_service_alert_definition_clone(
+    arguments: dict[str, Any], cfg: Config
+) -> list[TextContent]:
+    """Handle linode_monitor_service_alert_definition_clone tool request."""
+    service_type, alert_id, target_error = _validate_clone_alert_target(arguments)
+    if target_error is not None or service_type is None or alert_id is None:
+        return error_response(target_error or "invalid alert definition clone target")
+
+    body, validation_error = _build_alert_definition_clone_body(arguments)
+    if validation_error is not None or body is None:
+        return error_response(validation_error or "invalid alert definition clone body")
+
+    path = (
+        f"/monitor/services/{quote(service_type, safe='')}"
+        f"/alert-definitions/{quote(str(alert_id), safe='')}/clone"
+    )
+    if is_dry_run(arguments):
+
+        async def _fetch(client: RetryableClient) -> Any:
+            return await client.get_monitor_service_alert_definition(
+                service_type, alert_id
+            )
+
+        return await execute_dry_run(
+            cfg,
+            arguments,
+            "linode_monitor_service_alert_definition_clone",
+            "POST",
+            path,
+            _fetch,
+            request_body=body,
+        )
+
+    if arguments.get("confirm") is not True:
+        return error_response(
+            "This clones a monitor alert definition. Set confirm=true to proceed."
+        )
+
+    optional_fields = {
+        key: body[key]
+        for key in (
+            "channel_ids",
+            "description",
+            "group_by",
+            "rule_criteria",
+            "severity",
+            "trigger_conditions",
+        )
+        if key in body
+    }
+
+    async def _call(client: RetryableClient) -> dict[str, Any]:
+        data = await client.clone_monitor_service_alert_definition(
+            service_type,
+            alert_id,
+            label=cast("str", body["label"]),
+            **optional_fields,
+        )
+        return serialize_api_response(
+            {
+                "message": f"Monitor alert definition {alert_id} cloned",
+                "alert_definition": data,
+            },
+            monitor_pb2.MonitorAlertDefinitionWriteResponse(),
+        )
+
+    return await execute_tool(cfg, arguments, "clone monitor alert definition", _call)
 
 
 async def handle_linode_monitor_service_alert_definition_get(

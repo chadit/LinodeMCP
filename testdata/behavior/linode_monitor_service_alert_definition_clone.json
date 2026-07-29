@@ -1,0 +1,319 @@
+{
+  "tool": "linode_monitor_service_alert_definition_clone",
+  "description": "Clone requires explicit confirmation, preserves every optional request override, and returns the shared alert-definition write envelope without exposing request-only group_by. The dry-run preview pins the exact clone request and source-state lookup. A malformed successful body must fail at the shared parser position marker.",
+  "cases": [
+    {
+      "name": "clones with every optional override",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "channel_ids": [101, 202],
+        "description": "CPU clone for overnight load",
+        "group_by": ["entity_id", "region"],
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage",
+              "operator": "gt",
+              "threshold": 85
+            }
+          ]
+        },
+        "severity": 2,
+        "trigger_conditions": {
+          "criteria_condition": "ALL",
+          "evaluation_period_seconds": 300
+        },
+        "confirm": true
+      },
+      "api_responses": {
+        "POST /monitor/services/dbaas/alert-definitions/42/clone": {
+          "id": 9002,
+          "label": "CPU clone",
+          "group_by": ["entity_id", "region"]
+        }
+      },
+      "expect_result": {
+        "message": "Monitor alert definition 42 cloned",
+        "alert_definition": {
+          "id": 9002,
+          "label": "CPU clone",
+          "type": "",
+          "service_type": "",
+          "description": "",
+          "severity": 0,
+          "status": "",
+          "channel_ids": [],
+          "entity_ids": []
+        }
+      }
+    },
+    {
+      "name": "posts every optional override",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "channel_ids": [101, 202],
+        "description": "CPU clone for overnight load",
+        "group_by": ["entity_id", "region"],
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage",
+              "operator": "gt",
+              "threshold": 85
+            }
+          ]
+        },
+        "severity": 2,
+        "trigger_conditions": {
+          "criteria_condition": "ALL",
+          "evaluation_period_seconds": 300
+        },
+        "confirm": true
+      },
+      "api_response": {
+        "id": 9002,
+        "label": "CPU clone"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/alert-definitions/42/clone",
+        "body": {
+          "label": "CPU clone",
+          "channel_ids": [101, 202],
+          "description": "CPU clone for overnight load",
+          "group_by": ["entity_id", "region"],
+          "rule_criteria": {
+            "rules": [
+              {
+                "metric": "cpu_usage",
+                "operator": "gt",
+                "threshold": 85
+              }
+            ]
+          },
+          "severity": 2,
+          "trigger_conditions": {
+            "criteria_condition": "ALL",
+            "evaluation_period_seconds": 300
+          }
+        }
+      }
+    },
+    {
+      "name": "omits every optional override",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "Required label only",
+        "confirm": true
+      },
+      "api_response": {
+        "id": 9002,
+        "label": "Required label only"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/alert-definitions/42/clone",
+        "body": {
+          "label": "Required label only"
+        }
+      }
+    },
+    {
+      "name": "coerces integral numeric fields",
+      "args": {
+        "service_type": "db--aas",
+        "alert_id": 42.0,
+        "label": "Integral numbers",
+        "channel_ids": [101.0, 202.0],
+        "severity": 2.0,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 9002,
+        "label": "Integral numbers"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/db--aas/alert-definitions/42/clone",
+        "body": {
+          "label": "Integral numbers",
+          "channel_ids": [101, 202],
+          "severity": 2
+        }
+      }
+    },
+    {
+      "name": "requires service type",
+      "args": {
+        "alert_id": 42,
+        "label": "CPU clone",
+        "confirm": true
+      },
+      "expect_error": "service_type is required"
+    },
+    {
+      "name": "requires string service type",
+      "args": {
+        "service_type": 1,
+        "alert_id": 42,
+        "label": "CPU clone",
+        "confirm": true
+      },
+      "expect_error": "service_type must be a string"
+    },
+    {
+      "name": "rejects trimmed service type",
+      "args": {
+        "service_type": " dbaas ",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "confirm": true
+      },
+      "expect_error": "service_type must be a single non-empty service type slug"
+    },
+    {
+      "name": "requires alert id",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU clone",
+        "confirm": true
+      },
+      "expect_error": "alert_id is required"
+    },
+    {
+      "name": "rejects fractional alert id",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42.5,
+        "label": "CPU clone",
+        "confirm": true
+      },
+      "expect_error": "alert_id must be a positive integer"
+    },
+    {
+      "name": "rejects fractional severity",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "severity": 1.5,
+        "confirm": true
+      },
+      "expect_error": "severity must be an integer from 0 through 3"
+    },
+    {
+      "name": "rejects fractional channel id",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "channel_ids": [101.5],
+        "confirm": true
+      },
+      "expect_error": "channel_ids must be an array of integers"
+    },
+    {
+      "name": "requires explicit confirmation",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "confirm": false
+      },
+      "expect_error": "This clones a monitor alert definition. Set confirm=true to proceed."
+    },
+    {
+      "name": "rejects malformed success body",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "confirm": true
+      },
+      "api_response_raw": "not json",
+      "expect_api_error": "line 1"
+    },
+    {
+      "name": "previews the exact clone request and source lookup",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "channel_ids": [101, 202],
+        "description": "CPU clone for overnight load",
+        "group_by": ["entity_id", "region"],
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage",
+              "operator": "gt",
+              "threshold": 85
+            }
+          ]
+        },
+        "severity": 2,
+        "trigger_conditions": {
+          "criteria_condition": "ALL",
+          "evaluation_period_seconds": 300
+        },
+        "dry_run": true
+      },
+      "api_responses": {
+        "GET /monitor/services/dbaas/alert-definitions/42": {
+          "criteria": null,
+          "description": "",
+          "id": 42,
+          "label": "Source CPU alert",
+          "service_type": "dbaas",
+          "severity": 1,
+          "type": "user"
+        }
+      },
+      "expect_result": {
+        "dry_run": true,
+        "tool": "linode_monitor_service_alert_definition_clone",
+        "would_execute": {
+          "method": "POST",
+          "path": "/monitor/services/dbaas/alert-definitions/42/clone",
+          "body": {
+            "channel_ids": [101, 202],
+            "description": "CPU clone for overnight load",
+            "group_by": ["entity_id", "region"],
+            "label": "CPU clone",
+            "rule_criteria": {
+              "rules": [
+                {
+                  "metric": "cpu_usage",
+                  "operator": "gt",
+                  "threshold": 85
+                }
+              ]
+            },
+            "severity": 2,
+            "trigger_conditions": {
+              "criteria_condition": "ALL",
+              "evaluation_period_seconds": 300
+            }
+          }
+        },
+        "current_state": {
+          "criteria": null,
+          "description": "",
+          "id": 42,
+          "label": "Source CPU alert",
+          "service_type": "dbaas",
+          "severity": 1,
+          "type": "user"
+        },
+        "dependencies": [],
+        "side_effects": [],
+        "warnings": []
+      }
+    }
+  ]
+}

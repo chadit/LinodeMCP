@@ -25,6 +25,7 @@ const (
 	monitorServiceMetricsToolName               = "linode_monitor_service_metric_query"
 	monitorServiceCreateToolName                = "linode_monitor_service_" + "token_create"
 	monitorServiceAlertDefinitionCreateToolName = "linode_monitor_service_alert_definition_create"
+	monitorServiceAlertDefinitionCloneToolName  = "linode_monitor_service_alert_definition_clone"
 	monitorServiceAlertDefinitionGetToolName    = "linode_monitor_service_alert_definition_get"
 	monitorServiceAlertDefinitionDeleteToolName = "linode_monitor_service_alert_definition_delete"
 
@@ -37,6 +38,7 @@ const (
 	monitorAlertDefinitionTriggerConditionsParam = "trigger_conditions"
 	monitorAlertDefinitionChannelIDsParam        = "channel_ids"
 	monitorAlertDefinitionDescriptionParam       = "description"
+	monitorAlertDefinitionGroupByParam           = "group_by"
 	monitorAlertDefinitionEntityIDsParam         = "entity_ids"
 	monitorAlertDefinitionStatusParam            = "status"
 	monitorAlertDefinitionStatusEnabled          = "enabled"

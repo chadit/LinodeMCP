@@ -999,6 +999,7 @@ func coreToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeMonitorServiceTokenCreateTool,
 		tools.NewLinodeMonitorServiceAlertDefinitionGetTool,
 		tools.NewLinodeMonitorServiceAlertDefinitionCreateTool,
+		tools.NewLinodeMonitorServiceAlertDefinitionCloneTool,
 		tools.NewLinodeMonitorServiceAlertDefinitionDeleteTool,
 
 		tools.NewLinodeMonitorServiceAlertDefinitionUpdateTool,
