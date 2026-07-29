@@ -12,6 +12,8 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
+const monitorAlertDefinitionGroupBy = "entity_id"
+
 func monitorAlertDefinitionCloneRequest() *linode.CloneAlertDefinitionRequest {
 	var (
 		description string
@@ -19,7 +21,7 @@ func monitorAlertDefinitionCloneRequest() *linode.CloneAlertDefinitionRequest {
 	)
 
 	channelIDs := []int{}
-	groupBy := []string{"entity_id"}
+	groupBy := []string{monitorAlertDefinitionGroupBy}
 	ruleCriteria := map[string]any{}
 	triggerConditions := map[string]any{}
 
@@ -76,6 +78,7 @@ func TestClientCloneMonitorServiceAlertDefinitionProtoSuccessAndEscapedPath(t *t
 			keyLabel:       monitorAlertDefinitionLabel + " Clone",
 			keyServiceType: monitorServiceTypeWithSlash,
 			keySeverity:    0,
+			"group_by":     []string{monitorAlertDefinitionGroupBy},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -96,6 +99,10 @@ func TestClientCloneMonitorServiceAlertDefinitionProtoSuccessAndEscapedPath(t *t
 
 	if got.GetId() != int32(monitorAlertDefinitionID+1) {
 		t.Errorf("got.GetId() = %v, want %v", got.GetId(), int32(monitorAlertDefinitionID+1))
+	}
+
+	if !reflect.DeepEqual(got.GetGroupBy(), []string{monitorAlertDefinitionGroupBy}) {
+		t.Errorf("got.GetGroupBy() = %v, want %v", got.GetGroupBy(), []string{monitorAlertDefinitionGroupBy})
 	}
 }
 

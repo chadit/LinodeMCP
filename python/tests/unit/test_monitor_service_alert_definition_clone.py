@@ -403,7 +403,7 @@ async def test_clone_rejects_fractional_and_non_finite_numbers(
 
 
 @pytest.mark.asyncio
-async def test_clone_success_coerces_integral_floats_and_drops_group_by_response(
+async def test_clone_success_coerces_integral_floats_and_preserves_group_by_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = AsyncMock()
@@ -428,7 +428,7 @@ async def test_clone_success_coerces_integral_floats_and_drops_group_by_response
             "label": "  CPU Clone  ",
             "channel_ids": [101.0, 202],
             "description": "",
-            "group_by": [],
+            "group_by": ["entity_id"],
             "rule_criteria": {},
             "severity": 2.0,
             "trigger_conditions": {},
@@ -443,7 +443,7 @@ async def test_clone_success_coerces_integral_floats_and_drops_group_by_response
         label="CPU Clone",
         channel_ids=[101, 202],
         description="",
-        group_by=[],
+        group_by=["entity_id"],
         rule_criteria={},
         severity=2,
         trigger_conditions={},
@@ -454,7 +454,7 @@ async def test_clone_success_coerces_integral_floats_and_drops_group_by_response
     assert type(call.kwargs["severity"]) is int
     payload = json.loads(_text(result))
     assert payload["message"] == "Monitor alert definition 20000 cloned"
-    assert "group_by" not in payload["alert_definition"]
+    assert payload["alert_definition"]["group_by"] == ["entity_id"]
 
 
 @pytest.mark.asyncio

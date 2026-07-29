@@ -1,6 +1,6 @@
 {
   "tool": "linode_monitor_service_alert_definition_clone",
-  "description": "Clone requires explicit confirmation, preserves every optional request override, and returns the shared alert-definition write envelope without exposing request-only group_by. The dry-run preview pins the exact clone request and source-state lookup. A malformed successful body must fail at the shared parser position marker.",
+  "description": "Clone requires explicit confirmation, preserves every optional request override, and returns the shared alert-definition write envelope including API-returned group_by. The dry-run preview pins the exact clone request and source-state lookup. A malformed successful body must fail at the shared parser position marker.",
   "cases": [
     {
       "name": "clones with every optional override",
@@ -45,7 +45,8 @@
           "severity": 0,
           "status": "",
           "channel_ids": [],
-          "entity_ids": []
+          "entity_ids": [],
+          "group_by": ["entity_id", "region"]
         }
       }
     },

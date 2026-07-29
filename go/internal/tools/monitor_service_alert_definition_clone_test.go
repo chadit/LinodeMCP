@@ -18,6 +18,7 @@ import (
 const (
 	monitorServiceAlertDefinitionCloneToolName = "linode_monitor_service_alert_definition_clone"
 	monitorAlertDefinitionGroupByParam         = "group_by"
+	monitorAlertDefinitionGroupByValue         = "entity_id"
 )
 
 func monitorAlertDefinitionCloneArgs() map[string]any {
@@ -27,7 +28,7 @@ func monitorAlertDefinitionCloneArgs() map[string]any {
 		monitorAlertDefinitionLabelParam:        monitorAlertDefinitionToolLabel + " Clone",
 		monitorAlertDefinitionChannelIDsParam:   []any{float64(1)},
 		keyDescription:                          "",
-		monitorAlertDefinitionGroupByParam:      []any{"entity_id"},
+		monitorAlertDefinitionGroupByParam:      []any{monitorAlertDefinitionGroupByValue},
 		monitorAlertDefinitionRuleCriteriaParam: map[string]any{},
 		monitorAlertDefinitionSeverityParam:     float64(0),
 		monitorAlertDefinitionTriggerParam:      map[string]any{},
@@ -102,7 +103,9 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolValidationBeforeClient(t *t
 		{name: "channel ids not array", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = "1" }, wantMessage: "channel_ids must be an array of integers"},
 		{name: "description wrong type", mutate: func(args map[string]any) { args[keyDescription] = 1 }, wantMessage: "description must be a string"},
 		{name: "group by wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionGroupByParam] = []any{1} }, wantMessage: "group_by must be an array of strings"},
-		{name: "group by not array", mutate: func(args map[string]any) { args[monitorAlertDefinitionGroupByParam] = "entity_id" }, wantMessage: "group_by must be an array of strings"},
+		{name: "group by not array", mutate: func(args map[string]any) {
+			args[monitorAlertDefinitionGroupByParam] = monitorAlertDefinitionGroupByValue
+		}, wantMessage: "group_by must be an array of strings"},
 		{name: "rule criteria wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionRuleCriteriaParam] = []any{} }, wantMessage: "rule_criteria must be an object"},
 		{name: "fractional severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 1.5 }, wantMessage: errAlertDefinitionSeverity},
 		{name: "severity out of range", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 4 }, wantMessage: errAlertDefinitionSeverity},
@@ -185,7 +188,7 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolRequiresExplicitConfirm(t *
 	}
 }
 
-func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesEmptyOverrides(t *testing.T) {
+func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesOverridesAndReturnedGroupBy(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -210,8 +213,12 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesEmptyOverri
 			}
 		}
 
-		if !reflect.DeepEqual(body[monitorAlertDefinitionChannelIDsParam], []any{}) || !reflect.DeepEqual(body[monitorAlertDefinitionGroupByParam], []any{}) {
-			t.Errorf("array overrides were not preserved: %#v", body)
+		if !reflect.DeepEqual(body[monitorAlertDefinitionChannelIDsParam], []any{}) {
+			t.Errorf("empty channel_ids override was not preserved: %#v", body)
+		}
+
+		if !reflect.DeepEqual(body[monitorAlertDefinitionGroupByParam], []any{monitorAlertDefinitionGroupByValue}) {
+			t.Errorf("group_by override was not preserved: %#v", body)
 		}
 
 		if !reflect.DeepEqual(body[monitorAlertDefinitionRuleCriteriaParam], map[string]any{}) || !reflect.DeepEqual(body[monitorAlertDefinitionTriggerParam], map[string]any{}) {
@@ -221,10 +228,11 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesEmptyOverri
 		w.Header().Set("Content-Type", "application/json")
 
 		if err := json.NewEncoder(w).Encode(map[string]any{
-			keySupportTicketID:       monitorAlertDefinitionToolID + 1,
-			managedServiceLabelParam: monitorAlertDefinitionToolLabel + " Clone",
-			"service_type":           monitorServiceToolTypeDatabase,
-			"severity":               0,
+			keySupportTicketID:                 monitorAlertDefinitionToolID + 1,
+			managedServiceLabelParam:           monitorAlertDefinitionToolLabel + " Clone",
+			"service_type":                     monitorServiceToolTypeDatabase,
+			"severity":                         0,
+			monitorAlertDefinitionGroupByParam: []string{monitorAlertDefinitionGroupByValue},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -237,7 +245,6 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesEmptyOverri
 	_, _, handler := tools.NewLinodeMonitorServiceAlertDefinitionCloneTool(cfg)
 	args := monitorAlertDefinitionCloneArgs()
 	args[monitorAlertDefinitionChannelIDsParam] = []any{}
-	args[monitorAlertDefinitionGroupByParam] = []any{}
 
 	result, err := handler(t.Context(), createRequestWithArgs(t, args))
 	if err != nil {
@@ -253,8 +260,18 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesEmptyOverri
 		t.Fatal("response content is not text")
 	}
 
-	if strings.Contains(text.Text, monitorAlertDefinitionGroupByParam) {
-		t.Errorf("response unexpectedly broadened with group_by: %v", text.Text)
+	var response struct {
+		AlertDefinition struct {
+			GroupBy []string `json:"group_by"`
+		} `json:"alert_definition"`
+	}
+
+	if err := json.Unmarshal([]byte(text.Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !reflect.DeepEqual(response.AlertDefinition.GroupBy, []string{monitorAlertDefinitionGroupByValue}) {
+		t.Errorf("response group_by = %v, want %v", response.AlertDefinition.GroupBy, []string{monitorAlertDefinitionGroupByValue})
 	}
 }
 

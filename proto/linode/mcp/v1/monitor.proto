@@ -294,6 +294,8 @@ message MonitorAlertDefinition {
   google.protobuf.Struct trigger_conditions = 10;
   repeated int32 channel_ids = 11;
   repeated string entity_ids = 12;
+  // Fields used to group alert data.
+  repeated string group_by = 13;
 }
 
 // MonitorAlertDefinitionListResponse is the
