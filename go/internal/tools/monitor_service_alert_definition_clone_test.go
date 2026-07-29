@@ -290,6 +290,7 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolDryRun(t *testing.T) {
 			managedServiceLabelParam:            monitorAlertDefinitionToolLabel,
 			monitorServiceTypeParam:             monitorServiceToolTypeDatabase,
 			monitorAlertDefinitionSeverityParam: 0,
+			monitorAlertDefinitionGroupByParam:  []string{monitorAlertDefinitionGroupByValue},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -312,9 +313,31 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolDryRun(t *testing.T) {
 		t.Errorf("result.IsError = true, want false: %#v", result.Content)
 	}
 
-	text, ok := result.Content[0].(mcp.TextContent)
-	if !ok || !strings.Contains(text.Text, "/monitor/services/dbaas/alert-definitions/20000/clone") {
+	text, textOK := result.Content[0].(mcp.TextContent)
+	if !textOK {
+		t.Fatalf("response content = %T, want mcp.TextContent", result.Content[0])
+	}
+
+	if !strings.Contains(text.Text, "/monitor/services/dbaas/alert-definitions/20000/clone") {
 		t.Errorf("dry-run text %q does not contain clone path", text.Text)
+	}
+
+	var preview map[string]any
+	if err := json.Unmarshal([]byte(text.Text), &preview); err != nil {
+		t.Fatalf("decode dry-run response: %v", err)
+	}
+
+	currentState, ok := preview["current_state"].(map[string]any)
+	if !ok {
+		t.Fatalf("current_state = %T, want object", preview["current_state"])
+	}
+
+	if !reflect.DeepEqual(currentState[monitorAlertDefinitionGroupByParam], []any{monitorAlertDefinitionGroupByValue}) {
+		t.Errorf(
+			"current_state.group_by = %#v, want %#v",
+			currentState[monitorAlertDefinitionGroupByParam],
+			[]any{monitorAlertDefinitionGroupByValue},
+		)
 	}
 }
 
