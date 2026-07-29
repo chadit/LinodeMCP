@@ -1,6 +1,6 @@
 {
   "message": "linode.mcp.v1.MonitorAlertDefinitionWriteResponse",
-  "description": "Monitor alert-definition write envelope (create, clone, and update): a confirmation message plus the full MonitorAlertDefinition element. criteria, rule_criteria, and trigger_conditions are freeform JSON the API returns verbatim, modeled as google.protobuf.Struct.",
+  "description": "Monitor alert-definition write envelope (create, clone, and update): a confirmation message plus the full MonitorAlertDefinition element. criteria, rule_criteria, and trigger_conditions are freeform JSON the API returns verbatim, modeled as google.protobuf.Struct. Scope and regions preserve region-targeted alert definitions.",
   "input": {
     "message": "Monitor service alert definition created for 'dbaas'",
     "alert_definition": {
@@ -24,7 +24,9 @@
       },
       "channel_ids": [546, 392],
       "entity_ids": ["13116"],
-      "group_by": ["entity_id", "region"]
+      "group_by": ["entity_id", "region"],
+      "scope": "region",
+      "regions": ["us-east", "us-iad"]
     }
   },
   "canonical": {
@@ -50,7 +52,9 @@
       },
       "channel_ids": [546, 392],
       "entity_ids": ["13116"],
-      "group_by": ["entity_id", "region"]
+      "group_by": ["entity_id", "region"],
+      "scope": "region",
+      "regions": ["us-east", "us-iad"]
     }
   }
 }

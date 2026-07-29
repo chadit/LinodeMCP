@@ -437,7 +437,7 @@ async def test_clone_rejects_fractional_and_non_finite_numbers(
 
 
 @pytest.mark.asyncio
-async def test_clone_success_coerces_integral_floats_and_preserves_group_by_response(
+async def test_clone_success_coerces_integral_floats_and_preserves_scoped_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = AsyncMock()
@@ -445,6 +445,8 @@ async def test_clone_success_coerces_integral_floats_and_preserves_group_by_resp
         "id": 20001,
         "label": "CPU Clone",
         "group_by": ["entity_id"],
+        "scope": "region",
+        "regions": ["us-east", "us-iad"],
     }
 
     async def fake_execute(
@@ -493,6 +495,8 @@ async def test_clone_success_coerces_integral_floats_and_preserves_group_by_resp
     payload = json.loads(_text(result))
     assert payload["message"] == "Monitor alert definition 20000 cloned"
     assert payload["alert_definition"]["group_by"] == ["entity_id"]
+    assert payload["alert_definition"]["scope"] == "region"
+    assert payload["alert_definition"]["regions"] == ["us-east", "us-iad"]
 
 
 @pytest.mark.asyncio
@@ -503,6 +507,8 @@ async def test_clone_dry_run_previews_post_body_and_fetches_source(
     client.get_monitor_service_alert_definition.return_value = {
         "id": 20000,
         "label": "CPU",
+        "scope": "region",
+        "regions": ["us-east", "us-iad"],
     }
 
     async def fake_dry_run(
@@ -523,7 +529,12 @@ async def test_clone_dry_run_previews_post_body_and_fetches_source(
             "channel_ids": [],
             "rule_criteria": {},
         }
-        assert await fetch_state(client) == {"id": 20000, "label": "CPU"}
+        assert await fetch_state(client) == {
+            "id": 20000,
+            "label": "CPU",
+            "scope": "region",
+            "regions": ["us-east", "us-iad"],
+        }
         return [type("Text", (), {"text": "preview"})()]
 
     monkeypatch.setattr(monitor_write, "execute_dry_run", fake_dry_run)

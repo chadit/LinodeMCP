@@ -300,6 +300,10 @@ message MonitorAlertDefinition {
   repeated string entity_ids = 12;
   // Fields used to group alert data.
   repeated string group_by = 13;
+  // Classification describing where the alert definition applies.
+  string scope = 14;
+  // Region IDs targeted by a region-scope alert definition.
+  repeated string regions = 15;
 }
 
 // MonitorAlertDefinitionListResponse is the

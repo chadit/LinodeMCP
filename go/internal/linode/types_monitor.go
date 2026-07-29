@@ -34,6 +34,8 @@ type AlertDefinition struct {
 	ChannelIDs        []int          `json:"channel_ids,omitempty"`
 	EntityIDs         []string       `json:"entity_ids,omitempty"`
 	GroupBy           []string       `json:"group_by,omitempty"`
+	Scope             string         `json:"scope,omitempty"`
+	Regions           []string       `json:"regions,omitempty"`
 	ID                int            `json:"id"`
 	Severity          int            `json:"severity"`
 }

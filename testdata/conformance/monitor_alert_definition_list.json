@@ -1,6 +1,6 @@
 {
   "message": "linode.mcp.v1.MonitorAlertDefinitionListResponse",
-  "description": "linode_monitor_alert_definition_list envelope: count and the full proto MonitorAlertDefinition elements. criteria, rule_criteria, and trigger_conditions are arbitrary JSON objects modeled as google.protobuf.Struct; channel_ids, entity_ids, and group_by are repeated. The tool paginates and has no filter param, so filter is omitted.",
+  "description": "linode_monitor_alert_definition_list envelope: count and the full proto MonitorAlertDefinition elements. criteria, rule_criteria, and trigger_conditions are arbitrary JSON objects modeled as google.protobuf.Struct; channel_ids, entity_ids, group_by, scope, and regions preserve alert targeting. The tool paginates and has no filter param, so filter is omitted.",
   "input": {
     "count": 1,
     "alert_definitions": [
@@ -30,7 +30,9 @@
         },
         "channel_ids": [10000, 10001],
         "entity_ids": ["123", "456"],
-        "group_by": ["entity_id", "region"]
+        "group_by": ["entity_id", "region"],
+        "scope": "entity",
+        "regions": []
       }
     ]
   },
@@ -63,7 +65,9 @@
         },
         "channel_ids": [10000, 10001],
         "entity_ids": ["123", "456"],
-        "group_by": ["entity_id", "region"]
+        "group_by": ["entity_id", "region"],
+        "scope": "entity",
+        "regions": []
       }
     ]
   }

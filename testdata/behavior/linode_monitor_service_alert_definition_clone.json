@@ -1,6 +1,6 @@
 {
   "tool": "linode_monitor_service_alert_definition_clone",
-  "description": "Clone requires explicit confirmation, preserves every optional request override, and returns the shared alert-definition write envelope including API-returned group_by. The dry-run preview pins the exact clone request and source-state lookup. A malformed successful body must fail at the shared parser position marker.",
+  "description": "Clone requires explicit confirmation, preserves every optional request override, and returns the shared alert-definition write envelope including API-returned group_by, scope, and regions. The dry-run preview pins the exact clone request and source-state lookup. A malformed successful body must fail at the shared parser position marker.",
   "cases": [
     {
       "name": "clones with every optional override",
@@ -46,7 +46,9 @@
           "status": "",
           "channel_ids": [],
           "entity_ids": [],
-          "group_by": ["entity_id", "region"]
+          "group_by": ["entity_id", "region"],
+          "scope": "",
+          "regions": []
         }
       }
     },
@@ -144,6 +146,41 @@
         "path": "/monitor/services/dbaas/alert-definitions/42/clone",
         "body": {
           "label": "Region clone",
+          "regions": ["us-east", "us-iad"]
+        }
+      }
+    },
+    {
+      "name": "preserves region scope in the clone result",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "Region clone",
+        "regions": ["us-east", "us-iad"],
+        "confirm": true
+      },
+      "api_responses": {
+        "POST /monitor/services/dbaas/alert-definitions/42/clone": {
+          "id": 9004,
+          "label": "Region clone",
+          "scope": "region",
+          "regions": ["us-east", "us-iad"]
+        }
+      },
+      "expect_result": {
+        "message": "Monitor alert definition 42 cloned",
+        "alert_definition": {
+          "id": 9004,
+          "label": "Region clone",
+          "type": "",
+          "service_type": "",
+          "description": "",
+          "severity": 0,
+          "status": "",
+          "channel_ids": [],
+          "entity_ids": [],
+          "group_by": [],
+          "scope": "region",
           "regions": ["us-east", "us-iad"]
         }
       }

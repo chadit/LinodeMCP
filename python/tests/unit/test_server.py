@@ -17214,6 +17214,8 @@ async def test_monitor_service_alert_definitions_list_dispatches_from_registry(
             "channel_ids": [],
             "entity_ids": [],
             "group_by": ["entity_id"],
+            "scope": "",
+            "regions": [],
         }
     ]
     mock_client.list_monitor_service_alert_definitions.assert_awaited_once_with(

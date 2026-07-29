@@ -197,7 +197,7 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolRequiresExplicitConfirm(t *
 	}
 }
 
-func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesOverridesAndReturnedGroupBy(t *testing.T) {
+func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesOverridesAndReturnedScope(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -250,6 +250,8 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesOverridesAn
 			"service_type":                     monitorServiceToolTypeDatabase,
 			"severity":                         0,
 			monitorAlertDefinitionGroupByParam: []string{monitorAlertDefinitionGroupByValue},
+			"scope":                            keySupportTicketRegion,
+			monitorAlertDefinitionRegionsParam: []string{regionUSEast},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -277,18 +279,34 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesOverridesAn
 		t.Fatal("response content is not text")
 	}
 
+	assertScopedCloneResponse(t, text.Text)
+}
+
+func assertScopedCloneResponse(t *testing.T, raw string) {
+	t.Helper()
+
 	var response struct {
 		AlertDefinition struct {
 			GroupBy []string `json:"group_by"`
+			Scope   string   `json:"scope"`
+			Regions []string `json:"regions"`
 		} `json:"alert_definition"`
 	}
 
-	if err := json.Unmarshal([]byte(text.Text), &response); err != nil {
+	if err := json.Unmarshal([]byte(raw), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 
 	if !reflect.DeepEqual(response.AlertDefinition.GroupBy, []string{monitorAlertDefinitionGroupByValue}) {
 		t.Errorf("response group_by = %v, want %v", response.AlertDefinition.GroupBy, []string{monitorAlertDefinitionGroupByValue})
+	}
+
+	if response.AlertDefinition.Scope != keySupportTicketRegion {
+		t.Errorf("response scope = %q, want region", response.AlertDefinition.Scope)
+	}
+
+	if !reflect.DeepEqual(response.AlertDefinition.Regions, []string{regionUSEast}) {
+		t.Errorf("response regions = %v, want %v", response.AlertDefinition.Regions, []string{regionUSEast})
 	}
 }
 
@@ -308,6 +326,8 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolDryRun(t *testing.T) {
 			monitorServiceTypeParam:             monitorServiceToolTypeDatabase,
 			monitorAlertDefinitionSeverityParam: 0,
 			monitorAlertDefinitionGroupByParam:  []string{monitorAlertDefinitionGroupByValue},
+			"scope":                             keySupportTicketRegion,
+			monitorAlertDefinitionRegionsParam:  []string{regionUSEast},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -354,6 +374,18 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolDryRun(t *testing.T) {
 			"current_state.group_by = %#v, want %#v",
 			currentState[monitorAlertDefinitionGroupByParam],
 			[]any{monitorAlertDefinitionGroupByValue},
+		)
+	}
+
+	if currentState["scope"] != keySupportTicketRegion {
+		t.Errorf("current_state.scope = %#v, want region", currentState["scope"])
+	}
+
+	if !reflect.DeepEqual(currentState[monitorAlertDefinitionRegionsParam], []any{regionUSEast}) {
+		t.Errorf(
+			"current_state.regions = %#v, want %#v",
+			currentState[monitorAlertDefinitionRegionsParam],
+			[]any{regionUSEast},
 		)
 	}
 }
