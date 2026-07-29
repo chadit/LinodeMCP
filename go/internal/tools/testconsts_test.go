@@ -513,6 +513,7 @@ const (
 	errAlertDefinitionSeverity     = "severity must be an integer from 0 through 3"
 	errAlertDefinitionChannels     = "channel_ids must be a non-empty array of positive integers"
 	errAlertDefinitionEntityIDs    = "entity_ids must be an array of non-empty strings"
+	errRegionsArray                = "regions must be an array of strings"
 	monitorCriteriaAll             = "ALL"
 	caseFalseConfirmRejected       = "false confirm rejected"
 	caseStringConfirmRejected      = "string confirm rejected"

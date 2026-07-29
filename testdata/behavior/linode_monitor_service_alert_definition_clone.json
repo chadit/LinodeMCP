@@ -105,6 +105,50 @@
       }
     },
     {
+      "name": "retargets an entity-scope clone",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "Entity clone",
+        "entity_ids": ["13116", "13217", "13331"],
+        "confirm": true
+      },
+      "api_response": {
+        "id": 9003,
+        "label": "Entity clone"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/alert-definitions/42/clone",
+        "body": {
+          "label": "Entity clone",
+          "entity_ids": ["13116", "13217", "13331"]
+        }
+      }
+    },
+    {
+      "name": "retargets a region-scope clone",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "Region clone",
+        "regions": ["us-east", "us-iad"],
+        "confirm": true
+      },
+      "api_response": {
+        "id": 9004,
+        "label": "Region clone"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/alert-definitions/42/clone",
+        "body": {
+          "label": "Region clone",
+          "regions": ["us-east", "us-iad"]
+        }
+      }
+    },
+    {
       "name": "omits every optional override",
       "args": {
         "service_type": "dbaas",

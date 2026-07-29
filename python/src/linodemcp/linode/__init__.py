@@ -1952,12 +1952,21 @@ def _is_string_array(value: object) -> bool:
     )
 
 
+def _is_non_blank_string_array(value: object) -> bool:
+    """Report whether value is an array containing only non-blank strings."""
+    return _is_string_array(value) and all(
+        item.strip() for item in cast("list[str]", value)
+    )
+
+
 def _build_monitor_service_alert_definition_clone_body(
     *,
     label: object,
     channel_ids: object,
     description: object,
+    entity_ids: object,
     group_by: object,
+    regions: object,
     rule_criteria: object,
     severity: object,
     trigger_conditions: object,
@@ -1970,7 +1979,9 @@ def _build_monitor_service_alert_definition_clone_body(
     optional_fields = {
         "channel_ids": channel_ids,
         "description": description,
+        "entity_ids": entity_ids,
         "group_by": group_by,
+        "regions": regions,
         "rule_criteria": rule_criteria,
         "severity": severity,
         "trigger_conditions": trigger_conditions,
@@ -1984,7 +1995,12 @@ def _build_monitor_service_alert_definition_clone_body(
             lambda value: isinstance(value, str),
             "description must be a string",
         ),
+        "entity_ids": (
+            _is_non_blank_string_array,
+            "entity_ids must be an array of non-empty strings",
+        ),
         "group_by": (_is_string_array, "group_by must be an array of strings"),
+        "regions": (_is_string_array, "regions must be an array of strings"),
         "rule_criteria": (
             lambda value: isinstance(value, dict),
             "rule_criteria must be an object",
@@ -8235,7 +8251,9 @@ class Client:
         label: str,
         channel_ids: object = _UNSET,
         description: object = _UNSET,
+        entity_ids: object = _UNSET,
         group_by: object = _UNSET,
+        regions: object = _UNSET,
         rule_criteria: object = _UNSET,
         severity: object = _UNSET,
         trigger_conditions: object = _UNSET,
@@ -8254,7 +8272,9 @@ class Client:
             label=label,
             channel_ids=channel_ids,
             description=description,
+            entity_ids=entity_ids,
             group_by=group_by,
+            regions=regions,
             rule_criteria=rule_criteria,
             severity=severity,
             trigger_conditions=trigger_conditions,
@@ -14283,7 +14303,9 @@ class RetryableClient:
         label: str,
         channel_ids: object = _UNSET,
         description: object = _UNSET,
+        entity_ids: object = _UNSET,
         group_by: object = _UNSET,
+        regions: object = _UNSET,
         rule_criteria: object = _UNSET,
         severity: object = _UNSET,
         trigger_conditions: object = _UNSET,
@@ -14294,7 +14316,9 @@ class RetryableClient:
             for key, value in {
                 "channel_ids": channel_ids,
                 "description": description,
+                "entity_ids": entity_ids,
                 "group_by": group_by,
+                "regions": regions,
                 "rule_criteria": rule_criteria,
                 "severity": severity,
                 "trigger_conditions": trigger_conditions,

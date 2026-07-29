@@ -109,6 +109,15 @@ func monitorServiceAlertDefinitionCloneRequestFromTool(request *mcp.CallToolRequ
 		cloneRequest.Description = &description
 	}
 
+	if raw, exists := args[monitorAlertDefinitionEntityIDsParam]; exists {
+		entityIDs, ok := stringArray(raw)
+		if !ok || hasBlankString(entityIDs) {
+			return nil, errMonitorAlertDefinitionEntityIDs
+		}
+
+		cloneRequest.EntityIDs = &entityIDs
+	}
+
 	if raw, exists := args[monitorAlertDefinitionGroupByParam]; exists {
 		groupBy, ok := stringArray(raw)
 		if !ok {
@@ -116,6 +125,15 @@ func monitorServiceAlertDefinitionCloneRequestFromTool(request *mcp.CallToolRequ
 		}
 
 		cloneRequest.GroupBy = &groupBy
+	}
+
+	if raw, exists := args[monitorAlertDefinitionRegionsParam]; exists {
+		regions, ok := stringArray(raw)
+		if !ok {
+			return nil, errMonitorAlertDefinitionRegions
+		}
+
+		cloneRequest.Regions = &regions
 	}
 
 	if raw, exists := args[monitorAlertDefinitionRuleCriteriaParam]; exists {
@@ -184,4 +202,14 @@ func stringArray(raw any) ([]string, bool) {
 	}
 
 	return items, true
+}
+
+func hasBlankString(items []string) bool {
+	for _, item := range items {
+		if strings.TrimSpace(item) == "" {
+			return true
+		}
+	}
+
+	return false
 }

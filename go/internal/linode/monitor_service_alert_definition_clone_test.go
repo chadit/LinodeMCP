@@ -21,15 +21,19 @@ func monitorAlertDefinitionCloneRequest() *linode.CloneAlertDefinitionRequest {
 	)
 
 	channelIDs := []int{}
+	entityIDs := []string{}
 	groupBy := []string{monitorAlertDefinitionGroupBy}
+	regions := []string{}
 	ruleCriteria := map[string]any{}
 	triggerConditions := map[string]any{}
 
 	return &linode.CloneAlertDefinitionRequest{
 		ChannelIDs:        &channelIDs,
 		Description:       &description,
+		EntityIDs:         &entityIDs,
 		GroupBy:           &groupBy,
 		Label:             monitorAlertDefinitionLabel + " Clone",
+		Regions:           &regions,
 		RuleCriteria:      &ruleCriteria,
 		Severity:          &severity,
 		TriggerConditions: &triggerConditions,
@@ -57,7 +61,7 @@ func TestClientCloneMonitorServiceAlertDefinitionProtoSuccessAndEscapedPath(t *t
 			return
 		}
 
-		for _, key := range []string{"channel_ids", keyDescription, "group_by", "rule_criteria", "severity", "trigger_conditions"} {
+		for _, key := range []string{"channel_ids", keyDescription, "entity_ids", "group_by", "regions", "rule_criteria", "severity", "trigger_conditions"} {
 			if _, ok := body[key]; !ok {
 				t.Errorf("body missing key %v", key)
 			}
@@ -65,6 +69,14 @@ func TestClientCloneMonitorServiceAlertDefinitionProtoSuccessAndEscapedPath(t *t
 
 		if !reflect.DeepEqual(body["channel_ids"], []any{}) {
 			t.Errorf("body[channel_ids] = %#v, want empty array", body["channel_ids"])
+		}
+
+		if !reflect.DeepEqual(body["entity_ids"], []any{}) {
+			t.Errorf("body[entity_ids] = %#v, want empty array", body["entity_ids"])
+		}
+
+		if !reflect.DeepEqual(body["regions"], []any{}) {
+			t.Errorf("body[regions] = %#v, want empty array", body["regions"])
 		}
 
 		if !reflect.DeepEqual(body["rule_criteria"], map[string]any{}) {

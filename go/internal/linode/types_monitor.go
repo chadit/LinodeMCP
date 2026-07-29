@@ -55,7 +55,9 @@ type CreateAlertDefinitionRequest struct {
 type CloneAlertDefinitionRequest struct {
 	ChannelIDs        *[]int          `json:"channel_ids,omitempty"`
 	Description       *string         `json:"description,omitempty"`
+	EntityIDs         *[]string       `json:"entity_ids,omitempty"`
 	GroupBy           *[]string       `json:"group_by,omitempty"`
+	Regions           *[]string       `json:"regions,omitempty"`
 	RuleCriteria      *map[string]any `json:"rule_criteria,omitempty"`
 	Severity          *int            `json:"severity,omitempty"`
 	TriggerConditions *map[string]any `json:"trigger_conditions,omitempty"`

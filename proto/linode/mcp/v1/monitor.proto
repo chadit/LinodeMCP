@@ -190,6 +190,10 @@ message MonitorServiceAlertDefinitionCloneInput {
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
   optional bool dry_run = 12;
+  // Optional service entity IDs for an entity-scope clone.
+  repeated string entity_ids = 13;
+  // Optional region IDs for a region-scope clone.
+  repeated string regions = 14;
 }
 
 // MonitorServiceAlertDefinitionUpdateInput is the input contract for

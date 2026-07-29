@@ -660,7 +660,12 @@ def _build_alert_definition_clone_body(
             lambda value: isinstance(value, str),
             "description must be a string",
         ),
+        "entity_ids": (
+            lambda value: _coerce_entity_id_strings(value) is not None,
+            "entity_ids must be an array of non-empty strings",
+        ),
         "group_by": (_is_string_array, "group_by must be an array of strings"),
+        "regions": (_is_string_array, "regions must be an array of strings"),
         "rule_criteria": (
             lambda value: isinstance(value, dict),
             "rule_criteria must be an object",
@@ -756,7 +761,9 @@ async def handle_linode_monitor_service_alert_definition_clone(
         for key in (
             "channel_ids",
             "description",
+            "entity_ids",
             "group_by",
+            "regions",
             "rule_criteria",
             "severity",
             "trigger_conditions",

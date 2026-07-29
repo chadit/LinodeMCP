@@ -17,8 +17,10 @@ import (
 
 const (
 	monitorServiceAlertDefinitionCloneToolName = "linode_monitor_service_alert_definition_clone"
+	monitorAlertDefinitionEntityIDsParam       = "entity_ids"
 	monitorAlertDefinitionGroupByParam         = "group_by"
 	monitorAlertDefinitionGroupByValue         = "entity_id"
+	monitorAlertDefinitionRegionsParam         = "regions"
 )
 
 func monitorAlertDefinitionCloneArgs() map[string]any {
@@ -28,7 +30,9 @@ func monitorAlertDefinitionCloneArgs() map[string]any {
 		monitorAlertDefinitionLabelParam:        monitorAlertDefinitionToolLabel + " Clone",
 		monitorAlertDefinitionChannelIDsParam:   []any{float64(1)},
 		keyDescription:                          "",
+		monitorAlertDefinitionEntityIDsParam:    []any{"13116"},
 		monitorAlertDefinitionGroupByParam:      []any{monitorAlertDefinitionGroupByValue},
+		monitorAlertDefinitionRegionsParam:      []any{regionUSEast},
 		monitorAlertDefinitionRuleCriteriaParam: map[string]any{},
 		monitorAlertDefinitionSeverityParam:     float64(0),
 		monitorAlertDefinitionTriggerParam:      map[string]any{},
@@ -67,7 +71,9 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolDefinition(t *testing.T) {
 		monitorAlertDefinitionLabelParam,
 		monitorAlertDefinitionChannelIDsParam,
 		keyDescription,
+		monitorAlertDefinitionEntityIDsParam,
 		monitorAlertDefinitionGroupByParam,
+		monitorAlertDefinitionRegionsParam,
 		monitorAlertDefinitionRuleCriteriaParam,
 		monitorAlertDefinitionSeverityParam,
 		monitorAlertDefinitionTriggerParam,
@@ -102,10 +108,13 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolValidationBeforeClient(t *t
 		{name: "channel ids wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{"1"} }, wantMessage: "channel_ids must be an array of integers"},
 		{name: "channel ids not array", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = "1" }, wantMessage: "channel_ids must be an array of integers"},
 		{name: "description wrong type", mutate: func(args map[string]any) { args[keyDescription] = 1 }, wantMessage: "description must be a string"},
+		{name: "entity ids wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionEntityIDsParam] = []any{1} }, wantMessage: errAlertDefinitionEntityIDs},
+		{name: "entity ids blank", mutate: func(args map[string]any) { args[monitorAlertDefinitionEntityIDsParam] = []any{" "} }, wantMessage: errAlertDefinitionEntityIDs},
 		{name: "group by wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionGroupByParam] = []any{1} }, wantMessage: "group_by must be an array of strings"},
 		{name: "group by not array", mutate: func(args map[string]any) {
 			args[monitorAlertDefinitionGroupByParam] = monitorAlertDefinitionGroupByValue
 		}, wantMessage: "group_by must be an array of strings"},
+		{name: "regions wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionRegionsParam] = []any{1} }, wantMessage: errRegionsArray},
 		{name: "rule criteria wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionRuleCriteriaParam] = []any{} }, wantMessage: "rule_criteria must be an object"},
 		{name: "fractional severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 1.5 }, wantMessage: errAlertDefinitionSeverity},
 		{name: "severity out of range", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 4 }, wantMessage: errAlertDefinitionSeverity},
@@ -207,7 +216,7 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesOverridesAn
 			return
 		}
 
-		for _, key := range []string{monitorAlertDefinitionChannelIDsParam, keyDescription, monitorAlertDefinitionGroupByParam, monitorAlertDefinitionRuleCriteriaParam, monitorAlertDefinitionSeverityParam, monitorAlertDefinitionTriggerParam} {
+		for _, key := range []string{monitorAlertDefinitionChannelIDsParam, keyDescription, monitorAlertDefinitionEntityIDsParam, monitorAlertDefinitionGroupByParam, monitorAlertDefinitionRegionsParam, monitorAlertDefinitionRuleCriteriaParam, monitorAlertDefinitionSeverityParam, monitorAlertDefinitionTriggerParam} {
 			if _, ok := body[key]; !ok {
 				t.Errorf("body missing optional key %v", key)
 			}
@@ -219,6 +228,14 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesOverridesAn
 
 		if !reflect.DeepEqual(body[monitorAlertDefinitionGroupByParam], []any{monitorAlertDefinitionGroupByValue}) {
 			t.Errorf("group_by override was not preserved: %#v", body)
+		}
+
+		if !reflect.DeepEqual(body[monitorAlertDefinitionEntityIDsParam], []any{"13116"}) {
+			t.Errorf("entity_ids override was not preserved: %#v", body)
+		}
+
+		if !reflect.DeepEqual(body[monitorAlertDefinitionRegionsParam], []any{regionUSEast}) {
+			t.Errorf("regions override was not preserved: %#v", body)
 		}
 
 		if !reflect.DeepEqual(body[monitorAlertDefinitionRuleCriteriaParam], map[string]any{}) || !reflect.DeepEqual(body[monitorAlertDefinitionTriggerParam], map[string]any{}) {
