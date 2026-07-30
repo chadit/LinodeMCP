@@ -110,7 +110,11 @@ func monitorServiceAlertDefinitionCloneRequestFromTool(request *mcp.CallToolRequ
 	}
 
 	if _, exists := args[monitorAlertDefinitionEntityIDsParam]; exists {
-		entityIDs, validationMessage := optionalStringArrayArgument(args, monitorAlertDefinitionEntityIDsParam)
+		entityIDs, validationMessage := optionalStringArrayArgument(
+			args,
+			monitorAlertDefinitionEntityIDsParam,
+			errMonitorAlertDefinitionEntityIDs,
+		)
 		if validationMessage != "" {
 			return nil, validationMessage
 		}
@@ -118,19 +122,27 @@ func monitorServiceAlertDefinitionCloneRequestFromTool(request *mcp.CallToolRequ
 		cloneRequest.EntityIDs = &entityIDs
 	}
 
-	if raw, exists := args[monitorAlertDefinitionGroupByParam]; exists {
-		groupBy, ok := nonBlankStringArray(raw)
-		if !ok {
-			return nil, monitorAlertDefinitionGroupByParam + " must be an array of non-empty strings"
+	if _, exists := args[monitorAlertDefinitionGroupByParam]; exists {
+		groupBy, validationMessage := optionalStringArrayArgument(
+			args,
+			monitorAlertDefinitionGroupByParam,
+			errMonitorAlertDefinitionGroupBy,
+		)
+		if validationMessage != "" {
+			return nil, validationMessage
 		}
 
 		cloneRequest.GroupBy = &groupBy
 	}
 
-	if raw, exists := args[monitorAlertDefinitionRegionsParam]; exists {
-		regions, ok := nonBlankStringArray(raw)
-		if !ok {
-			return nil, monitorAlertDefinitionRegionsParam + " must be an array of non-empty strings"
+	if _, exists := args[monitorAlertDefinitionRegionsParam]; exists {
+		regions, validationMessage := optionalStringArrayArgument(
+			args,
+			monitorAlertDefinitionRegionsParam,
+			errMonitorAlertDefinitionRegions,
+		)
+		if validationMessage != "" {
+			return nil, validationMessage
 		}
 
 		cloneRequest.Regions = &regions
@@ -183,39 +195,4 @@ func integerArray(raw any) ([]int, bool) {
 	}
 
 	return items, true
-}
-
-func stringArray(raw any) ([]string, bool) {
-	rawItems, ok := raw.([]any)
-	if !ok {
-		return nil, false
-	}
-
-	items := make([]string, 0, len(rawItems))
-	for _, rawItem := range rawItems {
-		value, ok := rawItem.(string)
-		if !ok {
-			return nil, false
-		}
-
-		items = append(items, value)
-	}
-
-	return items, true
-}
-
-func nonBlankStringArray(raw any) ([]string, bool) {
-	items, ok := stringArray(raw)
-
-	return items, ok && !hasBlankString(items)
-}
-
-func hasBlankString(items []string) bool {
-	for _, item := range items {
-		if strings.TrimSpace(item) == "" {
-			return true
-		}
-	}
-
-	return false
 }

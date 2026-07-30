@@ -150,7 +150,11 @@ func monitorServiceAlertDefinitionUpdateRequestFromTool(request *mcp.CallToolReq
 	}
 
 	if _, exists := args[monitorAlertDefinitionEntityIDsParam]; exists {
-		entityIDs, validationMessage := optionalStringArrayArgument(args, monitorAlertDefinitionEntityIDsParam)
+		entityIDs, validationMessage := optionalStringArrayArgument(
+			args,
+			monitorAlertDefinitionEntityIDsParam,
+			errMonitorAlertDefinitionEntityIDs,
+		)
 		if validationMessage != "" {
 			return nil, validationMessage
 		}

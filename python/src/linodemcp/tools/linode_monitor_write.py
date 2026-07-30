@@ -22,6 +22,7 @@ from linodemcp.tools.proto_response import (
     serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
+from linodemcp.validation import is_non_blank_string_array
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -32,20 +33,6 @@ if TYPE_CHECKING:
 
 _SERVICE_TYPE_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _MONITOR_SERVICE_TYPE_SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
-
-
-def _is_string_array(value: object) -> bool:
-    """Report whether value is an array of strings."""
-    return isinstance(value, list) and all(
-        isinstance(item, str) for item in cast("list[object]", value)
-    )
-
-
-def _is_non_blank_string_array(value: object) -> bool:
-    """Report whether value is an array of non-blank strings."""
-    return _is_string_array(value) and all(
-        item.strip() for item in cast("list[str]", value)
-    )
 
 
 def _coerce_integral_number(value: object) -> int | None:
@@ -672,11 +659,11 @@ def _build_alert_definition_clone_body(
             "entity_ids must be an array of non-empty strings",
         ),
         "group_by": (
-            _is_non_blank_string_array,
+            is_non_blank_string_array,
             "group_by must be an array of non-empty strings",
         ),
         "regions": (
-            _is_non_blank_string_array,
+            is_non_blank_string_array,
             "regions must be an array of non-empty strings",
         ),
         "rule_criteria": (

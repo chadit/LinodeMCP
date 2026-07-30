@@ -21,6 +21,7 @@ from urllib.parse import quote, urlencode
 import httpx
 
 from linodemcp.linode.metrics import get_api_recorder, metrics_endpoint
+from linodemcp.validation import is_non_blank_string_array
 
 _MANAGED_SERVICE_TIMEOUT_MAX = 255
 
@@ -1945,20 +1946,6 @@ def _is_integer_array(value: object) -> bool:
     )
 
 
-def _is_string_array(value: object) -> bool:
-    """Report whether value is an array containing only strings."""
-    return isinstance(value, list) and all(
-        isinstance(item, str) for item in cast("list[object]", value)
-    )
-
-
-def _is_non_blank_string_array(value: object) -> bool:
-    """Report whether value is an array containing only non-blank strings."""
-    return _is_string_array(value) and all(
-        item.strip() for item in cast("list[str]", value)
-    )
-
-
 def _build_monitor_service_alert_definition_clone_body(
     *,
     label: object,
@@ -1996,15 +1983,15 @@ def _build_monitor_service_alert_definition_clone_body(
             "description must be a string",
         ),
         "entity_ids": (
-            _is_non_blank_string_array,
+            is_non_blank_string_array,
             "entity_ids must be an array of non-empty strings",
         ),
         "group_by": (
-            _is_non_blank_string_array,
+            is_non_blank_string_array,
             "group_by must be an array of non-empty strings",
         ),
         "regions": (
-            _is_non_blank_string_array,
+            is_non_blank_string_array,
             "regions must be an array of non-empty strings",
         ),
         "rule_criteria": (
