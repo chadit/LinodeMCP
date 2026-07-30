@@ -106,6 +106,24 @@ async def test_client_clone_omits_absent_optional_fields() -> None:
                 "service_type": "dbaas",
                 "alert_id": 1,
                 "label": "clone",
+                "channel_ids": [0],
+            },
+            "channel_ids",
+        ),
+        (
+            {
+                "service_type": "dbaas",
+                "alert_id": 1,
+                "label": "clone",
+                "channel_ids": [-1],
+            },
+            "channel_ids",
+        ),
+        (
+            {
+                "service_type": "dbaas",
+                "alert_id": 1,
+                "label": "clone",
                 "entity_ids": [1],
             },
             "entity_ids",

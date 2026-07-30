@@ -1939,10 +1939,10 @@ def _build_monitor_service_alert_definition_body(
     return body
 
 
-def _is_integer_array(value: object) -> bool:
-    """Report whether value is an array containing only non-boolean integers."""
+def _is_positive_integer_array(value: object) -> bool:
+    """Report whether value is an array containing only positive integers."""
     return isinstance(value, list) and all(
-        type(item) is int for item in cast("list[object]", value)
+        type(item) is int and item > 0 for item in cast("list[object]", value)
     )
 
 
@@ -1975,8 +1975,8 @@ def _build_monitor_service_alert_definition_clone_body(
     }
     validators: dict[str, tuple[Callable[[object], bool], str]] = {
         "channel_ids": (
-            _is_integer_array,
-            "channel_ids must be an array of integers",
+            _is_positive_integer_array,
+            "channel_ids must be an array of positive integers",
         ),
         "description": (
             lambda value: isinstance(value, str),
