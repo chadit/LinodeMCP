@@ -21,6 +21,7 @@ from urllib.parse import quote, urlencode
 import httpx
 
 from linodemcp.linode.metrics import get_api_recorder, metrics_endpoint
+from linodemcp.validation import is_non_blank_string_array
 
 _MANAGED_SERVICE_TIMEOUT_MAX = 255
 
@@ -1935,6 +1936,86 @@ def _build_monitor_service_alert_definition_body(
         body["description"] = description
     if checked_entity_ids is not None:
         body["entity_ids"] = checked_entity_ids
+    return body
+
+
+def _is_positive_integer_array(value: object) -> bool:
+    """Report whether value is an array containing only positive integers."""
+    return isinstance(value, list) and all(
+        type(item) is int and item > 0 for item in cast("list[object]", value)
+    )
+
+
+def _build_monitor_service_alert_definition_clone_body(
+    *,
+    label: object,
+    channel_ids: object,
+    description: object,
+    entity_ids: object,
+    group_by: object,
+    regions: object,
+    rule_criteria: object,
+    severity: object,
+    trigger_conditions: object,
+) -> dict[str, Any]:
+    """Validate clone fields and preserve every present optional field."""
+    if not isinstance(label, str) or not label.strip():
+        msg = "label must be a non-empty string"
+        raise ValueError(msg)
+
+    optional_fields = {
+        "channel_ids": channel_ids,
+        "description": description,
+        "entity_ids": entity_ids,
+        "group_by": group_by,
+        "regions": regions,
+        "rule_criteria": rule_criteria,
+        "severity": severity,
+        "trigger_conditions": trigger_conditions,
+    }
+    validators: dict[str, tuple[Callable[[object], bool], str]] = {
+        "channel_ids": (
+            _is_positive_integer_array,
+            "channel_ids must be an array of positive integers",
+        ),
+        "description": (
+            lambda value: isinstance(value, str),
+            "description must be a string",
+        ),
+        "entity_ids": (
+            is_non_blank_string_array,
+            "entity_ids must be an array of non-empty strings",
+        ),
+        "group_by": (
+            is_non_blank_string_array,
+            "group_by must be an array of non-empty strings",
+        ),
+        "regions": (
+            is_non_blank_string_array,
+            "regions must be an array of non-empty strings",
+        ),
+        "rule_criteria": (
+            lambda value: isinstance(value, dict),
+            "rule_criteria must be an object",
+        ),
+        "severity": (
+            lambda value: type(value) is int and value in {0, 1, 2, 3},
+            "severity must be an integer from 0 through 3",
+        ),
+        "trigger_conditions": (
+            lambda value: isinstance(value, dict),
+            "trigger_conditions must be an object",
+        ),
+    }
+
+    body: dict[str, Any] = {"label": label.strip()}
+    for key, value in optional_fields.items():
+        if value is _UNSET:
+            continue
+        validator, message = validators[key]
+        if not validator(value):
+            raise ValueError(message)
+        body[key] = value
     return body
 
 
@@ -8155,6 +8236,75 @@ class Client:
             logger.exception("HTTP error creating monitor alert definition: %s", e)
             raise NetworkError("CreateMonitorServiceAlertDefinition", e) from e
 
+    async def clone_monitor_service_alert_definition(
+        self,
+        service_type: str,
+        alert_id: int,
+        *,
+        label: str,
+        channel_ids: object = _UNSET,
+        description: object = _UNSET,
+        entity_ids: object = _UNSET,
+        group_by: object = _UNSET,
+        regions: object = _UNSET,
+        rule_criteria: object = _UNSET,
+        severity: object = _UNSET,
+        trigger_conditions: object = _UNSET,
+    ) -> dict[str, Any]:
+        """Clone an alert definition for a Linode Metrics service type."""
+        if not service_type:
+            msg = "service_type is required"
+            raise ValueError(msg)
+        if type(alert_id) is not int:
+            msg = "alert_id must be a valid integer"
+            raise TypeError(msg)
+        if alert_id <= 0:
+            msg = "alert_id must be a positive integer"
+            raise ValueError(msg)
+        body = _build_monitor_service_alert_definition_clone_body(
+            label=label,
+            channel_ids=channel_ids,
+            description=description,
+            entity_ids=entity_ids,
+            group_by=group_by,
+            regions=regions,
+            rule_criteria=rule_criteria,
+            severity=severity,
+            trigger_conditions=trigger_conditions,
+        )
+
+        encoded_service_type = quote(service_type, safe="")
+        encoded_alert_id = quote(str(alert_id), safe="")
+        endpoint = (
+            f"/monitor/services/{encoded_service_type}"
+            f"/alert-definitions/{encoded_alert_id}/clone"
+        )
+        logger.info(
+            "Cloning monitor service alert definition",
+            extra={"service_type": service_type, "alert_id": alert_id},
+        )
+
+        try:
+            response = await self.make_request("POST", endpoint, body)
+            data: dict[str, Any] = response.json()
+            logger.info(
+                "Monitor service alert definition cloned",
+                extra={"service_type": service_type, "alert_id": alert_id},
+            )
+            return data
+        except httpx.ConnectTimeout as e:
+            logger.exception("Connection timeout cloning monitor alert: %s", e)
+            raise NetworkError("CloneMonitorServiceAlertDefinition", e) from e
+        except httpx.ReadTimeout as e:
+            logger.exception("Read timeout cloning monitor alert: %s", e)
+            raise NetworkError("CloneMonitorServiceAlertDefinition", e) from e
+        except httpx.HTTPStatusError as e:
+            logger.exception("HTTP error cloning monitor alert definition")
+            raise NetworkError("CloneMonitorServiceAlertDefinition", e) from e
+        except httpx.HTTPError as e:
+            logger.exception("HTTP error cloning monitor alert: %s", e)
+            raise NetworkError("CloneMonitorServiceAlertDefinition", e) from e
+
     async def get_monitor_service_alert_definition(
         self, service_type: str, alert_id: int
     ) -> dict[str, Any]:
@@ -14134,6 +14284,47 @@ class RetryableClient:
                 channel_ids=channel_ids,
                 description=description,
                 entity_ids=entity_ids,
+            )
+        )
+        return result
+
+    async def clone_monitor_service_alert_definition(
+        self,
+        service_type: str,
+        alert_id: int,
+        *,
+        label: str,
+        channel_ids: object = _UNSET,
+        description: object = _UNSET,
+        entity_ids: object = _UNSET,
+        group_by: object = _UNSET,
+        regions: object = _UNSET,
+        rule_criteria: object = _UNSET,
+        severity: object = _UNSET,
+        trigger_conditions: object = _UNSET,
+    ) -> dict[str, Any]:
+        """Clone a monitor service alert definition without retry replay."""
+        optional_fields = {
+            key: value
+            for key, value in {
+                "channel_ids": channel_ids,
+                "description": description,
+                "entity_ids": entity_ids,
+                "group_by": group_by,
+                "regions": regions,
+                "rule_criteria": rule_criteria,
+                "severity": severity,
+                "trigger_conditions": trigger_conditions,
+            }.items()
+            if value is not _UNSET
+        }
+        result: dict[str, Any] = await self._execute_without_retry(
+            functools.partial(
+                self.client.clone_monitor_service_alert_definition,
+                service_type,
+                alert_id,
+                label=label,
+                **optional_fields,
             )
         )
         return result

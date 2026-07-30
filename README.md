@@ -668,7 +668,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in active development (v0.1.0). Both implementations are pinned by [docs/contracts/tools-manifest.txt](docs/contracts/tools-manifest.txt), which lists 460 tools, and the surface is enforced by parity tests in each language. Python implements the full set; Go implements all but a few routes that are tracked as accepted differences in [docs/contracts/tool-parity-baseline.txt](docs/contracts/tool-parity-baseline.txt). Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages, and the Python implementation is at full feature parity with Go.
+This project is in active development (v0.1.0). Both implementations are pinned by [docs/contracts/tools-manifest.txt](docs/contracts/tools-manifest.txt), which lists 461 tools, and the surface is enforced by parity tests in each language. Python implements the full set; Go implements all but a few routes that are tracked as accepted differences in [docs/contracts/tool-parity-baseline.txt](docs/contracts/tool-parity-baseline.txt). Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages, and the Python implementation is at full feature parity with Go.
 
 ## License
 
