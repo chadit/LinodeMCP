@@ -206,6 +206,28 @@
       }
     },
     {
+      "name": "preserves an explicitly empty channel list",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "Clear channels",
+        "channel_ids": [],
+        "confirm": true
+      },
+      "api_response": {
+        "id": 9002,
+        "label": "Clear channels"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/alert-definitions/42/clone",
+        "body": {
+          "label": "Clear channels",
+          "channel_ids": []
+        }
+      }
+    },
+    {
       "name": "coerces integral numeric fields",
       "args": {
         "service_type": "db--aas",
@@ -297,7 +319,29 @@
         "channel_ids": [101.5],
         "confirm": true
       },
-      "expect_error": "channel_ids must be an array of integers"
+      "expect_error": "channel_ids must be an array of positive integers"
+    },
+    {
+      "name": "rejects zero channel id",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "channel_ids": [0],
+        "confirm": true
+      },
+      "expect_error": "channel_ids must be an array of positive integers"
+    },
+    {
+      "name": "rejects negative channel id",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "channel_ids": [-1],
+        "confirm": true
+      },
+      "expect_error": "channel_ids must be an array of positive integers"
     },
     {
       "name": "rejects blank group by entry",

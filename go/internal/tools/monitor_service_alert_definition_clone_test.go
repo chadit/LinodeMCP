@@ -21,6 +21,7 @@ const (
 	monitorAlertDefinitionGroupByParam         = "group_by"
 	monitorAlertDefinitionGroupByValue         = "entity_id"
 	monitorAlertDefinitionRegionsParam         = "regions"
+	errCloneChannelIDs                         = "channel_ids must be an array of positive integers"
 	errGroupByNonEmpty                         = "group_by must be an array of non-empty strings"
 	errRegionsNonEmpty                         = "regions must be an array of non-empty strings"
 )
@@ -107,8 +108,10 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolValidationBeforeClient(t *t
 		{name: "zero alert id", mutate: func(args map[string]any) { args[monitorAlertIDParam] = float64(0) }, wantMessage: monitorAlertIDPositiveError},
 		{name: caseMissingLabel, mutate: func(args map[string]any) { delete(args, monitorAlertDefinitionLabelParam) }, wantMessage: errLabelNonEmpty},
 		{name: caseEmptyLabel, mutate: func(args map[string]any) { args[monitorAlertDefinitionLabelParam] = " " }, wantMessage: errLabelNonEmpty},
-		{name: "channel ids wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{"1"} }, wantMessage: "channel_ids must be an array of integers"},
-		{name: "channel ids not array", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = "1" }, wantMessage: "channel_ids must be an array of integers"},
+		{name: "channel ids wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{"1"} }, wantMessage: errCloneChannelIDs},
+		{name: "channel ids not array", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = "1" }, wantMessage: errCloneChannelIDs},
+		{name: "channel ids zero", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{0} }, wantMessage: errCloneChannelIDs},
+		{name: "channel ids negative", mutate: func(args map[string]any) { args[monitorAlertDefinitionChannelIDsParam] = []any{-1} }, wantMessage: errCloneChannelIDs},
 		{name: "description wrong type", mutate: func(args map[string]any) { args[keyDescription] = 1 }, wantMessage: "description must be a string"},
 		{name: "entity ids wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionEntityIDsParam] = []any{1} }, wantMessage: errAlertDefinitionEntityIDs},
 		{name: "entity ids blank", mutate: func(args map[string]any) { args[monitorAlertDefinitionEntityIDsParam] = []any{" "} }, wantMessage: errAlertDefinitionEntityIDs},

@@ -634,13 +634,13 @@ def _build_alert_definition_clone_body(
     if "channel_ids" in arguments:
         raw_channel_ids = arguments["channel_ids"]
         if not isinstance(raw_channel_ids, list):
-            return None, "channel_ids must be an array of integers"
+            return None, "channel_ids must be an array of positive integers"
         channel_ids = [
             _coerce_integral_number(value)
             for value in cast("list[object]", raw_channel_ids)
         ]
-        if any(value is None for value in channel_ids):
-            return None, "channel_ids must be an array of integers"
+        if any(value is None or value <= 0 for value in channel_ids):
+            return None, "channel_ids must be an array of positive integers"
         body["channel_ids"] = cast("list[int]", channel_ids)
 
     if "severity" in arguments:

@@ -424,15 +424,21 @@ async def test_clone_target_validation_matches_go_exactly(
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("channel_ids", [True], "channel_ids must be an array of integers"),
-        ("channel_ids", [1.5], "channel_ids must be an array of integers"),
-        ("channel_ids", [float("nan")], "channel_ids must be an array of integers"),
+        ("channel_ids", [True], "channel_ids must be an array of positive integers"),
+        ("channel_ids", [1.5], "channel_ids must be an array of positive integers"),
+        (
+            "channel_ids",
+            [float("nan")],
+            "channel_ids must be an array of positive integers",
+        ),
+        ("channel_ids", [0], "channel_ids must be an array of positive integers"),
+        ("channel_ids", [-1], "channel_ids must be an array of positive integers"),
         ("severity", True, "severity must be an integer from 0 through 3"),
         ("severity", 1.5, "severity must be an integer from 0 through 3"),
         ("severity", float("-inf"), "severity must be an integer from 0 through 3"),
     ],
 )
-async def test_clone_rejects_fractional_and_non_finite_numbers(
+async def test_clone_rejects_invalid_numeric_fields(
     monkeypatch: pytest.MonkeyPatch,
     field: str,
     value: object,

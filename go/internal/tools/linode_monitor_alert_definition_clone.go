@@ -94,7 +94,7 @@ func monitorServiceAlertDefinitionCloneRequestFromTool(request *mcp.CallToolRequ
 	if raw, exists := args[monitorAlertDefinitionChannelIDsParam]; exists {
 		channelIDs, ok := integerArray(raw)
 		if !ok {
-			return nil, monitorAlertDefinitionChannelIDsParam + " must be an array of integers"
+			return nil, monitorAlertDefinitionChannelIDsParam + " must be an array of positive integers"
 		}
 
 		cloneRequest.ChannelIDs = &channelIDs
@@ -187,7 +187,7 @@ func integerArray(raw any) ([]int, bool) {
 	items := make([]int, 0, len(rawItems))
 	for _, rawItem := range rawItems {
 		value, ok := intFromAny(rawItem)
-		if !ok {
+		if !ok || value <= 0 {
 			return nil, false
 		}
 
