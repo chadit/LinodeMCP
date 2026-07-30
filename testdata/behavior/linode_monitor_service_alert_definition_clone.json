@@ -300,6 +300,28 @@
       "expect_error": "channel_ids must be an array of integers"
     },
     {
+      "name": "rejects blank group by entry",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "group_by": [" "],
+        "confirm": true
+      },
+      "expect_error": "group_by must be an array of non-empty strings"
+    },
+    {
+      "name": "rejects blank region entry",
+      "args": {
+        "service_type": "dbaas",
+        "alert_id": 42,
+        "label": "CPU clone",
+        "regions": [""],
+        "confirm": true
+      },
+      "expect_error": "regions must be an array of non-empty strings"
+    },
+    {
       "name": "requires explicit confirmation",
       "args": {
         "service_type": "dbaas",

@@ -21,6 +21,8 @@ const (
 	monitorAlertDefinitionGroupByParam         = "group_by"
 	monitorAlertDefinitionGroupByValue         = "entity_id"
 	monitorAlertDefinitionRegionsParam         = "regions"
+	errGroupByNonEmpty                         = "group_by must be an array of non-empty strings"
+	errRegionsNonEmpty                         = "regions must be an array of non-empty strings"
 )
 
 func monitorAlertDefinitionCloneArgs() map[string]any {
@@ -110,11 +112,13 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolValidationBeforeClient(t *t
 		{name: "description wrong type", mutate: func(args map[string]any) { args[keyDescription] = 1 }, wantMessage: "description must be a string"},
 		{name: "entity ids wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionEntityIDsParam] = []any{1} }, wantMessage: errAlertDefinitionEntityIDs},
 		{name: "entity ids blank", mutate: func(args map[string]any) { args[monitorAlertDefinitionEntityIDsParam] = []any{" "} }, wantMessage: errAlertDefinitionEntityIDs},
-		{name: "group by wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionGroupByParam] = []any{1} }, wantMessage: "group_by must be an array of strings"},
+		{name: "group by wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionGroupByParam] = []any{1} }, wantMessage: errGroupByNonEmpty},
+		{name: "group by blank", mutate: func(args map[string]any) { args[monitorAlertDefinitionGroupByParam] = []any{" "} }, wantMessage: errGroupByNonEmpty},
 		{name: "group by not array", mutate: func(args map[string]any) {
 			args[monitorAlertDefinitionGroupByParam] = monitorAlertDefinitionGroupByValue
-		}, wantMessage: "group_by must be an array of strings"},
-		{name: "regions wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionRegionsParam] = []any{1} }, wantMessage: errRegionsArray},
+		}, wantMessage: errGroupByNonEmpty},
+		{name: "regions wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionRegionsParam] = []any{1} }, wantMessage: errRegionsNonEmpty},
+		{name: "regions blank", mutate: func(args map[string]any) { args[monitorAlertDefinitionRegionsParam] = []any{""} }, wantMessage: errRegionsNonEmpty},
 		{name: "rule criteria wrong type", mutate: func(args map[string]any) { args[monitorAlertDefinitionRuleCriteriaParam] = []any{} }, wantMessage: "rule_criteria must be an object"},
 		{name: "fractional severity", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 1.5 }, wantMessage: errAlertDefinitionSeverity},
 		{name: "severity out of range", mutate: func(args map[string]any) { args[monitorAlertDefinitionSeverityParam] = 4 }, wantMessage: errAlertDefinitionSeverity},

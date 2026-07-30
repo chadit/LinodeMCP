@@ -41,6 +41,13 @@ def _is_string_array(value: object) -> bool:
     )
 
 
+def _is_non_blank_string_array(value: object) -> bool:
+    """Report whether value is an array of non-blank strings."""
+    return _is_string_array(value) and all(
+        item.strip() for item in cast("list[str]", value)
+    )
+
+
 def _coerce_integral_number(value: object) -> int | None:
     """Return an int for non-boolean ints and finite integral floats."""
     if isinstance(value, bool):
@@ -664,8 +671,14 @@ def _build_alert_definition_clone_body(
             lambda value: _coerce_entity_id_strings(value) is not None,
             "entity_ids must be an array of non-empty strings",
         ),
-        "group_by": (_is_string_array, "group_by must be an array of strings"),
-        "regions": (_is_string_array, "regions must be an array of strings"),
+        "group_by": (
+            _is_non_blank_string_array,
+            "group_by must be an array of non-empty strings",
+        ),
+        "regions": (
+            _is_non_blank_string_array,
+            "regions must be an array of non-empty strings",
+        ),
         "rule_criteria": (
             lambda value: isinstance(value, dict),
             "rule_criteria must be an object",

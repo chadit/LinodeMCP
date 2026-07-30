@@ -109,28 +109,28 @@ func monitorServiceAlertDefinitionCloneRequestFromTool(request *mcp.CallToolRequ
 		cloneRequest.Description = &description
 	}
 
-	if raw, exists := args[monitorAlertDefinitionEntityIDsParam]; exists {
-		entityIDs, ok := stringArray(raw)
-		if !ok || hasBlankString(entityIDs) {
-			return nil, errMonitorAlertDefinitionEntityIDs
+	if _, exists := args[monitorAlertDefinitionEntityIDsParam]; exists {
+		entityIDs, validationMessage := optionalStringArrayArgument(args, monitorAlertDefinitionEntityIDsParam)
+		if validationMessage != "" {
+			return nil, validationMessage
 		}
 
 		cloneRequest.EntityIDs = &entityIDs
 	}
 
 	if raw, exists := args[monitorAlertDefinitionGroupByParam]; exists {
-		groupBy, ok := stringArray(raw)
+		groupBy, ok := nonBlankStringArray(raw)
 		if !ok {
-			return nil, monitorAlertDefinitionGroupByParam + " must be an array of strings"
+			return nil, monitorAlertDefinitionGroupByParam + " must be an array of non-empty strings"
 		}
 
 		cloneRequest.GroupBy = &groupBy
 	}
 
 	if raw, exists := args[monitorAlertDefinitionRegionsParam]; exists {
-		regions, ok := stringArray(raw)
+		regions, ok := nonBlankStringArray(raw)
 		if !ok {
-			return nil, errMonitorAlertDefinitionRegions
+			return nil, monitorAlertDefinitionRegionsParam + " must be an array of non-empty strings"
 		}
 
 		cloneRequest.Regions = &regions
@@ -202,6 +202,12 @@ func stringArray(raw any) ([]string, bool) {
 	}
 
 	return items, true
+}
+
+func nonBlankStringArray(raw any) ([]string, bool) {
+	items, ok := stringArray(raw)
+
+	return items, ok && !hasBlankString(items)
 }
 
 func hasBlankString(items []string) bool {
