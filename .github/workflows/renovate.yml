@@ -82,6 +82,7 @@ jobs:
         if: steps.secrets.outputs.skip != 'true'
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
+          renovate-version: "43"
         env:
           LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
           RENOVATE_DRY_RUN: ${{ inputs.dryRun == 'disabled' && 'null' || inputs.dryRun }}
