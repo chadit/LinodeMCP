@@ -33,6 +33,9 @@ type AlertDefinition struct {
 	Status            string         `json:"status,omitempty"`
 	ChannelIDs        []int          `json:"channel_ids,omitempty"`
 	EntityIDs         []string       `json:"entity_ids,omitempty"`
+	GroupBy           []string       `json:"group_by,omitempty"`
+	Scope             string         `json:"scope,omitempty"`
+	Regions           []string       `json:"regions,omitempty"`
 	ID                int            `json:"id"`
 	Severity          int            `json:"severity"`
 }
@@ -46,6 +49,21 @@ type CreateAlertDefinitionRequest struct {
 	ChannelIDs        []int          `json:"channel_ids"`
 	EntityIDs         []string       `json:"entity_ids,omitempty"`
 	Severity          int            `json:"severity"`
+}
+
+// CloneAlertDefinitionRequest describes a monitoring alert definition clone request.
+// Pointer collection fields preserve the distinction between an omitted override
+// and an explicitly empty array or object.
+type CloneAlertDefinitionRequest struct {
+	ChannelIDs        *[]int          `json:"channel_ids,omitempty"`
+	Description       *string         `json:"description,omitempty"`
+	EntityIDs         *[]string       `json:"entity_ids,omitempty"`
+	GroupBy           *[]string       `json:"group_by,omitempty"`
+	Regions           *[]string       `json:"regions,omitempty"`
+	RuleCriteria      *map[string]any `json:"rule_criteria,omitempty"`
+	Severity          *int            `json:"severity,omitempty"`
+	TriggerConditions *map[string]any `json:"trigger_conditions,omitempty"`
+	Label             string          `json:"label"`
 }
 
 // UpdateAlertDefinitionRequest describes a monitoring alert definition update request.

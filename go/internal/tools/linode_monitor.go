@@ -25,6 +25,7 @@ const (
 	monitorServiceMetricsToolName               = "linode_monitor_service_metric_query"
 	monitorServiceCreateToolName                = "linode_monitor_service_" + "token_create"
 	monitorServiceAlertDefinitionCreateToolName = "linode_monitor_service_alert_definition_create"
+	monitorServiceAlertDefinitionCloneToolName  = "linode_monitor_service_alert_definition_clone"
 	monitorServiceAlertDefinitionGetToolName    = "linode_monitor_service_alert_definition_get"
 	monitorServiceAlertDefinitionDeleteToolName = "linode_monitor_service_alert_definition_delete"
 
@@ -37,7 +38,9 @@ const (
 	monitorAlertDefinitionTriggerConditionsParam = "trigger_conditions"
 	monitorAlertDefinitionChannelIDsParam        = "channel_ids"
 	monitorAlertDefinitionDescriptionParam       = "description"
+	monitorAlertDefinitionGroupByParam           = "group_by"
 	monitorAlertDefinitionEntityIDsParam         = "entity_ids"
+	monitorAlertDefinitionRegionsParam           = "regions"
 	monitorAlertDefinitionStatusParam            = "status"
 	monitorAlertDefinitionStatusEnabled          = "enabled"
 	monitorAlertDefinitionStatusDisabled         = "disabled"
@@ -50,6 +53,8 @@ const (
 	errMonitorAlertDefinitionSeverity            = "severity must be an integer from 0 through 3"
 	errMonitorAlertDefinitionChannels            = "channel_ids must be a non-empty array of positive integers"
 	errMonitorAlertDefinitionEntityIDs           = "entity_ids must be an array of non-empty strings"
+	errMonitorAlertDefinitionGroupBy             = "group_by must be an array of non-empty strings"
+	errMonitorAlertDefinitionRegions             = "regions must be an array of non-empty strings"
 	errMonitorAlertDefinitionUpdateEmpty         = "at least one alert definition field must be provided"
 	errMonitorAlertDefinitionStatus              = "status must be enabled or disabled"
 	monitorDashboardIDParam                      = "dashboard_id"
@@ -586,7 +591,11 @@ func monitorServiceAlertDefinitionCreateRequestFromTool(request *mcp.CallToolReq
 		return nil, validationMessage
 	}
 
-	entityIDs, validationMessage := optionalStringArrayArgument(args, monitorAlertDefinitionEntityIDsParam)
+	entityIDs, validationMessage := optionalStringArrayArgument(
+		args,
+		monitorAlertDefinitionEntityIDsParam,
+		errMonitorAlertDefinitionEntityIDs,
+	)
 	if validationMessage != "" {
 		return nil, validationMessage
 	}
@@ -680,7 +689,7 @@ func intArrayArgument(args map[string]any, name string) ([]int, string) {
 	return items, ""
 }
 
-func optionalStringArrayArgument(args map[string]any, name string) ([]string, string) {
+func optionalStringArrayArgument(args map[string]any, name, invalidMessage string) ([]string, string) {
 	raw, exists := args[name]
 	if !exists {
 		return nil, ""
@@ -688,14 +697,14 @@ func optionalStringArrayArgument(args map[string]any, name string) ([]string, st
 
 	rawItems, ok := raw.([]any)
 	if !ok {
-		return nil, errMonitorAlertDefinitionEntityIDs
+		return nil, invalidMessage
 	}
 
 	items := make([]string, 0, len(rawItems))
 	for _, rawItem := range rawItems {
 		value, ok := rawItem.(string)
 		if !ok || strings.TrimSpace(value) == "" {
-			return nil, errMonitorAlertDefinitionEntityIDs
+			return nil, invalidMessage
 		}
 
 		items = append(items, value)

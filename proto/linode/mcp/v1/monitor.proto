@@ -160,6 +160,42 @@ message MonitorServiceAlertDefinitionCreateInput {
   optional bool dry_run = 11;
 }
 
+// MonitorServiceAlertDefinitionCloneInput is the input contract for
+// linode_monitor_service_alert_definition_clone. label is the only required
+// request-body field; the remaining clone overrides are optional.
+message MonitorServiceAlertDefinitionCloneInput {
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1;
+  // Supported monitoring service type slug for the source alert definition.
+  string service_type = 2;
+  // Source alert definition ID to clone.
+  int32 alert_id = 3;
+  // Label for the cloned alert definition.
+  string label = 4;
+  // Optional alert channel IDs.
+  repeated int32 channel_ids = 5;
+  // Optional cloned alert definition description.
+  optional string description = 6;
+  // Optional fields used to group alert data.
+  repeated string group_by = 7;
+  // Optional alert rule criteria object.
+  map<string, google.protobuf.Value> rule_criteria = 8;
+  // Optional alert severity: 0 severe, 1 medium, 2 low, or 3 info.
+  optional int32 severity = 9;
+  // Optional alert trigger conditions object.
+  map<string, google.protobuf.Value> trigger_conditions = 10;
+  // Must be true to confirm cloning an alert definition. Ignored when
+  // dry_run=true.
+  bool confirm = 11;
+  // Preview the call without making it: returns the would-be request and
+  // current resource state. Default false.
+  optional bool dry_run = 12;
+  // Optional service entity IDs for an entity-scope clone.
+  repeated string entity_ids = 13;
+  // Optional region IDs for a region-scope clone.
+  repeated string regions = 14;
+}
+
 // MonitorServiceAlertDefinitionUpdateInput is the input contract for
 // linode_monitor_service_alert_definition_update. rule_criteria and
 // trigger_conditions are optional free-form objects (map); all other mutable
@@ -262,6 +298,12 @@ message MonitorAlertDefinition {
   google.protobuf.Struct trigger_conditions = 10;
   repeated int32 channel_ids = 11;
   repeated string entity_ids = 12;
+  // Fields used to group alert data.
+  repeated string group_by = 13;
+  // Classification describing where the alert definition applies.
+  string scope = 14;
+  // Region IDs targeted by a region-scope alert definition.
+  repeated string regions = 15;
 }
 
 // MonitorAlertDefinitionListResponse is the
@@ -298,9 +340,9 @@ message MonitorServiceMetricQueryResponse {
 }
 
 // MonitorAlertDefinitionWriteResponse is the
-// linode_monitor_service_alert_definition_create and _update envelope: a
-// confirmation message plus the full MonitorAlertDefinition element decoded
-// from the API body.
+// linode_monitor_service_alert_definition_create, _clone, and _update
+// envelope: a confirmation message plus the full MonitorAlertDefinition
+// element decoded from the API body.
 message MonitorAlertDefinitionWriteResponse {
   string message = 1;
   MonitorAlertDefinition alert_definition = 2;
