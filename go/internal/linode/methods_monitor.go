@@ -143,6 +143,29 @@ func (c *Client) httpCreateMonitorServiceAlertDefinitionProto(ctx context.Contex
 	return definition, nil
 }
 
+// httpCloneMonitorServiceAlertDefinitionProto clones an alert definition and
+// decodes the response into the MonitorAlertDefinition proto element.
+func (c *Client) httpCloneMonitorServiceAlertDefinitionProto(ctx context.Context, serviceType string, alertID int, request *CloneAlertDefinitionRequest) (*linodev1.MonitorAlertDefinition, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID)) + "/clone"
+
+	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	if err != nil {
+		return nil, &NetworkError{Operation: "CloneMonitorServiceAlertDefinition", Err: err}
+	}
+
+	defer drainClose(resp)
+
+	definition := &linodev1.MonitorAlertDefinition{}
+	if err := c.handleProtoResponse(resp, definition); err != nil {
+		return nil, err
+	}
+
+	return definition, nil
+}
+
 // httpUpdateMonitorServiceAlertDefinitionProto updates an alert definition and
 // decodes the response into the MonitorAlertDefinition proto element.
 func (c *Client) httpUpdateMonitorServiceAlertDefinitionProto(ctx context.Context, serviceType string, alertID int, request *UpdateAlertDefinitionRequest) (*linodev1.MonitorAlertDefinition, error) {

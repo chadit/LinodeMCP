@@ -292,6 +292,7 @@ linode_monitor_alert_channel_list: GET /monitor/alert-channels
 linode_monitor_alert_definition_list: GET /monitor/alert-definitions
 linode_monitor_dashboard_get: GET /monitor/dashboards/{p}
 linode_monitor_dashboard_list: GET /monitor/dashboards
+linode_monitor_service_alert_definition_clone: POST /monitor/services/{p}/alert-definitions/{p}/clone
 linode_monitor_service_alert_definition_create: POST /monitor/services/{p}/alert-definitions
 linode_monitor_service_alert_definition_delete: DELETE /monitor/services/{p}/alert-definitions/{p}
 linode_monitor_service_alert_definition_get: GET /monitor/services/{p}/alert-definitions/{p}
