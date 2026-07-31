@@ -82,6 +82,8 @@ jobs:
         if: steps.secrets.outputs.skip != 'true'
         with:
           token: ${{ secrets.RENOVATE_TOKEN }}
+          # Preserve the previous action's v43 runner; validate v44 separately
+          # before upgrading this major.
           renovate-version: "43"
         env:
           LOG_LEVEL: ${{ inputs.logLevel || 'info' }}
