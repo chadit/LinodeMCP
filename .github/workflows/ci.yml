@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - main
+      # Renovate automerges its updates at the branch level (see
+      # renovate.json "automergeType"), so those branches never get a PR and
+      # would never reach the pull_request lane below. Without this entry a
+      # renovate/* branch carries no checks at all, and Renovate would either
+      # wait forever for a status that cannot arrive or, worse, merge an
+      # unverified dependency bump straight to main.
+      - "renovate/**"
   pull_request:
     branches:
       - main

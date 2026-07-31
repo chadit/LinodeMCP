@@ -17,6 +17,7 @@
     ]
   },
   "platformAutomerge": true,
+  "automergeType": "branch",
   "postUpdateOptions": [
     "gomodTidy"
   ],
@@ -88,7 +89,7 @@
       "groupName": "pre-commit hooks (non-major)"
     },
     {
-      "description": "Auto-merge minor, patch, pin, and digest updates once CI passes. Major updates stay manual for review.",
+      "description": "Auto-merge minor, patch, pin, and digest updates once CI passes. These land through automergeType 'branch': Renovate pushes renovate/*, waits for that branch to go green, then fast-forwards main without ever opening a PR, which keeps routine bumps out of the PR queue and out of the owner-PR tracker. It falls back to raising a PR only when the branch tests fail or stay pending. Major updates carry no automerge, so they still open a normal PR for review.",
       "matchUpdateTypes": [
         "minor",
         "patch",
