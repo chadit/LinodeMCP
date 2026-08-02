@@ -26,7 +26,7 @@ def create_version_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="version",
         description="Returns LinodeMCP server version and build information",
-        inputSchema=schema("linode.mcp.v1.VersionInput"),
+        input_schema=schema("linode.mcp.v1.VersionInput"),
     ), Capability.Meta
 
 

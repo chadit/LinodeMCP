@@ -8,7 +8,7 @@ option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1
 // InstanceDisk response message is defined in instance.proto.
 message InstanceDiskGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The ID of the disk to retrieve (required).
@@ -18,7 +18,7 @@ message InstanceDiskGetInput {
 // InstanceDiskListInput is the input contract for linode_instance_disk_list.
 message InstanceDiskListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // Page of results to return (optional, minimum 1).
@@ -34,7 +34,7 @@ message InstanceDiskListInput {
 // schema.
 message InstanceDiskCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // Label for the disk (required).
@@ -55,17 +55,17 @@ message InstanceDiskCreateInput {
   // (optional).
   optional string authorized_users = 9;
   // Must be true to confirm disk creation. Ignored when dry_run=true.
-  bool confirm = 10;
+  bool confirm = 10; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 11;
+  optional bool dry_run = 11; // system param
 }
 
 // InstanceDiskUpdateInput is the input contract for
 // linode_instance_disk_update. linode_id, disk_id, and confirm are required.
 message InstanceDiskUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The ID of the disk to update (required).
@@ -73,10 +73,10 @@ message InstanceDiskUpdateInput {
   // New label for the disk (optional).
   optional string label = 4;
   // Must be true to confirm disk update. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // InstanceDiskDeleteInput is the input contract for
@@ -84,39 +84,39 @@ message InstanceDiskUpdateInput {
 // confirm are required, and mode/plan_id drive the plan/apply flow.
 message InstanceDiskDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The ID of the disk to delete (required).
   int32 disk_id = 3;
   // Must be true to confirm deletion. This action is irreversible and all disk
   // data will be lost. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }
 
 // InstanceDiskCloneInput is the input contract for linode_instance_disk_clone.
 // linode_id, disk_id, and confirm are required.
 message InstanceDiskCloneInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The ID of the disk to clone (required).
   int32 disk_id = 3;
   // Must be true to confirm disk clone. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // InstanceDiskResizeInput is the input contract for
@@ -124,7 +124,7 @@ message InstanceDiskCloneInput {
 // required.
 message InstanceDiskResizeInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The ID of the disk to resize (required).
@@ -132,10 +132,10 @@ message InstanceDiskResizeInput {
   // New size for the disk in MB (required).
   int32 size = 4;
   // Must be true to confirm disk resize. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // InstanceDiskPasswordResetInput is the input contract for
@@ -143,7 +143,7 @@ message InstanceDiskResizeInput {
 // confirm are required.
 message InstanceDiskPasswordResetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The ID of the disk (required).
@@ -152,8 +152,8 @@ message InstanceDiskPasswordResetInput {
   // digits).
   string password = 4;
   // Must be true to confirm disk password reset. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }

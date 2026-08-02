@@ -211,7 +211,7 @@ def create_linode_networking_reserved_ip_create_tool() -> tuple[Tool, Capability
             "Reserves a public IPv4 address in a region. Pass dry_run=true to "
             "preview without reserving or starting billing."
         ),
-        inputSchema=schema("linode.mcp.v1.ReservedIPCreateInput"),
+        input_schema=schema("linode.mcp.v1.ReservedIPCreateInput"),
     ), Capability.Write
 
 
@@ -269,7 +269,7 @@ def create_linode_networking_reserved_ip_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_reserved_ip_list",
         description="Lists reserved public IPv4 addresses on the account",
-        inputSchema=schema("linode.mcp.v1.ReservedIPListInput"),
+        input_schema=schema("linode.mcp.v1.ReservedIPListInput"),
     ), Capability.Read
 
 
@@ -296,7 +296,7 @@ def create_linode_networking_reserved_ip_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_reserved_ip_get",
         description="Gets a reserved public IPv4 address",
-        inputSchema=schema("linode.mcp.v1.ReservedIPGetInput"),
+        input_schema=schema("linode.mcp.v1.ReservedIPGetInput"),
     ), Capability.Read
 
 
@@ -322,7 +322,7 @@ def create_linode_networking_reserved_ip_update_tool() -> tuple[Tool, Capability
             "Replaces all tags on a reserved public IPv4 address. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.ReservedIPUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ReservedIPUpdateInput"),
     ), Capability.Write
 
 
@@ -371,7 +371,7 @@ def create_linode_networking_reserved_ip_type_list_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_networking_reserved_ip_type_list",
         description="Lists reserved public IPv4 pricing information",
-        inputSchema=schema("linode.mcp.v1.ReservedIPTypeListInput"),
+        input_schema=schema("linode.mcp.v1.ReservedIPTypeListInput"),
     ), Capability.Read
 
 
@@ -399,7 +399,7 @@ def create_linode_networking_reserved_ip_delete_tool() -> tuple[Tool, Capability
             "Permanently unreserves a public IPv4 address and stops billing. "
             "Pass dry_run=true to preview without deleting." + TWO_STAGE_NOTE
         ),
-        inputSchema=schema("linode.mcp.v1.ReservedIPDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ReservedIPDeleteInput"),
     ), Capability.Destroy
 
 

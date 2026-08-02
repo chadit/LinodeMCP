@@ -33,7 +33,7 @@ message VLANListResponse {
 // VLANListInput is the input contract for linode_vlan_list.
 message VLANListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -43,21 +43,21 @@ message VLANListInput {
 // VLANDeleteInput is the input contract for linode_vlan_delete.
 message VLANDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The region ID for the VLAN, for example us-east.
   string region_id = 2;
   // The VLAN label.
   string label = 3;
   // Must be set to true to confirm deleting the VLAN. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }

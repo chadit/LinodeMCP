@@ -52,7 +52,7 @@ def create_linode_instance_ip_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_ip_list",
         description=("Lists IP addresses for a Linode instance"),
-        inputSchema=schema("linode.mcp.v1.InstanceIPListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceIPListInput"),
     ), Capability.Read
 
 
@@ -79,7 +79,7 @@ def create_linode_instance_ip_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_ip_get",
         description=("Gets details of a specific IP for an instance"),
-        inputSchema=schema("linode.mcp.v1.InstanceIPGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceIPGetInput"),
     ), Capability.Read
 
 
@@ -124,7 +124,7 @@ def create_linode_networking_ip_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_get",
         description=("Gets details of a networking-level IP address"),
-        inputSchema=schema("linode.mcp.v1.IPAddressGetInput"),
+        input_schema=schema("linode.mcp.v1.IPAddressGetInput"),
     ), Capability.Read
 
 
@@ -166,7 +166,7 @@ def create_linode_instance_ip_allocate_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_ip_allocate",
         description=("Allocates a new IP address for a Linode instance"),
-        inputSchema=schema("linode.mcp.v1.InstanceIPAllocateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceIPAllocateInput"),
     ), Capability.Write
 
 
@@ -226,7 +226,7 @@ def create_linode_instance_ip_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_ip_update",
         description=("Updates reverse DNS for an IP address on a Linode instance"),
-        inputSchema=schema("linode.mcp.v1.InstanceIPUpdateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceIPUpdateInput"),
     ), Capability.Write
 
 
@@ -301,7 +301,7 @@ def create_linode_networking_ip_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_update",
         description=("Updates reverse DNS for a networking-level IP address"),
-        inputSchema=schema("linode.mcp.v1.IPAddressUpdateInput"),
+        input_schema=schema("linode.mcp.v1.IPAddressUpdateInput"),
     ), Capability.Write
 
 
@@ -383,7 +383,7 @@ def create_linode_networking_ip_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_list",
         description="Lists public IP addresses on the account",
-        inputSchema=schema("linode.mcp.v1.NetworkingIPListInput"),
+        input_schema=schema("linode.mcp.v1.NetworkingIPListInput"),
     ), Capability.Read
 
 
@@ -411,7 +411,7 @@ def create_linode_networking_ip_allocate_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_allocate",
         description=("Allocates a new IP address at the networking level for a Linode"),
-        inputSchema=schema("linode.mcp.v1.IPAddressAllocateInput"),
+        input_schema=schema("linode.mcp.v1.IPAddressAllocateInput"),
     ), Capability.Write
 
 
@@ -503,7 +503,7 @@ def create_linode_instance_ip_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.InstanceIPDeleteInput"),
+        input_schema=schema("linode.mcp.v1.InstanceIPDeleteInput"),
     ), Capability.Destroy
 
 

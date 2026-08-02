@@ -138,7 +138,7 @@ message FirewallRuleVersionListResponse {
 // FirewallGetInput is the input contract for linode_firewall_get.
 message FirewallGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall to retrieve (required).
   int32 firewall_id = 2;
 }
@@ -146,7 +146,7 @@ message FirewallGetInput {
 // FirewallRulesGetInput is the input contract for linode_firewall_rules_get.
 message FirewallRulesGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall whose rules to retrieve (required).
   int32 firewall_id = 2;
 }
@@ -154,7 +154,7 @@ message FirewallRulesGetInput {
 // FirewallListInput is the input contract for linode_firewall_list.
 message FirewallListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Filter by firewall status (enabled, disabled, deleted).
   optional string status = 2;
   // Filter firewalls by label containing this string (case-insensitive).
@@ -164,7 +164,7 @@ message FirewallListInput {
 // FirewallCreateInput is the input contract for linode_firewall_create.
 message FirewallCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // A label for the firewall (must be unique).
   string label = 2;
   // Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional,
@@ -175,16 +175,16 @@ message FirewallCreateInput {
   optional FirewallPolicy.Value outbound_policy = 4;
   // Must be set to true to confirm firewall creation. Ignored when
   // dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // FirewallUpdateInput is the input contract for linode_firewall_update.
 message FirewallUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall to update.
   int32 firewall_id = 2;
   // New label for the firewall (optional).
@@ -196,36 +196,36 @@ message FirewallUpdateInput {
   // Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional).
   optional FirewallPolicy.Value outbound_policy = 6;
   // Must be set to true to confirm firewall update. Ignored when dry_run=true.
-  bool confirm = 7;
+  bool confirm = 7; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8;
+  optional bool dry_run = 8; // system param
 }
 
 // FirewallDeleteInput is the input contract for linode_firewall_delete.
 message FirewallDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall to delete.
   int32 firewall_id = 2;
   // Must be set to true to confirm deletion. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // FirewallSettingsGetInput is the input contract for
 // linode_firewall_settings_get.
 message FirewallSettingsGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -236,7 +236,7 @@ message FirewallSettingsGetInput {
 // linode_firewall_rule_version_list.
 message FirewallRuleVersionListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall whose rule versions should be listed.
   int32 firewall_id = 2;
 }
@@ -245,7 +245,7 @@ message FirewallRuleVersionListInput {
 // linode_firewall_rule_version_get.
 message FirewallRuleVersionGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall whose rule version should be retrieved.
   int32 firewall_id = 2;
   // The firewall rule version number to retrieve.
@@ -256,7 +256,7 @@ message FirewallRuleVersionGetInput {
 // linode_firewall_template_list.
 message FirewallTemplateListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -267,7 +267,7 @@ message FirewallTemplateListInput {
 // linode_firewall_template_get.
 message FirewallTemplateGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Firewall template slug to retrieve. Must be public or vpc.
   FirewallTemplateSlug.Value slug = 2;
   // Page of results to return (optional, minimum 1).
@@ -284,7 +284,7 @@ message FirewallTemplateGetInput {
 // shape, so each is a repeated free-form firewall-rule object.
 message FirewallRulesUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall whose rules should be replaced.
   int32 firewall_id = 2;
   // Array of inbound firewall rule objects.
@@ -293,10 +293,10 @@ message FirewallRulesUpdateInput {
   repeated google.protobuf.Struct outbound = 4;
   // Must be set to true to confirm replacing firewall rules. Ignored when
   // dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // FirewallSettingsUpdateInput is the input contract for
@@ -307,23 +307,23 @@ message FirewallRulesUpdateInput {
 // vpc_interface with positive-int firewall IDs.
 message FirewallSettingsUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Object of positive firewall IDs keyed by linode, nodebalancer,
   // public_interface, or vpc_interface.
   map<string, google.protobuf.Value> default_firewall_ids = 2;
   // Must be true to confirm default firewall settings update. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // InstanceFirewallListInput is the input contract for
 // linode_instance_firewall_list.
 message InstanceFirewallListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // Page of results to return (optional, minimum 1).
@@ -336,7 +336,7 @@ message InstanceFirewallListInput {
 // linode_instance_interface_firewall_list.
 message InstanceInterfaceFirewallListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The ID of the Linode interface (required).
@@ -351,7 +351,7 @@ message InstanceInterfaceFirewallListInput {
 // presence).
 message InstanceFirewallUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // Complete list of firewall IDs to assign to the Linode. Use an empty list
@@ -363,10 +363,10 @@ message InstanceFirewallUpdateInput {
   optional int32 page_size = 5;
   // Must be set to true to confirm firewall assignment changes. Ignored when
   // dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // FirewallDefaultIDs holds the default firewall assignments by resource type:

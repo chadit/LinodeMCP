@@ -442,7 +442,6 @@ func setResilienceDefaults(cfg *Config) {
 }
 
 func setObservabilityDefaults(cfg *Config) {
-	// Metrics defaults
 	if cfg.Observability.Metrics.Prometheus.Host == "" {
 		cfg.Observability.Metrics.Prometheus.Host = DefaultBindHost
 	}
@@ -455,7 +454,6 @@ func setObservabilityDefaults(cfg *Config) {
 		cfg.Observability.Metrics.Prometheus.Path = DefaultMetricsPath
 	}
 
-	// Health defaults
 	if cfg.Observability.Health.Host == "" {
 		cfg.Observability.Health.Host = DefaultBindHost
 	}
@@ -468,7 +466,6 @@ func setObservabilityDefaults(cfg *Config) {
 		cfg.Observability.Health.Path = DefaultHealthPath
 	}
 
-	// Tracing defaults
 	if cfg.Observability.Tracing.SampleRate == 0 {
 		cfg.Observability.Tracing.SampleRate = DefaultTracingSample
 	}
@@ -477,23 +474,19 @@ func setObservabilityDefaults(cfg *Config) {
 		cfg.Observability.Tracing.Protocol = DefaultTracingProtocol
 	}
 
-	// Enable runtime and host metrics by default
 	if !cfg.Observability.Metrics.Runtime && !cfg.Observability.Metrics.Host {
 		cfg.Observability.Metrics.Runtime = true
 		cfg.Observability.Metrics.Host = true
 	}
 
-	// Enable Prometheus by default if metrics enabled
 	if cfg.Observability.Metrics.Enabled && !cfg.Observability.Metrics.Prometheus.Enabled {
 		cfg.Observability.Metrics.Prometheus.Enabled = true
 	}
 
-	// Enable health checks by default
 	if !cfg.Observability.Health.Enabled {
 		cfg.Observability.Health.Enabled = true
 	}
 
-	// Default logging format
 	if cfg.Observability.Logging.Format == "" {
 		cfg.Observability.Logging.Format = "json"
 	}

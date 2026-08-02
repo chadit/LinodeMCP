@@ -22,7 +22,7 @@ def create_linode_network_transfer_price_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_network_transfer_price_list",
         description="Gets network transfer prices.",
-        inputSchema=schema("linode.mcp.v1.NetworkTransferPriceListInput"),
+        input_schema=schema("linode.mcp.v1.NetworkTransferPriceListInput"),
     ), Capability.Read
 
 

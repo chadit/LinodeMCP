@@ -141,8 +141,6 @@ func (c *Client) httpCreateSupportTicketReplyProto(ctx context.Context, ticketID
 	return reply, nil
 }
 
-// httpListSupportTickets retrieves support tickets.
-
 // httpListSupportTicketsProto retrieves support tickets as proto messages for the
 // proto-backed list path. page/page_size flow through withPaginationQuery, so the
 // request matches httpListSupportTickets.
@@ -161,7 +159,7 @@ func (c *Client) httpCloseSupportTicket(ctx context.Context, ticketID int) error
 		return &NetworkError{Operation: "CloseSupportTicket", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all support methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }

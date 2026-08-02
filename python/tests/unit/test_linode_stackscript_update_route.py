@@ -149,8 +149,8 @@ def test_create_linode_stackscript_update_tool_schema() -> None:
 
     assert tool.name == "linode_stackscript_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["stackscript_id", "confirm"]
-    properties = tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["stackscript_id", "confirm"]
+    properties = tool.input_schema["properties"]
     assert properties["stackscript_id"]["type"] == "integer"
     assert properties["label"]["type"] == "string"
     assert properties["images"]["type"] == "array"

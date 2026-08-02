@@ -101,7 +101,6 @@ func TestLoadWindowJSONLAndSQLiteAgree(t *testing.T) {
 		makeTestEvent("linode_instance_delete", audit.CapabilityDestroy, audit.StatusError, day(20, 10)),
 	}
 
-	// JSONL source.
 	jsonlDir := t.TempDir()
 	writeJSONLFile(t, filepath.Join(jsonlDir, "audit.log"), false, events)
 
@@ -114,7 +113,6 @@ func TestLoadWindowJSONLAndSQLiteAgree(t *testing.T) {
 		t.Errorf("len(jsonlEvents) = %d, want %d", len(jsonlEvents), 3)
 	}
 
-	// SQLite source.
 	dbPath := filepath.Join(t.TempDir(), "audit.db")
 
 	sink, err := audit.NewSQLiteSink(t.Context(), dbPath, 5000)

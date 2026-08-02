@@ -15,7 +15,6 @@ from pathlib import Path
 # log directory; everyone else writes under their XDG state directory.
 _SYSTEM_SERVICE_UID_THRESHOLD = 1000
 
-# Path used when the process runs as a system daemon.
 SYSTEM_AUDIT_DIR = "/var/log/linodemcp"
 
 # Directory name appended to XDG_STATE_HOME (or ~/.local/state) for

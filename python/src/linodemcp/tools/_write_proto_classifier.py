@@ -20,9 +20,9 @@ Classification rules (per handler, via transitive intra-package call graph):
 over every tool regardless of capability. It inspects each
 ``create_<tool>_tool`` factory's ``Tool(...)`` constructor:
 
-- "generated" -- ``inputSchema=schema(...)``; the MCP input schema is loaded
+- "generated" -- ``input_schema=schema(...)``; the MCP input schema is loaded
                  from the proto contract.
-- "hand"      -- ``inputSchema={...}``; the schema is a hand-built dict.
+- "hand"      -- ``input_schema={...}``; the schema is a hand-built dict.
 - "review"    -- ``create_<tool>_tool`` was not found; written to stderr.
 
 Usage::
@@ -41,10 +41,6 @@ import ast
 import json
 import sys
 from pathlib import Path
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 
 _TOOLS_DIR = Path(__file__).resolve().parent
 
@@ -72,17 +68,12 @@ _SURFACE_CAPS: dict[str, frozenset[str]] = {
 _INPUT_SURFACE = "input"
 
 # The proto-schema loader call name. A create_<tool>_tool factory that sets
-# inputSchema=schema(...) builds its schema from the proto contract (generated);
-# a dict-literal inputSchema is hand-built.
+# input_schema=schema(...) builds its schema from the proto contract (generated);
+# a dict-literal input_schema is hand-built.
 _SCHEMA_LOADER = "schema"
 
 # A capabilities file line has exactly two tab-separated fields.
 _CAP_FIELD_COUNT = 2
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _load_surface_tools(caps: frozenset[str]) -> list[str]:
@@ -130,8 +121,8 @@ def _is_schema_loader_call(value: ast.expr) -> bool:
 def _input_status(create_node: ast.AST) -> str:
     """Classify a create_<tool>_tool factory as "generated" or "hand".
 
-    "generated" means the ``Tool(...)`` constructor sets its ``inputSchema`` from
-    the proto-schema loader (``inputSchema=schema(...)``); "hand" means the
+    "generated" means the ``Tool(...)`` constructor sets its ``input_schema`` from
+    the proto-schema loader (``input_schema=schema(...)``); "hand" means the
     schema is a dict literal or any other non-loader expression. As a fallback
     for a factory that builds the schema in a local variable first, a call to
     the loader anywhere in the factory also counts as generated.
@@ -146,7 +137,7 @@ def _input_status(create_node: ast.AST) -> str:
         if not is_tool:
             continue
         for keyword in node.keywords:
-            if keyword.arg != "inputSchema":
+            if keyword.arg != "input_schema":
                 continue
             return "generated" if _is_schema_loader_call(keyword.value) else "hand"
 
@@ -222,7 +213,6 @@ def _reaches_proto_sink(
     if direct & _PROTO_SINKS:
         return True
 
-    # Recurse into intra-package helpers.
     for callee in direct:
         if callee not in package_index:
             continue
@@ -230,11 +220,6 @@ def _reaches_proto_sink(
             return True
 
     return False
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 def _classify_input() -> dict[str, str]:
@@ -294,10 +279,6 @@ def classify(surface: str = "write") -> dict[str, str]:
 
     return result
 
-
-# ---------------------------------------------------------------------------
-# __main__ entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     _surface = sys.argv[1] if len(sys.argv) > 1 else "write"

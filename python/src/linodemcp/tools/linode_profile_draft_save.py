@@ -116,7 +116,7 @@ def create_linode_profile_draft_save_tool() -> tuple[Tool, Capability]:
                 "use <name>` separately. Saving over a built-in "
                 "profile name is refused."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileDraftSaveInput"),
+            input_schema=schema("linode.mcp.v1.ProfileDraftSaveInput"),
         ),
         Capability.Meta,
     )

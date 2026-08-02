@@ -37,9 +37,6 @@ def _ok_response(body: Any) -> MagicMock:
     return response
 
 
-# --- Account / regions / types / volumes / images (typed reads) ------------
-
-
 async def test_get_account_parses_account() -> None:
     """get_account GETs /account and parses into an Account dataclass."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -264,9 +261,6 @@ async def test_delete_image_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- Instance backups ------------------------------------------------------
-
-
 async def test_list_instance_backups_returns_body() -> None:
     """list_instance_backups GETs the backups route and returns the raw body."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -400,9 +394,6 @@ async def test_cancel_instance_backups_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- Instance disks --------------------------------------------------------
-
-
 async def test_list_instance_disks_unwraps_data() -> None:
     """list_instance_disks GETs the disks route and unwraps the data list."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -488,9 +479,6 @@ async def test_delete_instance_disk_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- Instance IPs + password reset -----------------------------------------
-
-
 async def test_list_instance_ips_returns_body() -> None:
     """list_instance_ips GETs the ips route and returns the raw body."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -548,9 +536,6 @@ async def test_reset_instance_password_wraps_http_errors() -> None:
 
     assert "ResetInstancePassword" in str(excinfo.value)
     await client.close()
-
-
-# --- Destructive delete / shutdown (multi-except handlers) -----------------
 
 
 async def test_shutdown_instance_posts_shutdown() -> None:
@@ -733,8 +718,6 @@ async def test_delete_volume_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- SSH keys --------------------------------------------------------------
-
 _VALID_SSH_KEY = "ssh-ed25519 " + ("A" * 80) + " user@host"
 
 
@@ -815,9 +798,6 @@ async def test_delete_ssh_key_wraps_http_errors() -> None:
 
     assert "DeleteSSHKey" in str(excinfo.value)
     await client.close()
-
-
-# --- IPv6 ranges -----------------------------------------------------------
 
 
 async def test_create_ipv6_range_omits_optional_fields() -> None:
@@ -910,9 +890,6 @@ async def test_list_ipv6_ranges_wraps_http_errors() -> None:
 
     assert "ListIPv6Ranges" in str(excinfo.value)
     await client.close()
-
-
-# --- NodeBalancer config create (validation + happy path) ------------------
 
 
 async def test_create_nodebalancer_config_posts_fields() -> None:

@@ -117,15 +117,15 @@ def test_create_linode_domain_import_tool_schema() -> None:
 
     assert tool.name == "linode_domain_import"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "domain",
         "remote_nameserver",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["domain"]["type"] == "string"
-    assert tool.inputSchema["properties"]["remote_nameserver"]["type"] == "string"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["domain"]["type"] == "string"
+    assert tool.input_schema["properties"]["remote_nameserver"]["type"] == "string"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 @pytest.mark.asyncio

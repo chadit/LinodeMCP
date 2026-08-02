@@ -33,7 +33,7 @@ message RegionListResponse {
 // RegionGetInput is the input contract for linode_region_get.
 message RegionGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the region to retrieve, such as us-east (required).
   string region_id = 2;
 }
@@ -42,7 +42,7 @@ message RegionGetInput {
 // are client-side.
 message RegionListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Filter regions by country code (e.g., 'us', 'de', 'jp').
   optional string country = 2;
   // Filter regions by capability (e.g., 'Linodes', 'Block Storage', 'GPU
@@ -58,14 +58,14 @@ message RegionListInput {
 // linode_region_availability_list.
 message RegionAvailabilityListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // RegionAvailabilityGetInput is the input contract for
 // linode_region_availability_get.
 message RegionAvailabilityGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region slug to inspect, for example 'us-east'.
   string region_id = 2;
 }

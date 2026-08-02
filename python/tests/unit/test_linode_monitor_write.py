@@ -57,8 +57,8 @@ def test_update_alert_definition_tool_schema_requires_confirm() -> None:
     )
     assert tool.name == "linode_monitor_service_alert_definition_update"
     assert capability.name == "Write"
-    assert "confirm" in tool.inputSchema["required"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "confirm" in tool.input_schema["required"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.asyncio

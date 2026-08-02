@@ -53,7 +53,7 @@ def create_linode_image_list_tool() -> tuple[Tool, Capability]:
             "Lists all available Linode images (OS images and custom images) "
             "with optional filtering by type, public status, or deprecated status"
         ),
-        inputSchema=schema("linode.mcp.v1.ImageListInput"),
+        input_schema=schema("linode.mcp.v1.ImageListInput"),
     ), Capability.Read
 
 
@@ -62,7 +62,7 @@ def create_linode_image_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_get",
         description="Gets a single Linode image by ID.",
-        inputSchema=schema("linode.mcp.v1.ImageGetInput"),
+        input_schema=schema("linode.mcp.v1.ImageGetInput"),
     ), Capability.Read
 
 
@@ -71,7 +71,7 @@ def create_linode_image_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_delete",
         description="Deletes a private Linode image by ID." + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.ImageDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ImageDeleteInput"),
     ), Capability.Destroy
 
 
@@ -80,7 +80,7 @@ def create_linode_image_sharegroup_by_image_list_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_image_sharegroup_by_image_list",
         description="Lists share groups for a Linode image.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupByImageListInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupByImageListInput"),
     ), Capability.Read
 
 
@@ -89,7 +89,7 @@ def create_linode_image_sharegroup_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_list",
         description="Lists image share groups available to the account.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupListInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupListInput"),
     ), Capability.Read
 
 
@@ -98,7 +98,7 @@ def create_linode_image_sharegroup_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_delete",
         description="Deletes a single image share group by UUID." + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupDeleteInput"),
     ), Capability.Destroy
 
 
@@ -107,7 +107,7 @@ def create_linode_image_sharegroup_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_create",
         description="Creates a share group for sharing images with other users.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupCreateInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupCreateInput"),
     ), Capability.Write
 
 
@@ -116,7 +116,7 @@ def create_linode_image_sharegroup_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_get",
         description="Gets a single image share group by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupGetInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupGetInput"),
     ), Capability.Read
 
 
@@ -125,7 +125,7 @@ def create_linode_image_sharegroup_image_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_image_list",
         description="Lists images available in an image share group by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupImageListInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupImageListInput"),
     ), Capability.Read
 
 
@@ -134,7 +134,7 @@ def create_linode_image_sharegroup_member_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_image_sharegroup_member_list",
         description="Lists members of an image share group by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberListInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupMemberListInput"),
     ), Capability.Read
 
 
@@ -143,7 +143,7 @@ def create_linode_image_sharegroup_member_token_get_tool() -> tuple[Tool, Capabi
     return Tool(
         name="linode_image_sharegroup_member_token_get",
         description="Gets a membership token from an image share group by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberTokenGetInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupMemberTokenGetInput"),
     ), Capability.Read
 
 
@@ -154,7 +154,7 @@ def create_linode_image_sharegroup_member_token_delete_tool() -> tuple[
     return Tool(
         name="linode_image_sharegroup_member_token_delete",
         description="Revokes a membership token from an image share group by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberTokenDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupMemberTokenDeleteInput"),
     ), Capability.Destroy
 
 
@@ -165,7 +165,7 @@ def create_linode_image_sharegroup_member_token_update_tool() -> tuple[
     return Tool(
         name="linode_image_sharegroup_member_token_update",
         description="Updates a membership token label in an image share group by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberTokenUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupMemberTokenUpdateInput"),
     ), Capability.Write
 
 
@@ -174,7 +174,7 @@ def create_linode_image_sharegroup_member_add_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_member_add",
         description="Adds members to an image share group by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupMemberAddInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupMemberAddInput"),
     ), Capability.Write
 
 
@@ -185,7 +185,7 @@ def create_linode_image_sharegroup_image_delete_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_image_delete",
         description="Revokes access to one shared image from an image share group.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupImageDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupImageDeleteInput"),
     ), Capability.Destroy
 
 
@@ -198,7 +198,7 @@ def create_linode_image_sharegroup_image_update_tool() -> tuple[Tool, Capability
         description=(
             "Updates a shared image label or description by share group and image ID."
         ),
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupImageUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupImageUpdateInput"),
     ), Capability.Write
 
 
@@ -207,7 +207,7 @@ def create_linode_image_sharegroup_image_add_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_image_add",
         description="Adds images to an image share group by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupImageAddInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupImageAddInput"),
     ), Capability.Write
 
 
@@ -216,7 +216,7 @@ def create_linode_image_sharegroup_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_update",
         description="Updates an image share group label or description by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupUpdateInput"),
     ), Capability.Write
 
 
@@ -225,7 +225,7 @@ def create_linode_image_sharegroup_token_delete_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_token_delete",
         description="Deletes an image share group token by UUID." + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupTokenDeleteInput"),
     ), Capability.Destroy
 
 
@@ -234,7 +234,7 @@ def create_linode_image_sharegroup_token_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_token_list",
         description="Lists image share group tokens for the user.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenListInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupTokenListInput"),
     ), Capability.Read
 
 
@@ -243,7 +243,7 @@ def create_linode_image_sharegroup_token_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_sharegroup_token_get",
         description="Gets a single image share group token by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenGetInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupTokenGetInput"),
     ), Capability.Read
 
 
@@ -252,7 +252,7 @@ def create_linode_image_sharegroup_by_token_get_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_by_token_get",
         description="Gets the image share group associated with a token UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupByTokenGetInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupByTokenGetInput"),
     ), Capability.Read
 
 
@@ -261,7 +261,7 @@ def create_linode_image_sharegroup_token_image_list_tool() -> tuple[Tool, Capabi
     return Tool(
         name="linode_image_sharegroup_token_image_list",
         description="Lists images available through an image share group token UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenImageListInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupTokenImageListInput"),
     ), Capability.Read
 
 
@@ -270,7 +270,7 @@ def create_linode_image_sharegroup_token_update_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_token_update",
         description="Updates an image share group token label by UUID.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupTokenUpdateInput"),
     ), Capability.Write
 
 
@@ -279,7 +279,7 @@ def create_linode_image_sharegroup_token_create_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_image_sharegroup_token_create",
         description="Creates a token for sharing images with another share group.",
-        inputSchema=schema("linode.mcp.v1.ImageShareGroupTokenCreateInput"),
+        input_schema=schema("linode.mcp.v1.ImageShareGroupTokenCreateInput"),
     ), Capability.Write
 
 
@@ -288,7 +288,7 @@ def create_linode_image_upload_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_upload",
         description="Creates a pending private image upload for a region.",
-        inputSchema=schema("linode.mcp.v1.ImageUploadInput"),
+        input_schema=schema("linode.mcp.v1.ImageUploadInput"),
     ), Capability.Write
 
 
@@ -297,7 +297,7 @@ def create_linode_image_replicate_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_replicate",
         description="Replicates a private or public image to one or more regions.",
-        inputSchema=schema("linode.mcp.v1.ImageReplicateInput"),
+        input_schema=schema("linode.mcp.v1.ImageReplicateInput"),
     ), Capability.Write
 
 
@@ -306,7 +306,7 @@ def create_linode_image_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_create",
         description="Creates a private image from a Linode disk.",
-        inputSchema=schema("linode.mcp.v1.ImageCreateInput"),
+        input_schema=schema("linode.mcp.v1.ImageCreateInput"),
     ), Capability.Write
 
 
@@ -315,7 +315,7 @@ def create_linode_image_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_image_update",
         description="Updates a private image label, description, or tags.",
-        inputSchema=schema("linode.mcp.v1.ImageUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ImageUpdateInput"),
     ), Capability.Write
 
 

@@ -12,7 +12,7 @@ message DomainZoneFile {
 // DomainZoneFileGetInput is the input contract for linode_domain_zone_file_get.
 message DomainZoneFileGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain whose zone file to retrieve (required).
   int32 domain_id = 2;
 }

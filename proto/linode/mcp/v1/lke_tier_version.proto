@@ -32,7 +32,7 @@ message LKETierVersionListResponse {
 // LKETierVersionGetInput is the input contract for linode_lke_tier_version_get.
 message LKETierVersionGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The LKE tier ID, standard or enterprise (required).
   LKETier.Value tier = 2;
   // The Kubernetes version ID (required).
@@ -43,7 +43,7 @@ message LKETierVersionGetInput {
 // linode_lke_tier_version_list.
 message LKETierVersionListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // LKE tier: standard or enterprise (required).
   LKETier.Value tier = 2;
 }

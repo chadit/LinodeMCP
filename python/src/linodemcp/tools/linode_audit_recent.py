@@ -44,7 +44,7 @@ def create_linode_audit_recent_tool() -> tuple[Tool, Capability]:
                 "audit log. Optional filters: limit, since, until, tool "
                 "(glob), capability, status, include_meta."
             ),
-            inputSchema=schema("linode.mcp.v1.AuditRecentInput"),
+            input_schema=schema("linode.mcp.v1.AuditRecentInput"),
         ),
         Capability.Meta,
     )

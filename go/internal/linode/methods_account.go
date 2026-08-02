@@ -71,7 +71,7 @@ func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 		return nil, &NetworkError{Operation: "GetProfile", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var profile Profile
 	if err := c.handleResponse(resp, &profile); err != nil {
@@ -91,7 +91,7 @@ func (c *Client) httpGetProfileProto(ctx context.Context) (*linodev1.Profile, er
 		return nil, &NetworkError{Operation: "GetProfile", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	profile := &linodev1.Profile{}
 	if err := c.handleProtoResponse(resp, profile); err != nil {
@@ -113,7 +113,7 @@ func (c *Client) httpCreateProfileTokenProto(ctx context.Context, req CreateProf
 		return nil, &NetworkError{Operation: "CreateProfileToken", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	token := &linodev1.CreatedPersonalAccessToken{}
 	if err := c.handleProtoResponse(resp, token); err != nil {
@@ -137,7 +137,7 @@ func (c *Client) httpUpdateProfilePreferences(ctx context.Context, req ProfilePr
 		return nil, &NetworkError{Operation: "UpdateProfilePreferences", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var preferences ProfilePreferences
 	if err := c.handleResponse(resp, &preferences); err != nil {
@@ -590,7 +590,7 @@ func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 		return nil, &NetworkError{Operation: "GetAccount", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var account Account
 	if err := c.handleResponse(resp, &account); err != nil {
@@ -610,7 +610,7 @@ func (c *Client) httpGetAccountProto(ctx context.Context) (*linodev1.Account, er
 		return nil, &NetworkError{Operation: "GetAccount", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	account := &linodev1.Account{}
 	if err := c.handleProtoResponse(resp, account); err != nil {
@@ -630,7 +630,7 @@ func (c *Client) httpUpdateAccountProto(ctx context.Context, req *UpdateAccountR
 		return nil, &NetworkError{Operation: "UpdateAccount", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	account := &linodev1.Account{}
 	if err := c.handleProtoResponse(resp, account); err != nil {
@@ -650,7 +650,7 @@ func (c *Client) httpGetAccountTransferProto(ctx context.Context) (*linodev1.Acc
 		return nil, &NetworkError{Operation: "GetAccountTransfer", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	transfer := &linodev1.AccountTransfer{}
 	if err := c.handleProtoResponse(resp, transfer); err != nil {
@@ -670,7 +670,7 @@ func (c *Client) httpGetAccountSettings(ctx context.Context) (*AccountSettings, 
 		return nil, &NetworkError{Operation: "GetAccountSettings", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var settings AccountSettings
 	if err := c.handleResponse(resp, &settings); err != nil {
@@ -690,7 +690,7 @@ func (c *Client) httpGetAccountSettingsProto(ctx context.Context) (*linodev1.Acc
 		return nil, &NetworkError{Operation: "GetAccountSettings", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	settings := &linodev1.AccountSettings{}
 	if err := c.handleProtoResponse(resp, settings); err != nil {
@@ -711,7 +711,7 @@ func (c *Client) httpUpdateAccountSettingsProto(ctx context.Context, req *Update
 		return nil, &NetworkError{Operation: "UpdateAccountSettings", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	settings := &linodev1.AccountSettings{}
 	if err := c.handleProtoResponse(resp, settings); err != nil {
@@ -731,7 +731,7 @@ func (c *Client) httpEnableAccountManaged(ctx context.Context) error {
 		return &NetworkError{Operation: "EnableAccountManaged", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	if err := c.handleResponse(resp, nil); err != nil {
 		return err
@@ -763,7 +763,7 @@ func (c *Client) httpUpdateManagedCredentialProto(ctx context.Context, credentia
 		return nil, &NetworkError{Operation: "UpdateManagedCredential", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	credential := &linodev1.ManagedCredential{}
 	if err := c.handleProtoResponse(resp, credential); err != nil {
@@ -785,7 +785,7 @@ func (c *Client) httpUpdateManagedCredentialUsernamePassword(ctx context.Context
 		return nil, &NetworkError{Operation: "UpdateManagedCredentialUsernamePassword", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var credential ManagedCredential
 	if err := c.handleResponse(resp, &credential); err != nil {
@@ -806,7 +806,7 @@ func (c *Client) httpGetManagedSSHKeyProto(ctx context.Context) (*linodev1.Manag
 		return nil, &NetworkError{Operation: "GetManagedSSHKey", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	sshKey := &linodev1.ManagedSSHKey{}
 	if err := c.handleProtoResponse(resp, sshKey); err != nil {
@@ -828,7 +828,7 @@ func (c *Client) httpCreateManagedCredentialProto(ctx context.Context, request *
 		return nil, &NetworkError{Operation: "CreateManagedCredential", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	credential := &linodev1.ManagedCredential{}
 	if err := c.handleProtoResponse(resp, credential); err != nil {
@@ -850,7 +850,7 @@ func (c *Client) httpGetManagedCredential(ctx context.Context, credentialID int)
 		return nil, &NetworkError{Operation: "GetManagedCredential", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var credential ManagedCredential
 	if err := c.handleResponse(resp, &credential); err != nil {
@@ -872,7 +872,7 @@ func (c *Client) httpGetManagedCredentialProto(ctx context.Context, credentialID
 		return nil, &NetworkError{Operation: "GetManagedCredential", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	credential := &linodev1.ManagedCredential{}
 	if err := c.handleProtoResponse(resp, credential); err != nil {
@@ -894,7 +894,7 @@ func (c *Client) httpRevokeManagedCredential(ctx context.Context, credentialID i
 		return &NetworkError{Operation: "RevokeManagedCredential", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	if err := c.handleResponse(resp, nil); err != nil {
 		return err
@@ -915,7 +915,7 @@ func (c *Client) httpGetAccountAgreementsProto(ctx context.Context) (*linodev1.A
 		return nil, &NetworkError{Operation: "GetAccountAgreements", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	agreements := &linodev1.AccountAgreements{}
 	if err := c.handleProtoResponse(resp, agreements); err != nil {
@@ -994,7 +994,7 @@ func (c *Client) httpGetAccountAvailabilityProto(ctx context.Context, regionID s
 		return nil, &NetworkError{Operation: "GetAccountAvailability", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	availability := &linodev1.AccountAvailability{}
 	if err := c.handleProtoResponse(resp, availability); err != nil {
@@ -1032,7 +1032,7 @@ func (c *Client) httpGetBetaProto(ctx context.Context, betaID string) (*linodev1
 		return nil, &NetworkError{Operation: "GetBeta", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	beta := &linodev1.BetaProgram{}
 	if err := c.handleProtoResponse(resp, beta); err != nil {
@@ -1085,7 +1085,7 @@ func (c *Client) httpUpdateLongviewClientProto(ctx context.Context, clientID int
 		return nil, &NetworkError{Operation: "UpdateLongviewClient", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	client := &linodev1.LongviewClient{}
 	if err := c.handleProtoResponse(resp, client); err != nil {
@@ -1107,7 +1107,7 @@ func (c *Client) httpDeleteLongviewClient(ctx context.Context, clientID int) err
 		return &NetworkError{Operation: "DeleteLongviewClient", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1124,7 +1124,7 @@ func (c *Client) httpGetAccountPaymentMethod(ctx context.Context, paymentMethodI
 		return nil, &NetworkError{Operation: "GetAccountPaymentMethod", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var method AccountPaymentMethod
 	if err := c.handleResponse(resp, &method); err != nil {
@@ -1148,7 +1148,7 @@ func (c *Client) httpGetAccountPaymentMethodProto(ctx context.Context, paymentMe
 		return nil, &NetworkError{Operation: "GetAccountPaymentMethod", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	method := &linodev1.AccountPaymentMethod{}
 	if err := c.handleProtoResponse(resp, method); err != nil {
@@ -1175,7 +1175,7 @@ func (c *Client) httpCreateAccountPaymentMethodProto(ctx context.Context, req *C
 		return nil, &NetworkError{Operation: "CreateAccountPaymentMethod", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	method := &linodev1.AccountPaymentMethod{}
 	if err := c.handleProtoResponse(resp, method); err != nil {
@@ -1197,7 +1197,7 @@ func (c *Client) httpDeleteAccountPaymentMethod(ctx context.Context, paymentMeth
 		return &NetworkError{Operation: "DeleteAccountPaymentMethod", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1213,7 +1213,7 @@ func (c *Client) httpMakeAccountPaymentMethodDefault(ctx context.Context, paymen
 		return &NetworkError{Operation: "MakeAccountPaymentMethodDefault", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1230,7 +1230,7 @@ func (c *Client) httpGetAccountOAuthClient(ctx context.Context, clientID string)
 		return nil, &NetworkError{Operation: "GetAccountOAuthClient", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var client OAuthClient
 	if err := c.handleResponse(resp, &client); err != nil {
@@ -1252,7 +1252,7 @@ func (c *Client) httpGetAccountOAuthClientProto(ctx context.Context, clientID st
 		return nil, &NetworkError{Operation: "GetAccountOAuthClient", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	oauthClient := &linodev1.OAuthClient{}
 	if err := c.handleProtoResponse(resp, oauthClient); err != nil {
@@ -1275,7 +1275,7 @@ func (c *Client) httpUpdateOAuthClientProto(ctx context.Context, clientID string
 		return nil, &NetworkError{Operation: "UpdateOAuthClient", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	client := &linodev1.OAuthClient{}
 	if err := c.handleProtoResponse(resp, client); err != nil {
@@ -1297,7 +1297,7 @@ func (c *Client) httpUpdateOAuthClientThumbnail(ctx context.Context, clientID st
 		return &NetworkError{Operation: "UpdateOAuthClientThumbnail", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1314,7 +1314,7 @@ func (c *Client) httpGetOAuthClientThumbnail(ctx context.Context, clientID strin
 		return nil, &NetworkError{Operation: "GetOAuthClientThumbnail", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	// Read the body first since handleResponse would consume it
 	thumbnailPNG, err := io.ReadAll(resp.Body)
@@ -1322,7 +1322,6 @@ func (c *Client) httpGetOAuthClientThumbnail(ctx context.Context, clientID strin
 		return nil, &NetworkError{Operation: "GetOAuthClientThumbnail", Err: err}
 	}
 
-	// Check for error status codes after reading the body
 	if resp.StatusCode >= http.StatusBadRequest {
 		apiErr := c.handleErrorResponse(resp.StatusCode, thumbnailPNG, resp)
 
@@ -1350,7 +1349,7 @@ func (c *Client) httpDeleteAccountOAuthClient(ctx context.Context, clientID stri
 		return &NetworkError{Operation: "DeleteAccountOAuthClient", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1368,7 +1367,7 @@ func (c *Client) httpResetOAuthClientSecretProto(ctx context.Context, clientID s
 		return nil, &NetworkError{Operation: "ResetOAuthClientSecret", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	secret := &linodev1.OAuthClientSecret{}
 	if err := c.handleProtoResponse(resp, secret); err != nil {
@@ -1406,7 +1405,7 @@ func (c *Client) httpGetAccountUser(ctx context.Context, username string) (*Acco
 		return nil, &NetworkError{Operation: "GetAccountUser", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var user AccountUser
 	if err := c.handleResponse(resp, &user); err != nil {
@@ -1428,7 +1427,7 @@ func (c *Client) httpGetAccountUserProto(ctx context.Context, username string) (
 		return nil, &NetworkError{Operation: "GetAccountUser", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	user := &linodev1.AccountUser{}
 	if err := c.handleProtoResponse(resp, user); err != nil {
@@ -1450,7 +1449,7 @@ func (c *Client) httpGetAccountUserGrants(ctx context.Context, username string) 
 		return nil, &NetworkError{Operation: "GetAccountUserGrants", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var grants Grants
 	if err := c.handleResponse(resp, &grants); err != nil {
@@ -1475,7 +1474,7 @@ func (c *Client) httpGetAccountUserGrantsProto(ctx context.Context, username str
 		return nil, &NetworkError{Operation: "GetAccountUserGrants", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	grants := &linodev1.AccountUserGrants{}
 	if err := c.handleProtoResponse(resp, grants); err != nil {
@@ -1496,7 +1495,7 @@ func (c *Client) httpCreateAccountUserProto(ctx context.Context, request *Create
 		return nil, &NetworkError{Operation: "CreateAccountUser", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	user := &linodev1.AccountUser{}
 	if err := c.handleProtoResponse(resp, user); err != nil {
@@ -1519,7 +1518,7 @@ func (c *Client) httpUpdateAccountUserProto(ctx context.Context, username string
 		return nil, &NetworkError{Operation: "UpdateAccountUser", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	user := &linodev1.AccountUser{}
 	if err := c.handleProtoResponse(resp, user); err != nil {
@@ -1542,7 +1541,7 @@ func (c *Client) httpUpdateAccountUserGrantsProto(ctx context.Context, username 
 		return nil, &NetworkError{Operation: "UpdateAccountUserGrants", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	grants := &linodev1.AccountUserGrants{}
 	if err := c.handleProtoResponse(resp, grants); err != nil {
@@ -1564,7 +1563,7 @@ func (c *Client) httpDeleteAccountUser(ctx context.Context, username string) err
 		return &NetworkError{Operation: "DeleteAccountUser", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1589,7 +1588,7 @@ func (c *Client) httpGetAccountLoginProto(ctx context.Context, loginID int) (*li
 		return nil, &NetworkError{Operation: "GetAccountLogin", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	login := &linodev1.AccountLogin{}
 	if err := c.handleProtoResponse(resp, login); err != nil {
@@ -1627,7 +1626,7 @@ func (c *Client) httpGetAccountPaymentProto(ctx context.Context, paymentID int) 
 		return nil, &NetworkError{Operation: "GetAccountPayment", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	payment := &linodev1.AccountPayment{}
 	if err := c.handleProtoResponse(resp, payment); err != nil {
@@ -1654,7 +1653,7 @@ func (c *Client) httpCreateAccountPaymentProto(ctx context.Context, req *CreateA
 		return nil, &NetworkError{Operation: "CreateAccountPayment", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	payment := &linodev1.AccountPayment{}
 	if err := c.handleProtoResponse(resp, payment); err != nil {
@@ -1676,7 +1675,7 @@ func (c *Client) httpGetAccountInvoiceProto(ctx context.Context, invoiceID int) 
 		return nil, &NetworkError{Operation: "GetAccountInvoice", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	invoice := &linodev1.AccountInvoice{}
 	if err := c.handleProtoResponse(resp, invoice); err != nil {
@@ -1737,7 +1736,7 @@ func (c *Client) httpGetAccountServiceTransfer(ctx context.Context, token string
 		return nil, &NetworkError{Operation: "GetAccountServiceTransfer", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var transfer AccountEntityTransfer
 	if err := c.handleResponse(resp, &transfer); err != nil {
@@ -1760,7 +1759,7 @@ func (c *Client) httpGetAccountServiceTransferProto(ctx context.Context, token s
 		return nil, &NetworkError{Operation: "GetAccountServiceTransfer", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	transfer := &linodev1.AccountEntityTransfer{}
 	if err := c.handleProtoResponse(resp, transfer); err != nil {
@@ -1782,7 +1781,7 @@ func (c *Client) httpDeleteAccountServiceTransfer(ctx context.Context, token str
 		return &NetworkError{Operation: "DeleteAccountServiceTransfer", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1799,7 +1798,7 @@ func (c *Client) httpAcceptAccountServiceTransfer(ctx context.Context, token str
 		return &NetworkError{Operation: "AcceptAccountServiceTransfer", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1815,7 +1814,7 @@ func (c *Client) httpCreateAccountServiceTransferProto(ctx context.Context, req 
 		return nil, &NetworkError{Operation: "CreateAccountServiceTransfer", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	transfer := &linodev1.AccountEntityTransfer{}
 	if err := c.handleProtoResponse(resp, transfer); err != nil {
@@ -1837,7 +1836,7 @@ func (c *Client) httpGetAccountEvent(ctx context.Context, eventID int) (*Account
 		return nil, &NetworkError{Operation: "GetAccountEvent", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var event AccountEvent
 	if err := c.handleResponse(resp, &event); err != nil {
@@ -1859,7 +1858,7 @@ func (c *Client) httpGetAccountEventProto(ctx context.Context, eventID int) (*li
 		return nil, &NetworkError{Operation: "GetAccountEvent", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	event := &linodev1.AccountEvent{}
 	if err := c.handleProtoResponse(resp, event); err != nil {
@@ -1881,7 +1880,7 @@ func (c *Client) httpMarkAccountEventSeen(ctx context.Context, eventID int) erro
 		return &NetworkError{Operation: "MarkAccountEventSeen", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -1898,7 +1897,7 @@ func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (
 		return nil, &NetworkError{Operation: "GetAccountChildAccount", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var childAccount ChildAccount
 	if err := c.handleResponse(resp, &childAccount); err != nil {
@@ -1923,7 +1922,7 @@ func (c *Client) httpGetAccountChildAccountProto(ctx context.Context, euuid stri
 		return nil, &NetworkError{Operation: "GetAccountChildAccount", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	childAccount := &linodev1.ChildAccount{}
 	if err := c.handleProtoResponse(resp, childAccount); err != nil {
@@ -1947,7 +1946,7 @@ func (c *Client) httpCreateAccountChildAccountTokenProto(ctx context.Context, eu
 		return nil, &NetworkError{Operation: "CreateAccountChildAccountToken", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	token := &linodev1.ProxyUserToken{}
 	if err := c.handleProtoResponse(resp, token); err != nil {
@@ -1968,7 +1967,7 @@ func (c *Client) httpCreateOAuthClientProto(ctx context.Context, req *CreateOAut
 		return nil, &NetworkError{Operation: "CreateOAuthClient", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	client := &linodev1.CreatedOAuthClient{}
 	if err := c.handleProtoResponse(resp, client); err != nil {
@@ -1991,7 +1990,7 @@ func (c *Client) httpGetAccountBetaProto(ctx context.Context, betaID string) (*l
 		return nil, &NetworkError{Operation: "GetAccountBeta", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	beta := &linodev1.AccountBetaProgram{}
 	if err := c.handleProtoResponse(resp, beta); err != nil {
@@ -2011,7 +2010,7 @@ func (c *Client) httpEnrollAccountBeta(ctx context.Context, req *EnrollAccountBe
 		return &NetworkError{Operation: "EnrollAccountBeta", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -2026,7 +2025,7 @@ func (c *Client) httpAddAccountPromoCredit(ctx context.Context, req *AddAccountP
 		return &NetworkError{Operation: "AddAccountPromoCredit", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -2059,7 +2058,7 @@ func (c *Client) httpAcknowledgeAccountAgreements(ctx context.Context, req *Ackn
 		return &NetworkError{Operation: "AcknowledgeAccountAgreements", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -2075,7 +2074,7 @@ func (c *Client) httpCancelAccountProto(ctx context.Context, req *CancelAccountR
 		return nil, &NetworkError{Operation: "CancelAccount", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	cancelResponse := &linodev1.AccountCancelResponse{}
 	if err := c.handleProtoResponse(resp, cancelResponse); err != nil {
@@ -2095,7 +2094,7 @@ func (c *Client) httpUpdateProfile(ctx context.Context, req *UpdateProfileReques
 		return nil, &NetworkError{Operation: "UpdateProfile", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all account methods use this pattern
+	defer drainClose(resp)
 
 	var profile Profile
 	if err := c.handleResponse(resp, &profile); err != nil {

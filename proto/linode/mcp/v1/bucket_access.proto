@@ -23,7 +23,7 @@ message ObjectStorageBucketAccessWriteResponse {
 // linode_object_storage_bucket_access_get.
 message ObjectStorageBucketAccessGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (required).
   string region = 2;
   // The bucket label (required).
@@ -35,7 +35,7 @@ message ObjectStorageBucketAccessGetInput {
 // required.
 message ObjectStorageBucketAccessAllowInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region of the bucket.
   string region = 2;
   // Label of the bucket.
@@ -46,10 +46,10 @@ message ObjectStorageBucketAccessAllowInput {
   // Whether to enable CORS on the bucket.
   optional bool cors_enabled = 5;
   // Must be set to true to confirm access changes. Ignored when dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // ObjectStorageBucketAccessUpdateInput is the input contract for
@@ -57,7 +57,7 @@ message ObjectStorageBucketAccessAllowInput {
 // required.
 message ObjectStorageBucketAccessUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region of the bucket.
   string region = 2;
   // Label of the bucket.
@@ -68,8 +68,8 @@ message ObjectStorageBucketAccessUpdateInput {
   // Whether to enable CORS on the bucket.
   optional bool cors_enabled = 5;
   // Must be set to true to confirm access update. Ignored when dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }

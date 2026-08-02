@@ -203,8 +203,8 @@ def test_create_linode_longview_client_update_tool_schema() -> None:
 
     assert tool.name == "linode_longview_client_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["client_id", "label", "confirm"]
-    properties = tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["client_id", "label", "confirm"]
+    properties = tool.input_schema["properties"]
     assert properties["client_id"]["type"] == "integer"
     assert properties["label"]["type"] == "string"
     assert properties["confirm"]["type"] == "boolean"
@@ -341,8 +341,8 @@ def test_create_linode_longview_client_get_tool_schema() -> None:
 
     assert tool.name == "linode_longview_client_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["client_id"]
-    assert "client_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["client_id"]
+    assert "client_id" in tool.input_schema["properties"]
 
 
 def test_linode_longview_client_get_registered() -> None:

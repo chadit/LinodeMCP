@@ -23,7 +23,7 @@ def create_linode_volume_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_get",
         description="Gets details for a single block storage volume by ID.",
-        inputSchema=schema("linode.mcp.v1.VolumeGetInput"),
+        input_schema=schema("linode.mcp.v1.VolumeGetInput"),
     ), Capability.Read
 
 
@@ -50,7 +50,7 @@ def create_linode_volume_list_tool() -> tuple[Tool, Capability]:
             "Lists all block storage volumes for the authenticated user "
             "with optional filtering by region or label"
         ),
-        inputSchema=schema("linode.mcp.v1.VolumeListInput"),
+        input_schema=schema("linode.mcp.v1.VolumeListInput"),
     ), Capability.Read
 
 
@@ -59,7 +59,7 @@ def create_linode_volume_type_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_type_list",
         description="Lists available block storage volume types and prices.",
-        inputSchema=schema("linode.mcp.v1.VolumeTypeListInput"),
+        input_schema=schema("linode.mcp.v1.VolumeTypeListInput"),
     ), Capability.Read
 
 

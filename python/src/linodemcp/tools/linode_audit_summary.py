@@ -72,7 +72,7 @@ def create_linode_audit_summary_tool() -> tuple[Tool, Capability]:
                 "columns) over a time window. Reads SQLite when enabled, else "
                 "the JSONL log."
             ),
-            inputSchema=schema("linode.mcp.v1.AuditSummaryInput"),
+            input_schema=schema("linode.mcp.v1.AuditSummaryInput"),
         ),
         Capability.Meta,
     )

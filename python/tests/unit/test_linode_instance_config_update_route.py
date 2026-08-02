@@ -370,8 +370,8 @@ def test_create_linode_instance_interface_settings_get_tool_schema() -> None:
 
     assert capability is Capability.Read
     assert tool.name == "linode_instance_interface_settings_get"
-    assert tool.inputSchema["required"] == ["linode_id"]
-    assert "linode_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["linode_id"]
+    assert "linode_id" in tool.input_schema["properties"]
 
 
 def test_linode_instance_interface_settings_get_registered_and_exported() -> None:
@@ -389,7 +389,7 @@ def test_create_linode_instance_interfaces_list_tool_schema() -> None:
 
     assert capability is Capability.Read
     assert tool.name == "linode_instance_interface_list"
-    assert tool.inputSchema["required"] == ["linode_id"]
+    assert tool.input_schema["required"] == ["linode_id"]
 
 
 def test_linode_instance_interfaces_list_registered_and_exported() -> None:
@@ -556,9 +556,9 @@ def test_create_linode_instance_interface_get_tool_schema() -> None:
 
     assert capability is Capability.Read
     assert tool.name == "linode_instance_interface_get"
-    assert set(tool.inputSchema["required"]) == {"linode_id", "interface_id"}
-    assert "linode_id" in tool.inputSchema["properties"]
-    assert "interface_id" in tool.inputSchema["properties"]
+    assert set(tool.input_schema["required"]) == {"linode_id", "interface_id"}
+    assert "linode_id" in tool.input_schema["properties"]
+    assert "interface_id" in tool.input_schema["properties"]
 
 
 def test_linode_instance_interface_get_registered_and_exported() -> None:
@@ -755,17 +755,17 @@ def test_create_linode_instance_config_interface_add_tool_schema() -> None:
 
     assert tool.name == "linode_instance_config_interface_add"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "linode_id",
         "config_id",
         "purpose",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["ip_ranges"]["items"] == {"type": "string"}
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert "dry_run" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert "dry_run" not in tool.inputSchema["required"]
+    assert tool.input_schema["properties"]["ip_ranges"]["items"] == {"type": "string"}
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert "dry_run" not in tool.input_schema["required"]
 
 
 @pytest.mark.asyncio
@@ -1178,14 +1178,14 @@ def test_create_linode_instance_config_update_tool_schema() -> None:
 
     assert tool.name == "linode_instance_config_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["linode_id", "config_id", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert "dry_run" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert "dry_run" not in tool.inputSchema["required"]
-    assert "id" not in tool.inputSchema["properties"]
-    assert "devices" in tool.inputSchema["properties"]
-    assert "virt_mode" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["linode_id", "config_id", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert "dry_run" not in tool.input_schema["required"]
+    assert "id" not in tool.input_schema["properties"]
+    assert "devices" in tool.input_schema["properties"]
+    assert "virt_mode" in tool.input_schema["properties"]
 
 
 @pytest.mark.asyncio
@@ -1494,10 +1494,10 @@ def test_create_linode_instance_config_interfaces_order_tool_schema() -> None:
     assert capability is Capability.Write
     # ids maps to a proto repeated field, so it drops out of the generated
     # required set even though the handler still enforces it.
-    assert tool.inputSchema["required"] == ["linode_id", "config_id", "confirm"]
-    assert tool.inputSchema["properties"]["ids"]["type"] == "array"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert "dry_run" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["linode_id", "config_id", "confirm"]
+    assert tool.input_schema["properties"]["ids"]["type"] == "array"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.input_schema["properties"]
 
 
 @pytest.mark.asyncio
@@ -1795,13 +1795,13 @@ def test_create_linode_instance_interface_delete_tool_schema() -> None:
 
     assert tool.name == "linode_instance_interface_delete"
     assert capability is Capability.Destroy
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "linode_id",
         "interface_id",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert "dry_run" in tool.inputSchema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.input_schema["properties"]
 
 
 @pytest.mark.asyncio
@@ -2037,14 +2037,14 @@ def test_create_linode_instance_config_interface_delete_tool_schema() -> None:
 
     assert tool.name == "linode_instance_config_interface_delete"
     assert capability is Capability.Destroy
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "linode_id",
         "config_id",
         "interface_id",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert "dry_run" in tool.inputSchema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert "dry_run" in tool.input_schema["properties"]
 
 
 @pytest.mark.asyncio

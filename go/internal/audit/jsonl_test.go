@@ -128,7 +128,7 @@ func TestJSONLSinkRotatesOnDayBoundary(t *testing.T) {
 
 	rotatedPath := filepath.Join(dir, "audit-2026-05-18.log.gz")
 
-	rotated, err := os.Open(rotatedPath) //nolint:gosec // path is constructed from test tmp dir
+	rotated, err := os.Open(rotatedPath)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -279,7 +279,7 @@ func makeEvent(tool string, capability audit.Capability) audit.Event {
 func readLines(t *testing.T, path string) []string {
 	t.Helper()
 
-	file, err := os.Open(path) //nolint:gosec // path comes from test tmp dirs
+	file, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -31,9 +31,6 @@ def _ok_response(body: Any) -> MagicMock:
     return response
 
 
-# --- Firewalls -------------------------------------------------------------
-
-
 async def test_update_firewall_raw_builds_partial_body() -> None:
     """update_firewall_raw only sends the fields the caller supplied."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -73,9 +70,6 @@ async def test_update_firewall_raw_wraps_http_errors() -> None:
 
     assert "UpdateFirewall" in str(excinfo.value)
     await client.close()
-
-
-# --- Domains ---------------------------------------------------------------
 
 
 async def test_update_domain_wraps_http_errors() -> None:
@@ -183,9 +177,6 @@ async def test_delete_domain_record_wraps_http_errors() -> None:
 
     assert "DeleteDomainRecord" in str(excinfo.value)
     await client.close()
-
-
-# --- Volumes ---------------------------------------------------------------
 
 
 async def test_create_volume_decodes_response() -> None:
@@ -300,9 +291,6 @@ async def test_resize_volume_rejects_undersized() -> None:
     await client.close()
 
 
-# --- NodeBalancers ---------------------------------------------------------
-
-
 async def test_create_nodebalancer_raw_wraps_http_errors() -> None:
     """create_nodebalancer_raw wraps an HTTP status error as NetworkError."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -347,9 +335,6 @@ async def test_delete_nodebalancer_wraps_http_errors() -> None:
 
     assert "DeleteNodeBalancer" in str(excinfo.value)
     await client.close()
-
-
-# --- Instance lifecycle ----------------------------------------------------
 
 
 async def test_boot_instance_sends_config_id() -> None:
@@ -521,9 +506,6 @@ async def test_create_instance_disk_wraps_http_errors() -> None:
 
     assert "CreateInstanceDisk" in str(excinfo.value)
     await client.close()
-
-
-# --- RetryableClient delegation -------------------------------------------
 
 
 async def test_retryable_create_volume_delegates() -> None:

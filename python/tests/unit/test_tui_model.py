@@ -22,7 +22,7 @@ def _tool(properties: dict[str, object], required: list[str]) -> Tool:
     return Tool(
         name="linode_test_tool",
         description="test tool",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": properties,
             "required": required,

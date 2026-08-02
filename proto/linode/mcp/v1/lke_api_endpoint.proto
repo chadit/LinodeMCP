@@ -24,7 +24,7 @@ message LKEAPIEndpointListResponse {
 // read-side convention.
 message LKEAPIEndpointListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster (required).
   string cluster_id = 2;
 }

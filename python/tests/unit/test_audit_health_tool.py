@@ -56,7 +56,7 @@ def test_definition() -> None:
 
     assert tool.name == "linode_audit_health"
     assert capability == ProfileCapability.Meta
-    assert tool.inputSchema["properties"] == {}
+    assert tool.input_schema["properties"] == {}
 
 
 async def test_reports_jsonl(

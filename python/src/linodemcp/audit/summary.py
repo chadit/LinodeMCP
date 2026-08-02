@@ -18,7 +18,6 @@ from linodemcp.audit.reader import scan_events
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-# Default group-by columns when the request omits them.
 _DEFAULT_GROUP_BY = ("tool", "status")
 
 

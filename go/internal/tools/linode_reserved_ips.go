@@ -288,22 +288,12 @@ func reservedIPObjectResponse(raw json.RawMessage, failure string) (*mcp.CallToo
 // does: the proto fixes the field shape, then the raw object restores the
 // documented explicit nulls protojson drops.
 func marshalReservedIPResponse(raw json.RawMessage) (*mcp.CallToolResult, error) {
-	return marshalReservedIPResponseWithMarshal(raw, MarshalProtoJSON)
-}
-
-// marshalReservedIPResponseWithMarshal is marshalReservedIPResponse with the
-// proto marshaller injected, matching the seam the list path uses so its
-// defensive branches stay reachable from a test.
-func marshalReservedIPResponseWithMarshal(
-	raw json.RawMessage,
-	marshal func(proto.Message) ([]byte, error),
-) (*mcp.CallToolResult, error) {
 	reservedIP := &linodev1.ReservedIPAddress{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(raw, reservedIP); err != nil {
 		return nil, fmt.Errorf("failed to decode reserved IP API response: %w", err)
 	}
 
-	item, err := reservedIPAddressResponseWithMarshal(reservedIP, raw, marshal)
+	item, err := reservedIPAddressResponse(reservedIP, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -498,11 +488,7 @@ func marshalReservedIPListJSON(response reservedIPListJSON) (*mcp.CallToolResult
 }
 
 func reservedIPAddressResponse(reservedIP *linodev1.ReservedIPAddress, raw json.RawMessage) (reservedIPAddressJSON, error) {
-	return reservedIPAddressResponseWithMarshal(reservedIP, raw, MarshalProtoJSON)
-}
-
-func reservedIPAddressResponseWithMarshal(reservedIP *linodev1.ReservedIPAddress, raw json.RawMessage, marshal func(proto.Message) ([]byte, error)) (reservedIPAddressJSON, error) {
-	data, err := marshal(reservedIP)
+	data, err := MarshalProtoJSON(reservedIP)
 	if err != nil {
 		return reservedIPAddressJSON{}, err
 	}

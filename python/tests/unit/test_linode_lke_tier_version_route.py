@@ -88,9 +88,9 @@ def test_linode_lke_tier_version_get_tool_schema() -> None:
 
     assert tool.name == "linode_lke_tier_version_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["tier", "version"]
-    assert tool.inputSchema["properties"]["tier"]["type"] == "string"
-    assert tool.inputSchema["properties"]["version"]["type"] == "string"
+    assert tool.input_schema["required"] == ["tier", "version"]
+    assert tool.input_schema["properties"]["tier"]["type"] == "string"
+    assert tool.input_schema["properties"]["version"]["type"] == "string"
 
 
 async def test_handle_linode_lke_tier_version_get_success(

@@ -51,7 +51,7 @@ def create_linode_monitor_service_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_monitor_service_list",
         description="Lists supported Linode Metrics service types.",
-        inputSchema=schema("linode.mcp.v1.MonitorServiceListInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceListInput"),
     ), Capability.Read
 
 
@@ -60,7 +60,7 @@ def create_linode_monitor_service_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_monitor_service_get",
         description="Gets details for a supported Linode Metrics service type.",
-        inputSchema=schema("linode.mcp.v1.MonitorServiceGetInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceGetInput"),
     ), Capability.Read
 
 
@@ -69,7 +69,7 @@ def create_linode_monitor_service_metric_query_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_monitor_service_metric_query",
         description=("Reads metrics for a Linode Metrics service entity type."),
-        inputSchema=schema("linode.mcp.v1.MonitorServiceMetricQueryInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceMetricQueryInput"),
     ), Capability.Read
 
 
@@ -78,7 +78,7 @@ def create_linode_monitor_dashboard_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_monitor_dashboard_list",
         description="Lists Linode Metrics dashboards.",
-        inputSchema=schema("linode.mcp.v1.MonitorDashboardListInput"),
+        input_schema=schema("linode.mcp.v1.MonitorDashboardListInput"),
     ), Capability.Read
 
 
@@ -87,7 +87,7 @@ def create_linode_monitor_alert_definition_list_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_monitor_alert_definition_list",
         description="Lists Linode Metrics alert definitions.",
-        inputSchema=schema("linode.mcp.v1.MonitorAlertDefinitionListInput"),
+        input_schema=schema("linode.mcp.v1.MonitorAlertDefinitionListInput"),
     ), Capability.Read
 
 
@@ -96,7 +96,7 @@ def create_linode_monitor_alert_channel_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_monitor_alert_channel_list",
         description="Lists Linode Metrics alert channels.",
-        inputSchema=schema("linode.mcp.v1.MonitorAlertChannelListInput"),
+        input_schema=schema("linode.mcp.v1.MonitorAlertChannelListInput"),
     ), Capability.Read
 
 
@@ -105,7 +105,7 @@ def create_linode_monitor_service_dashboard_list_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_monitor_service_dashboard_list",
         description=("Lists dashboards for a Linode Metrics service type."),
-        inputSchema=schema("linode.mcp.v1.MonitorServiceDashboardListInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceDashboardListInput"),
     ), Capability.Read
 
 
@@ -114,7 +114,7 @@ def create_linode_monitor_dashboard_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_monitor_dashboard_get",
         description="Gets a Linode Metrics dashboard by ID.",
-        inputSchema=schema("linode.mcp.v1.MonitorDashboardGetInput"),
+        input_schema=schema("linode.mcp.v1.MonitorDashboardGetInput"),
     ), Capability.Read
 
 
@@ -125,7 +125,7 @@ def create_linode_monitor_service_metric_definition_list_tool() -> tuple[
     return Tool(
         name="linode_monitor_service_metric_definition_list",
         description=("Lists metric definitions for a Linode Metrics service type."),
-        inputSchema=schema("linode.mcp.v1.MonitorServiceMetricDefinitionListInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceMetricDefinitionListInput"),
     ), Capability.Read
 
 
@@ -136,7 +136,7 @@ def create_linode_monitor_service_alert_definition_list_tool() -> tuple[
     return Tool(
         name="linode_monitor_service_alert_definition_list",
         description=("Lists alert definitions for a Linode Metrics service type."),
-        inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionListInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionListInput"),
     ), Capability.Read
 
 
@@ -149,7 +149,7 @@ def create_linode_monitor_service_token_create_tool() -> tuple[Tool, Capability]
             "entities. The token is returned only once and cannot be retrieved "
             "later; capture both `token` and `expiry` from the response."
         ),
-        inputSchema=schema("linode.mcp.v1.MonitorServiceTokenCreateInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceTokenCreateInput"),
     ), Capability.Write
 
 
@@ -160,7 +160,7 @@ def create_linode_monitor_service_alert_definition_create_tool() -> tuple[
     return Tool(
         name="linode_monitor_service_alert_definition_create",
         description="Creates an alert definition for a Linode Metrics service type.",
-        inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionCreateInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionCreateInput"),
     ), Capability.Write
 
 
@@ -174,7 +174,7 @@ def create_linode_monitor_service_alert_definition_clone_tool() -> tuple[
             "Clones an alert definition for a Linode Metrics service type."
             " Requires confirm=true. Pass dry_run=true to preview without cloning."
         ),
-        inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionCloneInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionCloneInput"),
     ), Capability.Write
 
 
@@ -185,7 +185,7 @@ def create_linode_monitor_service_alert_definition_get_tool() -> tuple[
     return Tool(
         name="linode_monitor_service_alert_definition_get",
         description="Gets an alert definition for a Linode Metrics service type.",
-        inputSchema=schema("linode.mcp.v1.MonitorAlertDefinitionGetInput"),
+        input_schema=schema("linode.mcp.v1.MonitorAlertDefinitionGetInput"),
     ), Capability.Read
 
 
@@ -199,7 +199,7 @@ def create_linode_monitor_service_alert_definition_delete_tool() -> tuple[
             "Deletes an alert definition for a Linode Metrics service type."
             " Pass dry_run=true to preview without deleting."
         ),
-        inputSchema=schema("linode.mcp.v1.MonitorAlertDefinitionDeleteInput"),
+        input_schema=schema("linode.mcp.v1.MonitorAlertDefinitionDeleteInput"),
     ), Capability.Destroy
 
 
@@ -886,7 +886,7 @@ def create_linode_monitor_service_alert_definition_update_tool() -> tuple[
             "Updates a Linode Metrics alert definition for a service type."
             " Pass dry_run=true to preview without modifying."
         ),
-        inputSchema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionUpdateInput"),
+        input_schema=schema("linode.mcp.v1.MonitorServiceAlertDefinitionUpdateInput"),
     ), Capability.Write
 
 

@@ -52,7 +52,7 @@ message SupportTicketListResponse {
 // SupportTicketGetInput is the input contract for linode_support_ticket_get.
 message SupportTicketGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the support ticket to retrieve (required).
   int32 ticket_id = 2;
 }
@@ -105,7 +105,7 @@ message SupportTicketIDResponse {
 // SupportTicketListInput is the input contract for linode_support_ticket_list.
 message SupportTicketListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -117,7 +117,7 @@ message SupportTicketListInput {
 // required; the entity references are optional and mutually independent.
 message SupportTicketCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Short summary for the support ticket.
   string summary = 2;
   // Detailed support ticket description.
@@ -152,32 +152,32 @@ message SupportTicketCreateInput {
   optional int32 vpc_id = 17;
   // Must be true to confirm support ticket creation. Ignored when
   // dry_run=true.
-  bool confirm = 18;
+  bool confirm = 18; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 19;
+  optional bool dry_run = 19; // system param
 }
 
 // SupportTicketCloseInput is the input contract for
 // linode_support_ticket_close.
 message SupportTicketCloseInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Support ticket ID to close.
   int32 ticket_id = 2;
   // Must be true to confirm closing the support ticket. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // SupportTicketReplyListInput is the input contract for
 // linode_support_ticket_reply_list.
 message SupportTicketReplyListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Support ticket ID whose replies should be listed.
   int32 ticket_id = 2;
   // Page of results to return (optional, minimum 1).
@@ -190,32 +190,32 @@ message SupportTicketReplyListInput {
 // linode_support_ticket_reply_create.
 message SupportTicketReplyCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Support ticket ID to reply to.
   int32 ticket_id = 2;
   // Reply description to add to the support ticket.
   string description = 3;
   // Must be true to confirm support ticket reply creation. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // SupportTicketAttachmentCreateInput is the input contract for
 // linode_support_ticket_attachment_create.
 message SupportTicketAttachmentCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Support ticket ID to attach the file to.
   int32 ticket_id = 2;
   // Attachment file content or reference accepted by the Linode API.
   string file = 3;
   // Must be true to confirm support ticket attachment creation. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

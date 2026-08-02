@@ -42,7 +42,7 @@ func makeTestEvent(
 func writeJSONLFile(t *testing.T, path string, gzipped bool, events []audit.Event) {
 	t.Helper()
 
-	file, err := os.Create(path) //nolint:gosec // path from test tmp dir
+	file, err := os.Create(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -54,7 +54,7 @@ def create_linode_audit_export_tool() -> tuple[Tool, Capability]:
                 "path. Reads SQLite when enabled, else the JSONL log. Optional "
                 "filters: since, until, tool (glob), max_records, include_meta."
             ),
-            inputSchema=schema("linode.mcp.v1.AuditExportInput"),
+            input_schema=schema("linode.mcp.v1.AuditExportInput"),
         ),
         Capability.Meta,
     )

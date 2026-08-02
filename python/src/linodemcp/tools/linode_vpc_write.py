@@ -123,7 +123,7 @@ def create_linode_vpc_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_create",
         description="Creates a new VPC",
-        inputSchema=schema("linode.mcp.v1.VpcCreateInput"),
+        input_schema=schema("linode.mcp.v1.VpcCreateInput"),
     ), Capability.Write
 
 
@@ -192,7 +192,7 @@ def create_linode_vpc_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_update",
         description="Updates an existing VPC",
-        inputSchema=schema("linode.mcp.v1.VpcUpdateInput"),
+        input_schema=schema("linode.mcp.v1.VpcUpdateInput"),
     ), Capability.Write
 
 
@@ -277,7 +277,7 @@ def create_linode_vpc_delete_tool() -> tuple[Tool, Capability]:
         name="linode_vpc_delete",
         description="Deletes a VPC. Pass dry_run=true to preview without deleting."
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.VpcDeleteInput"),
+        input_schema=schema("linode.mcp.v1.VpcDeleteInput"),
     ), Capability.Destroy
 
 
@@ -421,7 +421,7 @@ def create_linode_vpc_subnet_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_subnet_create",
         description="Creates a new subnet in a VPC",
-        inputSchema=schema("linode.mcp.v1.VpcSubnetCreateInput"),
+        input_schema=schema("linode.mcp.v1.VpcSubnetCreateInput"),
     ), Capability.Write
 
 
@@ -501,7 +501,7 @@ def create_linode_vpc_subnet_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_subnet_update",
         description="Updates a VPC subnet",
-        inputSchema=schema("linode.mcp.v1.VpcSubnetUpdateInput"),
+        input_schema=schema("linode.mcp.v1.VpcSubnetUpdateInput"),
     ), Capability.Write
 
 
@@ -565,7 +565,7 @@ def create_linode_vpc_subnet_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a VPC subnet. Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.VpcSubnetDeleteInput"),
+        input_schema=schema("linode.mcp.v1.VpcSubnetDeleteInput"),
     ), Capability.Destroy
 
 
@@ -714,7 +714,7 @@ def create_linode_ipv6_range_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_ipv6_range_create",
         description="Creates an IPv6 range",
-        inputSchema=schema("linode.mcp.v1.IPv6RangeCreateInput"),
+        input_schema=schema("linode.mcp.v1.IPv6RangeCreateInput"),
     ), Capability.Write
 
 
@@ -777,7 +777,7 @@ def create_linode_ipv6_range_delete_tool() -> tuple[Tool, Capability]:
             "Deletes an IPv6 range. Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.IPv6RangeDeleteInput"),
+        input_schema=schema("linode.mcp.v1.IPv6RangeDeleteInput"),
     ), Capability.Destroy
 
 

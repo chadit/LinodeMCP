@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from mcp.server import Server as MCPServer
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
 
 import linodemcp.tools as tools_module
 from linodemcp.audit import Capability as AuditCapability
@@ -53,23 +53,14 @@ from linodemcp.twostage.store import PlanStore
 from linodemcp.version import VERSION as LINODEMCP_VERSION
 
 if TYPE_CHECKING:
+    from mcp.server import ServerRequestContext
+    from mcp.types import CallToolRequestParams, PaginatedRequestParams
+
     from linodemcp.config import Config
 
 __all__ = ["Server", "ToolEntry", "get_tool_registry"]
 
 logger = logging.getLogger(__name__)
-
-# The MCP library's list_tools() and call_tool() methods lack return type
-# annotations. These type aliases let us cast them to their actual signatures
-# (verified from the library source) instead of suppressing type errors.
-ListToolsDecorator = Callable[
-    [Callable[[], Awaitable[list[Tool]]]],
-    Callable[[], Awaitable[list[Tool]]],
-]
-CallToolDecorator = Callable[
-    [Callable[..., Awaitable[list[Any]]]],
-    Callable[..., Awaitable[list[Any]]],
-]
 
 # Each tool factory now returns (Tool, Capability). We invoke every factory
 # once at module import time and store the resolved Tool plus its capability,
@@ -296,7 +287,11 @@ class Server:
             raise ValueError(msg)
 
         self.config = config
-        self.mcp = MCPServer(config.server.name)
+        self.mcp = MCPServer(
+            config.server.name,
+            on_list_tools=self._on_list_tools,
+            on_call_tool=self._on_call_tool,
+        )
         self._inflight = 0
         # Phase 1b: audit sink defaults to NoopSink so dispatch logs
         # nothing yet. Phase 2 swaps in the JSONL writer; tests inject
@@ -367,7 +362,6 @@ class Server:
         # inside _apply_active_profile so the type annotations live in one
         # place. Reload reuses the same helper to swap state.
         self._apply_active_profile(emit_filter_log=True)
-        self._register_tools()
 
     @property
     def active_profile(self) -> Profile:
@@ -639,28 +633,42 @@ class Server:
             if entry.capability == Capability.Destroy
         )
 
-    def _register_tools(self) -> None:
-        """Wire the MCP server's list_tools and call_tool decorators.
+    async def _on_list_tools(
+        self,
+        ctx: ServerRequestContext[Any],
+        params: PaginatedRequestParams | None,
+    ) -> ListToolsResult:
+        """Return the tools the active profile allows.
 
-        Both decorated callables read mutable instance state
-        (``self._allowed_entries`` and ``self.dispatch``), so a later
-        ``reload_profile`` only needs to swap that state; the decorators
-        themselves stay registered for the lifetime of the server.
+        Reads ``self._allowed_entries`` on every call rather than capturing it,
+        so ``reload_profile`` only has to swap that list for the next
+        ``tools/list`` to reflect the new profile.
         """
-        _list_tools_method = cast(
-            "Callable[[], ListToolsDecorator]", self.mcp.list_tools
-        )
+        del ctx, params
+        return ListToolsResult(tools=[entry.tool for entry in self._allowed_entries])
 
-        async def _list_tools() -> list[Tool]:
-            return [entry.tool for entry in self._allowed_entries]
+    async def _on_call_tool(
+        self,
+        ctx: ServerRequestContext[Any],
+        params: CallToolRequestParams,
+    ) -> CallToolResult:
+        """Dispatch via the tracked path so shutdown can drain it.
 
-        _list_tools_method()(_list_tools)
-
-        async def _call_tool(name: str, arguments: dict[str, Any]) -> list[Any]:
-            """Dispatch via the tracked path so Shutdown can drain it."""
-            return await self.dispatch(name, arguments)
-
-        cast("CallToolDecorator", self.mcp.call_tool())(_call_tool)
+        The SDK stopped turning handler exceptions into ``isError`` results in
+        2.0 and raises them as JSON-RPC errors instead. Catching here keeps the
+        wire shape the Go server produces: a failed call comes back as a normal
+        result carrying the message with ``is_error`` set, so the model can read
+        the text and self-correct rather than seeing a transport-level failure.
+        """
+        del ctx
+        try:
+            content = await self.dispatch(params.name, dict(params.arguments or {}))
+        except Exception as exc:
+            return CallToolResult(
+                content=[TextContent(type="text", text=str(exc))],
+                is_error=True,
+            )
+        return CallToolResult(content=content)
 
     async def reload_profile(self, config: Config) -> None:
         """Swap the running server to the profile resolved from ``config``.

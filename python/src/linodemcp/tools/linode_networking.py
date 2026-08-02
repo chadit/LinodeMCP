@@ -36,7 +36,7 @@ def create_linode_vlan_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vlan_list",
         description="Lists all VLANs on the account",
-        inputSchema=schema("linode.mcp.v1.VLANListInput"),
+        input_schema=schema("linode.mcp.v1.VLANListInput"),
     ), Capability.Read
 
 
@@ -72,7 +72,7 @@ def create_linode_vlan_delete_tool() -> tuple[Tool, Capability]:
         name="linode_vlan_delete",
         description="Deletes a VLAN. Pass dry_run=true to preview without deleting."
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.VLANDeleteInput"),
+        input_schema=schema("linode.mcp.v1.VLANDeleteInput"),
     ), Capability.Destroy
 
 
@@ -212,7 +212,7 @@ def create_linode_networking_ipv4_share_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ipv4_share",
         description="Shares IPv4 addresses with a Linode",
-        inputSchema=schema("linode.mcp.v1.NetworkingIPv4ShareInput"),
+        input_schema=schema("linode.mcp.v1.NetworkingIPv4ShareInput"),
     ), Capability.Write
 
 
@@ -281,7 +281,7 @@ def create_linode_networking_ip_share_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ip_share",
         description="Shares IP addresses with a Linode",
-        inputSchema=schema("linode.mcp.v1.NetworkingIPShareInput"),
+        input_schema=schema("linode.mcp.v1.NetworkingIPShareInput"),
     ), Capability.Write
 
 
@@ -353,7 +353,7 @@ def create_linode_networking_ipv4_assign_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_networking_ipv4_assign",
         description="Assigns IPv4 addresses to Linodes in a region",
-        inputSchema=schema("linode.mcp.v1.NetworkingIPv4AssignInput"),
+        input_schema=schema("linode.mcp.v1.NetworkingIPv4AssignInput"),
     ), Capability.Write
 
 
@@ -456,7 +456,7 @@ def create_linode_networking_ip_assign_tool() -> tuple[Tool, Capability]:
             "Assigns IP addresses to Linodes in a region. WARNING: This "
             "changes IP ownership assignments."
         ),
-        inputSchema=schema("linode.mcp.v1.NetworkingIPAssignInput"),
+        input_schema=schema("linode.mcp.v1.NetworkingIPAssignInput"),
     ), Capability.Write
 
 

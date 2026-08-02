@@ -33,7 +33,7 @@ def create_linode_sshkey_create_tool() -> tuple[Tool, Capability]:
             "Creates a new SSH key and adds it to your Linode profile."
             " Pass dry_run=true to preview without creating."
         ),
-        inputSchema=schema("linode.mcp.v1.SSHKeyCreateInput"),
+        input_schema=schema("linode.mcp.v1.SSHKeyCreateInput"),
     ), Capability.Write
 
 
@@ -105,7 +105,7 @@ def create_linode_sshkey_update_tool() -> tuple[Tool, Capability]:
             "Updates the label for an SSH key in your Linode profile."
             " Pass dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.SSHKeyUpdateInput"),
+        input_schema=schema("linode.mcp.v1.SSHKeyUpdateInput"),
     ), Capability.Write
 
 
@@ -212,7 +212,7 @@ def create_linode_sshkey_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.SSHKeyDeleteInput"),
+        input_schema=schema("linode.mcp.v1.SSHKeyDeleteInput"),
     ), Capability.Destroy
 
 

@@ -183,7 +183,7 @@ def create_linode_instance_config_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_config_get",
         description="Gets a configuration profile for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceConfigGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigGetInput"),
     ), Capability.Read
 
 
@@ -192,7 +192,7 @@ def create_linode_instance_config_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_config_delete",
         description="Deletes a configuration profile from a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceConfigDeleteInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigDeleteInput"),
     ), Capability.Destroy
 
 
@@ -204,7 +204,7 @@ def create_linode_instance_config_interface_delete_tool() -> tuple[Tool, Capabil
             "Deletes an interface from a Linode instance configuration profile. "
             "Requires confirm because the interface is removed from the profile."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceDeleteInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigInterfaceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -213,7 +213,7 @@ def create_linode_instance_config_interface_get_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_instance_config_interface_get",
         description="Gets an interface for a Linode instance configuration profile.",
-        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigInterfaceGetInput"),
     ), Capability.Read
 
 
@@ -225,7 +225,7 @@ def create_linode_instance_interface_delete_tool() -> tuple[Tool, Capability]:
             "Deletes an interface from a Linode instance. "
             "Requires confirm because the interface is removed from the Linode."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceDeleteInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -234,7 +234,7 @@ def create_linode_instance_interface_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_interface_list",
         description="Lists interfaces for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceListInput"),
     ), Capability.Read
 
 
@@ -243,7 +243,7 @@ def create_linode_instance_interface_settings_get_tool() -> tuple[Tool, Capabili
     return Tool(
         name="linode_instance_interface_settings_get",
         description="Lists interface settings for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceSettingsGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceSettingsGetInput"),
     ), Capability.Read
 
 
@@ -252,7 +252,7 @@ def create_linode_instance_transfer_month_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_transfer_month_get",
         description="Gets monthly network transfer stats for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceTransferMonthGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceTransferMonthGetInput"),
     ), Capability.Read
 
 
@@ -261,7 +261,7 @@ def create_linode_instance_interface_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_interface_get",
         description="Gets an interface for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceGetInput"),
     ), Capability.Read
 
 
@@ -270,7 +270,7 @@ def create_linode_instance_interface_firewall_list_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_instance_interface_firewall_list",
         description="Lists firewalls assigned to a Linode instance interface.",
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceFirewallListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceFirewallListInput"),
     ), Capability.Read
 
 
@@ -303,7 +303,7 @@ def create_linode_instance_config_interface_list_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_instance_config_interface_list",
         description="Lists interfaces for a Linode instance configuration profile.",
-        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigInterfaceListInput"),
     ), Capability.Read
 
 
@@ -312,7 +312,7 @@ def create_linode_instance_interface_history_list_tool() -> tuple[Tool, Capabili
     return Tool(
         name="linode_instance_interface_history_list",
         description="Lists network interface history for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceHistoryListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceHistoryListInput"),
     ), Capability.Read
 
 
@@ -324,7 +324,7 @@ def create_linode_instance_config_interface_update_tool() -> tuple[Tool, Capabil
             "Updates an interface for a Linode instance configuration profile. "
             "Requires confirm because interface networking can change."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceUpdateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigInterfaceUpdateInput"),
     ), Capability.Write
 
 
@@ -333,7 +333,7 @@ def create_linode_instance_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_list",
         description="Lists Linode instances with optional filtering by status",
-        inputSchema=schema("linode.mcp.v1.InstanceListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceListInput"),
     ), Capability.Read
 
 
@@ -342,7 +342,7 @@ def create_linode_instance_stats_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_stats_get",
         description="Gets daily statistics for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceStatsGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceStatsGetInput"),
     ), Capability.Read
 
 
@@ -351,7 +351,7 @@ def create_linode_instance_nodebalancer_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_nodebalancer_list",
         description="Lists NodeBalancers assigned to a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceNodeBalancerListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceNodeBalancerListInput"),
     ), Capability.Read
 
 
@@ -362,7 +362,7 @@ def create_linode_instance_stats_month_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets a month of statistics for a Linode instance by year and month."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceStatsMonthGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceStatsMonthGetInput"),
     ), Capability.Read
 
 
@@ -371,7 +371,7 @@ def create_linode_instance_transfer_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_transfer_get",
         description="Gets this month's network transfer stats for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceTransferGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceTransferGetInput"),
     ), Capability.Read
 
 
@@ -380,7 +380,7 @@ def create_linode_instance_config_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_config_list",
         description="Lists configuration profiles for a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceConfigListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigListInput"),
     ), Capability.Read
 
 
@@ -392,7 +392,7 @@ def create_linode_instance_config_interface_reorder_tool() -> tuple[Tool, Capabi
             "Reorders interfaces on a Linode instance configuration profile. "
             "Requires confirm because the active interface order can change."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceReorderInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigInterfaceReorderInput"),
     ), Capability.Write
 
 
@@ -404,7 +404,7 @@ def create_linode_instance_config_interface_add_tool() -> tuple[Tool, Capability
             "Adds an interface to a Linode instance configuration profile. "
             "Requires confirm because the instance network configuration changes."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceConfigInterfaceAddInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigInterfaceAddInput"),
     ), Capability.Write
 
 
@@ -416,7 +416,7 @@ def create_linode_instance_interface_add_tool() -> tuple[Tool, Capability]:
             "Adds an interface to a Linode instance using the current Linode "
             "Interfaces API. Requires confirm because instance networking changes."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceAddInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceAddInput"),
     ), Capability.Write
 
 
@@ -428,7 +428,7 @@ def create_linode_instance_interface_update_tool() -> tuple[Tool, Capability]:
             "Updates a Linode interface using explicit documented body sections. "
             "Requires confirm because instance networking changes."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceUpdateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceUpdateInput"),
     ), Capability.Write
 
 
@@ -440,7 +440,7 @@ def create_linode_instance_config_update_tool() -> tuple[Tool, Capability]:
             "Updates a configuration profile for a Linode instance. "
             "Requires confirm because the instance boot profile can change."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceConfigUpdateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigUpdateInput"),
     ), Capability.Write
 
 

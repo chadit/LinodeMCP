@@ -131,7 +131,7 @@ def create_linode_profile_can_run_tool() -> tuple[Tool, Capability]:
                 "environment arg, not resource IDs. Advice only; it does not "
                 "execute anything."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileCanRunInput"),
+            input_schema=schema("linode.mcp.v1.ProfileCanRunInput"),
         ),
         Capability.Meta,
     )

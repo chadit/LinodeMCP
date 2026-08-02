@@ -32,7 +32,7 @@ def create_linode_firewall_list_tool() -> tuple[Tool, Capability]:
         description=(
             "Lists all Cloud Firewalls on your account. Can filter by status or label."
         ),
-        inputSchema=schema("linode.mcp.v1.FirewallListInput"),
+        input_schema=schema("linode.mcp.v1.FirewallListInput"),
     ), Capability.Read
 
 
@@ -41,7 +41,7 @@ def create_linode_firewall_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_get",
         description="Gets a Cloud Firewall by ID.",
-        inputSchema=schema("linode.mcp.v1.FirewallGetInput"),
+        input_schema=schema("linode.mcp.v1.FirewallGetInput"),
     ), Capability.Read
 
 
@@ -67,7 +67,7 @@ def create_linode_firewall_rules_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_rules_get",
         description="Gets the rules for a Cloud Firewall by ID.",
-        inputSchema=schema("linode.mcp.v1.FirewallRulesGetInput"),
+        input_schema=schema("linode.mcp.v1.FirewallRulesGetInput"),
     ), Capability.Read
 
 
@@ -126,7 +126,7 @@ def create_linode_firewall_rule_version_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_rule_version_list",
         description=("Lists all rule versions (history) for a Cloud Firewall by ID."),
-        inputSchema=schema("linode.mcp.v1.FirewallRuleVersionListInput"),
+        input_schema=schema("linode.mcp.v1.FirewallRuleVersionListInput"),
     ), Capability.Read
 
 
@@ -179,7 +179,7 @@ def create_linode_firewall_rule_version_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets a specific version of a Cloud Firewall rule by ID and version."
         ),
-        inputSchema=schema("linode.mcp.v1.FirewallRuleVersionGetInput"),
+        input_schema=schema("linode.mcp.v1.FirewallRuleVersionGetInput"),
     ), Capability.Read
 
 
@@ -188,7 +188,7 @@ def create_linode_firewall_device_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_device_get",
         description="Gets a specific device attached to a Cloud Firewall by ID.",
-        inputSchema=schema("linode.mcp.v1.FirewallDeviceGetInput"),
+        input_schema=schema("linode.mcp.v1.FirewallDeviceGetInput"),
     ), Capability.Read
 
 
@@ -197,7 +197,7 @@ def create_linode_firewall_device_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_device_list",
         description="Lists devices attached to a Cloud Firewall by ID.",
-        inputSchema=schema("linode.mcp.v1.FirewallDeviceListInput"),
+        input_schema=schema("linode.mcp.v1.FirewallDeviceListInput"),
     ), Capability.Read
 
 
@@ -313,7 +313,7 @@ def create_linode_firewall_settings_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_settings_get",
         description="Lists account default firewall settings.",
-        inputSchema=schema("linode.mcp.v1.FirewallSettingsGetInput"),
+        input_schema=schema("linode.mcp.v1.FirewallSettingsGetInput"),
     ), Capability.Read
 
 
@@ -340,7 +340,7 @@ def create_linode_firewall_template_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_template_list",
         description="Lists Cloud Firewall Templates.",
-        inputSchema=schema("linode.mcp.v1.FirewallTemplateListInput"),
+        input_schema=schema("linode.mcp.v1.FirewallTemplateListInput"),
     ), Capability.Read
 
 
@@ -369,7 +369,7 @@ def create_linode_firewall_template_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_template_get",
         description="Gets a Cloud Firewall Template by slug.",
-        inputSchema=schema("linode.mcp.v1.FirewallTemplateGetInput"),
+        input_schema=schema("linode.mcp.v1.FirewallTemplateGetInput"),
     ), Capability.Read
 
 

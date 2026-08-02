@@ -49,7 +49,7 @@ message PlacementGroupMigration {
 // PlacementGroupGetInput is the input contract for linode_placement_group_get.
 message PlacementGroupGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the placement group to retrieve (required).
   int32 group_id = 2;
 }
@@ -81,7 +81,7 @@ message PlacementGroupListResponse {
 // linode_placement_group_list.
 message PlacementGroupListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -93,7 +93,7 @@ message PlacementGroupListInput {
 // placement_group_policy, and confirm are required.
 message PlacementGroupCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Placement group label.
   string label = 2;
   // Region where the placement group is created.
@@ -104,45 +104,45 @@ message PlacementGroupCreateInput {
   PlacementGroupPolicy.Value placement_group_policy = 5;
   // Must be true to confirm placement group creation. Ignored when
   // dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview placement group creation without creating it.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // PlacementGroupUpdateInput is the input contract for
 // linode_placement_group_update. group_id, label, and confirm are required.
 message PlacementGroupUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Placement group ID to update.
   int32 group_id = 2;
   // New placement group label.
   string label = 3;
   // Must be true to confirm placement group update.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // PlacementGroupDeleteInput is the input contract for
 // linode_placement_group_delete, a two-stage destroy.
 message PlacementGroupDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the placement group to delete.
   int32 group_id = 2;
   // Must be set to true to confirm deletion. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // PlacementGroupAssignInput is the input contract for
@@ -152,17 +152,17 @@ message PlacementGroupDeleteInput {
 // there (the handler still enforces a non-empty list at runtime).
 message PlacementGroupAssignInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the placement group to assign Linodes to.
   int32 group_id = 2;
   // Array of Linode IDs to assign to the placement group.
   repeated int32 linodes = 3;
   // Must be true to confirm assigning Linodes to the placement group. Ignored
   // when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // PlacementGroupUnassignInput is the input contract for
@@ -172,15 +172,15 @@ message PlacementGroupAssignInput {
 // optional there (the handler still enforces a non-empty list at runtime).
 message PlacementGroupUnassignInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the placement group.
   int32 group_id = 2;
   // Linode IDs to unassign from the placement group.
   repeated int32 linodes = 3;
   // Must be true to confirm placement group unassignment. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

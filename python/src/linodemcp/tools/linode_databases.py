@@ -433,7 +433,7 @@ def create_linode_database_engine_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_engine_get",
         description="Gets details for a Managed Databases engine.",
-        inputSchema=schema("linode.mcp.v1.DatabaseEngineGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseEngineGetInput"),
     ), Capability.Read
 
 
@@ -442,7 +442,7 @@ def create_linode_database_type_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_type_get",
         description="Gets details for a Managed Databases type.",
-        inputSchema=schema("linode.mcp.v1.DatabaseTypeGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseTypeGetInput"),
     ), Capability.Read
 
 
@@ -455,7 +455,7 @@ def create_linode_database_mysql_instance_create_tool() -> tuple[Tool, Capabilit
             "create a billable resource. Pass dry_run=true to preview without "
             "creating."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceCreateInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceCreateInput"),
     ), Capability.Write
 
 
@@ -468,7 +468,7 @@ def create_linode_database_postgresql_instance_create_tool() -> tuple[Tool, Capa
             "create a billable resource. Pass dry_run=true to preview without "
             "creating."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceCreateInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceCreateInput"),
     ), Capability.Write
 
 
@@ -481,7 +481,7 @@ def create_linode_database_mysql_instance_delete_tool() -> tuple[Tool, Capabilit
             "without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceDeleteInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -490,7 +490,7 @@ def create_linode_database_mysql_instance_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_database_mysql_instance_list",
         description="Lists MySQL Managed Database instances.",
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceListInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceListInput"),
     ), Capability.Read
 
 
@@ -499,7 +499,7 @@ def create_linode_database_postgresql_instance_list_tool() -> tuple[Tool, Capabi
     return Tool(
         name="linode_database_postgresql_instance_list",
         description="Lists PostgreSQL Managed Database instances.",
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceListInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceListInput"),
     ), Capability.Read
 
 
@@ -512,7 +512,7 @@ def create_linode_database_postgresql_instance_delete_tool() -> tuple[Tool, Capa
             "preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceDeleteInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -524,7 +524,7 @@ def create_linode_database_mysql_instance_patch_tool() -> tuple[Tool, Capability
             "Applies pending patches to a MySQL Managed Database. Pass "
             "dry_run=true to preview without patching."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstancePatchInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstancePatchInput"),
     ), Capability.Write
 
 
@@ -536,7 +536,7 @@ def create_linode_database_postgresql_instance_patch_tool() -> tuple[Tool, Capab
             "Applies pending patches to a PostgreSQL Managed Database. Pass "
             "dry_run=true to preview without patching."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstancePatchInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstancePatchInput"),
     ), Capability.Write
 
 
@@ -548,7 +548,7 @@ def create_linode_database_mysql_instance_suspend_tool() -> tuple[Tool, Capabili
             "Suspends a MySQL Managed Database. Pass dry_run=true to preview "
             "without suspending."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceSuspendInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceSuspendInput"),
     ), Capability.Write
 
 
@@ -560,7 +560,7 @@ def create_linode_database_mysql_instance_update_tool() -> tuple[Tool, Capabilit
             "Updates a MySQL Managed Database. Requires confirm=true; pass "
             "dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceUpdateInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceUpdateInput"),
     ), Capability.Write
 
 
@@ -574,7 +574,7 @@ def create_linode_database_postgresql_instance_suspend_tool() -> tuple[
             "Suspends a PostgreSQL Managed Database. Pass dry_run=true to "
             "preview without suspending."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceSuspendInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceSuspendInput"),
     ), Capability.Write
 
 
@@ -586,7 +586,7 @@ def create_linode_database_postgresql_instance_update_tool() -> tuple[Tool, Capa
             "Updates a PostgreSQL Managed Database. Requires confirm=true; pass "
             "dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceUpdateInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceUpdateInput"),
     ), Capability.Write
 
 
@@ -595,7 +595,7 @@ def create_linode_database_instance_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_instance_list",
         description="Lists Managed Database instances.",
-        inputSchema=schema("linode.mcp.v1.DatabaseInstanceListInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseInstanceListInput"),
     ), Capability.Read
 
 
@@ -604,7 +604,7 @@ def create_linode_database_engine_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_engine_list",
         description="Lists available Linode Managed Databases engines.",
-        inputSchema=schema("linode.mcp.v1.DatabaseEngineListInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseEngineListInput"),
     ), Capability.Read
 
 
@@ -613,7 +613,7 @@ def create_linode_database_type_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_type_list",
         description="Lists available Linode Managed Databases types.",
-        inputSchema=schema("linode.mcp.v1.DatabaseTypeListInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseTypeListInput"),
     ), Capability.Read
 
 
@@ -671,7 +671,7 @@ def create_linode_database_mysql_instance_credentials_reset_tool() -> tuple[
             "Resets credentials for a MySQL Managed Database. Pass dry_run=true "
             "to preview without resetting credentials."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceCredentialsResetInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceCredentialsResetInput"),
     ), Capability.Write
 
 
@@ -685,7 +685,7 @@ def create_linode_database_postgresql_instance_credentials_reset_tool() -> tuple
             "Resets credentials for a PostgreSQL Managed Database. Pass "
             "dry_run=true to preview without resetting credentials."
         ),
-        inputSchema=schema(
+        input_schema=schema(
             "linode.mcp.v1.DatabasePostgreSQLInstanceCredentialsResetInput"
         ),
     ), Capability.Write
@@ -696,7 +696,7 @@ def create_linode_database_mysql_instance_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_mysql_instance_get",
         description="Gets a MySQL Managed Database instance.",
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceGetInput"),
     ), Capability.Read
 
 
@@ -705,7 +705,7 @@ def create_linode_database_mysql_instance_ssl_get_tool() -> tuple[Tool, Capabili
     return Tool(
         name="linode_database_mysql_instance_ssl_get",
         description="Gets a MySQL Managed Database SSL certificate.",
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceSSLGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceSSLGetInput"),
     ), Capability.Read
 
 
@@ -743,7 +743,7 @@ def create_linode_database_mysql_instance_credentials_get_tool() -> tuple[
             "and requires a database write-capable profile. Pass dry_run=true "
             "to preview without retrieving credentials."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceCredentialsGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceCredentialsGetInput"),
     ), Capability.Write
 
 
@@ -759,7 +759,7 @@ def create_linode_database_postgresql_instance_credentials_get_tool() -> tuple[
             "and requires a database write-capable profile. Pass dry_run=true "
             "to preview without retrieving credentials."
         ),
-        inputSchema=schema(
+        input_schema=schema(
             "linode.mcp.v1.DatabasePostgreSQLInstanceCredentialsGetInput"
         ),
     ), Capability.Write
@@ -773,7 +773,7 @@ def create_linode_database_mysql_instance_resume_tool() -> tuple[Tool, Capabilit
             "Resumes a MySQL Managed Database. Requires confirm=true; pass "
             "dry_run=true to preview without resuming."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLInstanceResumeInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLInstanceResumeInput"),
     ), Capability.Write
 
 
@@ -785,7 +785,7 @@ def create_linode_database_postgresql_instance_resume_tool() -> tuple[Tool, Capa
             "Resumes a PostgreSQL Managed Database. Requires confirm=true; pass "
             "dry_run=true to preview without resuming."
         ),
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceResumeInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceResumeInput"),
     ), Capability.Write
 
 
@@ -794,7 +794,7 @@ def create_linode_database_mysql_config_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_database_mysql_config_get",
         description="Lists MySQL Managed Database advanced parameters.",
-        inputSchema=schema("linode.mcp.v1.DatabaseMySQLConfigGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabaseMySQLConfigGetInput"),
     ), Capability.Read
 
 
@@ -803,7 +803,7 @@ def create_linode_database_postgresql_instance_get_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_database_postgresql_instance_get",
         description="Gets a PostgreSQL Managed Database instance.",
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceGetInput"),
     ), Capability.Read
 
 
@@ -814,7 +814,7 @@ def create_linode_database_postgresql_instance_ssl_get_tool() -> tuple[
     return Tool(
         name="linode_database_postgresql_instance_ssl_get",
         description="Gets a PostgreSQL Managed Database SSL certificate.",
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceSSLGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLInstanceSSLGetInput"),
     ), Capability.Read
 
 
@@ -823,7 +823,7 @@ def create_linode_database_postgresql_config_get_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_database_postgresql_config_get",
         description="Lists PostgreSQL Managed Database advanced parameters.",
-        inputSchema=schema("linode.mcp.v1.DatabasePostgreSQLConfigGetInput"),
+        input_schema=schema("linode.mcp.v1.DatabasePostgreSQLConfigGetInput"),
     ), Capability.Read
 
 

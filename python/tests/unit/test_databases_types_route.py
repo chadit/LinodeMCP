@@ -246,10 +246,10 @@ def test_create_linode_database_type_get_tool_schema() -> None:
 
     assert tool.name == "linode_database_type_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["type_id"]
-    assert "type_id" in tool.inputSchema["properties"]
-    assert "page" in tool.inputSchema["properties"]
-    assert "page_size" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["type_id"]
+    assert "type_id" in tool.input_schema["properties"]
+    assert "page" in tool.input_schema["properties"]
+    assert "page_size" in tool.input_schema["properties"]
 
 
 def test_create_linode_databases_types_list_tool_schema() -> None:
@@ -258,8 +258,8 @@ def test_create_linode_databases_types_list_tool_schema() -> None:
 
     assert tool.name == "linode_database_type_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page_size"]["type"] == "integer"
 
 
 @pytest.mark.asyncio

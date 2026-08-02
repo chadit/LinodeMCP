@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from linodemcp.linode import RetryableClient
 
 
-# Validation constants
 _VALID_BUCKET_LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]{1,2}$")
 _VALID_ACLS = ("private", "public-read", "authenticated-read", "public-read-write")
 _MIN_BUCKET_LABEL_LENGTH = 3
@@ -81,7 +80,7 @@ def create_linode_object_storage_cancel_tool() -> tuple[Tool, Capability]:
             "Requires confirm=true because this is a destructive "
             "account-level operation."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageCancelInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageCancelInput"),
     ), Capability.Write
 
 
@@ -124,7 +123,7 @@ def create_linode_object_storage_bucket_create_tool() -> tuple[Tool, Capability]
         description=(
             "Creates a new Object Storage bucket. WARNING: Billing starts immediately."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketCreateInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketCreateInput"),
     ), Capability.Write
 
 
@@ -206,7 +205,7 @@ def create_linode_object_storage_bucket_delete_tool() -> tuple[Tool, Capability]
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketDeleteInput"),
     ), Capability.Destroy
 
 
@@ -305,7 +304,7 @@ def create_linode_object_storage_bucket_access_update_tool() -> tuple[Tool, Capa
     return Tool(
         name="linode_object_storage_bucket_access_update",
         description=("Updates access control settings for an Object Storage bucket."),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketAccessUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketAccessUpdateInput"),
     ), Capability.Write
 
 
@@ -406,7 +405,7 @@ def create_linode_object_storage_bucket_access_allow_tool() -> tuple[Tool, Capab
     return Tool(
         name="linode_object_storage_bucket_access_allow",
         description=("Allows access to an Object Storage bucket."),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketAccessAllowInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketAccessAllowInput"),
     ), Capability.Write
 
 
@@ -473,8 +472,6 @@ async def handle_linode_object_storage_bucket_access_allow(
     return await execute_tool(cfg, arguments, "allow bucket access", _call)
 
 
-# Stage 5 Phase 4: Object Storage access key write operations
-
 _MAX_KEY_LABEL_LENGTH = 50
 
 
@@ -515,7 +512,7 @@ def create_linode_object_storage_key_create_tool() -> tuple[Tool, Capability]:
             " WARNING: The secret_key is only shown ONCE"
             " in the response and cannot be retrieved later."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyCreateInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageKeyCreateInput"),
     ), Capability.Write
 
 
@@ -526,7 +523,7 @@ def create_linode_object_storage_key_update_tool() -> tuple[Tool, Capability]:
         description=(
             "Updates an Object Storage access key's label or bucket permissions."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageKeyUpdateInput"),
     ), Capability.Write
 
 
@@ -539,7 +536,7 @@ def create_linode_object_storage_key_delete_tool() -> tuple[Tool, Capability]:
             "dry_run=true to preview without revoking."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageKeyDeleteInput"),
     ), Capability.Destroy
 
 
@@ -821,8 +818,6 @@ async def handle_linode_object_storage_key_delete(
     return await execute_tool(cfg, arguments, f"revoke access key {key_id}", _call)
 
 
-# Stage 5 Phase 5: Presigned URLs, Object ACL, and SSL
-
 _MIN_EXPIRES_IN = 1
 _MAX_EXPIRES_IN = 604800
 
@@ -847,7 +842,7 @@ def create_linode_object_storage_presigned_url_create_tool() -> tuple[Tool, Capa
             " in Object Storage. Use method=GET to create a"
             " download URL, method=PUT to create an upload URL."
         ),
-        inputSchema=schema("linode.mcp.v1.PresignedURLCreateInput"),
+        input_schema=schema("linode.mcp.v1.PresignedURLCreateInput"),
     ), Capability.Read
 
 
@@ -907,7 +902,7 @@ def create_linode_object_storage_object_acl_get_tool() -> tuple[Tool, Capability
             "Gets the Access Control List (ACL) for a specific"
             " object in an Object Storage bucket"
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectACLGetInput"),
+        input_schema=schema("linode.mcp.v1.ObjectACLGetInput"),
     ), Capability.Read
 
 
@@ -944,7 +939,7 @@ def create_linode_object_storage_object_acl_update_tool() -> tuple[Tool, Capabil
             " object in an Object Storage bucket."
             " Requires confirm=true to proceed."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectACLUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ObjectACLUpdateInput"),
     ), Capability.Write
 
 
@@ -1033,7 +1028,7 @@ def create_linode_object_storage_ssl_get_tool() -> tuple[Tool, Capability]:
             "Checks whether an Object Storage bucket has an"
             " SSL/TLS certificate installed"
         ),
-        inputSchema=schema("linode.mcp.v1.BucketSSLGetInput"),
+        input_schema=schema("linode.mcp.v1.BucketSSLGetInput"),
     ), Capability.Read
 
 
@@ -1067,7 +1062,7 @@ def create_linode_object_storage_ssl_upload_tool() -> tuple[Tool, Capability]:
             " for an Object Storage bucket."
             " Requires confirm=true to proceed."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageSSLUploadInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageSSLUploadInput"),
     ), Capability.Write
 
 
@@ -1145,7 +1140,7 @@ def create_linode_object_storage_ssl_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.ObjectStorageSSLDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageSSLDeleteInput"),
     ), Capability.Destroy
 
 

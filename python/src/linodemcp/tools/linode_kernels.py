@@ -29,7 +29,7 @@ def create_linode_kernel_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_kernel_list",
         description="Lists available Linode kernels.",
-        inputSchema=schema("linode.mcp.v1.KernelListInput"),
+        input_schema=schema("linode.mcp.v1.KernelListInput"),
     ), Capability.Read
 
 
@@ -72,7 +72,7 @@ def create_linode_kernel_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_kernel_get",
         description="Gets a single Linode kernel by ID.",
-        inputSchema=schema("linode.mcp.v1.KernelGetInput"),
+        input_schema=schema("linode.mcp.v1.KernelGetInput"),
     ), Capability.Read
 
 

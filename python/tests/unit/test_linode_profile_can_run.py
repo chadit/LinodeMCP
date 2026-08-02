@@ -67,7 +67,7 @@ def test_schema_and_capability() -> None:
     tool, capability = create_linode_profile_can_run_tool()
     assert tool.name == "linode_profile_can_run"
     assert capability == Capability.Meta
-    assert "calls" in tool.inputSchema["properties"]
+    assert "calls" in tool.input_schema["properties"]
 
 
 async def test_classifies_every_category_and_allow_path(wired: None) -> None:

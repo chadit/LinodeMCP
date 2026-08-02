@@ -54,7 +54,7 @@ message AccountUserListResponse {
 // AccountUserGetInput is the input contract for linode_account_user_get.
 message AccountUserGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The account username to retrieve (required).
   string username = 2;
 }
@@ -135,7 +135,7 @@ message AccountUserGrantsWriteResponse {
 // AccountUserListInput is the input contract for linode_account_user_list.
 message AccountUserListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -146,7 +146,7 @@ message AccountUserListInput {
 // linode_account_user_grants_get.
 message AccountUserGrantsGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Account username whose grants should be retrieved (required).
   string username = 2;
 }
@@ -155,7 +155,7 @@ message AccountUserGrantsGetInput {
 // username, email, and confirm are required.
 message AccountUserCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Username for the new account user (required).
   string username = 2;
   // Email address for the new account user (required).
@@ -163,10 +163,10 @@ message AccountUserCreateInput {
   // Whether the new account user is restricted (optional, defaults to false).
   optional bool restricted = 4;
   // Must be true to confirm account user creation. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // AccountUserUpdateInput is the input contract for linode_account_user_update.
@@ -176,7 +176,7 @@ message AccountUserCreateInput {
 // param).
 message AccountUserUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Account username to update (required).
   string username = 2;
   // New email address for the account user (optional).
@@ -188,24 +188,24 @@ message AccountUserUpdateInput {
   // New username for the account user (optional).
   optional string new_username = 6;
   // Must be true to confirm account user update. Ignored when dry_run=true.
-  bool confirm = 7;
+  bool confirm = 7; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8;
+  optional bool dry_run = 8; // system param
 }
 
 // AccountUserDeleteInput is the input contract for linode_account_user_delete.
 // Not a two-stage destroy: the ground-truth dump shows no mode/plan_id params.
 message AccountUserDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Account username to delete (required).
   string username = 2;
   // Must be true to confirm account user deletion. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountUserGrantsUpdateInput is the input contract for
@@ -217,7 +217,7 @@ message AccountUserDeleteInput {
 // username and confirm were required.
 message AccountUserGrantsUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Account username whose grants should be updated (required).
   string username = 2;
   // Optional global grants object.
@@ -246,8 +246,8 @@ message AccountUserGrantsUpdateInput {
   repeated google.protobuf.Struct lkecluster = 14;
   // Must be true to confirm account user grants update. Ignored when
   // dry_run=true.
-  bool confirm = 15;
+  bool confirm = 15; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 16;
+  optional bool dry_run = 16; // system param
 }

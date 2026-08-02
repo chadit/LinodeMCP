@@ -39,7 +39,7 @@ def create_linode_audit_health_tool() -> tuple[Tool, Capability]:
                 "SQLite sink is enabled) row count, oldest event, and "
                 "database size."
             ),
-            inputSchema=schema("linode.mcp.v1.AuditHealthInput"),
+            input_schema=schema("linode.mcp.v1.AuditHealthInput"),
         ),
         Capability.Meta,
     )

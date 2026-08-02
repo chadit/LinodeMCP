@@ -33,7 +33,7 @@ message LKENodeRecycleResponse {
 // LKENodeGetInput is the input contract for linode_lke_node_get.
 message LKENodeGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster (required).
   string cluster_id = 2;
   // The ID of the node to retrieve (required).
@@ -43,35 +43,35 @@ message LKENodeGetInput {
 // LKENodeDeleteInput is the input contract for linode_lke_node_delete.
 message LKENodeDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster.
   int32 cluster_id = 2;
   // The ID of the node to delete (string format).
   string node_id = 3;
   // Must be true to confirm node deletion. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }
 
 // LKENodeRecycleInput is the input contract for linode_lke_node_recycle.
 message LKENodeRecycleInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster.
   int32 cluster_id = 2;
   // The ID of the node to recycle (string format).
   string node_id = 3;
   // Must be true to confirm node recycling. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

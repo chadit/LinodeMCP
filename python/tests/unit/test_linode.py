@@ -10133,9 +10133,6 @@ def test_api_error_methods() -> None:
     assert not server_error.is_forbidden_error()
 
 
-# Stage 3 Client Tests
-
-
 async def test_list_ssh_keys() -> None:
     """Test listing SSH keys."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -11242,7 +11239,6 @@ async def test_get_firewall_rule_version_encodes_path_params() -> None:
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        # Test with a version containing path traversal characters
         await client.get_firewall_rule_version(12345, "v1/../../../etc/passwd")
 
         call_args = mock_request.call_args
@@ -14380,9 +14376,6 @@ async def test_upload_image_wraps_http_errors() -> None:
     await client.close()
 
 
-# Validation function tests
-
-
 class TestValidateSSHKey:
     """Tests for SSH key validation."""
 
@@ -14586,11 +14579,6 @@ class TestValidateLabel:
         """Test invalid characters raise error."""
         with pytest.raises(ValueError, match="invalid character"):
             validate_label("label with spaces")
-
-
-# ---------------------------------------------------------------------------
-# Client.make_request HTTP mechanics
-# ---------------------------------------------------------------------------
 
 
 class TestMakeRequestURLConstruction:
@@ -19353,11 +19341,11 @@ async def test_monitor_alert_definition_create_tool_schema_and_handler_success()
     tool, capability = create_linode_monitor_service_alert_definition_create_tool()
     assert tool.name == "linode_monitor_service_alert_definition_create"
     assert capability == Capability.Write
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
     # The generated proto schema drops the hand-built service_type pattern and
     # never marks the rule_criteria/trigger_conditions (map) or channel_ids
     # (repeated) fields required; the handler still enforces all of them.
-    assert set(tool.inputSchema["required"]) == {
+    assert set(tool.input_schema["required"]) == {
         "service_type",
         "label",
         "severity",
@@ -19626,10 +19614,10 @@ async def test_monitor_alert_definition_get_tool_schema_and_handler_success() ->
     tool, capability = create_linode_monitor_service_alert_definition_get_tool()
     assert tool.name == "linode_monitor_service_alert_definition_get"
     assert capability == Capability.Read
-    assert "confirm" not in tool.inputSchema["properties"]
-    assert "service_type" in tool.inputSchema["properties"]
-    assert sorted(tool.inputSchema["required"]) == ["alert_id", "service_type"]
-    assert tool.inputSchema["properties"]["alert_id"]["type"] == "integer"
+    assert "confirm" not in tool.input_schema["properties"]
+    assert "service_type" in tool.input_schema["properties"]
+    assert sorted(tool.input_schema["required"]) == ["alert_id", "service_type"]
+    assert tool.input_schema["properties"]["alert_id"]["type"] == "integer"
 
     cfg = Config(
         environments={
@@ -19734,9 +19722,9 @@ async def test_monitor_alert_definition_delete_tool_schema_and_handler_success()
     tool, capability = create_linode_monitor_service_alert_definition_delete_tool()
     assert tool.name == "linode_monitor_service_alert_definition_delete"
     assert capability == Capability.Destroy
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert "service_type" in tool.inputSchema["properties"]
-    assert sorted(tool.inputSchema["required"]) == [
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert "service_type" in tool.input_schema["properties"]
+    assert sorted(tool.input_schema["required"]) == [
         "alert_id",
         "confirm",
         "service_type",
@@ -19867,8 +19855,8 @@ async def test_monitor_global_alert_definitions_list_tool_success() -> None:
     tool, capability = create_linode_monitor_alert_definition_list_tool()
     assert tool.name == "linode_monitor_alert_definition_list"
     assert capability == Capability.Read
-    assert "confirm" not in tool.inputSchema["properties"]
-    assert "required" not in tool.inputSchema
+    assert "confirm" not in tool.input_schema["properties"]
+    assert "required" not in tool.input_schema
 
     cfg = Config(
         environments={
@@ -19909,7 +19897,7 @@ async def test_monitor_alert_channels_list_tool_schema_and_handler_success() -> 
     tool, capability = create_linode_monitor_alert_channel_list_tool()
     assert tool.name == "linode_monitor_alert_channel_list"
     assert capability == Capability.Read
-    assert "confirm" not in tool.inputSchema["properties"]
+    assert "confirm" not in tool.input_schema["properties"]
 
     cfg = Config(
         environments={
@@ -19951,8 +19939,8 @@ async def test_monitor_alert_definitions_list_tool_schema_and_handler_success() 
     tool, capability = create_linode_monitor_service_alert_definition_list_tool()
     assert tool.name == "linode_monitor_service_alert_definition_list"
     assert capability == Capability.Read
-    assert "confirm" not in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["service_type"]
+    assert "confirm" not in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["service_type"]
 
     cfg = Config(
         environments={
@@ -20018,9 +20006,9 @@ async def test_monitor_dashboard_get_tool_schema_and_handler_success() -> None:
     tool, capability = create_linode_monitor_dashboard_get_tool()
     assert tool.name == "linode_monitor_dashboard_get"
     assert capability == Capability.Read
-    assert "confirm" not in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["dashboard_id"]
-    assert tool.inputSchema["properties"]["dashboard_id"]["type"] == "integer"
+    assert "confirm" not in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["dashboard_id"]
+    assert tool.input_schema["properties"]["dashboard_id"]["type"] == "integer"
 
     cfg = Config(
         environments={
@@ -20103,8 +20091,8 @@ async def test_monitor_dashboards_list_tool_schema_and_handler_success() -> None
     tool, capability = create_linode_monitor_dashboard_list_tool()
     assert tool.name == "linode_monitor_dashboard_list"
     assert capability == Capability.Read
-    assert "confirm" not in tool.inputSchema["properties"]
-    assert "required" not in tool.inputSchema
+    assert "confirm" not in tool.input_schema["properties"]
+    assert "required" not in tool.input_schema
 
     cfg = Config(
         environments={
@@ -20154,8 +20142,8 @@ async def test_monitor_service_dashboards_tool_schema_and_handler_success() -> N
     tool, capability = create_linode_monitor_service_dashboard_list_tool()
     assert tool.name == "linode_monitor_service_dashboard_list"
     assert capability == Capability.Read
-    assert "confirm" not in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["service_type"]
+    assert "confirm" not in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["service_type"]
 
     cfg = Config(
         environments={
@@ -21204,8 +21192,8 @@ async def test_linode_instance_interface_settings_update_schema_has_dry_run() ->
     tool, capability = create_linode_instance_interface_settings_update_tool()
 
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert "dry_run" not in tool.inputSchema["required"]
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert "dry_run" not in tool.input_schema["required"]
 
 
 async def test_list_lke_tier_versions_sends_tier_route() -> None:

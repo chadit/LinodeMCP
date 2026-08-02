@@ -25,7 +25,17 @@
     "enabled": true,
     "automerge": true
   },
+  "pre-commit": {
+    "enabled": true
+  },
   "packageRules": [
+    {
+      "description": "config:recommended leaves rangeStrategy at 'auto', which re-narrows a floor-only constraint into a one-minor window every time a dep crosses its upper bound. That is where 'structlog>=26.1,<26.2' came from: commit f09ca71c, an automated bump, not a human decision. 'bump' keeps the declared floor equal to the released version and never invents a ceiling.",
+      "matchManagers": [
+        "pep621"
+      ],
+      "rangeStrategy": "bump"
+    },
     {
       "matchManagers": [
         "gomod"

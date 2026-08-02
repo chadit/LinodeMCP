@@ -36,7 +36,7 @@ def create_linode_longview_client_update_tool() -> tuple[Tool, Capability]:
             "Updates a Longview client label. Pass dry_run=true to preview "
             "without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.LongviewClientUpdateInput"),
+        input_schema=schema("linode.mcp.v1.LongviewClientUpdateInput"),
     ), Capability.Write
 
 
@@ -45,7 +45,7 @@ def create_linode_longview_subscription_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_longview_subscription_get",
         description="Gets details for a single Longview subscription by ID.",
-        inputSchema=schema("linode.mcp.v1.LongviewSubscriptionGetInput"),
+        input_schema=schema("linode.mcp.v1.LongviewSubscriptionGetInput"),
     ), Capability.Read
 
 
@@ -54,7 +54,7 @@ def create_linode_longview_plan_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_longview_plan_get",
         description="Gets the account Longview plan.",
-        inputSchema=schema("linode.mcp.v1.LongviewPlanGetInput"),
+        input_schema=schema("linode.mcp.v1.LongviewPlanGetInput"),
     ), Capability.Read
 
 
@@ -63,7 +63,7 @@ def create_linode_longview_type_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_longview_type_list",
         description="Lists Longview types.",
-        inputSchema=schema("linode.mcp.v1.LongviewTypeListInput"),
+        input_schema=schema("linode.mcp.v1.LongviewTypeListInput"),
     ), Capability.Read
 
 
@@ -72,7 +72,7 @@ def create_linode_longview_client_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_longview_client_list",
         description="Lists Longview clients on the account.",
-        inputSchema=schema("linode.mcp.v1.LongviewClientListInput"),
+        input_schema=schema("linode.mcp.v1.LongviewClientListInput"),
     ), Capability.Read
 
 
@@ -81,7 +81,7 @@ def create_linode_longview_client_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_longview_client_get",
         description="Gets a Longview client by ID.",
-        inputSchema=schema("linode.mcp.v1.LongviewClientGetInput"),
+        input_schema=schema("linode.mcp.v1.LongviewClientGetInput"),
     ), Capability.Read
 
 
@@ -93,7 +93,7 @@ def create_linode_longview_plan_update_tool() -> tuple[Tool, Capability]:
             "Updates the account Longview plan."
             " Requires confirm=true and supports dry_run=true to preview."
         ),
-        inputSchema=schema("linode.mcp.v1.LongviewPlanUpdateInput"),
+        input_schema=schema("linode.mcp.v1.LongviewPlanUpdateInput"),
     ), Capability.Write
 
 
@@ -102,7 +102,7 @@ def create_linode_longview_subscription_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_longview_subscription_list",
         description="Lists Longview subscriptions on the account.",
-        inputSchema=schema("linode.mcp.v1.LongviewSubscriptionListInput"),
+        input_schema=schema("linode.mcp.v1.LongviewSubscriptionListInput"),
     ), Capability.Read
 
 
@@ -114,7 +114,7 @@ def create_linode_longview_client_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a Longview client."
             " Requires confirm=true and supports dry_run=true to preview."
         ),
-        inputSchema=schema("linode.mcp.v1.LongviewClientDeleteInput"),
+        input_schema=schema("linode.mcp.v1.LongviewClientDeleteInput"),
     ), Capability.Destroy
 
 
@@ -271,7 +271,7 @@ def create_linode_longview_client_create_tool() -> tuple[Tool, Capability]:
             "Creates a Longview client. Pass dry_run=true to preview without "
             "creating the client."
         ),
-        inputSchema=schema("linode.mcp.v1.LongviewClientCreateInput"),
+        input_schema=schema("linode.mcp.v1.LongviewClientCreateInput"),
     ), Capability.Write
 
 

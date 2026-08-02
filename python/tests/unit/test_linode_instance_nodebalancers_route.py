@@ -122,9 +122,9 @@ def test_create_linode_instance_nodebalancers_list_tool_schema() -> None:
 
     assert tool.name == "linode_instance_nodebalancer_list"
     assert capability is Capability.Read
-    assert tool.inputSchema == schema("linode.mcp.v1.InstanceNodeBalancerListInput")
-    assert tool.inputSchema["required"] == ["linode_id"]
-    assert tool.inputSchema["properties"]["linode_id"]["type"] == "integer"
+    assert tool.input_schema == schema("linode.mcp.v1.InstanceNodeBalancerListInput")
+    assert tool.input_schema["required"] == ["linode_id"]
+    assert tool.input_schema["properties"]["linode_id"]["type"] == "integer"
 
 
 @pytest.mark.asyncio

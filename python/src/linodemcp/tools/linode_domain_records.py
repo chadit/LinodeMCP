@@ -39,7 +39,7 @@ def create_linode_domain_record_list_tool() -> tuple[Tool, Capability]:
             "Lists all DNS records for a specific domain. "
             "Can filter by record type or name."
         ),
-        inputSchema=schema("linode.mcp.v1.DomainRecordListInput"),
+        input_schema=schema("linode.mcp.v1.DomainRecordListInput"),
     ), Capability.Read
 
 
@@ -48,7 +48,7 @@ def create_linode_domain_record_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_record_get",
         description="Gets a specific DNS record for a domain.",
-        inputSchema=schema("linode.mcp.v1.DomainRecordGetInput"),
+        input_schema=schema("linode.mcp.v1.DomainRecordGetInput"),
     ), Capability.Read
 
 
@@ -117,7 +117,7 @@ def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_record_create",
         description="Creates a new DNS record for a domain.",
-        inputSchema=schema("linode.mcp.v1.DomainRecordCreateInput"),
+        input_schema=schema("linode.mcp.v1.DomainRecordCreateInput"),
     ), Capability.Write
 
 
@@ -236,7 +236,7 @@ def create_linode_domain_record_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_record_update",
         description="Updates an existing DNS record.",
-        inputSchema=schema("linode.mcp.v1.DomainRecordUpdateInput"),
+        input_schema=schema("linode.mcp.v1.DomainRecordUpdateInput"),
     ), Capability.Write
 
 
@@ -350,7 +350,7 @@ def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a DNS record. Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.DomainRecordDeleteInput"),
+        input_schema=schema("linode.mcp.v1.DomainRecordDeleteInput"),
     ), Capability.Destroy
 
 

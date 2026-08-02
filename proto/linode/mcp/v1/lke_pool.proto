@@ -51,7 +51,7 @@ message LKENodePoolWriteResponse {
 // LKENodePoolGetInput is the input contract for linode_lke_pool_get.
 message LKENodePoolGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster (required).
   string cluster_id = 2;
   // The ID of the node pool to retrieve (required).
@@ -62,7 +62,7 @@ message LKENodePoolGetInput {
 // cluster_id is a string, matching the read-side convention.
 message LKENodePoolListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster (required).
   string cluster_id = 2;
 }
@@ -74,7 +74,7 @@ message LKENodePoolListInput {
 // required set is exactly [cluster_id, confirm, count, type].
 message LKENodePoolCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster.
   int32 cluster_id = 2;
   // Linode type for pool nodes (e.g. g6-standard-2). Use linode_lke_type_list
@@ -84,10 +84,10 @@ message LKENodePoolCreateInput {
   int32 count = 4;
   // Must be true to confirm pool creation. This creates billable resources.
   // Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
   // Autoscaler settings, e.g. {"enabled": true, "min": 1, "max": 5} (optional).
   map<string, google.protobuf.Value> autoscaler = 7;
   // Tags to apply to the node pool (optional).
@@ -100,18 +100,18 @@ message LKENodePoolCreateInput {
 // optional string array, so neither enters the generated required set.
 message LKENodePoolUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster.
   int32 cluster_id = 2;
   // The ID of the node pool to update.
   int32 pool_id = 3;
   // Must be true to confirm pool update. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // New number of nodes in the pool (optional).
   optional int32 count = 5;
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
   // Autoscaler settings, e.g. {"enabled": true, "min": 1, "max": 5} (optional).
   map<string, google.protobuf.Value> autoscaler = 7;
   // Tags to apply to the node pool (optional, replaces existing tags).
@@ -132,22 +132,22 @@ message LKENodePoolDeleteResponse {
 // destroy is on the two-stage flow, so it carries mode and plan_id.
 message LKENodePoolDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster.
   int32 cluster_id = 2;
   // The ID of the node pool to delete.
   int32 pool_id = 3;
   // Must be true to confirm pool deletion. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }
 
 // LKEPoolRecycleResponse is the id-echo envelope linode_lke_pool_recycle
@@ -164,14 +164,14 @@ message LKEPoolRecycleResponse {
 // mode/plan_id: this destroy is not on the two-stage flow per the dump.
 message LKEPoolRecycleInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster.
   int32 cluster_id = 2;
   // The ID of the node pool to recycle.
   int32 pool_id = 3;
   // Must be true to confirm pool recycling. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

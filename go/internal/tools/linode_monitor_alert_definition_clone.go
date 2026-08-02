@@ -71,8 +71,9 @@ func handleLinodeMonitorServiceAlertDefinitionCloneRequest(ctx context.Context, 
 
 	definition, err := client.CloneMonitorServiceAlertDefinitionProto(ctx, serviceType, alertID, cloneRequest)
 	if err != nil {
-		//nolint:nilerr // API errors are returned as MCP tool results.
-		return mcp.NewToolResultError("Failed to clone " + monitorServiceAlertDefinitionCloneToolName + ": " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf(
+			"Failed to clone %s: %v", monitorServiceAlertDefinitionCloneToolName, err,
+		)), nil
 	}
 
 	return MarshalProtoToolResponse(&linodev1.MonitorAlertDefinitionWriteResponse{

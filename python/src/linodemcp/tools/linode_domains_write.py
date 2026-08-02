@@ -63,7 +63,7 @@ def create_linode_domain_import_tool() -> tuple[Tool, Capability]:
             "Imports a DNS domain from a remote nameserver. Pass dry_run=true "
             "with confirm=true to preview without importing."
         ),
-        inputSchema=schema("linode.mcp.v1.DomainImportInput"),
+        input_schema=schema("linode.mcp.v1.DomainImportInput"),
     ), Capability.Write
 
 
@@ -143,7 +143,7 @@ def create_linode_domain_clone_tool() -> tuple[Tool, Capability]:
             "Clones an existing DNS domain. Pass dry_run=true with confirm=true "
             "to preview without cloning."
         ),
-        inputSchema=schema("linode.mcp.v1.DomainCloneInput"),
+        input_schema=schema("linode.mcp.v1.DomainCloneInput"),
     ), Capability.Write
 
 
@@ -208,7 +208,7 @@ def create_linode_domain_create_tool() -> tuple[Tool, Capability]:
         description=(
             "Creates a new DNS domain. Pass dry_run=true to preview without creating."
         ),
-        inputSchema=schema("linode.mcp.v1.DomainCreateInput"),
+        input_schema=schema("linode.mcp.v1.DomainCreateInput"),
     ), Capability.Write
 
 
@@ -392,7 +392,7 @@ def create_linode_domain_update_tool() -> tuple[Tool, Capability]:
             "Updates an existing DNS domain. Pass dry_run=true to preview "
             "without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.DomainUpdateInput"),
+        input_schema=schema("linode.mcp.v1.DomainUpdateInput"),
     ), Capability.Write
 
 
@@ -497,7 +497,7 @@ def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
             "records. Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.DomainDeleteInput"),
+        input_schema=schema("linode.mcp.v1.DomainDeleteInput"),
     ), Capability.Destroy
 
 

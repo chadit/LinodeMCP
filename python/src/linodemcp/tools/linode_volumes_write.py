@@ -35,7 +35,7 @@ def create_linode_volume_create_tool() -> tuple[Tool, Capability]:
             "Creates a new block storage volume. WARNING: Billing starts immediately."
             " Pass dry_run=true to preview without creating."
         ),
-        inputSchema=schema("linode.mcp.v1.VolumeCreateInput"),
+        input_schema=schema("linode.mcp.v1.VolumeCreateInput"),
     ), Capability.Write
 
 
@@ -144,7 +144,7 @@ def create_linode_volume_clone_tool() -> tuple[Tool, Capability]:
             "new billable resource."
             " Pass dry_run=true to preview without cloning."
         ),
-        inputSchema=schema("linode.mcp.v1.VolumeCloneInput"),
+        input_schema=schema("linode.mcp.v1.VolumeCloneInput"),
     ), Capability.Write
 
 
@@ -225,7 +225,7 @@ def create_linode_volume_attach_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_attach",
         description="Attaches a block storage volume to a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.VolumeAttachInput"),
+        input_schema=schema("linode.mcp.v1.VolumeAttachInput"),
     ), Capability.Write
 
 
@@ -311,7 +311,7 @@ def create_linode_volume_detach_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_detach",
         description="Detaches a block storage volume from a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.VolumeDetachInput"),
+        input_schema=schema("linode.mcp.v1.VolumeDetachInput"),
     ), Capability.Write
 
 
@@ -391,7 +391,7 @@ def create_linode_volume_resize_tool() -> tuple[Tool, Capability]:
             "Resizes a block storage volume. WARNING: Volumes can only be resized "
             "up, not down. This increases billing."
         ),
-        inputSchema=schema("linode.mcp.v1.VolumeResizeInput"),
+        input_schema=schema("linode.mcp.v1.VolumeResizeInput"),
     ), Capability.Write
 
 
@@ -487,7 +487,7 @@ def create_linode_volume_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_volume_update",
         description="Updates a block storage volume label or tags.",
-        inputSchema=schema("linode.mcp.v1.VolumeUpdateInput"),
+        input_schema=schema("linode.mcp.v1.VolumeUpdateInput"),
     ), Capability.Write
 
 
@@ -593,7 +593,7 @@ def create_linode_volume_delete_tool() -> tuple[Tool, Capability]:
             "Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.VolumeDeleteInput"),
+        input_schema=schema("linode.mcp.v1.VolumeDeleteInput"),
     ), Capability.Destroy
 
 

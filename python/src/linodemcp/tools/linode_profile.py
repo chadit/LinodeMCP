@@ -35,7 +35,7 @@ def create_linode_profile_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_get",
         description="Retrieves Linode user account profile information",
-        inputSchema=schema("linode.mcp.v1.ProfileGetInput"),
+        input_schema=schema("linode.mcp.v1.ProfileGetInput"),
     ), Capability.Read
 
 
@@ -62,7 +62,7 @@ def create_linode_profile_preferences_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_preferences_get",
         description="Gets OAuth client-specific Linode profile preferences.",
-        inputSchema=schema("linode.mcp.v1.ProfilePreferencesGetInput"),
+        input_schema=schema("linode.mcp.v1.ProfilePreferencesGetInput"),
     ), Capability.Read
 
 
@@ -84,7 +84,7 @@ def create_linode_profile_preferences_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_preferences_update",
         description="Updates OAuth client-specific Linode profile preferences.",
-        inputSchema=schema("linode.mcp.v1.ProfilePreferencesUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ProfilePreferencesUpdateInput"),
     ), Capability.Write
 
 
@@ -151,7 +151,7 @@ def create_linode_profile_tfa_enable_tool() -> tuple[Tool, Capability]:
         description=(
             "Generates a two-factor authentication secret for the Linode profile."
         ),
-        inputSchema=schema("linode.mcp.v1.ProfileTfaEnableInput"),
+        input_schema=schema("linode.mcp.v1.ProfileTfaEnableInput"),
     ), Capability.Admin
 
 
@@ -206,7 +206,7 @@ def create_linode_profile_tfa_disable_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_tfa_disable",
         description="Disables two-factor authentication for the Linode profile.",
-        inputSchema=schema("linode.mcp.v1.ProfileTfaDisableInput"),
+        input_schema=schema("linode.mcp.v1.ProfileTfaDisableInput"),
     ), Capability.Admin
 
 
@@ -253,7 +253,7 @@ def create_linode_profile_tfa_enable_confirm_tool() -> tuple[Tool, Capability]:
         description=(
             "Confirms enabling two-factor authentication for the Linode profile."
         ),
-        inputSchema=schema("linode.mcp.v1.ProfileTfaEnableConfirmInput"),
+        input_schema=schema("linode.mcp.v1.ProfileTfaEnableConfirmInput"),
     ), Capability.Admin
 
 
@@ -308,7 +308,7 @@ def create_linode_profile_phone_number_send_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_phone_number_send",
         description="Sends a verification code to a Linode profile phone number.",
-        inputSchema=schema("linode.mcp.v1.ProfilePhoneNumberSendInput"),
+        input_schema=schema("linode.mcp.v1.ProfilePhoneNumberSendInput"),
     ), Capability.Admin
 
 
@@ -389,7 +389,7 @@ def create_linode_profile_phone_number_verify_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_phone_number_verify",
         description="Verifies the Linode profile phone number using an SMS code.",
-        inputSchema=schema("linode.mcp.v1.ProfilePhoneNumberVerifyInput"),
+        input_schema=schema("linode.mcp.v1.ProfilePhoneNumberVerifyInput"),
     ), Capability.Admin
 
 
@@ -437,7 +437,7 @@ def create_linode_profile_phone_number_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_phone_number_delete",
         description="Deletes the verified Linode profile phone number.",
-        inputSchema=schema("linode.mcp.v1.ProfilePhoneNumberDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ProfilePhoneNumberDeleteInput"),
     ), Capability.Admin
 
 
@@ -478,7 +478,7 @@ def create_linode_profile_security_question_list_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_profile_security_question_list",
         description="Lists available Linode profile security questions.",
-        inputSchema=schema("linode.mcp.v1.SecurityQuestionListInput"),
+        input_schema=schema("linode.mcp.v1.SecurityQuestionListInput"),
     ), Capability.Read
 
 
@@ -508,7 +508,7 @@ def create_linode_profile_security_question_answer_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_profile_security_question_answer",
         description="Answers profile security questions for the Linode account.",
-        inputSchema=schema("linode.mcp.v1.SecurityQuestionAnswerInput"),
+        input_schema=schema("linode.mcp.v1.SecurityQuestionAnswerInput"),
     ), Capability.Admin
 
 
@@ -564,7 +564,7 @@ def create_linode_profile_token_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_create",
         description="Creates a Linode personal access token.",
-        inputSchema=schema("linode.mcp.v1.ProfileTokenCreateInput"),
+        input_schema=schema("linode.mcp.v1.ProfileTokenCreateInput"),
     ), Capability.Admin
 
 
@@ -649,7 +649,7 @@ def create_linode_profile_token_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_list",
         description="Lists Linode personal access tokens.",
-        inputSchema=schema("linode.mcp.v1.ProfileTokenListInput"),
+        input_schema=schema("linode.mcp.v1.ProfileTokenListInput"),
     ), Capability.Read
 
 
@@ -682,7 +682,7 @@ def create_linode_profile_token_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_get",
         description="Retrieves a Linode personal access token by token ID.",
-        inputSchema=schema("linode.mcp.v1.ProfileTokenGetInput"),
+        input_schema=schema("linode.mcp.v1.ProfileTokenGetInput"),
     ), Capability.Read
 
 
@@ -708,7 +708,7 @@ def create_linode_profile_login_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_login_list",
         description="Lists recent successful Linode profile logins.",
-        inputSchema=schema("linode.mcp.v1.ProfileLoginListInput"),
+        input_schema=schema("linode.mcp.v1.ProfileLoginListInput"),
     ), Capability.Read
 
 
@@ -738,7 +738,7 @@ def create_linode_profile_device_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_device_list",
         description="Lists trusted devices for the Linode profile.",
-        inputSchema=schema("linode.mcp.v1.ProfileDeviceListInput"),
+        input_schema=schema("linode.mcp.v1.ProfileDeviceListInput"),
     ), Capability.Read
 
 
@@ -770,7 +770,7 @@ def create_linode_profile_login_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_login_get",
         description="Retrieves a Linode profile login by login ID.",
-        inputSchema=schema("linode.mcp.v1.ProfileLoginGetInput"),
+        input_schema=schema("linode.mcp.v1.ProfileLoginGetInput"),
     ), Capability.Read
 
 
@@ -795,7 +795,7 @@ def create_linode_profile_token_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_update",
         description="Updates a Linode personal access token label by token ID.",
-        inputSchema=schema("linode.mcp.v1.ProfileTokenUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ProfileTokenUpdateInput"),
     ), Capability.Admin
 
 
@@ -862,7 +862,7 @@ def create_linode_profile_app_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_app_list",
         description="Lists OAuth app authorizations from the Linode profile.",
-        inputSchema=schema("linode.mcp.v1.ProfileAppListInput"),
+        input_schema=schema("linode.mcp.v1.ProfileAppListInput"),
     ), Capability.Read
 
 
@@ -896,7 +896,7 @@ def create_linode_profile_app_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Retrieves an OAuth app authorization from the Linode profile by app ID."
         ),
-        inputSchema=schema("linode.mcp.v1.ProfileAppGetInput"),
+        input_schema=schema("linode.mcp.v1.ProfileAppGetInput"),
     ), Capability.Read
 
 
@@ -923,7 +923,7 @@ def create_linode_profile_app_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_app_delete",
         description="Revokes OAuth app access from the Linode profile by app ID.",
-        inputSchema=schema("linode.mcp.v1.ProfileAppDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ProfileAppDeleteInput"),
     ), Capability.Admin
 
 
@@ -976,7 +976,7 @@ def create_linode_profile_device_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_device_get",
         description="Retrieves a trusted device from the Linode profile by device ID.",
-        inputSchema=schema("linode.mcp.v1.ProfileDeviceGetInput"),
+        input_schema=schema("linode.mcp.v1.ProfileDeviceGetInput"),
     ), Capability.Read
 
 
@@ -1004,7 +1004,7 @@ def create_linode_profile_device_revoke_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_device_revoke",
         description="Revokes a trusted device from the Linode profile by device ID.",
-        inputSchema=schema("linode.mcp.v1.ProfileDeviceRevokeInput"),
+        input_schema=schema("linode.mcp.v1.ProfileDeviceRevokeInput"),
     ), Capability.Admin
 
 
@@ -1055,7 +1055,7 @@ def create_linode_profile_token_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_profile_token_delete",
         description="Revokes a Linode personal access token by token ID.",
-        inputSchema=schema("linode.mcp.v1.ProfileTokenDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ProfileTokenDeleteInput"),
     ), Capability.Admin
 
 

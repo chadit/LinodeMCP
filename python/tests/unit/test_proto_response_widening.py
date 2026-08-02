@@ -8,10 +8,17 @@ so both languages pin the same contract.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from google.protobuf import descriptor_pb2, descriptor_pool, message_factory
 
 from linodemcp.genpb.linode.mcp.v1 import audit_pb2
 from linodemcp.tools.proto_response import serialize_api_response
+
+if TYPE_CHECKING:
+    from google.protobuf.message import Message
+
+_WIDEN_PACKAGE = "linodemcp.test.widen"
 
 
 def test_int64_fields_serialize_as_numbers() -> None:
@@ -81,3 +88,71 @@ def test_struct_digit_strings_stay_strings() -> None:
     assert isinstance(out["credential_generation"], int)
     assert out["args"]["disk_bytes"] == "40960"
     assert isinstance(out["args"]["disk_bytes"], str)
+
+
+def _widen_case_message() -> Message:
+    """Build a message carrying a repeated int64 and a map<string, int64>.
+
+    The proto contract has neither shape today (every 64-bit field in it is
+    singular), so the serializer's repeated and map widening arms have no
+    fixture to drive them. Declaring the shapes here at runtime, in a private
+    pool that never touches the real registry, drives the public serializer
+    down those arms and pins the behavior for the day the contract grows such a
+    field. Go's walk reaches the same two positions through its list and
+    map-value contexts.
+    """
+    file_proto = descriptor_pb2.FileDescriptorProto()
+    file_proto.name = "linodemcp_test/widen.proto"
+    file_proto.package = _WIDEN_PACKAGE
+    file_proto.syntax = "proto3"
+
+    message_proto = file_proto.message_type.add()
+    message_proto.name = "WidenCase"
+
+    counters = message_proto.field.add()
+    counters.name = "counters"
+    counters.number = 1
+    counters.label = descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED
+    counters.type = descriptor_pb2.FieldDescriptorProto.TYPE_INT64
+
+    entry_proto = message_proto.nested_type.add()
+    entry_proto.name = "TotalsEntry"
+    entry_proto.options.map_entry = True
+    entry_key = entry_proto.field.add()
+    entry_key.name = "key"
+    entry_key.number = 1
+    entry_key.label = descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL
+    entry_key.type = descriptor_pb2.FieldDescriptorProto.TYPE_STRING
+    entry_value = entry_proto.field.add()
+    entry_value.name = "value"
+    entry_value.number = 2
+    entry_value.label = descriptor_pb2.FieldDescriptorProto.LABEL_OPTIONAL
+    entry_value.type = descriptor_pb2.FieldDescriptorProto.TYPE_INT64
+
+    totals = message_proto.field.add()
+    totals.name = "totals"
+    totals.number = 2
+    totals.label = descriptor_pb2.FieldDescriptorProto.LABEL_REPEATED
+    totals.type = descriptor_pb2.FieldDescriptorProto.TYPE_MESSAGE
+    totals.type_name = f".{_WIDEN_PACKAGE}.WidenCase.TotalsEntry"
+
+    pool = descriptor_pool.DescriptorPool()
+    pool.Add(file_proto)
+    descriptor = pool.FindMessageTypeByName(f"{_WIDEN_PACKAGE}.WidenCase")
+
+    return message_factory.GetMessageClass(descriptor)()
+
+
+def test_repeated_and_map_int64_fields_serialize_as_numbers() -> None:
+    """Repeated and map-valued 64-bit fields widen like singular ones."""
+    payload: dict[str, Any] = {
+        "counters": [1, -2, 9007199254740993],
+        "totals": {"hits": 5, "misses": -7},
+    }
+
+    out = serialize_api_response(payload, _widen_case_message())
+
+    assert out["counters"] == [1, -2, 9007199254740993]
+    assert all(isinstance(item, int) for item in out["counters"])
+    assert out["totals"] == {"hits": 5, "misses": -7}
+    assert all(isinstance(item, int) for item in out["totals"].values())

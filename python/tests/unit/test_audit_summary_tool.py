@@ -57,7 +57,7 @@ def test_definition() -> None:
     assert tool.name == "linode_audit_summary"
     assert capability == ProfileCapability.Meta
 
-    props = tool.inputSchema["properties"]
+    props = tool.input_schema["properties"]
     for param in ("since", "group_by", "include_meta"):
         assert param in props
 

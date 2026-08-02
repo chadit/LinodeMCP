@@ -317,8 +317,8 @@ def test_create_linode_image_sharegroups_by_image_list_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_by_image_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["image_id"]
-    assert tool.inputSchema["properties"]["image_id"]["type"] == "string"
+    assert tool.input_schema["required"] == ["image_id"]
+    assert tool.input_schema["properties"]["image_id"]["type"] == "string"
 
 
 @pytest.mark.asyncio
@@ -437,8 +437,8 @@ def test_create_linode_images_sharegroups_list_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page_size"]["type"] == "integer"
 
 
 @pytest.mark.asyncio
@@ -697,7 +697,7 @@ def test_create_linode_image_sharegroup_create_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_create"
     assert capability is Capability.Write
-    schema = tool.inputSchema
+    schema = tool.input_schema
     assert schema["required"] == ["label", "confirm"]
     assert schema["properties"]["label"]["type"] == "string"
     # The images item detail is preserved via the named ImageShareGroupImageSpec
@@ -1014,8 +1014,8 @@ def test_create_linode_images_sharegroups_token_get_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_token_get"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {"environment", "token_uuid"}
-    assert tool.inputSchema["required"] == ["token_uuid"]
+    assert set(tool.input_schema["properties"]) == {"environment", "token_uuid"}
+    assert tool.input_schema["required"] == ["token_uuid"]
 
 
 @pytest.mark.asyncio
@@ -1166,8 +1166,8 @@ def test_create_linode_images_sharegroups_token_sharegroup_get_tool_schema() -> 
 
     assert tool.name == "linode_image_sharegroup_by_token_get"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {"environment", "token_uuid"}
-    assert tool.inputSchema["required"] == ["token_uuid"]
+    assert set(tool.input_schema["properties"]) == {"environment", "token_uuid"}
+    assert tool.input_schema["required"] == ["token_uuid"]
 
 
 @pytest.mark.asyncio
@@ -1324,13 +1324,13 @@ def test_create_token_sharegroup_images_list_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_token_image_list"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "token_uuid",
         "page",
         "page_size",
     }
-    assert tool.inputSchema["required"] == ["token_uuid"]
+    assert tool.input_schema["required"] == ["token_uuid"]
 
 
 @pytest.mark.asyncio
@@ -1528,14 +1528,14 @@ def test_create_linode_images_sharegroup_members_list_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_member_list"
     assert capability is Capability.Read
-    sharegroup_id_schema = tool.inputSchema["properties"]["sharegroup_id"]
-    assert set(tool.inputSchema["properties"]) == {
+    sharegroup_id_schema = tool.input_schema["properties"]["sharegroup_id"]
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "sharegroup_id",
         "page",
         "page_size",
     }
-    assert tool.inputSchema["required"] == ["sharegroup_id"]
+    assert tool.input_schema["required"] == ["sharegroup_id"]
     assert sharegroup_id_schema["type"] == "integer"
 
 
@@ -1761,14 +1761,14 @@ def test_create_linode_images_sharegroup_member_token_get_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_member_token_get"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "sharegroup_id",
         "token_uuid",
     }
-    assert tool.inputSchema["required"] == ["sharegroup_id", "token_uuid"]
-    sharegroup_schema = tool.inputSchema["properties"]["sharegroup_id"]
-    token_schema = tool.inputSchema["properties"]["token_uuid"]
+    assert tool.input_schema["required"] == ["sharegroup_id", "token_uuid"]
+    sharegroup_schema = tool.input_schema["properties"]["sharegroup_id"]
+    token_schema = tool.input_schema["properties"]["token_uuid"]
     assert sharegroup_schema["type"] == "integer"
     assert token_schema["type"] == "string"
 
@@ -2008,16 +2008,16 @@ def test_create_linode_images_sharegroup_member_token_update_tool_schema() -> No
 
     assert tool.name == "linode_image_sharegroup_member_token_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "sharegroup_id",
         "token_uuid",
         "label",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["token_uuid"]["type"] == "string"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["sharegroup_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["token_uuid"]["type"] == "string"
 
 
 @pytest.mark.asyncio
@@ -2324,15 +2324,15 @@ def test_create_linode_images_sharegroup_member_token_delete_tool_schema() -> No
 
     assert tool.name == "linode_image_sharegroup_member_token_delete"
     assert capability is Capability.Destroy
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "sharegroup_id",
         "token_uuid",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["token_uuid"]["type"] == "string"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["sharegroup_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["token_uuid"]["type"] == "string"
 
 
 @pytest.mark.asyncio
@@ -2664,7 +2664,7 @@ def test_create_linode_images_sharegroup_image_delete_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_image_delete"
     assert capability is Capability.Destroy
-    schema = tool.inputSchema
+    schema = tool.input_schema
     assert schema["required"] == ["sharegroup_id", "image_id", "confirm"]
     assert schema["properties"]["sharegroup_id"]["type"] == "integer"
     assert schema["properties"]["image_id"]["type"] == "integer"
@@ -2926,7 +2926,7 @@ def test_create_linode_images_sharegroup_images_add_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_image_add"
     assert capability is Capability.Write
-    assert set(tool.inputSchema["properties"]) == {
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "sharegroup_id",
         "images",
@@ -2935,9 +2935,9 @@ def test_create_linode_images_sharegroup_images_add_tool_schema() -> None:
     }
     # images is required at runtime but a repeated proto field cannot be marked
     # required in the generated schema, so it drops from the required list.
-    assert tool.inputSchema["required"] == ["sharegroup_id", "confirm"]
-    assert tool.inputSchema["properties"]["images"]["type"] == "array"
-    assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
+    assert tool.input_schema["required"] == ["sharegroup_id", "confirm"]
+    assert tool.input_schema["properties"]["images"]["type"] == "array"
+    assert tool.input_schema["properties"]["sharegroup_id"]["type"] == "integer"
 
 
 @pytest.mark.asyncio
@@ -3232,7 +3232,7 @@ def test_create_linode_images_sharegroup_members_add_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_member_add"
     assert capability is Capability.Write
-    assert set(tool.inputSchema["properties"]) == {
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "sharegroup_id",
         "label",
@@ -3240,13 +3240,13 @@ def test_create_linode_images_sharegroup_members_add_tool_schema() -> None:
         "confirm",
         "dry_run",
     }
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "sharegroup_id",
         "label",
         "token",
         "confirm",
     ]
-    sharegroup_schema = tool.inputSchema["properties"]["sharegroup_id"]
+    sharegroup_schema = tool.input_schema["properties"]["sharegroup_id"]
     assert sharegroup_schema["type"] == "integer"
 
 
@@ -3431,14 +3431,14 @@ def test_create_linode_images_sharegroup_images_list_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_image_list"
     assert capability is Capability.Read
-    sharegroup_id_schema = tool.inputSchema["properties"]["sharegroup_id"]
-    assert set(tool.inputSchema["properties"]) == {
+    sharegroup_id_schema = tool.input_schema["properties"]["sharegroup_id"]
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "sharegroup_id",
         "page",
         "page_size",
     }
-    assert tool.inputSchema["required"] == ["sharegroup_id"]
+    assert tool.input_schema["required"] == ["sharegroup_id"]
     assert sharegroup_id_schema["type"] == "integer"
 
 
@@ -3740,9 +3740,9 @@ def test_create_linode_images_sharegroups_token_update_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_token_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["token_uuid", "label", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["token_uuid", "label", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 @pytest.mark.asyncio
@@ -3986,9 +3986,9 @@ def test_create_linode_images_sharegroups_token_delete_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_token_delete"
     assert capability is Capability.Destroy
-    assert tool.inputSchema["required"] == ["token_uuid", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["token_uuid", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 @pytest.mark.asyncio
@@ -4129,12 +4129,12 @@ def test_create_linode_images_sharegroups_tokens_list_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_token_list"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "page",
         "page_size",
     }
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 @pytest.mark.asyncio
@@ -4370,12 +4370,12 @@ def test_create_linode_images_sharegroup_image_update_tool_schema() -> None:
 
     assert tool.name == "linode_image_sharegroup_image_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["sharegroup_id", "image_id", "confirm"]
-    assert tool.inputSchema["properties"]["sharegroup_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["image_id"]["type"] == "string"
-    assert "dry_run" in tool.inputSchema["properties"]
-    assert "label" in tool.inputSchema["properties"]
-    assert "description" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["sharegroup_id", "image_id", "confirm"]
+    assert tool.input_schema["properties"]["sharegroup_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["image_id"]["type"] == "string"
+    assert "dry_run" in tool.input_schema["properties"]
+    assert "label" in tool.input_schema["properties"]
+    assert "description" in tool.input_schema["properties"]
 
 
 @pytest.mark.asyncio
@@ -4673,8 +4673,8 @@ def test_linode_image_delete_tool_schema_requires_confirm() -> None:
 
     assert tool.name == "linode_image_delete"
     assert capability is Capability.Destroy
-    assert tool.inputSchema["required"] == ["image_id", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["image_id", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.asyncio

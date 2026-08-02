@@ -25,7 +25,7 @@ message AccountEntityTransfer {
 // linode_account_service_transfer_get.
 message AccountServiceTransferGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The service transfer token to retrieve (required).
   string token = 2;
 }
@@ -52,7 +52,7 @@ message AccountServiceTransferWriteResponse {
 // linode_account_service_transfer_list.
 message AccountServiceTransferListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -64,30 +64,30 @@ message AccountServiceTransferListInput {
 // ground-truth dump shows no mode/plan_id params.
 message AccountServiceTransferDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Service transfer token to cancel (required).
   string token = 2;
   // Must be true to confirm service transfer cancellation. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountServiceTransferAcceptInput is the input contract for
 // linode_account_service_transfer_accept.
 message AccountServiceTransferAcceptInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Service transfer token to accept (required).
   string token = 2;
   // Must be true to confirm service transfer acceptance. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountServiceTransferCreateInput is the input contract for
@@ -96,14 +96,14 @@ message AccountServiceTransferAcceptInput {
 // required flag is dropped (the handler still enforces presence).
 message AccountServiceTransferCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The Linode IDs to include in the service transfer. Required at runtime,
   // though the generated schema cannot mark a repeated field required.
   repeated int32 linode_ids = 2;
   // Must be true to confirm creating a service transfer. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }

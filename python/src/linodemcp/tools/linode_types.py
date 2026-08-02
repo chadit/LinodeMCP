@@ -32,7 +32,7 @@ def create_linode_type_list_tool() -> tuple[Tool, Capability]:
             "Lists all available Linode instance types (plans) with pricing. "
             "Can filter by class (standard, dedicated, gpu, highmem, premium)."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceTypeListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceTypeListInput"),
     ), Capability.Read
 
 
@@ -71,7 +71,7 @@ def create_linode_type_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_type_get",
         description="Gets details for a specific Linode instance type (plan).",
-        inputSchema=schema("linode.mcp.v1.InstanceTypeGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceTypeGetInput"),
     ), Capability.Read
 
 

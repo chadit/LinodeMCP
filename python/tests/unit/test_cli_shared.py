@@ -32,7 +32,7 @@ def _tool_with_schema(properties: dict[str, object], required: list[str]) -> Too
     return Tool(
         name="linode_test_tool",
         description="test tool",
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": properties,
             "required": required,
@@ -56,7 +56,7 @@ def test_schema_properties_returns_property_map() -> None:
 
 def test_schema_properties_empty_when_absent() -> None:
     """A tool with no properties yields an empty dict, not a crash."""
-    tool = Tool(name="x", description="d", inputSchema={"type": "object"})
+    tool = Tool(name="x", description="d", input_schema={"type": "object"})
     assert schema_properties(tool) == {}
 
 

@@ -77,7 +77,7 @@ def create_linode_audit_report_tool() -> tuple[Tool, Capability]:
                 "summary of counts or a list of matching events depending on "
                 "the report's output mode."
             ),
-            inputSchema=schema("linode.mcp.v1.AuditReportInput"),
+            input_schema=schema("linode.mcp.v1.AuditReportInput"),
         ),
         Capability.Meta,
     )
@@ -131,7 +131,6 @@ def _run_report(name: str, report: ReportConfig, now: datetime) -> dict[str, Any
             "rows": [asdict(row) for row in rows],
         }
 
-    # list output
     if report.limit > 0 and len(filtered) > report.limit:
         filtered = filtered[: report.limit]
 

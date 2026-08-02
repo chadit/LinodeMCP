@@ -80,13 +80,13 @@ def test_reserved_ip_tool_schemas_and_capabilities() -> None:
     for factory, expected_capability in factories:
         tool, capability = factory()
         assert capability == expected_capability
-        assert tool.inputSchema["additionalProperties"] is False
+        assert tool.input_schema["additionalProperties"] is False
         if capability in {Capability.Write, Capability.Destroy}:
-            assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-            assert "confirm" in tool.inputSchema["required"]
-            assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+            assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+            assert "confirm" in tool.input_schema["required"]
+            assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
         else:
-            assert "confirm" not in tool.inputSchema["properties"]
+            assert "confirm" not in tool.input_schema["properties"]
 
 
 async def test_reserved_ip_create_passes_body_and_preserves_response(

@@ -75,7 +75,7 @@ def create_linode_instance_boot_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_boot",
         description="Boots a Linode instance that is currently offline.",
-        inputSchema=schema("linode.mcp.v1.InstanceBootInput"),
+        input_schema=schema("linode.mcp.v1.InstanceBootInput"),
     ), Capability.Write
 
 
@@ -126,7 +126,7 @@ def create_linode_instance_reboot_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_reboot",
         description="Reboots a running Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceRebootInput"),
+        input_schema=schema("linode.mcp.v1.InstanceRebootInput"),
     ), Capability.Write
 
 
@@ -178,7 +178,7 @@ def create_linode_instance_shutdown_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_shutdown",
         description="Shuts down a running Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceShutdownInput"),
+        input_schema=schema("linode.mcp.v1.InstanceShutdownInput"),
     ), Capability.Write
 
 
@@ -231,7 +231,7 @@ def create_linode_instance_firewall_update_tool() -> tuple[Tool, Capability]:
             "Replaces the firewall assignments for a Linode instance. "
             "Pass an empty firewall_ids list to remove all assignments."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceFirewallUpdateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceFirewallUpdateInput"),
     ), Capability.Write
 
 
@@ -305,7 +305,7 @@ def create_linode_instance_interface_settings_update_tool() -> tuple[Tool, Capab
             "Updates Network Helper and default route settings on a Linode. "
             "Power off the Linode before enabling or disabling Network Helper."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceSettingsUpdateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceSettingsUpdateInput"),
     ), Capability.Write
 
 
@@ -437,7 +437,7 @@ def create_linode_instance_create_tool() -> tuple[Tool, Capability]:
             "interface model is not yet supported by this tool; use "
             "linode_vpc_* tools after create."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceCreateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceCreateInput"),
     ), Capability.Write
 
 
@@ -526,7 +526,7 @@ def create_linode_instance_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_update",
         description="Updates editable fields on a Linode instance.",
-        inputSchema=schema("linode.mcp.v1.InstanceUpdateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceUpdateInput"),
     ), Capability.Write
 
 
@@ -605,7 +605,7 @@ def create_linode_instance_delete_tool() -> tuple[Tool, Capability]:
             "without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.InstanceDeleteInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -840,7 +840,7 @@ def create_linode_instance_mutate_tool() -> tuple[Tool, Capability]:
             "Upgrades a Linode using the mutate endpoint. "
             "WARNING: This changes instance state and may resize disks."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceMutateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceMutateInput"),
     ), Capability.Write
 
 
@@ -905,7 +905,7 @@ def create_linode_instance_interface_upgrade_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_interface_upgrade",
         description="Upgrades a Linode to Linode Interfaces.",
-        inputSchema=schema("linode.mcp.v1.InstanceInterfaceUpgradeInput"),
+        input_schema=schema("linode.mcp.v1.InstanceInterfaceUpgradeInput"),
     ), Capability.Write
 
 
@@ -973,7 +973,7 @@ def create_linode_instance_resize_tool() -> tuple[Tool, Capability]:
             "WARNING: This may cause downtime and billing changes."
             + TWO_STAGE_OPT_IN_NOTE
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceResizeInput"),
+        input_schema=schema("linode.mcp.v1.InstanceResizeInput"),
     ), Capability.Write
 
 

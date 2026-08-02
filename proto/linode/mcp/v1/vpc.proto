@@ -65,7 +65,7 @@ message VpcDeleteResponse {
 // VpcGetInput is the input contract for linode_vpc_get.
 message VpcGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC to retrieve (required).
   string vpc_id = 2;
 }
@@ -88,7 +88,7 @@ message VpcSubnetListResponse {
 // VpcSubnetGetInput is the input contract for linode_vpc_subnet_get.
 message VpcSubnetGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC (required).
   string vpc_id = 2;
   // The ID of the subnet to retrieve (required).
@@ -137,7 +137,7 @@ message VpcSubnetDeleteResponse {
 // vpc_id as a STRING (matching VpcGetInput); the write tools take it as int32.
 message VpcListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Filter VPCs by label containing this string (case-insensitive).
   optional string label = 2;
   // Filter VPCs by region (exact match, case-insensitive).
@@ -159,7 +159,7 @@ message VpcSubnetCreateItem {
 // the advertised {label, ipv4} item shape.
 message VpcCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Label for the VPC (1-64 characters).
   string label = 2;
   // Region for the VPC (e.g. us-east). Use linode_region_list to find valid
@@ -171,16 +171,16 @@ message VpcCreateInput {
   repeated VpcSubnetCreateItem subnets = 5;
   // Must be true to confirm VPC creation. This creates a billable resource.
   // Ignored when dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // VpcUpdateInput is the input contract for linode_vpc_update.
 message VpcUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC to update.
   int32 vpc_id = 2;
   // New label for the VPC (optional).
@@ -188,42 +188,42 @@ message VpcUpdateInput {
   // New description for the VPC (optional).
   optional string description = 4;
   // Must be true to confirm VPC update. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // VpcDeleteInput is the input contract for linode_vpc_delete.
 message VpcDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC to delete.
   int32 vpc_id = 2;
   // Must be true to confirm deletion. This action is irreversible and deletes
   // all subnets. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // VPCIPAllListInput is the input contract for linode_vpc_ip_all_list.
 message VPCIPAllListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // VPCIPListInput is the input contract for linode_vpc_ip_list.
 message VPCIPListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC.
   string vpc_id = 2;
 }
@@ -231,7 +231,7 @@ message VPCIPListInput {
 // VpcSubnetListInput is the input contract for linode_vpc_subnet_list.
 message VpcSubnetListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC.
   string vpc_id = 2;
 }
@@ -239,7 +239,7 @@ message VpcSubnetListInput {
 // VpcSubnetCreateInput is the input contract for linode_vpc_subnet_create.
 message VpcSubnetCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC to add the subnet to.
   int32 vpc_id = 2;
   // Label for the subnet.
@@ -247,16 +247,16 @@ message VpcSubnetCreateInput {
   // IPv4 range for the subnet in CIDR notation (e.g. 10.0.0.0/24).
   string ipv4 = 4;
   // Must be true to confirm subnet creation. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // VpcSubnetUpdateInput is the input contract for linode_vpc_subnet_update.
 message VpcSubnetUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC containing the subnet.
   int32 vpc_id = 2;
   // The ID of the subnet to update.
@@ -264,30 +264,30 @@ message VpcSubnetUpdateInput {
   // New label for the subnet.
   string label = 4;
   // Must be true to confirm subnet update. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // VpcSubnetDeleteInput is the input contract for linode_vpc_subnet_delete.
 message VpcSubnetDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the VPC containing the subnet.
   int32 vpc_id = 2;
   // The ID of the subnet to delete.
   int32 subnet_id = 3;
   // Must be true to confirm subnet deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }

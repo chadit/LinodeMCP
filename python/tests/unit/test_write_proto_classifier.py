@@ -238,7 +238,7 @@ def test_classify_meta_surface_known_proto() -> None:
 
 
 # Factories known to build their MCP input schema from the proto contract
-# (inputSchema=schema(...)). These are long-converted read tools, stable across
+# (input_schema=schema(...)). These are long-converted read tools, stable across
 # the input-surface conversion waves.
 _KNOWN_INPUT_GENERATED = (
     "linode_volume_get",

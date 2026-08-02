@@ -131,7 +131,7 @@ def test_create_linode_image_replicate_tool_schema() -> None:
 
     assert tool.name == "linode_image_replicate"
     assert capability is Capability.Write
-    schema = tool.inputSchema
+    schema = tool.input_schema
     # regions is required at runtime but a repeated proto field cannot be marked
     # required in the generated schema, so it drops from the required list.
     assert schema["required"] == ["image_id", "confirm"]

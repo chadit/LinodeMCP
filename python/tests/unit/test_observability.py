@@ -214,9 +214,11 @@ class TestToolExecution:
     def test_tool_execution_failure(self) -> None:
         obs = _make_obs()
         try:
-            with pytest.raises(ValueError, match="test error"):  # noqa: SIM117
-                with obs.tool_execution("test_tool"):
-                    raise ValueError("test error")
+            with (
+                pytest.raises(ValueError, match="test error"),
+                obs.tool_execution("test_tool"),
+            ):
+                raise ValueError("test error")
         finally:
             obs.shutdown()
 
@@ -235,9 +237,11 @@ class TestAPICall:
     def test_api_call_failure(self) -> None:
         obs = _make_obs()
         try:
-            with pytest.raises(RuntimeError, match="API error"):  # noqa: SIM117
-                with obs.api_call("/v4/test", "POST"):
-                    raise RuntimeError("API error")
+            with (
+                pytest.raises(RuntimeError, match="API error"),
+                obs.api_call("/v4/test", "POST"),
+            ):
+                raise RuntimeError("API error")
         finally:
             obs.shutdown()
 

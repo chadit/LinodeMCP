@@ -2742,8 +2742,7 @@ func handleLinodeAccountOAuthClientThumbnailGetRequest(ctx context.Context, requ
 
 	thumbnailPNG, err := client.GetOAuthClientThumbnail(ctx, clientID)
 	if err != nil {
-		//nolint:nilerr // MCP tool errors are returned in the result, not as Go errors
-		return mcp.NewToolResultError("Failed to get OAuth client thumbnail: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get OAuth client thumbnail: %v", err)), nil
 	}
 
 	encoded := base64.StdEncoding.EncodeToString(thumbnailPNG)

@@ -114,7 +114,7 @@ def create_linode_profile_draft_add_tools_tool() -> tuple[Tool, Capability]:
                 "already on the draft are not duplicated and are not "
                 "reported in the response."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileDraftAddToolsInput"),
+            input_schema=schema("linode.mcp.v1.ProfileDraftAddToolsInput"),
         ),
         Capability.Meta,
     )
@@ -150,7 +150,7 @@ def create_linode_profile_draft_remove_tools_tool() -> tuple[Tool, Capability]:
                 "Patterns match against the draft's current allowed_tools "
                 "list, not the live catalog."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileDraftRemoveToolsInput"),
+            input_schema=schema("linode.mcp.v1.ProfileDraftRemoveToolsInput"),
         ),
         Capability.Meta,
     )
@@ -187,7 +187,7 @@ def create_linode_profile_draft_set_tool() -> tuple[Tool, Capability]:
                 "required_token_scopes (array of Linode scope strings), "
                 "allow_yolo (boolean opt-in to the yolo execution path)."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileDraftSetInput"),
+            input_schema=schema("linode.mcp.v1.ProfileDraftSetInput"),
         ),
         Capability.Meta,
     )

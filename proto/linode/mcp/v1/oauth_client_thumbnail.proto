@@ -18,7 +18,7 @@ message OAuthClientThumbnail {
 // linode_account_oauth_client_thumbnail_get.
 message AccountOAuthClientThumbnailGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // OAuth client ID (required).
   string client_id = 2;
 }
@@ -27,15 +27,15 @@ message AccountOAuthClientThumbnailGetInput {
 // linode_account_oauth_client_thumbnail_update.
 message AccountOAuthClientThumbnailUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // OAuth client ID (required).
   string client_id = 2;
   // Base64-encoded PNG image for the OAuth client thumbnail (required).
   string thumbnail_png_base64 = 3;
   // Must be true to confirm OAuth client thumbnail update. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

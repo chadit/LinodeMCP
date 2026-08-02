@@ -234,7 +234,6 @@ _PLACEMENT_GROUP_LABEL_PATTERN = re.compile(
     r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$"
 )
 
-# Validation patterns
 VALID_SSH_KEY_PREFIXES = (
     "ssh-rsa",
     "ssh-ed25519",
@@ -249,7 +248,6 @@ VALID_DNS_NAME_PATTERN = re.compile(
     r"(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*$|^@$|^$"
 )
 
-# Validation constants
 MIN_SSH_KEY_LENGTH = 80
 MAX_SSH_KEY_LENGTH = 16000
 MIN_PASSWORD_LENGTH = 12
@@ -517,7 +515,6 @@ def build_profile_security_questions_body(
     return {"security_questions": body_questions}
 
 
-# HTTP status code constants
 HTTP_BAD_REQUEST = 400
 HTTP_UNAUTHORIZED = 401
 HTTP_FORBIDDEN = 403
@@ -1074,9 +1071,6 @@ class Image:
     tags: list[str]
 
 
-# Stage 3: Extended read operations
-
-
 @dataclass
 class SSHKey:
     """SSH key associated with a Linode profile."""
@@ -1244,9 +1238,6 @@ class StackScript:
     script: str
     user_defined_fields: list[UDF]
     rev_note: str = ""
-
-
-# LKE (Linode Kubernetes Engine) types
 
 
 @dataclass
@@ -4723,8 +4714,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ReplicateImage", e) from e
 
-    # Stage 3: Extended read operations
-
     async def list_ssh_keys(self) -> list[SSHKey]:
         """List SSH keys."""
         try:
@@ -6336,8 +6325,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("UpdateLongviewClient", e) from e
 
-    # Phase 1: Object Storage read operations
-
     async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
         """List Object Storage buckets."""
         try:
@@ -6526,8 +6513,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("GetObjectStorageBucketAccess", e) from e
 
-    # Stage 5 Phase 3: Object Storage write operations
-
     async def create_object_storage_bucket(
         self,
         label: str,
@@ -6599,8 +6584,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("AllowObjectStorageBucketAccess", e) from e
 
-    # Stage 5 Phase 4: Object Storage access key write operations
-
     async def create_object_storage_key(
         self,
         label: str,
@@ -6642,8 +6625,6 @@ class Client:
             await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteObjectStorageKey", e) from e
-
-    # Stage 5 Phase 5: Presigned URLs, Object ACL, and SSL.
 
     async def create_presigned_url(
         self,
@@ -6724,8 +6705,6 @@ class Client:
             await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteBucketSSL", e) from e
-
-    # Stage 4: Write operations
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
         """Create a new SSH key."""
@@ -9396,8 +9375,6 @@ class Client:
             logger.exception("HTTP error deleting NodeBalancer: %s", e)
             raise NetworkError("DeleteNodeBalancer", e) from e
 
-    # LKE (Linode Kubernetes Engine) operations
-
     async def list_lke_clusters(self) -> list[dict[str, Any]]:
         """List LKE clusters."""
         try:
@@ -9761,8 +9738,6 @@ class Client:
             return result
         except httpx.HTTPError as e:
             raise NetworkError("GetLKETierVersion", e) from e
-
-    # VPC operations
 
     async def list_vpcs(self) -> list[dict[str, Any]]:
         """List VPCs."""
@@ -10128,8 +10103,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteIPv6Range", e) from e
 
-    # ── Reserved public IPv4 addresses ──
-
     async def create_reserved_ip(
         self, region: str, tags: list[str] | None = None
     ) -> dict[str, Any]:
@@ -10206,8 +10179,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("DeleteReservedIP", e) from e
 
-    # ── Instance Backups ──
-
     async def list_instance_backups(self, instance_id: int) -> dict[str, Any]:
         """List backups for an instance."""
         endpoint = f"/linode/instances/{instance_id}/backups"
@@ -10278,8 +10249,6 @@ class Client:
             await self.make_request("POST", endpoint)
         except httpx.HTTPError as e:
             raise NetworkError("CancelInstanceBackups", e) from e
-
-    # ── Instance Disks ──
 
     async def list_instance_disks(
         self,
@@ -10528,8 +10497,6 @@ class Client:
         except httpx.HTTPError as e:
             raise NetworkError("ResetInstanceDiskPassword", e) from e
 
-    # ── Instance IPs ──
-
     async def list_instance_ips(self, instance_id: int) -> dict[str, Any]:
         """List IP addresses for an instance."""
         endpoint = f"/linode/instances/{instance_id}/ips"
@@ -10666,8 +10633,6 @@ class Client:
             await self.make_request("DELETE", endpoint)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteInstanceIP", e) from e
-
-    # ── Instance Actions ──
 
     async def clone_instance_raw(
         self,
@@ -11040,8 +11005,6 @@ class Client:
             capabilities=data.get("capabilities", []),
             tags=data.get("tags", []),
         )
-
-    # Stage 3: Parse methods
 
     def _parse_ssh_key(self, data: dict[str, Any]) -> SSHKey:
         """Parse SSH key data from API response."""
@@ -12737,8 +12700,6 @@ class RetryableClient:
         """Replicate an image once without retry replay."""
         return await self.client.replicate_image(image_id, regions)
 
-    # Stage 3: Extended read operations
-
     async def list_ssh_keys(self) -> list[SSHKey]:
         """List SSH keys with retry."""
         result: list[SSHKey] = await self._execute_with_retry(self.client.list_ssh_keys)
@@ -13610,8 +13571,6 @@ class RetryableClient:
         """Update a Longview client without replay retry."""
         return await self.client.update_longview_client(client_id, label=label)
 
-    # Phase 1: Object Storage read operations with retry
-
     async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
         """List Object Storage buckets with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
@@ -13727,8 +13686,6 @@ class RetryableClient:
         )
         return result
 
-    # Stage 5 Phase 3: Object Storage write operations with retry
-
     async def create_object_storage_bucket(
         self,
         label: str,
@@ -13791,8 +13748,6 @@ class RetryableClient:
             cors_enabled,
         )
         return result
-
-    # Stage 5 Phase 4: Object Storage access key write operations with retry
 
     async def create_object_storage_key(
         self,
@@ -13891,8 +13846,6 @@ class RetryableClient:
     async def delete_bucket_ssl(self, region: str, label: str) -> None:
         """Delete bucket SSL certificate with retry."""
         await self._execute_with_retry(self.client.delete_bucket_ssl, region, label)
-
-    # Stage 4: Write operations with retry
 
     async def create_ssh_key(self, label: str, ssh_key: str) -> SSHKey:
         """Create an SSH key with one protected attempt, never a replay.
@@ -14741,8 +14694,6 @@ class RetryableClient:
         """Delete NodeBalancer with retry."""
         await self._execute_with_retry(self.client.delete_nodebalancer, nodebalancer_id)
 
-    # LKE operations with retry
-
     async def list_lke_clusters(self) -> list[dict[str, Any]]:
         """List LKE clusters with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
@@ -14988,8 +14939,6 @@ class RetryableClient:
         )
         return result
 
-    # VPC operations with retry
-
     async def list_vpcs(self) -> list[dict[str, Any]]:
         """List VPCs with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
@@ -15218,8 +15167,6 @@ class RetryableClient:
         """Delete IPv6 range with retry."""
         await self._execute_with_retry(self.client.delete_ipv6_range, ipv6_range)
 
-    # ── Reserved public IPv4 addresses (retry wrappers) ──
-
     async def create_reserved_ip(
         self, region: str, tags: list[str] | None = None
     ) -> dict[str, Any]:
@@ -15260,8 +15207,6 @@ class RetryableClient:
     async def delete_reserved_ip(self, address: str) -> None:
         """Permanently unreserve a public IPv4 address once without replay."""
         await self.client.delete_reserved_ip(address)
-
-    # ── Instance Backups (retry wrappers) ──
 
     async def list_instance_backups(self, instance_id: int) -> dict[str, Any]:
         """List instance backups with retry."""
@@ -15321,8 +15266,6 @@ class RetryableClient:
     async def cancel_instance_backups(self, instance_id: int) -> None:
         """Cancel instance backups with retry."""
         await self._execute_with_retry(self.client.cancel_instance_backups, instance_id)
-
-    # ── Instance Disks (retry wrappers) ──
 
     async def list_instance_disks(
         self,
@@ -15505,8 +15448,6 @@ class RetryableClient:
         """Reset an instance disk root password once without retry replay."""
         await self.client.reset_instance_disk_password(instance_id, disk_id, password)
 
-    # ── Instance IPs (retry wrappers) ──
-
     async def list_instance_ips(self, instance_id: int) -> dict[str, Any]:
         """List instance IPs with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -15602,8 +15543,6 @@ class RetryableClient:
             instance_id,
             address,
         )
-
-    # ── Instance Actions (retry wrappers) ──
 
     async def clone_instance_raw(
         self,

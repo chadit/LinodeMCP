@@ -37,7 +37,7 @@ def _paginated_entries() -> list[tuple[str, Any, dict[str, Any]]]:
     """(name, handler, arguments) for every tool taking page and page_size."""
     entries: list[tuple[str, Any, dict[str, Any]]] = []
     for entry in get_tool_registry():
-        schema: dict[str, Any] = entry.tool.inputSchema or {}
+        schema: dict[str, Any] = entry.tool.input_schema or {}
         properties: dict[str, Any] = schema.get("properties", {})
         if PAGE_ARG not in properties or PAGE_SIZE_ARG not in properties:
             continue

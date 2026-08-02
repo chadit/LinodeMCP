@@ -40,9 +40,6 @@ async def client() -> AsyncIterator[Client]:
     await instance.close()
 
 
-# --- Object Storage --------------------------------------------------------
-
-
 async def test_create_object_storage_bucket_includes_optionals(
     client: Client,
 ) -> None:
@@ -216,9 +213,6 @@ async def test_update_object_acl_wraps_errors(client: Client) -> None:
     assert "UpdateObjectACL" in str(excinfo.value)
 
 
-# --- LKE -------------------------------------------------------------------
-
-
 async def test_create_lke_cluster_includes_optionals(client: Client) -> None:
     """create_lke_cluster forwards tags and control_plane when supplied."""
     pools = [{"type": "g6-standard-1", "count": 3}]
@@ -360,9 +354,6 @@ async def test_update_lke_control_plane_acl_wraps_errors(client: Client) -> None
     assert "UpdateLKEControlPlaneACL" in str(excinfo.value)
 
 
-# --- VPC -------------------------------------------------------------------
-
-
 async def test_create_vpc_includes_optionals(client: Client) -> None:
     """create_vpc forwards description and inline subnets when supplied."""
     subnets = [{"label": "sub-a", "ipv4": "10.0.0.0/24"}]
@@ -471,9 +462,6 @@ async def test_update_vpc_subnet_wraps_errors(client: Client) -> None:
             await client.update_vpc_subnet(5, 2, "renamed")
 
     assert "UpdateVPCSubnet" in str(excinfo.value)
-
-
-# --- Instances -------------------------------------------------------------
 
 
 async def test_get_instance_backup_targets_backup_route(client: Client) -> None:
@@ -710,9 +698,6 @@ async def test_rescue_instance_wraps_errors(client: Client) -> None:
             await client.rescue_instance(123)
 
     assert "RescueInstance" in str(excinfo.value)
-
-
-# --- Raw passthrough helpers ----------------------------------------------
 
 
 async def test_get_raw_returns_decoded_json(client: Client) -> None:

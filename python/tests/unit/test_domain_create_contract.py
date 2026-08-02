@@ -54,7 +54,7 @@ def test_domain_create_is_exported_registered_scoped_and_schema_backed() -> None
     assert capability is Capability.Write
     assert required_scopes(tool.name, capability) == [Scope.DomainsReadWrite]
 
-    assert set(tool.inputSchema["properties"]) >= {
+    assert set(tool.input_schema["properties"]) >= {
         "environment",
         "domain",
         "type",
@@ -72,9 +72,9 @@ def test_domain_create_is_exported_registered_scoped_and_schema_backed() -> None
         "confirm",
         "dry_run",
     }
-    assert set(tool.inputSchema["required"]) == {"domain", "type", "confirm"}
-    assert tool.inputSchema["properties"]["type"]["enum"] == ["master", "slave"]
-    assert tool.inputSchema["properties"]["status"]["enum"] == ["active", "disabled"]
+    assert set(tool.input_schema["required"]) == {"domain", "type", "confirm"}
+    assert tool.input_schema["properties"]["type"]["enum"] == ["master", "slave"]
+    assert tool.input_schema["properties"]["status"]["enum"] == ["active", "disabled"]
 
 
 @pytest.mark.parametrize(

@@ -21,7 +21,7 @@ def create_linode_instance_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_get",
         description="Retrieves details of a single Linode instance by its ID",
-        inputSchema=schema("linode.mcp.v1.InstanceGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceGetInput"),
     ), Capability.Read
 
 

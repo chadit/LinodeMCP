@@ -49,7 +49,7 @@ def create_linode_instance_clone_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_clone",
         description="Clones a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceCloneInput"),
+        input_schema=schema("linode.mcp.v1.InstanceCloneInput"),
     ), Capability.Write
 
 
@@ -112,7 +112,7 @@ def create_linode_instance_migrate_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_migrate",
         description=("Migrates a Linode instance to a new region"),
-        inputSchema=schema("linode.mcp.v1.InstanceMigrateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceMigrateInput"),
     ), Capability.Write
 
 
@@ -204,7 +204,7 @@ def create_linode_instance_rebuild_tool() -> tuple[Tool, Capability]:
             " All data on existing disks will be destroyed."
             " Pass dry_run=true to preview without rebuilding." + TWO_STAGE_NOTE
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceRebuildInput"),
+        input_schema=schema("linode.mcp.v1.InstanceRebuildInput"),
     ), Capability.Destroy
 
 
@@ -364,7 +364,7 @@ def create_linode_instance_rescue_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_rescue",
         description=("Boots a Linode instance into rescue mode"),
-        inputSchema=schema("linode.mcp.v1.InstanceRescueInput"),
+        input_schema=schema("linode.mcp.v1.InstanceRescueInput"),
     ), Capability.Write
 
 
@@ -447,7 +447,7 @@ def create_linode_instance_password_reset_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without resetting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.InstancePasswordResetInput"),
+        input_schema=schema("linode.mcp.v1.InstancePasswordResetInput"),
     ), Capability.Destroy
 
 

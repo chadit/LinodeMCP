@@ -23,7 +23,7 @@ message ObjectStorageObjectACLWriteResponse {
 // linode_object_storage_object_acl_get.
 message ObjectACLGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (required).
   string region = 2;
   // The bucket label (required).
@@ -37,7 +37,7 @@ message ObjectACLGetInput {
 // confirm are all required.
 message ObjectACLUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
   string region = 2;
   // The bucket label (name).
@@ -49,8 +49,8 @@ message ObjectACLUpdateInput {
   string acl = 5;
   // Must be true to proceed. This modifies the object's access permissions.
   // Ignored when dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }

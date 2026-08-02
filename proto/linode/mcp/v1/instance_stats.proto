@@ -9,7 +9,7 @@ option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1
 // InstanceStatsGetInput is the input contract for linode_instance_stats_get.
 message InstanceStatsGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
 }
@@ -18,7 +18,7 @@ message InstanceStatsGetInput {
 // linode_instance_stats_month_get. All three fields are required.
 message InstanceStatsMonthGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The statistics year, from 2000 through 2037 (required).

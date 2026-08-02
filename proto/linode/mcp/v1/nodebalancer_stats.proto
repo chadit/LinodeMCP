@@ -35,7 +35,7 @@ message NodeBalancerTrafficStats {
 // linode_nodebalancer_stats_get.
 message NodeBalancerStatsGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose statistics should be retrieved.
   int32 nodebalancer_id = 2;
 }

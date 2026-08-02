@@ -64,7 +64,7 @@ def create_linode_instance_backup_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backup_list",
         description=("Lists backups for a Linode instance"),
-        inputSchema=schema("linode.mcp.v1.InstanceBackupListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceBackupListInput"),
     ), Capability.Read
 
 
@@ -92,7 +92,7 @@ def create_linode_instance_backup_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backup_get",
         description=("Gets details of a specific backup for an instance"),
-        inputSchema=schema("linode.mcp.v1.InstanceBackupGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceBackupGetInput"),
     ), Capability.Read
 
 
@@ -121,7 +121,7 @@ def create_linode_instance_backup_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backup_create",
         description=("Creates a snapshot backup of a Linode instance"),
-        inputSchema=schema("linode.mcp.v1.InstanceBackupCreateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceBackupCreateInput"),
     ), Capability.Write
 
 
@@ -177,7 +177,7 @@ def create_linode_instance_backup_restore_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backup_restore",
         description="Restores a backup to a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceBackupRestoreInput"),
+        input_schema=schema("linode.mcp.v1.InstanceBackupRestoreInput"),
     ), Capability.Write
 
 
@@ -291,7 +291,7 @@ def create_linode_instance_backups_enable_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_backups_enable",
         description=("Enables backups for a Linode instance (billing charges apply)"),
-        inputSchema=schema("linode.mcp.v1.InstanceBackupsEnableInput"),
+        input_schema=schema("linode.mcp.v1.InstanceBackupsEnableInput"),
     ), Capability.Write
 
 
@@ -348,7 +348,7 @@ def create_linode_instance_backups_cancel_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without canceling."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.InstanceBackupsCancelInput"),
+        input_schema=schema("linode.mcp.v1.InstanceBackupsCancelInput"),
     ), Capability.Destroy
 
 

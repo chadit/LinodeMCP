@@ -25,7 +25,7 @@ message AccountAvailabilityListResponse {
 // linode_account_availability_get.
 message AccountAvailabilityGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The region slug to inspect (required).
   string region_id = 2;
 }
@@ -34,7 +34,7 @@ message AccountAvailabilityGetInput {
 // linode_account_availability_list.
 message AccountAvailabilityListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).

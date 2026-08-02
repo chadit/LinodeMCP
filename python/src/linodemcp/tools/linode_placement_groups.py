@@ -80,7 +80,7 @@ def create_linode_placement_group_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_list",
         description="Lists placement groups",
-        inputSchema=schema("linode.mcp.v1.PlacementGroupListInput"),
+        input_schema=schema("linode.mcp.v1.PlacementGroupListInput"),
     ), Capability.Read
 
 
@@ -110,7 +110,7 @@ def create_linode_placement_group_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_get",
         description="Gets a placement group",
-        inputSchema=schema("linode.mcp.v1.PlacementGroupGetInput"),
+        input_schema=schema("linode.mcp.v1.PlacementGroupGetInput"),
     ), Capability.Read
 
 

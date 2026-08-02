@@ -26,9 +26,6 @@ def _ok_response(body: Any) -> MagicMock:
     return response
 
 
-# --- LKE clusters ----------------------------------------------------------
-
-
 async def test_list_lke_clusters_unwraps_data_envelope() -> None:
     """list_lke_clusters GETs /lke/clusters and returns the data list."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -181,9 +178,6 @@ async def test_regenerate_lke_cluster_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- LKE node pools --------------------------------------------------------
-
-
 async def test_list_lke_node_pools_unwraps_data() -> None:
     """list_lke_node_pools GETs the pools route and returns the data list."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -296,9 +290,6 @@ async def test_recycle_lke_node_pool_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- LKE nodes -------------------------------------------------------------
-
-
 async def test_get_lke_node_returns_body() -> None:
     """get_lke_node GETs the node route with the string node id."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -382,9 +373,6 @@ async def test_recycle_lke_node_wraps_http_errors() -> None:
 
     assert "RecycleLKENode" in str(excinfo.value)
     await client.close()
-
-
-# --- LKE kubeconfig / dashboard / endpoints / tokens / acl -----------------
 
 
 async def test_get_lke_kubeconfig_returns_body() -> None:
@@ -555,9 +543,6 @@ async def test_delete_lke_control_plane_acl_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- LKE versions / types --------------------------------------------------
-
-
 async def test_list_lke_versions_unwraps_data() -> None:
     """list_lke_versions GETs /lke/versions and unwraps the data list."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -643,9 +628,6 @@ async def test_list_lke_types_wraps_http_errors() -> None:
 
     assert "ListLKETypes" in str(excinfo.value)
     await client.close()
-
-
-# --- VPCs ------------------------------------------------------------------
 
 
 async def test_list_vpcs_unwraps_data() -> None:

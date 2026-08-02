@@ -87,13 +87,13 @@ def test_capability_and_confirm_invariants() -> None:
         entry.name
         for entry in registry
         if entry.capability == Capability.Read
-        and _schema_has_boolean_prop(entry.tool.inputSchema, "confirm")
+        and _schema_has_boolean_prop(entry.tool.input_schema, "confirm")
     ]
     mutator_violations: list[str] = [
         entry.name
         for entry in registry
         if entry.capability in mutators
-        and not _schema_requires(entry.tool.inputSchema, "confirm")
+        and not _schema_requires(entry.tool.input_schema, "confirm")
     ]
 
     assert not read_violations, "Read tools must not declare confirm: " + ", ".join(
@@ -124,7 +124,7 @@ def test_capability_and_dry_run_invariants() -> None:
         entry.name
         for entry in registry
         if entry.capability in mutators
-        and not _schema_has_boolean_prop(entry.tool.inputSchema, "dry_run")
+        and not _schema_has_boolean_prop(entry.tool.input_schema, "dry_run")
     ]
 
     assert not missing, (

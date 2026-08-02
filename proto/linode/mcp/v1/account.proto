@@ -52,7 +52,7 @@ message AccountWriteResponse {
 // account, so no resource ID).
 message AccountGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // AccountAgreements mirrors the account agreement acknowledgment status: one
@@ -70,7 +70,7 @@ message AccountAgreements {
 // linode_account_agreement_list (the singular agreement set, so no resource ID).
 message AccountAgreementsListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // AccountSettings mirrors the account settings object. longview_subscription and
@@ -88,7 +88,7 @@ message AccountSettings {
 // AccountSettingsGetInput is the input contract for linode_account_settings_get.
 message AccountSettingsGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // AccountSettingsWriteResponse is the {message, settings} envelope the account
@@ -119,7 +119,7 @@ message AccountTransfer {
 // AccountTransferGetInput is the input contract for linode_account_transfer_get.
 message AccountTransferGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // AccountInvoice mirrors one Linode account invoice.
@@ -133,7 +133,7 @@ message AccountInvoice {
 // AccountInvoiceGetInput is the input contract for linode_account_invoice_get.
 message AccountInvoiceGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the invoice to retrieve (required).
   int32 invoice_id = 2;
 }
@@ -160,7 +160,7 @@ message AccountLogin {
 // AccountLoginGetInput is the input contract for linode_account_login_get.
 message AccountLoginGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the login to retrieve (required).
   int32 login_id = 2;
 }
@@ -177,7 +177,7 @@ message AccountLoginListResponse {
 // a shared AccountLogin).
 message ProfileLoginGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the login to retrieve (required).
   int32 login_id = 2;
 }
@@ -194,7 +194,7 @@ message ProfileLoginListResponse {
 // ProfileLoginListInput is the input contract for linode_profile_login_list.
 message ProfileLoginListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -211,7 +211,7 @@ message AccountPayment {
 // AccountPaymentGetInput is the input contract for linode_account_payment_get.
 message AccountPaymentGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the payment to retrieve (required).
   int32 payment_id = 2;
 }
@@ -281,7 +281,7 @@ message OAuthClientListResponse {
 // linode_account_oauth_client_get.
 message AccountOAuthClientGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the OAuth client to retrieve (required).
   string client_id = 2;
 }
@@ -421,7 +421,7 @@ message MaintenancePolicyListResponse {
 // linode_maintenance_policy_list.
 message MaintenancePolicyListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -580,7 +580,7 @@ message AccountBetaEnrollResponse {
 // agreement flag is optional.
 message AccountAgreementsAcknowledgeInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Acknowledge the billing agreement (optional).
   optional bool billing_agreement = 2;
   // Acknowledge the EU model agreement (optional).
@@ -591,31 +591,31 @@ message AccountAgreementsAcknowledgeInput {
   optional bool privacy_policy = 5;
   // Must be true to confirm account agreement acknowledgement. Ignored when
   // dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // AccountCancelInput is the input contract for linode_account_cancel. Only
 // confirm is required.
 message AccountCancelInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Reason for canceling the account or other feedback (optional).
   optional string comments = 2;
   // Must be true to confirm account cancellation. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountChildAccountGetInput is the input contract for
 // linode_account_child_account_get.
 message AccountChildAccountGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // External unique identifier for the child account (required).
   string euuid = 2;
 }
@@ -624,7 +624,7 @@ message AccountChildAccountGetInput {
 // linode_account_child_account_list.
 message AccountChildAccountListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -635,22 +635,22 @@ message AccountChildAccountListInput {
 // linode_account_child_account_token_create. euuid and confirm are required.
 message AccountChildAccountTokenCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // External unique identifier for the child account (required).
   string euuid = 2;
   // Must be true to confirm proxy user token creation. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountInvoiceItemListInput is the input contract for
 // linode_account_invoice_item_list. invoice_id is required.
 message AccountInvoiceItemListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Invoice ID whose items should be listed (required).
   int32 invoice_id = 2;
   // Page of results to return (optional, minimum 1).
@@ -663,7 +663,7 @@ message AccountInvoiceItemListInput {
 // linode_account_invoice_list.
 message AccountInvoiceListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -673,7 +673,7 @@ message AccountInvoiceListInput {
 // AccountLoginListInput is the input contract for linode_account_login_list.
 message AccountLoginListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -684,7 +684,7 @@ message AccountLoginListInput {
 // linode_account_maintenance_list.
 message AccountMaintenanceListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -695,7 +695,7 @@ message AccountMaintenanceListInput {
 // linode_account_notification_list.
 message AccountNotificationListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -707,17 +707,17 @@ message AccountNotificationListInput {
 // required.
 message AccountOAuthClientCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Label for the OAuth client (required).
   string label = 2;
   // Redirect URI for the OAuth client (required).
   string redirect_uri = 3;
   // Must be true to confirm OAuth client creation. The secret is only shown
   // once. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // AccountOAuthClientDeleteInput is the input contract for
@@ -725,21 +725,21 @@ message AccountOAuthClientCreateInput {
 // dump shows no mode/plan_id params.
 message AccountOAuthClientDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // OAuth client ID (required).
   string client_id = 2;
   // Must be true to confirm OAuth client deletion. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountOAuthClientListInput is the input contract for
 // linode_account_oauth_client_list.
 message AccountOAuthClientListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -750,15 +750,15 @@ message AccountOAuthClientListInput {
 // linode_account_oauth_client_secret_reset.
 message AccountOAuthClientSecretResetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // OAuth client ID (required).
   string client_id = 2;
   // Must be true to confirm OAuth client secret reset. The new secret is only
   // shown once. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountOAuthClientUpdateInput is the input contract for
@@ -766,7 +766,7 @@ message AccountOAuthClientSecretResetInput {
 // mutable fields are optional.
 message AccountOAuthClientUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // OAuth client ID (required).
   string client_id = 2;
   // New label for the OAuth client (optional).
@@ -776,10 +776,10 @@ message AccountOAuthClientUpdateInput {
   // Whether this OAuth client is public (optional).
   optional bool public = 5;
   // Must be true to confirm OAuth client update. Ignored when dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // AccountPaymentCreateInput is the input contract for
@@ -787,24 +787,24 @@ message AccountOAuthClientUpdateInput {
 // string because the API takes a decimal-string amount.
 message AccountPaymentCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Payment method ID to charge (optional).
   optional int32 payment_method_id = 2;
   // Payment amount in USD, as a decimal string (e.g. "25.50") (required).
   string usd = 3;
   // Must be true to confirm making an account payment. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // AccountPaymentListInput is the input contract for
 // linode_account_payment_list.
 message AccountPaymentListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -816,15 +816,15 @@ message AccountPaymentListInput {
 // ground-truth dump shows no mode/plan_id params.
 message AccountPaymentMethodDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Payment method ID (required).
   int32 payment_method_id = 2;
   // Must be true to confirm payment method deletion. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountPaymentMethodCreateInput is the input contract for
@@ -835,7 +835,7 @@ message AccountPaymentMethodDeleteInput {
 // (the handler still enforces presence).
 message AccountPaymentMethodCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Payment method details. The shape varies by payment method type. Required at
   // runtime, though the generated schema cannot mark a map field required.
   map<string, google.protobuf.Value> data = 2;
@@ -844,17 +844,17 @@ message AccountPaymentMethodCreateInput {
   // Payment method type (e.g. "credit_card", "google_pay", "paypal") (required).
   string type = 4;
   // Must be true to confirm adding a payment method. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // AccountPaymentMethodGetInput is the input contract for
 // linode_account_payment_method_get.
 message AccountPaymentMethodGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Payment method ID (required).
   int32 payment_method_id = 2;
 }
@@ -863,7 +863,7 @@ message AccountPaymentMethodGetInput {
 // linode_account_payment_method_list.
 message AccountPaymentMethodListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -874,43 +874,43 @@ message AccountPaymentMethodListInput {
 // linode_account_payment_method_make_default.
 message AccountPaymentMethodMakeDefaultInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Payment method ID (required).
   int32 payment_method_id = 2;
   // Must be true to confirm changing the default payment method. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountPromoCreditAddInput is the input contract for
 // linode_account_promo_credit_add.
 message AccountPromoCreditAddInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Promo code to apply to the account (required).
   string promo_code = 2;
   // Must be true to confirm applying a promo credit. Ignored when
   // dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
 }
 
 // AccountSettingsManagedEnableInput is the input contract for
 // linode_account_settings_managed_enable. confirm is the only required field.
 message AccountSettingsManagedEnableInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Must be true to confirm enabling Linode Managed. Ignored when
   // dry_run=true.
-  bool confirm = 2;
+  bool confirm = 2; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 3;
+  optional bool dry_run = 3; // system param
 }
 
 // AccountSettingsUpdateInput is the input contract for
@@ -918,7 +918,7 @@ message AccountSettingsManagedEnableInput {
 // optional.
 message AccountSettingsUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Whether backups are enabled by default for new Linodes (optional).
   optional bool backups_enabled = 2;
   // Default interface generation mode for new Linodes (optional).
@@ -935,17 +935,17 @@ message AccountSettingsUpdateInput {
   optional string object_storage = 8;
   // Must be true to confirm account settings update. Ignored when
   // dry_run=true.
-  bool confirm = 9;
+  bool confirm = 9; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 10;
+  optional bool dry_run = 10; // system param
 }
 
 // AccountUpdateInput is the input contract for linode_account_update. Only
 // confirm is required; every billing/contact field is optional.
 message AccountUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // First line of the account billing address (optional).
   optional string address_1 = 2;
   // Second line of the account billing address (optional).
@@ -972,8 +972,8 @@ message AccountUpdateInput {
   // Zip or postal code for the account address (optional).
   optional string zip = 13;
   // Must be true to confirm account update. Ignored when dry_run=true.
-  bool confirm = 14;
+  bool confirm = 14; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 15;
+  optional bool dry_run = 15; // system param
 }

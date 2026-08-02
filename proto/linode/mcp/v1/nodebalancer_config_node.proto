@@ -52,7 +52,7 @@ message NodeBalancerConfigNodeWriteResponse {
 // linode_nodebalancer_config_node_get.
 message NodeBalancerConfigNodeGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer (required).
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config (required).
@@ -75,7 +75,7 @@ message NodeBalancerConfigNodeDeleteResponse {
 // linode_nodebalancer_config_node_list.
 message NodeBalancerConfigNodeListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose config nodes should be listed.
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config whose nodes should be listed.
@@ -91,7 +91,7 @@ message NodeBalancerConfigNodeListInput {
 // mode, not the two-stage plan/apply mode.
 message NodeBalancerConfigNodeCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer that owns the config.
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config that should receive a new node.
@@ -108,10 +108,10 @@ message NodeBalancerConfigNodeCreateInput {
   optional int32 subnet_id = 8;
   // Must be set to true to confirm NodeBalancer node creation. Ignored when
   // dry_run=true.
-  bool confirm = 9;
+  bool confirm = 9; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 10;
+  optional bool dry_run = 10; // system param
 }
 
 // NodeBalancerConfigNodeUpdateInput is the input contract for
@@ -119,7 +119,7 @@ message NodeBalancerConfigNodeCreateInput {
 // mode, not the two-stage plan/apply mode.
 message NodeBalancerConfigNodeUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer that owns the config.
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config that owns the node.
@@ -138,10 +138,10 @@ message NodeBalancerConfigNodeUpdateInput {
   optional int32 subnet_id = 9;
   // Must be set to true to confirm NodeBalancer node update. Ignored when
   // dry_run=true.
-  bool confirm = 10;
+  bool confirm = 10; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 11;
+  optional bool dry_run = 11; // system param
 }
 
 // NodeBalancerConfigNodeDeleteInput is the input contract for
@@ -149,7 +149,7 @@ message NodeBalancerConfigNodeUpdateInput {
 // two-stage flow, so there is no mode/plan_id (matches the registered schema).
 message NodeBalancerConfigNodeDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer that owns the config.
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config that owns the node.
@@ -158,8 +158,8 @@ message NodeBalancerConfigNodeDeleteInput {
   int32 node_id = 4;
   // Must be set to true to confirm NodeBalancer node deletion. Ignored when
   // dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }

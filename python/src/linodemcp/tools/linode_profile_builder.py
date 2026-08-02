@@ -89,7 +89,7 @@ def create_linode_profile_list_tools_tool() -> tuple[Tool, Capability]:
                 "full menu before composing a user-defined profile. "
                 "Optional filters: category, capability."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileListToolsInput"),
+            input_schema=schema("linode.mcp.v1.ProfileListToolsInput"),
         ),
         Capability.Meta,
     )
@@ -165,14 +165,14 @@ def create_linode_profile_list_categories_tool() -> tuple[Tool, Capability]:
                 "categories before drilling into a category with "
                 "linode_profile_list_tools."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileListCategoriesInput"),
+            input_schema=schema("linode.mcp.v1.ProfileListCategoriesInput"),
         ),
         Capability.Meta,
     )
 
 
 async def handle_linode_profile_list_categories(
-    arguments: dict[str, Any],  # noqa: ARG001 - no inputs per spec
+    arguments: dict[str, Any],
 ) -> list[TextContent]:
     """Return ``[{name, tool_count}]`` for every category in the catalog.
 
@@ -181,6 +181,11 @@ async def handle_linode_profile_list_categories(
     output is reproducible and the cross-language parity test can
     compare directly.
     """
+    # The tool takes no inputs per spec, but the dispatch contract fixes this
+    # signature. del marks the parameter used without renaming it, which would
+    # break the handler's keyword-call shape.
+    del arguments
+
     entries = _resolve_catalog()
     counts: dict[str, int] = {}
 

@@ -15,7 +15,7 @@ message MonitorService {
 // MonitorServiceGetInput is the input contract for linode_monitor_service_get.
 message MonitorServiceGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The monitoring service type to retrieve (required).
   string service_type = 2;
 }
@@ -24,14 +24,14 @@ message MonitorServiceGetInput {
 // linode_monitor_service_list.
 message MonitorServiceListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // MonitorServiceDashboardListInput is the input contract for
 // linode_monitor_service_dashboard_list.
 message MonitorServiceDashboardListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug whose dashboards should be listed.
   string service_type = 2;
 }
@@ -40,7 +40,7 @@ message MonitorServiceDashboardListInput {
 // linode_monitor_service_metric_definition_list.
 message MonitorServiceMetricDefinitionListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug whose metric definitions should be
   // listed.
   string service_type = 2;
@@ -50,7 +50,7 @@ message MonitorServiceMetricDefinitionListInput {
 // linode_monitor_service_alert_definition_list.
 message MonitorServiceAlertDefinitionListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug whose alert definitions should be
   // listed.
   string service_type = 2;
@@ -61,7 +61,7 @@ message MonitorServiceAlertDefinitionListInput {
 // service_type (the ground-truth dump confirms).
 message MonitorServiceMetricQueryInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug whose metrics should be retrieved.
   string service_type = 2;
 }
@@ -71,7 +71,7 @@ message MonitorServiceMetricQueryInput {
 // definition, addressed by service_type + alert_id).
 message MonitorAlertDefinitionGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug whose alert definition should be
   // retrieved.
   string service_type = 2;
@@ -84,7 +84,7 @@ message MonitorAlertDefinitionGetInput {
 // Pairs with MonitorAlertDefinitionDeleteResponse.
 message MonitorAlertDefinitionDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug whose alert definition should be
   // deleted.
   string service_type = 2;
@@ -92,10 +92,10 @@ message MonitorAlertDefinitionDeleteInput {
   int32 alert_id = 3;
   // Must be true to confirm deleting an alert definition. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // MonitorServiceTokenCreateInput is the input contract for
@@ -105,17 +105,17 @@ message MonitorAlertDefinitionDeleteInput {
 // optional-in-schema field enforced by the handler at runtime.
 message MonitorServiceTokenCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug for the token.
   string service_type = 2;
   // Service entity IDs to include in the token (non-empty positive integers).
   repeated int32 entity_ids = 3;
   // Must be true to confirm creating a monitor service token. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // MonitorServiceTokenCreateResponse is the linode_monitor_service_token_create
@@ -135,7 +135,7 @@ message MonitorServiceTokenCreateResponse {
 // drop out of the generated required set (handler still enforces them).
 message MonitorServiceAlertDefinitionCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug for the alert definition.
   string service_type = 2;
   // Alert definition label.
@@ -154,10 +154,10 @@ message MonitorServiceAlertDefinitionCreateInput {
   repeated string entity_ids = 9;
   // Must be true to confirm creating an alert definition. Ignored when
   // dry_run=true.
-  bool confirm = 10;
+  bool confirm = 10; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 11;
+  optional bool dry_run = 11; // system param
 }
 
 // MonitorServiceAlertDefinitionCloneInput is the input contract for
@@ -165,7 +165,7 @@ message MonitorServiceAlertDefinitionCreateInput {
 // request-body field; the remaining clone overrides are optional.
 message MonitorServiceAlertDefinitionCloneInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug for the source alert definition.
   string service_type = 2;
   // Source alert definition ID to clone.
@@ -186,10 +186,10 @@ message MonitorServiceAlertDefinitionCloneInput {
   map<string, google.protobuf.Value> trigger_conditions = 10;
   // Must be true to confirm cloning an alert definition. Ignored when
   // dry_run=true.
-  bool confirm = 11;
+  bool confirm = 11; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 12;
+  optional bool dry_run = 12; // system param
   // Optional service entity IDs for an entity-scope clone.
   repeated string entity_ids = 13;
   // Optional region IDs for a region-scope clone.
@@ -202,7 +202,7 @@ message MonitorServiceAlertDefinitionCloneInput {
 // fields are optional. service_type, alert_id, and confirm are required.
 message MonitorServiceAlertDefinitionUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Supported monitoring service type slug for the alert definition.
   string service_type = 2;
   // Alert definition ID to update.
@@ -225,17 +225,17 @@ message MonitorServiceAlertDefinitionUpdateInput {
   repeated string entity_ids = 11;
   // Must be true to confirm updating an alert definition. Ignored when
   // dry_run=true.
-  bool confirm = 12;
+  bool confirm = 12; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 13;
+  optional bool dry_run = 13; // system param
 }
 
 // MonitorDashboardListInput is the input contract for
 // linode_monitor_dashboard_list.
 message MonitorDashboardListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -246,7 +246,7 @@ message MonitorDashboardListInput {
 // linode_monitor_dashboard_get.
 message MonitorDashboardGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Monitoring dashboard ID to retrieve.
   int32 dashboard_id = 2;
 }
@@ -255,7 +255,7 @@ message MonitorDashboardGetInput {
 // linode_monitor_alert_definition_list (all service types).
 message MonitorAlertDefinitionListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -266,7 +266,7 @@ message MonitorAlertDefinitionListInput {
 // linode_monitor_alert_channel_list.
 message MonitorAlertChannelListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).

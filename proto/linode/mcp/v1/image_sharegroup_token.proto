@@ -45,7 +45,7 @@ message ImageShareGroupTokenListResponse {
 // linode_image_sharegroup_token_get.
 message ImageShareGroupTokenGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The image share group token UUID (required).
   string token_uuid = 2;
 }
@@ -54,7 +54,7 @@ message ImageShareGroupTokenGetInput {
 // linode_image_sharegroup_token_list.
 message ImageShareGroupTokenListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -66,16 +66,16 @@ message ImageShareGroupTokenListInput {
 // are required; label is optional.
 message ImageShareGroupTokenCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The UUID of the share group this token is valid for.
   string valid_for_sharegroup_uuid = 2;
   // Optional descriptive label for the token.
   optional string label = 3;
   // Must be set to true to confirm token creation. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // ImageShareGroupTokenUpdateInput is the input contract for
@@ -83,44 +83,44 @@ message ImageShareGroupTokenCreateInput {
 // required.
 message ImageShareGroupTokenUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The UUID of the token to update.
   string token_uuid = 2;
   // The new descriptive label for the token.
   string label = 3;
   // Must be set to true to confirm the token update. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // ImageShareGroupTokenDeleteInput is the input contract for
 // linode_image_sharegroup_token_delete, a two-stage destroy.
 message ImageShareGroupTokenDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Image share group token UUID.
   string token_uuid = 2;
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // ImageShareGroupTokenImageListInput is the input contract for
 // linode_image_sharegroup_token_image_list.
 message ImageShareGroupTokenImageListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Image share group token UUID.
   string token_uuid = 2;
   // Page of results to return (optional, minimum 1).

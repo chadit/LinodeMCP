@@ -52,7 +52,7 @@ message ProfileDraftSaveInput {
   // Draft name to save.
   string name = 1;
   // Must be true. The save is a write operation that mutates the config file.
-  bool confirm = 2;
+  bool confirm = 2; // system param
 }
 
 // ProfileDraftAddToolsInput is the input contract for

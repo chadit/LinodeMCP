@@ -20,7 +20,7 @@ message LKEVersionListResponse {
 // LKEVersionGetInput is the input contract for linode_lke_version_get.
 message LKEVersionGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The Kubernetes version ID (required).
   string version = 2;
 }
@@ -28,5 +28,5 @@ message LKEVersionGetInput {
 // LKEVersionListInput is the input contract for linode_lke_version_list.
 message LKEVersionListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }

@@ -151,7 +151,7 @@ func TestBehaviorConformance(t *testing.T) {
 			continue
 		}
 
-		raw, err := os.ReadFile(filepath.Join(dir, entry.Name())) //nolint:gosec // fixture path from testdata
+		raw, err := os.ReadFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

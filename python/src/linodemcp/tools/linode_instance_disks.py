@@ -237,7 +237,7 @@ def create_linode_instance_disk_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_list",
         description="Lists disks for a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceDiskListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDiskListInput"),
     ), Capability.Read
 
 
@@ -272,7 +272,7 @@ def create_linode_instance_volume_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_volume_list",
         description="Lists volumes attached to a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceVolumeListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceVolumeListInput"),
     ), Capability.Read
 
 
@@ -306,7 +306,7 @@ def create_linode_instance_firewall_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_firewall_list",
         description="Lists firewalls assigned to a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceFirewallListInput"),
+        input_schema=schema("linode.mcp.v1.InstanceFirewallListInput"),
     ), Capability.Read
 
 
@@ -340,7 +340,7 @@ def create_linode_instance_disk_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_get",
         description=("Gets details of a specific disk on an instance"),
-        inputSchema=schema("linode.mcp.v1.InstanceDiskGetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDiskGetInput"),
     ), Capability.Read
 
 
@@ -369,7 +369,7 @@ def create_linode_instance_config_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_config_create",
         description="Creates a configuration profile on a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceConfigCreateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceConfigCreateInput"),
     ), Capability.Write
 
 
@@ -503,7 +503,7 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_create",
         description="Creates a disk on a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceDiskCreateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDiskCreateInput"),
     ), Capability.Write
 
 
@@ -583,7 +583,7 @@ def create_linode_instance_disk_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_update",
         description="Updates a disk on a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceDiskUpdateInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDiskUpdateInput"),
     ), Capability.Write
 
 
@@ -645,7 +645,7 @@ def create_linode_instance_disk_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.InstanceDiskDeleteInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDiskDeleteInput"),
     ), Capability.Destroy
 
 
@@ -804,7 +804,7 @@ def create_linode_instance_disk_clone_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_clone",
         description="Clones a disk on a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceDiskCloneInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDiskCloneInput"),
     ), Capability.Write
 
 
@@ -891,7 +891,7 @@ def create_linode_instance_disk_resize_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_instance_disk_resize",
         description="Resizes a disk on a Linode instance",
-        inputSchema=schema("linode.mcp.v1.InstanceDiskResizeInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDiskResizeInput"),
     ), Capability.Write
 
 
@@ -974,7 +974,7 @@ def create_linode_instance_disk_password_reset_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_instance_disk_password_reset",
         description="Resets the root password for a Linode instance disk",
-        inputSchema=schema("linode.mcp.v1.InstanceDiskPasswordResetInput"),
+        input_schema=schema("linode.mcp.v1.InstanceDiskPasswordResetInput"),
     ), Capability.Write
 
 

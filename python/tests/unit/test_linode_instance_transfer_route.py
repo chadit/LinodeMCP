@@ -147,10 +147,10 @@ def test_create_linode_instance_transfer_month_get_tool_schema() -> None:
 
     assert tool.name == "linode_instance_transfer_month_get"
     assert capability is Capability.Read
-    assert tool.inputSchema == schema("linode.mcp.v1.InstanceTransferMonthGetInput")
-    assert tool.inputSchema["required"] == ["linode_id", "year", "month"]
+    assert tool.input_schema == schema("linode.mcp.v1.InstanceTransferMonthGetInput")
+    assert tool.input_schema["required"] == ["linode_id", "year", "month"]
     for field in ("linode_id", "year", "month"):
-        assert tool.inputSchema["properties"][field]["type"] == "integer"
+        assert tool.input_schema["properties"][field]["type"] == "integer"
 
 
 @pytest.mark.asyncio

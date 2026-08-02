@@ -74,7 +74,7 @@ def set_profile_resolver(
     _profile_resolver = resolver
 
 
-# Exception classes. Ruff N818 enforces the ``Error`` suffix.
+# Ruff N818 enforces the ``Error`` suffix on the names below.
 
 
 class DraftNameMissingError(ValueError):
@@ -164,7 +164,7 @@ def create_linode_profile_draft_new_tool() -> tuple[Tool, Capability]:
                 "linode_profile_draft_save (Phase 8.5) to write it to "
                 "the config file."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileDraftNewInput"),
+            input_schema=schema("linode.mcp.v1.ProfileDraftNewInput"),
         ),
         Capability.Meta,
     )
@@ -218,7 +218,7 @@ def create_linode_profile_draft_show_tool() -> tuple[Tool, Capability]:
                 "environments, required token scopes, and the "
                 "allow_yolo flag."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileDraftShowInput"),
+            input_schema=schema("linode.mcp.v1.ProfileDraftShowInput"),
         ),
         Capability.Meta,
     )
@@ -259,7 +259,7 @@ def create_linode_profile_draft_discard_tool() -> tuple[Tool, Capability]:
                 "(no error), so the model can call it from cleanup "
                 "paths without first checking existence."
             ),
-            inputSchema=schema("linode.mcp.v1.ProfileDraftDiscardInput"),
+            input_schema=schema("linode.mcp.v1.ProfileDraftDiscardInput"),
         ),
         Capability.Meta,
     )

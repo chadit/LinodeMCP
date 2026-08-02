@@ -46,7 +46,7 @@ message FirewallDeviceListResponse {
 // FirewallDeviceGetInput is the input contract for linode_firewall_device_get.
 message FirewallDeviceGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall (required).
   int32 firewall_id = 2;
   // The ID of the firewall device to retrieve (required).
@@ -57,7 +57,7 @@ message FirewallDeviceGetInput {
 // linode_firewall_device_list.
 message FirewallDeviceListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall whose assigned devices should be listed.
   int32 firewall_id = 2;
   // Page of results to return (optional, minimum 1).
@@ -70,7 +70,7 @@ message FirewallDeviceListInput {
 // linode_firewall_device_create.
 message FirewallDeviceCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall to assign the device to.
   int32 firewall_id = 2;
   // The positive ID of the Linode, Linode interface, or NodeBalancer to
@@ -80,33 +80,33 @@ message FirewallDeviceCreateInput {
   FirewallDeviceType.Value type = 4;
   // Must be true to confirm firewall device assignment. Ignored when
   // dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // FirewallDeviceDeleteInput is the input contract for
 // linode_firewall_device_delete.
 message FirewallDeviceDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the firewall whose device assignment should be removed.
   int32 firewall_id = 2;
   // The ID of the firewall device assignment to remove.
   int32 device_id = 3;
   // Must be true to confirm firewall device removal. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }
 
 // FirewallDeviceWriteResponse is the {message, device} envelope the

@@ -1,0 +1,46 @@
+# MCP system params: proto input fields the server itself consumes, which
+# never reach the Linode API. One entry per line: <field name>\t<proto type>,
+# sorted by name.
+#
+# scripts/verify_system_params.py reads this file and checks every field of
+# every *Input message under proto/linode/mcp/v1/. A field whose name and type
+# match an entry here must carry a trailing `// system param` marker on its
+# field line, and a field carrying that marker without a matching entry fails
+# the same gate. Adding a line here means adding the marker to every matching
+# field in the same change; removing a line means removing every marker.
+#
+# The marker is a TRAILING comment on purpose. A proto LEADING comment becomes
+# the `description` an MCP client shows the model, and a trailing comment does
+# not, so marking a field leaves the published schema byte-identical. Never
+# move the marker into the leading block.
+#
+# The type column is part of the key because a name on its own is not enough.
+# `mode` is the two-stage plan/apply selector on 35 destructive inputs, where
+# it is `optional string`, and it is also the NodeBalancer backend node mode on
+# NodeBalancerConfigNodeCreateInput and NodeBalancerConfigNodeUpdateInput,
+# where it is `optional NodeBalancerNodeMode.Value` and is a real Linode API
+# body param (POST /nodebalancers/{p}/configs/{p}/nodes accepts mode: accept,
+# backup, drain, none, reject). Only the string form is a system param.
+#
+# Two field groups are deliberately absent. Client-side filters
+# (label_contains, domain_contains, name_contains, mine, class, deprecated,
+# is_public, and the type/region/capability/country filters on the list inputs
+# that fetch everything and filter locally) are user-supplied query params the
+# tool applies itself, not server plumbing, and their names are real API params
+# on other tools, so a name-and-type key cannot separate the two roles. Meta
+# tool inputs (audit, profile builder, version, hello) are those tools' own
+# domain params and map to no Linode route at all, and their names (limit,
+# since, until, tool, capability, status, group_by, format, name) likewise
+# collide with real API params elsewhere.
+#
+# Only *Input messages are required to carry markers. Response and nested item
+# messages reuse these names for real API values: AuditEvent.environment/mode/
+# plan_id, DryRunResponse.dry_run/environment, PlanResponse.plan_id/environment,
+# InstanceInterfaceUpgradeWriteResponse.dry_run, NodeBalancerConfigNode.mode,
+# and NodeBalancerConfigNodeItem.mode. The gate still rejects a stray marker in
+# any of them.
+confirm	bool
+dry_run	bool
+environment	string
+mode	string
+plan_id	string

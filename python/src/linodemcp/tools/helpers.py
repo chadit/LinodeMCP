@@ -30,11 +30,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Constants for truncation limits
 SSH_KEY_TRUNCATE_LIMIT = 50
 DESCRIPTION_TRUNCATE_LIMIT = 100
 
-# Environment parameter schema (reused across all tools)
 ENV_PARAM_SCHEMA = {
     "environment": {
         "type": "string",

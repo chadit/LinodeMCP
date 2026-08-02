@@ -135,8 +135,8 @@ def test_linode_instance_stats_month_get_tool_schema() -> None:
 
     assert tool.name == "linode_instance_stats_month_get"
     assert capability is Capability.Read
-    assert tool.inputSchema == schema("linode.mcp.v1.InstanceStatsMonthGetInput")
-    assert tool.inputSchema["required"] == ["linode_id", "year", "month"]
+    assert tool.input_schema == schema("linode.mcp.v1.InstanceStatsMonthGetInput")
+    assert tool.input_schema["required"] == ["linode_id", "year", "month"]
 
 
 async def test_handle_linode_instance_stats_month_get_success(

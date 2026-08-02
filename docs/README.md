@@ -104,6 +104,7 @@ header comment holds its full rules and exact regenerate command.
 | [env-vars.txt](./contracts/env-vars.txt) | The complete environment-variable surface every language reads (observability has none by design) | `scripts/verify_env_parity.py` |
 | [coverage-floors.txt](./contracts/coverage-floors.txt) | Minimum total unit-test statement coverage per registered language (rise-only; the per-line half is `make diff-coverage`) | `scripts/verify_coverage_floor.py` |
 | [tool-routes.txt](./contracts/tool-routes.txt) | Which Linode API operation (method plus path template) each tool calls; checked from both sides against the registry and the live spec, and against what each client can actually build | `scripts/verify_sync_scopes.py`, `scripts/verify_route_evidence.py` |
+| [system-params.txt](./contracts/system-params.txt) | The proto input fields the server consumes itself rather than passing to the Linode API, by field name and proto type; each one carries a trailing `// system param` marker that stays out of the generated schema | `scripts/verify_system_params.py` |
 
 ### Ratchet baselines
 

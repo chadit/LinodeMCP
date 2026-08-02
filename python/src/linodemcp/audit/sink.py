@@ -34,9 +34,11 @@ class NoopSink:
     exercise the capture middleware without exercising a real sink.
     """
 
-    def write(self, event: Event) -> None:  # noqa: ARG002 - protocol shape
+    def write(self, event: Event) -> None:
         """Discard the event. No observable side effect."""
-        return
+        # Named to match the Sink protocol, which mypy checks by parameter
+        # name for keyword compatibility. del marks it used without renaming.
+        del event
 
 
 class MultiSink:

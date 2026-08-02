@@ -267,7 +267,7 @@ def create_linode_account_get_tool() -> tuple[Tool, Capability]:
             "Retrieves the authenticated user's Linode account information "
             "including billing details and capabilities"
         ),
-        inputSchema=schema("linode.mcp.v1.AccountGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountGetInput"),
     ), Capability.Read
 
 
@@ -294,7 +294,7 @@ def create_linode_account_user_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_user_create",
         description="Creates a user on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountUserCreateInput"),
+        input_schema=schema("linode.mcp.v1.AccountUserCreateInput"),
     ), Capability.Admin
 
 
@@ -350,7 +350,7 @@ def create_linode_account_user_grants_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_user_grants_update",
         description="Updates grants for an account user.",
-        inputSchema=schema("linode.mcp.v1.AccountUserGrantsUpdateInput"),
+        input_schema=schema("linode.mcp.v1.AccountUserGrantsUpdateInput"),
     ), Capability.Admin
 
 
@@ -400,7 +400,7 @@ def create_linode_account_agreement_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_agreement_list",
         description="Lists agreements on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountAgreementsListInput"),
+        input_schema=schema("linode.mcp.v1.AccountAgreementsListInput"),
     ), Capability.Read
 
 
@@ -422,7 +422,7 @@ def create_linode_account_login_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_login_list",
         description="Lists user logins on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountLoginListInput"),
+        input_schema=schema("linode.mcp.v1.AccountLoginListInput"),
     ), Capability.Read
 
 
@@ -452,7 +452,7 @@ def create_linode_account_user_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_user_list",
         description="Lists users on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountUserListInput"),
+        input_schema=schema("linode.mcp.v1.AccountUserListInput"),
     ), Capability.Read
 
 
@@ -482,7 +482,7 @@ def create_linode_account_settings_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_settings_get",
         description="Gets settings for the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountSettingsGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountSettingsGetInput"),
     ), Capability.Read
 
 
@@ -507,7 +507,7 @@ def create_linode_account_settings_managed_enable_tool() -> tuple[Tool, Capabili
             "Enables Linode Managed for the account. Pass dry_run=true to "
             "preview without enabling it."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountSettingsManagedEnableInput"),
+        input_schema=schema("linode.mcp.v1.AccountSettingsManagedEnableInput"),
     ), Capability.Admin
 
 
@@ -545,7 +545,7 @@ def create_linode_account_transfer_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_transfer_get",
         description="Gets network transfer usage for the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountTransferGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountTransferGetInput"),
     ), Capability.Read
 
 
@@ -567,7 +567,7 @@ def create_linode_account_maintenance_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_maintenance_list",
         description="Lists maintenances on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountMaintenanceListInput"),
+        input_schema=schema("linode.mcp.v1.AccountMaintenanceListInput"),
     ), Capability.Read
 
 
@@ -597,7 +597,7 @@ def create_linode_maintenance_policy_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_maintenance_policy_list",
         description="Lists available maintenance policies.",
-        inputSchema=schema("linode.mcp.v1.MaintenancePolicyListInput"),
+        input_schema=schema("linode.mcp.v1.MaintenancePolicyListInput"),
     ), Capability.Read
 
 
@@ -627,7 +627,7 @@ def create_linode_account_oauth_client_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_oauth_client_list",
         description="Lists OAuth clients on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountOAuthClientListInput"),
+        input_schema=schema("linode.mcp.v1.AccountOAuthClientListInput"),
     ), Capability.Read
 
 
@@ -662,7 +662,7 @@ def create_linode_account_oauth_client_update_tool() -> tuple[Tool, Capability]:
             "Updates one Linode account OAuth client. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountOAuthClientUpdateInput"),
+        input_schema=schema("linode.mcp.v1.AccountOAuthClientUpdateInput"),
     ), Capability.Admin
 
 
@@ -676,7 +676,7 @@ def create_linode_account_oauth_client_thumbnail_update_tool() -> tuple[
             "Updates an account OAuth client's thumbnail. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountOAuthClientThumbnailUpdateInput"),
+        input_schema=schema("linode.mcp.v1.AccountOAuthClientThumbnailUpdateInput"),
     ), Capability.Admin
 
 
@@ -820,7 +820,7 @@ def create_linode_account_event_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_event_list",
         description="Lists events on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountEventListInput"),
+        input_schema=schema("linode.mcp.v1.AccountEventListInput"),
     ), Capability.Read
 
 
@@ -850,7 +850,7 @@ def create_linode_account_invoice_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_invoice_list",
         description="Lists invoices on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountInvoiceListInput"),
+        input_schema=schema("linode.mcp.v1.AccountInvoiceListInput"),
     ), Capability.Read
 
 
@@ -880,7 +880,7 @@ def create_linode_account_payment_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_payment_list",
         description="Lists payments on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountPaymentListInput"),
+        input_schema=schema("linode.mcp.v1.AccountPaymentListInput"),
     ), Capability.Read
 
 
@@ -910,7 +910,7 @@ def create_linode_account_payment_method_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_payment_method_list",
         description="Lists payment methods on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodListInput"),
+        input_schema=schema("linode.mcp.v1.AccountPaymentMethodListInput"),
     ), Capability.Read
 
 
@@ -945,7 +945,7 @@ def create_linode_account_payment_create_tool() -> tuple[Tool, Capability]:
             "Makes a payment on the Linode account. "
             "Pass dry_run=true to preview without creating a payment."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountPaymentCreateInput"),
+        input_schema=schema("linode.mcp.v1.AccountPaymentCreateInput"),
     ), Capability.Admin
 
 
@@ -1023,7 +1023,7 @@ def create_linode_account_service_transfer_create_tool() -> tuple[Tool, Capabili
             "Requests a service transfer for Linode IDs on the account. "
             "Pass dry_run=true to preview without creating a service transfer."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountServiceTransferCreateInput"),
+        input_schema=schema("linode.mcp.v1.AccountServiceTransferCreateInput"),
     ), Capability.Admin
 
 
@@ -1099,7 +1099,7 @@ def create_linode_account_payment_method_delete_tool() -> tuple[Tool, Capability
             "Deletes a payment method on the Linode account. "
             "Pass dry_run=true to preview without deleting."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodDeleteInput"),
+        input_schema=schema("linode.mcp.v1.AccountPaymentMethodDeleteInput"),
     ), Capability.Admin
 
 
@@ -1154,7 +1154,7 @@ def create_linode_account_notification_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_notification_list",
         description="Lists notifications on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountNotificationListInput"),
+        input_schema=schema("linode.mcp.v1.AccountNotificationListInput"),
     ), Capability.Read
 
 
@@ -1186,7 +1186,7 @@ def create_linode_account_invoice_item_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_invoice_item_list",
         description="Lists items on a Linode account invoice.",
-        inputSchema=schema("linode.mcp.v1.AccountInvoiceItemListInput"),
+        input_schema=schema("linode.mcp.v1.AccountInvoiceItemListInput"),
     ), Capability.Read
 
 
@@ -1228,7 +1228,7 @@ def create_linode_account_event_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_event_get",
         description="Gets a Linode account event by ID.",
-        inputSchema=schema("linode.mcp.v1.AccountEventGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountEventGetInput"),
     ), Capability.Read
 
 
@@ -1257,7 +1257,7 @@ def create_linode_account_event_seen_tool() -> tuple[Tool, Capability]:
             "Marks a Linode account event as seen. "
             "Pass dry_run=true to preview without marking the event seen."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountEventSeenInput"),
+        input_schema=schema("linode.mcp.v1.AccountEventSeenInput"),
     ), Capability.Write
 
 
@@ -1324,7 +1324,7 @@ def create_linode_account_agreement_acknowledge_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_account_agreement_acknowledge",
         description="Acknowledges agreements on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountAgreementsAcknowledgeInput"),
+        input_schema=schema("linode.mcp.v1.AccountAgreementsAcknowledgeInput"),
     ), Capability.Admin
 
 
@@ -1383,7 +1383,7 @@ def create_linode_account_beta_enroll_tool() -> tuple[Tool, Capability]:
             "Enrolls the Linode account in a Beta program. "
             "Pass dry_run=true to preview without enrolling."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountBetaEnrollInput"),
+        input_schema=schema("linode.mcp.v1.AccountBetaEnrollInput"),
     ), Capability.Admin
 
 
@@ -1439,7 +1439,7 @@ def create_linode_account_oauth_client_create_tool() -> tuple[Tool, Capability]:
             "shown once in the response. Pass dry_run=true to preview "
             "without creating the client."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountOAuthClientCreateInput"),
+        input_schema=schema("linode.mcp.v1.AccountOAuthClientCreateInput"),
     ), Capability.Admin
 
 
@@ -1451,7 +1451,7 @@ def create_linode_account_oauth_client_delete_tool() -> tuple[Tool, Capability]:
             "Deletes an account OAuth client by client ID. "
             "Pass dry_run=true to preview without deleting."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountOAuthClientDeleteInput"),
+        input_schema=schema("linode.mcp.v1.AccountOAuthClientDeleteInput"),
     ), Capability.Admin
 
 
@@ -1608,7 +1608,7 @@ def create_linode_account_payment_method_create_tool() -> tuple[Tool, Capability
             "Adds a payment method to the Linode account. "
             "Pass dry_run=true to preview without creating it."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodCreateInput"),
+        input_schema=schema("linode.mcp.v1.AccountPaymentMethodCreateInput"),
     ), Capability.Admin
 
 
@@ -1696,7 +1696,7 @@ def create_linode_account_promo_credit_add_tool() -> tuple[Tool, Capability]:
             "Adds a promo credit to the Linode account. "
             "Pass dry_run=true to preview without applying the promo code."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountPromoCreditAddInput"),
+        input_schema=schema("linode.mcp.v1.AccountPromoCreditAddInput"),
     ), Capability.Admin
 
 
@@ -1751,7 +1751,7 @@ def create_linode_account_cancel_tool() -> tuple[Tool, Capability]:
             "Cancels the Linode account. "
             "Pass dry_run=true to preview without canceling."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountCancelInput"),
+        input_schema=schema("linode.mcp.v1.AccountCancelInput"),
     ), Capability.Admin
 
 
@@ -1905,7 +1905,7 @@ def create_linode_account_settings_update_tool() -> tuple[Tool, Capability]:
             "Updates Linode account-wide settings. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountSettingsUpdateInput"),
+        input_schema=schema("linode.mcp.v1.AccountSettingsUpdateInput"),
     ), Capability.Admin
 
 
@@ -1985,7 +1985,7 @@ def create_linode_account_update_tool() -> tuple[Tool, Capability]:
             "Updates Linode account contact and billing-address information. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountUpdateInput"),
+        input_schema=schema("linode.mcp.v1.AccountUpdateInput"),
     ), Capability.Admin
 
 
@@ -2055,7 +2055,7 @@ def create_linode_account_user_update_tool() -> tuple[Tool, Capability]:
             "Updates an account user by username. "
             "Pass dry_run=true to preview without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountUserUpdateInput"),
+        input_schema=schema("linode.mcp.v1.AccountUserUpdateInput"),
     ), Capability.Admin
 
 
@@ -2137,7 +2137,7 @@ def create_linode_account_beta_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_beta_get",
         description="Gets an enrolled Beta program on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountBetaGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountBetaGetInput"),
     ), Capability.Read
 
 
@@ -2169,7 +2169,7 @@ def create_linode_account_child_account_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_child_account_get",
         description="Gets a child account by EUUID.",
-        inputSchema=schema("linode.mcp.v1.AccountChildAccountGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountChildAccountGetInput"),
     ), Capability.Read
 
 
@@ -2204,7 +2204,7 @@ def create_linode_account_service_transfer_accept_tool() -> tuple[Tool, Capabili
             "Accepts an account service transfer request by token. "
             "Pass dry_run=true to preview without accepting the transfer."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountServiceTransferAcceptInput"),
+        input_schema=schema("linode.mcp.v1.AccountServiceTransferAcceptInput"),
     ), Capability.Admin
 
 
@@ -2253,7 +2253,7 @@ def create_linode_account_service_transfer_get_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_account_service_transfer_get",
         description="Gets an account service transfer request by token.",
-        inputSchema=schema("linode.mcp.v1.AccountServiceTransferGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountServiceTransferGetInput"),
     ), Capability.Read
 
 
@@ -2284,7 +2284,7 @@ def create_linode_account_service_transfer_delete_tool() -> tuple[Tool, Capabili
             "Cancels an account service transfer request by token. "
             "Pass dry_run=true to preview without canceling."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountServiceTransferDeleteInput"),
+        input_schema=schema("linode.mcp.v1.AccountServiceTransferDeleteInput"),
     ), Capability.Admin
 
 
@@ -2332,7 +2332,7 @@ def create_linode_account_oauth_client_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_oauth_client_get",
         description="Gets an OAuth client by client ID.",
-        inputSchema=schema("linode.mcp.v1.AccountOAuthClientGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountOAuthClientGetInput"),
     ), Capability.Read
 
 
@@ -2362,7 +2362,7 @@ def create_linode_account_oauth_client_secret_reset_tool() -> tuple[Tool, Capabi
             "Resets an OAuth client secret. The new secret is only shown once "
             "in the response. Pass dry_run=true to preview without resetting."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountOAuthClientSecretResetInput"),
+        input_schema=schema("linode.mcp.v1.AccountOAuthClientSecretResetInput"),
     ), Capability.Admin
 
 
@@ -2437,7 +2437,7 @@ def create_linode_account_oauth_client_thumbnail_get_tool() -> tuple[Tool, Capab
     return Tool(
         name="linode_account_oauth_client_thumbnail_get",
         description="Gets an OAuth client's thumbnail by client ID.",
-        inputSchema=schema("linode.mcp.v1.AccountOAuthClientThumbnailGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountOAuthClientThumbnailGetInput"),
     ), Capability.Read
 
 
@@ -2469,7 +2469,7 @@ def create_linode_account_invoice_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_invoice_get",
         description="Gets an invoice on the Linode account by ID.",
-        inputSchema=schema("linode.mcp.v1.AccountInvoiceGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountInvoiceGetInput"),
     ), Capability.Read
 
 
@@ -2501,7 +2501,7 @@ def create_linode_account_payment_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_payment_get",
         description="Gets a payment on the Linode account by ID.",
-        inputSchema=schema("linode.mcp.v1.AccountPaymentGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountPaymentGetInput"),
     ), Capability.Read
 
 
@@ -2533,7 +2533,7 @@ def create_linode_account_payment_method_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_payment_method_get",
         description="Gets a payment method on the Linode account by ID.",
-        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountPaymentMethodGetInput"),
     ), Capability.Read
 
 
@@ -2567,7 +2567,7 @@ def create_linode_account_payment_method_make_default_tool() -> tuple[Tool, Capa
             "Sets a payment method as the default for the Linode account. "
             "Pass dry_run=true to preview without changing the default."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountPaymentMethodMakeDefaultInput"),
+        input_schema=schema("linode.mcp.v1.AccountPaymentMethodMakeDefaultInput"),
     ), Capability.Admin
 
 
@@ -2619,7 +2619,7 @@ def create_linode_account_login_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_login_get",
         description="Gets an account login by login ID.",
-        inputSchema=schema("linode.mcp.v1.AccountLoginGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountLoginGetInput"),
     ), Capability.Read
 
 
@@ -2653,7 +2653,7 @@ def create_linode_account_user_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a user from the Linode account by username. "
             "Pass dry_run=true to preview without deleting."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountUserDeleteInput"),
+        input_schema=schema("linode.mcp.v1.AccountUserDeleteInput"),
     ), Capability.Admin
 
 
@@ -2723,7 +2723,7 @@ def create_linode_account_user_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_user_get",
         description="Gets an account user by username.",
-        inputSchema=schema("linode.mcp.v1.AccountUserGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountUserGetInput"),
     ), Capability.Read
 
 
@@ -2760,7 +2760,7 @@ def create_linode_account_user_grants_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_user_grants_get",
         description="Lists grants for an account user by username.",
-        inputSchema=schema("linode.mcp.v1.AccountUserGrantsGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountUserGrantsGetInput"),
     ), Capability.Read
 
 
@@ -2798,7 +2798,7 @@ def create_linode_account_availability_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_availability_list",
         description="Lists available Linode services for the account.",
-        inputSchema=schema("linode.mcp.v1.AccountAvailabilityListInput"),
+        input_schema=schema("linode.mcp.v1.AccountAvailabilityListInput"),
     ), Capability.Read
 
 
@@ -2830,7 +2830,7 @@ def create_linode_account_availability_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets available Linode services for the account in a specific region."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountAvailabilityGetInput"),
+        input_schema=schema("linode.mcp.v1.AccountAvailabilityGetInput"),
     ), Capability.Read
 
 
@@ -2863,7 +2863,7 @@ def create_linode_account_beta_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_beta_list",
         description="Lists enrolled Beta programs for the account.",
-        inputSchema=schema("linode.mcp.v1.AccountBetaListInput"),
+        input_schema=schema("linode.mcp.v1.AccountBetaListInput"),
     ), Capability.Read
 
 
@@ -2893,7 +2893,7 @@ def create_linode_beta_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_beta_list",
         description="Lists available Beta programs.",
-        inputSchema=schema("linode.mcp.v1.BetaListInput"),
+        input_schema=schema("linode.mcp.v1.BetaListInput"),
     ), Capability.Read
 
 
@@ -2923,7 +2923,7 @@ def create_linode_account_child_account_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_account_child_account_list",
         description="Lists child accounts for the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountChildAccountListInput"),
+        input_schema=schema("linode.mcp.v1.AccountChildAccountListInput"),
     ), Capability.Read
 
 
@@ -2955,7 +2955,7 @@ def create_linode_account_service_transfer_list_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_account_service_transfer_list",
         description="Lists service transfers for the Linode account.",
-        inputSchema=schema("linode.mcp.v1.AccountServiceTransferListInput"),
+        input_schema=schema("linode.mcp.v1.AccountServiceTransferListInput"),
     ), Capability.Read
 
 
@@ -2992,7 +2992,7 @@ def create_linode_account_child_account_token_create_tool() -> tuple[Tool, Capab
             "Creates a proxy user token for a child account. "
             "Pass dry_run=true to preview without creating a token."
         ),
-        inputSchema=schema("linode.mcp.v1.AccountChildAccountTokenCreateInput"),
+        input_schema=schema("linode.mcp.v1.AccountChildAccountTokenCreateInput"),
     ), Capability.Admin
 
 
@@ -3057,7 +3057,7 @@ def create_linode_tag_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_tag_list",
         description="Lists tags on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.TagListInput"),
+        input_schema=schema("linode.mcp.v1.TagListInput"),
     ), Capability.Read
 
 
@@ -3083,7 +3083,7 @@ def create_linode_tag_object_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_tag_object_list",
         description="Lists objects assigned to a Linode account tag.",
-        inputSchema=schema("linode.mcp.v1.TaggedObjectListInput"),
+        input_schema=schema("linode.mcp.v1.TaggedObjectListInput"),
     ), Capability.Read
 
 
@@ -3127,7 +3127,7 @@ def create_linode_tag_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_tag_create",
         description="Creates a Linode account tag and optionally assigns resources.",
-        inputSchema=schema("linode.mcp.v1.TagCreateInput"),
+        input_schema=schema("linode.mcp.v1.TagCreateInput"),
     ), Capability.Write
 
 
@@ -3200,7 +3200,7 @@ def create_linode_tag_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_tag_delete",
         description="Deletes a Linode account tag by label." + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.TagDeleteInput"),
+        input_schema=schema("linode.mcp.v1.TagDeleteInput"),
     ), Capability.Destroy
 
 
@@ -3344,7 +3344,7 @@ def create_linode_support_ticket_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_create",
         description="Opens a Linode support ticket.",
-        inputSchema=schema("linode.mcp.v1.SupportTicketCreateInput"),
+        input_schema=schema("linode.mcp.v1.SupportTicketCreateInput"),
     ), Capability.Write
 
 
@@ -3493,7 +3493,7 @@ def create_linode_managed_credential_get_tool() -> tuple[Tool, Capability]:
             "managed credential metadata requires admin capability. Pass "
             "dry_run=true to preview the request without retrieving it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedCredentialGetInput"),
+        input_schema=schema("linode.mcp.v1.ManagedCredentialGetInput"),
     ), Capability.Admin
 
 
@@ -3534,7 +3534,7 @@ def create_linode_managed_contact_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_contact_list",
         description="Lists Managed contacts on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.ManagedContactListInput"),
+        input_schema=schema("linode.mcp.v1.ManagedContactListInput"),
     ), Capability.Read
 
 
@@ -3562,7 +3562,7 @@ def create_linode_managed_issue_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_issue_list",
         description="Lists open Managed issues on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.ManagedIssueListInput"),
+        input_schema=schema("linode.mcp.v1.ManagedIssueListInput"),
     ), Capability.Read
 
 
@@ -3590,7 +3590,7 @@ def create_linode_managed_credential_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_credential_list",
         description="Lists Managed credentials on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.ManagedCredentialListInput"),
+        input_schema=schema("linode.mcp.v1.ManagedCredentialListInput"),
     ), Capability.Read
 
 
@@ -3638,7 +3638,7 @@ def create_linode_managed_credential_username_password_update_tool() -> tuple[
             "Requires confirm=true; pass dry_run=true with confirm=true "
             "to preview without changing it."
         ),
-        inputSchema=schema(
+        input_schema=schema(
             "linode.mcp.v1.ManagedCredentialUsernamePasswordUpdateInput"
         ),
     ), Capability.Admin
@@ -3701,7 +3701,7 @@ def create_linode_managed_credential_revoke_tool() -> tuple[Tool, Capability]:
             "Revokes a Managed credential. Pass confirm=true to revoke it; "
             "pass dry_run=true to preview without revoking it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedCredentialRevokeInput"),
+        input_schema=schema("linode.mcp.v1.ManagedCredentialRevokeInput"),
     ), Capability.Admin
 
 
@@ -3823,7 +3823,7 @@ def create_linode_managed_linode_settings_update_tool() -> tuple[Tool, Capabilit
             "Updates SSH-related Managed settings for a specific Linode. "
             "Pass dry_run=true to preview without updating settings."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedLinodeSettingsUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ManagedLinodeSettingsUpdateInput"),
     ), Capability.Admin
 
 
@@ -3832,7 +3832,7 @@ def create_linode_managed_sshkey_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_sshkey_get",
         description="Gets the Managed SSH public key for the Linode account.",
-        inputSchema=schema("linode.mcp.v1.ManagedSSHKeyGetInput"),
+        input_schema=schema("linode.mcp.v1.ManagedSSHKeyGetInput"),
     ), Capability.Read
 
 
@@ -3926,7 +3926,7 @@ def create_linode_managed_credential_create_tool() -> tuple[Tool, Capability]:
             "Creates a Managed credential. Pass confirm=true to create it; "
             "pass dry_run=true to preview without creating it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedCredentialCreateInput"),
+        input_schema=schema("linode.mcp.v1.ManagedCredentialCreateInput"),
     ), Capability.Admin
 
 
@@ -4008,7 +4008,7 @@ def create_linode_managed_credential_update_tool() -> tuple[Tool, Capability]:
             "Updates a Managed credential label. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without changing it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedCredentialUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ManagedCredentialUpdateInput"),
     ), Capability.Admin
 
 
@@ -4136,7 +4136,7 @@ def create_linode_managed_service_create_tool() -> tuple[Tool, Capability]:
             "Creates a Managed service monitor. Pass confirm=true to create it; "
             "pass dry_run=true to preview without creating it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedServiceCreateInput"),
+        input_schema=schema("linode.mcp.v1.ManagedServiceCreateInput"),
     ), Capability.Admin
 
 
@@ -4199,7 +4199,7 @@ def create_linode_managed_service_enable_tool() -> tuple[Tool, Capability]:
             "Enables a Managed service monitor. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without enabling it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedServiceEnableInput"),
+        input_schema=schema("linode.mcp.v1.ManagedServiceEnableInput"),
     ), Capability.Admin
 
 
@@ -4248,7 +4248,7 @@ def create_linode_managed_service_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a Managed service monitor. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without deleting it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedServiceDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ManagedServiceDeleteInput"),
     ), Capability.Admin
 
 
@@ -4297,7 +4297,7 @@ def create_linode_managed_service_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_service_get",
         description="Gets a Linode Managed service monitor by ID.",
-        inputSchema=schema("linode.mcp.v1.ManagedServiceGetInput"),
+        input_schema=schema("linode.mcp.v1.ManagedServiceGetInput"),
     ), Capability.Read
 
 
@@ -4333,7 +4333,7 @@ def create_linode_managed_service_disable_tool() -> tuple[Tool, Capability]:
             "Disables a Managed service monitor by service ID. "
             "Pass dry_run=true to preview without disabling."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedServiceDisableInput"),
+        input_schema=schema("linode.mcp.v1.ManagedServiceDisableInput"),
     ), Capability.Admin
 
 
@@ -4385,7 +4385,7 @@ def create_linode_managed_contact_create_tool() -> tuple[Tool, Capability]:
             "Creates a Managed contact. Pass confirm=true to create it; "
             "pass dry_run=true to preview without creating it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedContactCreateInput"),
+        input_schema=schema("linode.mcp.v1.ManagedContactCreateInput"),
     ), Capability.Admin
 
 
@@ -4442,7 +4442,7 @@ def create_linode_managed_contact_delete_tool() -> tuple[Tool, Capability]:
             "Deletes a Managed contact by contact ID. "
             "Pass dry_run=true to preview without deleting."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedContactDeleteInput"),
+        input_schema=schema("linode.mcp.v1.ManagedContactDeleteInput"),
     ), Capability.Admin
 
 
@@ -4494,7 +4494,7 @@ def create_linode_managed_contact_update_tool() -> tuple[Tool, Capability]:
             "Updates a Managed contact. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without changing it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedContactUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ManagedContactUpdateInput"),
     ), Capability.Admin
 
 
@@ -4649,7 +4649,7 @@ def create_linode_managed_service_update_tool() -> tuple[Tool, Capability]:
             "Updates a Managed service monitor. Requires confirm=true; pass "
             "dry_run=true with confirm=true to preview without changing it."
         ),
-        inputSchema=schema("linode.mcp.v1.ManagedServiceUpdateInput"),
+        input_schema=schema("linode.mcp.v1.ManagedServiceUpdateInput"),
     ), Capability.Admin
 
 
@@ -4826,7 +4826,7 @@ def create_linode_managed_linode_settings_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_managed_linode_settings_list",
         description="Lists Managed Linode settings on the account.",
-        inputSchema=schema("linode.mcp.v1.ManagedLinodeSettingsListInput"),
+        input_schema=schema("linode.mcp.v1.ManagedLinodeSettingsListInput"),
     ), Capability.Read
 
 
@@ -4858,7 +4858,7 @@ def create_linode_managed_stats_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_stats_get",
         description="Lists Managed statistics from the last 24 hours.",
-        inputSchema=schema("linode.mcp.v1.ManagedStatsGetInput"),
+        input_schema=schema("linode.mcp.v1.ManagedStatsGetInput"),
     ), Capability.Read
 
 
@@ -4878,7 +4878,7 @@ def create_linode_managed_linode_settings_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_linode_settings_get",
         description="Gets Managed settings for a Linode.",
-        inputSchema=schema("linode.mcp.v1.ManagedLinodeSettingsGetInput"),
+        input_schema=schema("linode.mcp.v1.ManagedLinodeSettingsGetInput"),
     ), Capability.Read
 
 
@@ -4904,7 +4904,7 @@ def create_linode_managed_service_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_service_list",
         description="Lists Managed services on the Linode account.",
-        inputSchema=schema("linode.mcp.v1.ManagedServiceListInput"),
+        input_schema=schema("linode.mcp.v1.ManagedServiceListInput"),
     ), Capability.Read
 
 
@@ -4932,7 +4932,7 @@ def create_linode_managed_issue_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_issue_get",
         description="Gets a Linode Managed issue by ID.",
-        inputSchema=schema("linode.mcp.v1.ManagedIssueGetInput"),
+        input_schema=schema("linode.mcp.v1.ManagedIssueGetInput"),
     ), Capability.Read
 
 
@@ -4959,7 +4959,7 @@ def create_linode_managed_contact_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_managed_contact_get",
         description="Gets a Linode Managed contact by ID.",
-        inputSchema=schema("linode.mcp.v1.ManagedContactGetInput"),
+        input_schema=schema("linode.mcp.v1.ManagedContactGetInput"),
     ), Capability.Read
 
 
@@ -4990,7 +4990,7 @@ def create_linode_support_ticket_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_list",
         description="Lists Linode support tickets.",
-        inputSchema=schema("linode.mcp.v1.SupportTicketListInput"),
+        input_schema=schema("linode.mcp.v1.SupportTicketListInput"),
     ), Capability.Read
 
 
@@ -5020,7 +5020,7 @@ def create_linode_support_ticket_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_get",
         description="Gets a Linode support ticket by ID.",
-        inputSchema=schema("linode.mcp.v1.SupportTicketGetInput"),
+        input_schema=schema("linode.mcp.v1.SupportTicketGetInput"),
     ), Capability.Read
 
 
@@ -5046,7 +5046,7 @@ def create_linode_support_ticket_reply_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_reply_list",
         description="Lists replies on a Linode support ticket.",
-        inputSchema=schema("linode.mcp.v1.SupportTicketReplyListInput"),
+        input_schema=schema("linode.mcp.v1.SupportTicketReplyListInput"),
     ), Capability.Read
 
 
@@ -5084,7 +5084,7 @@ def create_linode_support_ticket_close_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_close",
         description="Closes a Linode support ticket.",
-        inputSchema=schema("linode.mcp.v1.SupportTicketCloseInput"),
+        input_schema=schema("linode.mcp.v1.SupportTicketCloseInput"),
     ), Capability.Write
 
 
@@ -5141,7 +5141,7 @@ def create_linode_support_ticket_reply_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_support_ticket_reply_create",
         description="Creates a reply on a Linode support ticket.",
-        inputSchema=schema("linode.mcp.v1.SupportTicketReplyCreateInput"),
+        input_schema=schema("linode.mcp.v1.SupportTicketReplyCreateInput"),
     ), Capability.Write
 
 
@@ -5204,7 +5204,7 @@ def create_linode_support_ticket_attachment_create_tool() -> tuple[Tool, Capabil
     return Tool(
         name="linode_support_ticket_attachment_create",
         description="Creates an attachment on a Linode support ticket.",
-        inputSchema=schema("linode.mcp.v1.SupportTicketAttachmentCreateInput"),
+        input_schema=schema("linode.mcp.v1.SupportTicketAttachmentCreateInput"),
     ), Capability.Write
 
 

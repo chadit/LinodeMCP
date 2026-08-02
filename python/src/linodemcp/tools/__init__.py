@@ -1030,7 +1030,6 @@ from linodemcp.tools.version import (
 )
 
 __all__ = [
-    # Re-exported helpers
     "DESCRIPTION_TRUNCATE_LIMIT",
     "ENV_PARAM_SCHEMA",
     "SSH_KEY_TRUNCATE_LIMIT",
@@ -1962,7 +1961,6 @@ __all__ = [
     "truncate_string",
 ]
 
-# Re-export shared utilities
 from linodemcp.linode import RetryableClient
 from linodemcp.tools.helpers import (
     DESCRIPTION_TRUNCATE_LIMIT,

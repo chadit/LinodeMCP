@@ -42,7 +42,7 @@ message DatabaseTypeListResponse {
 // DatabaseTypeGetInput is the input contract for linode_database_type_get.
 message DatabaseTypeGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the database type to retrieve (required).
   string type_id = 2;
   // Page of results to return (optional, minimum 1).
@@ -54,7 +54,7 @@ message DatabaseTypeGetInput {
 // DatabaseTypeListInput is the input contract for linode_database_type_list.
 message DatabaseTypeListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -65,12 +65,12 @@ message DatabaseTypeListInput {
 // linode_database_mysql_config_get.
 message DatabaseMySQLConfigGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // DatabasePostgreSQLConfigGetInput is the input contract for
 // linode_database_postgresql_config_get.
 message DatabasePostgreSQLConfigGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }

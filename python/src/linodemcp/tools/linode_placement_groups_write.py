@@ -129,7 +129,7 @@ def create_linode_placement_group_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_create",
         description="Creates a placement group",
-        inputSchema=schema("linode.mcp.v1.PlacementGroupCreateInput"),
+        input_schema=schema("linode.mcp.v1.PlacementGroupCreateInput"),
     ), Capability.Write
 
 
@@ -190,7 +190,7 @@ def create_linode_placement_group_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_delete",
         description="Deletes a placement group" + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.PlacementGroupDeleteInput"),
+        input_schema=schema("linode.mcp.v1.PlacementGroupDeleteInput"),
     ), Capability.Destroy
 
 
@@ -316,7 +316,7 @@ def create_linode_placement_group_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_update",
         description="Updates a placement group",
-        inputSchema=schema("linode.mcp.v1.PlacementGroupUpdateInput"),
+        input_schema=schema("linode.mcp.v1.PlacementGroupUpdateInput"),
     ), Capability.Write
 
 
@@ -375,7 +375,7 @@ def create_linode_placement_group_assign_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_assign",
         description="Assigns Linodes to a placement group",
-        inputSchema=schema("linode.mcp.v1.PlacementGroupAssignInput"),
+        input_schema=schema("linode.mcp.v1.PlacementGroupAssignInput"),
     ), Capability.Write
 
 
@@ -451,7 +451,7 @@ def create_linode_placement_group_unassign_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_placement_group_unassign",
         description="Unassigns Linodes from a placement group",
-        inputSchema=schema("linode.mcp.v1.PlacementGroupUnassignInput"),
+        input_schema=schema("linode.mcp.v1.PlacementGroupUnassignInput"),
     ), Capability.Write
 
 

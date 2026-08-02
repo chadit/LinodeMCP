@@ -37,7 +37,7 @@ def create_linode_nodebalancer_type_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_nodebalancer_type_list",
         description="Lists all available NodeBalancer types.",
-        inputSchema=schema("linode.mcp.v1.NodeBalancerTypeListInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerTypeListInput"),
     ), Capability.Read
 
 
@@ -48,7 +48,7 @@ def create_linode_nodebalancer_list_tool() -> tuple[Tool, Capability]:
         description=(
             "Lists all NodeBalancers on your account. Can filter by region or label."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerListInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerListInput"),
     ), Capability.Read
 
 
@@ -108,7 +108,7 @@ def create_linode_nodebalancer_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets detailed information about a specific NodeBalancer by its ID."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerGetInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerGetInput"),
     ), Capability.Read
 
 
@@ -137,7 +137,7 @@ def create_linode_nodebalancer_vpc_config_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_nodebalancer_vpc_config_get",
         description="Gets a VPC configuration for a NodeBalancer.",
-        inputSchema=schema("linode.mcp.v1.NodeBalancerVPCConfigGetInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerVPCConfigGetInput"),
     ), Capability.Read
 
 
@@ -146,7 +146,7 @@ def create_linode_nodebalancer_vpc_config_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_nodebalancer_vpc_config_list",
         description="Lists VPC configurations for a NodeBalancer.",
-        inputSchema=schema("linode.mcp.v1.NodeBalancerVPCConfigListInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerVPCConfigListInput"),
     ), Capability.Read
 
 
@@ -210,7 +210,7 @@ def create_linode_nodebalancer_stats_get_tool() -> tuple[Tool, Capability]:
             "Gets detailed statistics about a specific NodeBalancer by its ID, "
             "including connections and traffic data."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerStatsGetInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerStatsGetInput"),
     ), Capability.Read
 
 
@@ -237,7 +237,7 @@ def create_linode_nodebalancer_firewall_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_nodebalancer_firewall_list",
         description=("Lists firewalls assigned to a specific NodeBalancer by its ID."),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerFirewallListInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerFirewallListInput"),
     ), Capability.Read
 
 
@@ -273,7 +273,7 @@ def create_linode_nodebalancer_config_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_nodebalancer_config_list",
         description="Lists configs for a NodeBalancer.",
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigListInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigListInput"),
     ), Capability.Read
 
 
@@ -309,7 +309,7 @@ def create_linode_nodebalancer_config_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_nodebalancer_config_get",
         description="Gets a specific NodeBalancer config.",
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigGetInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigGetInput"),
     ), Capability.Read
 
 
@@ -339,7 +339,7 @@ def create_linode_nodebalancer_config_node_list_tool() -> tuple[Tool, Capability
     return Tool(
         name="linode_nodebalancer_config_node_list",
         description="Lists backend nodes in a NodeBalancer config.",
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeListInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigNodeListInput"),
     ), Capability.Read
 
 
@@ -383,7 +383,7 @@ def create_linode_nodebalancer_config_node_get_tool() -> tuple[Tool, Capability]
         description=(
             "Gets detailed information about a specific node in a NodeBalancer config."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeGetInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigNodeGetInput"),
     ), Capability.Read
 
 

@@ -37,7 +37,7 @@ def create_linode_vpc_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_list",
         description="Lists all VPCs. Can filter by label or region.",
-        inputSchema=schema("linode.mcp.v1.VpcListInput"),
+        input_schema=schema("linode.mcp.v1.VpcListInput"),
     ), Capability.Read
 
 
@@ -134,7 +134,7 @@ def create_linode_vpc_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_get",
         description="Gets details of a specific VPC by ID",
-        inputSchema=schema("linode.mcp.v1.VpcGetInput"),
+        input_schema=schema("linode.mcp.v1.VpcGetInput"),
     ), Capability.Read
 
 
@@ -161,7 +161,7 @@ def create_linode_ipv6_range_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_ipv6_range_get",
         description="Gets details of an IPv6 range",
-        inputSchema=schema("linode.mcp.v1.IPv6RangeGetInput"),
+        input_schema=schema("linode.mcp.v1.IPv6RangeGetInput"),
     ), Capability.Read
 
 
@@ -189,7 +189,7 @@ def create_linode_ipv6_range_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_ipv6_range_list",
         description="Lists all IPv6 ranges on the account",
-        inputSchema=schema("linode.mcp.v1.IPv6RangeListInput"),
+        input_schema=schema("linode.mcp.v1.IPv6RangeListInput"),
     ), Capability.Read
 
 
@@ -219,7 +219,7 @@ def create_linode_ipv6_pool_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_ipv6_pool_list",
         description="Lists all IPv6 pools on the account",
-        inputSchema=schema("linode.mcp.v1.IPv6PoolListInput"),
+        input_schema=schema("linode.mcp.v1.IPv6PoolListInput"),
     ), Capability.Read
 
 
@@ -249,7 +249,7 @@ def create_linode_vpc_ip_all_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_ip_all_list",
         description="Lists all VPC IP addresses across all VPCs",
-        inputSchema=schema("linode.mcp.v1.VPCIPAllListInput"),
+        input_schema=schema("linode.mcp.v1.VPCIPAllListInput"),
     ), Capability.Read
 
 
@@ -272,7 +272,7 @@ def create_linode_vpc_ip_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_ip_list",
         description="Lists IP addresses for a specific VPC",
-        inputSchema=schema("linode.mcp.v1.VPCIPListInput"),
+        input_schema=schema("linode.mcp.v1.VPCIPListInput"),
     ), Capability.Read
 
 
@@ -302,7 +302,7 @@ def create_linode_vpc_subnet_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_subnet_list",
         description="Lists subnets for a specific VPC",
-        inputSchema=schema("linode.mcp.v1.VpcSubnetListInput"),
+        input_schema=schema("linode.mcp.v1.VpcSubnetListInput"),
     ), Capability.Read
 
 
@@ -334,7 +334,7 @@ def create_linode_vpc_subnet_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_vpc_subnet_get",
         description="Gets details of a specific VPC subnet",
-        inputSchema=schema("linode.mcp.v1.VpcSubnetGetInput"),
+        input_schema=schema("linode.mcp.v1.VpcSubnetGetInput"),
     ), Capability.Read
 
 

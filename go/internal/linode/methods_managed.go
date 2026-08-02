@@ -29,7 +29,7 @@ func (c *Client) httpGetManagedLinodeSettings(ctx context.Context, linodeID int)
 		return nil, &NetworkError{Operation: "GetManagedLinodeSettings", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	var settings ManagedLinodeSettings
 	if err := c.handleResponse(resp, &settings); err != nil {
@@ -52,7 +52,7 @@ func (c *Client) httpGetManagedLinodeSettingsProto(ctx context.Context, linodeID
 		return nil, &NetworkError{Operation: "GetManagedLinodeSettings", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	settings := &linodev1.ManagedLinodeSettings{}
 	if err := c.handleProtoResponse(resp, settings); err != nil {
@@ -74,7 +74,7 @@ func (c *Client) httpGetManagedContact(ctx context.Context, contactID int) (*Man
 		return nil, &NetworkError{Operation: "GetManagedContact", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	var contact ManagedContact
 	if err := c.handleResponse(resp, &contact); err != nil {
@@ -96,7 +96,7 @@ func (c *Client) httpGetManagedContactProto(ctx context.Context, contactID int) 
 		return nil, &NetworkError{Operation: "GetManagedContact", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	contact := &linodev1.ManagedContact{}
 	if err := c.handleProtoResponse(resp, contact); err != nil {
@@ -118,7 +118,7 @@ func (c *Client) httpDeleteManagedContact(ctx context.Context, contactID int) er
 		return &NetworkError{Operation: "DeleteManagedContact", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -133,7 +133,7 @@ func (c *Client) httpGetManagedStats(ctx context.Context) (map[string]any, error
 		return nil, &NetworkError{Operation: "GetManagedStats", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	var stats map[string]any
 	if err := c.handleResponse(resp, &stats); err != nil {
@@ -157,7 +157,7 @@ func (c *Client) httpUpdateManagedLinodeSettingsProto(ctx context.Context, linod
 		return nil, &NetworkError{Operation: "UpdateManagedLinodeSettings", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	settings := &linodev1.ManagedLinodeSettings{}
 	if err := c.handleProtoResponse(resp, settings); err != nil {
@@ -179,7 +179,7 @@ func (c *Client) httpGetManagedService(ctx context.Context, serviceID int) (*Man
 		return nil, &NetworkError{Operation: "GetManagedService", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	var service ManagedService
 	if err := c.handleResponse(resp, &service); err != nil {
@@ -201,7 +201,7 @@ func (c *Client) httpGetManagedServiceProto(ctx context.Context, serviceID int) 
 		return nil, &NetworkError{Operation: "GetManagedService", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	service := &linodev1.ManagedService{}
 	if err := c.handleProtoResponse(resp, service); err != nil {
@@ -225,7 +225,7 @@ func (c *Client) httpUpdateManagedServiceProto(ctx context.Context, serviceID in
 		return nil, &NetworkError{Operation: "UpdateManagedService", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	service := &linodev1.ManagedService{}
 	if err := c.handleProtoResponse(resp, service); err != nil {
@@ -247,7 +247,7 @@ func (c *Client) httpDeleteManagedService(ctx context.Context, serviceID int) er
 		return &NetworkError{Operation: "DeleteManagedService", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -264,7 +264,7 @@ func (c *Client) httpDisableManagedService(ctx context.Context, serviceID int) e
 		return &NetworkError{Operation: "DisableManagedService", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -281,7 +281,7 @@ func (c *Client) httpEnableManagedService(ctx context.Context, serviceID int) er
 		return &NetworkError{Operation: "EnableManagedService", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	return c.handleResponse(resp, nil)
 }
@@ -330,7 +330,7 @@ func (c *Client) httpGetManagedIssueProto(ctx context.Context, issueID int) (*li
 		return nil, &NetworkError{Operation: "GetManagedIssue", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	issue := &linodev1.ManagedIssue{}
 	if err := c.handleProtoResponse(resp, issue); err != nil {
@@ -352,7 +352,7 @@ func (c *Client) httpCreateManagedServiceProto(ctx context.Context, request *Cre
 		return nil, &NetworkError{Operation: "CreateManagedService", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	service := &linodev1.ManagedService{}
 	if err := c.handleProtoResponse(resp, service); err != nil {
@@ -376,7 +376,7 @@ func (c *Client) httpUpdateManagedContactProto(ctx context.Context, contactID in
 		return nil, &NetworkError{Operation: "UpdateManagedContact", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	contact := &linodev1.ManagedContact{}
 	if err := c.handleProtoResponse(resp, contact); err != nil {
@@ -398,7 +398,7 @@ func (c *Client) httpCreateManagedContactProto(ctx context.Context, request *Cre
 		return nil, &NetworkError{Operation: "CreateManagedContact", Err: err}
 	}
 
-	defer drainClose(resp) // errcheck: body close is best-effort; all client methods use this pattern
+	defer drainClose(resp)
 
 	contact := &linodev1.ManagedContact{}
 	if err := c.handleProtoResponse(resp, contact); err != nil {

@@ -4248,7 +4248,6 @@ func TestLinodeObjectStorageObjectACLUpdateToolValidation(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			// Use empty cfg for confirm test (matches original test)
 			testCfg := cfg
 			if testCase.name == "confirm required" {
 				testCfg = &config.Config{}

@@ -48,7 +48,7 @@ def create_linode_lke_cluster_list_tool() -> tuple[Tool, Capability]:
         description=(
             "Lists all Linode Kubernetes Engine (LKE) clusters. Can filter by label."
         ),
-        inputSchema=schema("linode.mcp.v1.LKEClusterListInput"),
+        input_schema=schema("linode.mcp.v1.LKEClusterListInput"),
     ), Capability.Read
 
 
@@ -81,7 +81,7 @@ def create_linode_lke_cluster_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_cluster_get",
         description="Gets details of a specific LKE cluster by ID",
-        inputSchema=schema("linode.mcp.v1.LKEClusterGetInput"),
+        input_schema=schema("linode.mcp.v1.LKEClusterGetInput"),
     ), Capability.Read
 
 
@@ -110,7 +110,7 @@ def create_linode_lke_pool_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_pool_list",
         description="Lists node pools for an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKENodePoolListInput"),
+        input_schema=schema("linode.mcp.v1.LKENodePoolListInput"),
     ), Capability.Read
 
 
@@ -142,7 +142,7 @@ def create_linode_lke_pool_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_pool_get",
         description="Gets details of a specific node pool in an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKENodePoolGetInput"),
+        input_schema=schema("linode.mcp.v1.LKENodePoolGetInput"),
     ), Capability.Read
 
 
@@ -179,7 +179,7 @@ def create_linode_lke_node_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_node_get",
         description="Gets details of a specific node in an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKENodeGetInput"),
+        input_schema=schema("linode.mcp.v1.LKENodeGetInput"),
     ), Capability.Read
 
 
@@ -212,7 +212,7 @@ def create_linode_lke_kubeconfig_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_kubeconfig_get",
         description="Gets the kubeconfig for an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKEKubeconfigGetInput"),
+        input_schema=schema("linode.mcp.v1.LKEKubeconfigGetInput"),
     ), Capability.Read
 
 
@@ -242,7 +242,7 @@ def create_linode_lke_dashboard_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_dashboard_get",
         description="Gets the dashboard URL for an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKEDashboardGetInput"),
+        input_schema=schema("linode.mcp.v1.LKEDashboardGetInput"),
     ), Capability.Read
 
 
@@ -272,7 +272,7 @@ def create_linode_lke_api_endpoint_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_api_endpoint_list",
         description="Lists API endpoints for an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKEAPIEndpointListInput"),
+        input_schema=schema("linode.mcp.v1.LKEAPIEndpointListInput"),
     ), Capability.Read
 
 
@@ -304,7 +304,7 @@ def create_linode_lke_acl_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_acl_get",
         description="Gets the control plane ACL configuration for an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKEACLGetInput"),
+        input_schema=schema("linode.mcp.v1.LKEACLGetInput"),
     ), Capability.Read
 
 
@@ -332,7 +332,7 @@ def create_linode_lke_version_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_version_list",
         description="Lists available Kubernetes versions for LKE",
-        inputSchema=schema("linode.mcp.v1.LKEVersionListInput"),
+        input_schema=schema("linode.mcp.v1.LKEVersionListInput"),
     ), Capability.Read
 
 
@@ -357,7 +357,7 @@ def create_linode_lke_version_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_version_get",
         description="Gets details of a specific LKE Kubernetes version",
-        inputSchema=schema("linode.mcp.v1.LKEVersionGetInput"),
+        input_schema=schema("linode.mcp.v1.LKEVersionGetInput"),
     ), Capability.Read
 
 
@@ -387,7 +387,7 @@ def create_linode_lke_type_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_type_list",
         description="Lists available node types for LKE clusters",
-        inputSchema=schema("linode.mcp.v1.LKETypeListInput"),
+        input_schema=schema("linode.mcp.v1.LKETypeListInput"),
     ), Capability.Read
 
 
@@ -412,7 +412,7 @@ def create_linode_lke_tier_version_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_tier_version_list",
         description="Lists LKE Kubernetes versions for a tier",
-        inputSchema=schema("linode.mcp.v1.LKETierVersionListInput"),
+        input_schema=schema("linode.mcp.v1.LKETierVersionListInput"),
     ), Capability.Read
 
 
@@ -443,7 +443,7 @@ def create_linode_lke_tier_version_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_tier_version_get",
         description="Gets details of a specific LKE Kubernetes version for any tier",
-        inputSchema=schema("linode.mcp.v1.LKETierVersionGetInput"),
+        input_schema=schema("linode.mcp.v1.LKETierVersionGetInput"),
     ), Capability.Read
 
 

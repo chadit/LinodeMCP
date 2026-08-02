@@ -203,7 +203,7 @@ def create_linode_nodebalancer_firewall_update_tool() -> tuple[Tool, Capability]
             "Replaces the firewall assignments for a NodeBalancer. "
             "Pass an empty firewall_ids list to remove all assignments."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerFirewallUpdateInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerFirewallUpdateInput"),
     ), Capability.Write
 
 
@@ -265,7 +265,7 @@ def create_linode_nodebalancer_config_rebuild_tool() -> tuple[Tool, Capability]:
             "Rebuilds a NodeBalancer config. "
             "Requires confirm because active connections may be affected."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigRebuildInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigRebuildInput"),
     ), Capability.Write
 
 
@@ -329,7 +329,7 @@ def create_linode_nodebalancer_config_delete_tool() -> tuple[Tool, Capability]:
             "WARNING: This removes the config and its backend nodes."
             " Pass dry_run=true to preview without deleting."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigDeleteInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigDeleteInput"),
     ), Capability.Destroy
 
 
@@ -437,7 +437,7 @@ def create_linode_nodebalancer_create_tool() -> tuple[Tool, Capability]:
             "Creates a new NodeBalancer (load balancer). "
             "WARNING: Billing starts immediately."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerCreateInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerCreateInput"),
     ), Capability.Write
 
 
@@ -534,7 +534,7 @@ def create_linode_nodebalancer_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_nodebalancer_update",
         description="Updates an existing NodeBalancer.",
-        inputSchema=schema("linode.mcp.v1.NodeBalancerUpdateInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerUpdateInput"),
     ), Capability.Write
 
 
@@ -620,7 +620,7 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.NodeBalancerDeleteInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerDeleteInput"),
     ), Capability.Destroy
 
 
@@ -767,7 +767,7 @@ def create_linode_nodebalancer_config_node_create_tool() -> tuple[Tool, Capabili
             "Creates a backend node in a NodeBalancer config. "
             "Requires confirm because live backend routing may change."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeCreateInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigNodeCreateInput"),
     ), Capability.Write
 
 
@@ -828,7 +828,7 @@ def create_linode_nodebalancer_config_node_update_tool() -> tuple[Tool, Capabili
             "Updates a node in a NodeBalancer config. "
             "Requires confirm because live backend routing may change."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeUpdateInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigNodeUpdateInput"),
     ), Capability.Write
 
 
@@ -895,7 +895,7 @@ def create_linode_nodebalancer_config_node_delete_tool() -> tuple[Tool, Capabili
             "WARNING: This removes the backend node from the load balancer."
             " Pass dry_run=true to preview without deleting."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigNodeDeleteInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigNodeDeleteInput"),
     ), Capability.Destroy
 
 
@@ -976,7 +976,7 @@ def create_linode_nodebalancer_config_update_tool() -> tuple[Tool, Capability]:
             "Updates an existing NodeBalancer config. "
             "Requires confirm because live routing may be affected."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigUpdateInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigUpdateInput"),
     ), Capability.Write
 
 
@@ -1119,7 +1119,7 @@ def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:
             "Creates a NodeBalancer configuration. "
             "WARNING: This creates a new config on an existing NodeBalancer."
         ),
-        inputSchema=schema("linode.mcp.v1.NodeBalancerConfigCreateInput"),
+        input_schema=schema("linode.mcp.v1.NodeBalancerConfigCreateInput"),
     ), Capability.Write
 
 

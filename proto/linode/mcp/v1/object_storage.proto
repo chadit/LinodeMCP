@@ -87,7 +87,7 @@ message ObjectStorageKeyDeleteResponse {
 // ObjectStorageKeyGetInput is the input contract for linode_object_storage_key_get.
 message ObjectStorageKeyGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Object Storage key to retrieve (required).
   int32 key_id = 2;
 }
@@ -96,7 +96,7 @@ message ObjectStorageKeyGetInput {
 // linode_object_storage_key_list.
 message ObjectStorageKeyListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // ObjectStorageKeyCreateInput is the input contract for
@@ -105,7 +105,7 @@ message ObjectStorageKeyListInput {
 // validates it, so the schema type stays string.
 message ObjectStorageKeyCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Label for the access key (max 50 characters).
   string label = 2;
   // JSON array of bucket permissions: [{"bucket_name": "name", "region":
@@ -114,17 +114,17 @@ message ObjectStorageKeyCreateInput {
   optional string bucket_access = 3;
   // Must be set to true. The secret_key is only shown ONCE in the response.
   // Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // ObjectStorageKeyUpdateInput is the input contract for
 // linode_object_storage_key_update. key_id and confirm are required.
 message ObjectStorageKeyUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // ID of the access key to update.
   int32 key_id = 2;
   // New label for the access key (max 50 characters).
@@ -133,31 +133,31 @@ message ObjectStorageKeyUpdateInput {
   // "region", "permissions": "read_only|read_write"}].
   optional string bucket_access = 4;
   // Must be set to true to confirm key update. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // ObjectStorageKeyDeleteInput is the input contract for
 // linode_object_storage_key_delete. key_id and confirm are required.
 message ObjectStorageKeyDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // ID of the access key to revoke.
   int32 key_id = 2;
   // Must be set to true to confirm key revocation. This action is permanent.
   // Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // ObjectStorageBucket mirrors a Linode Object Storage bucket.
@@ -201,7 +201,7 @@ message ObjectStorageBucketDeleteResponse {
 // linode_object_storage_bucket_get.
 message ObjectStorageBucketGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (required).
   string region = 2;
   // The bucket label (required).
@@ -212,14 +212,14 @@ message ObjectStorageBucketGetInput {
 // linode_object_storage_bucket_list.
 message ObjectStorageBucketListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // ObjectStorageBucketByRegionListInput is the input contract for
 // linode_object_storage_bucket_by_region_list. region is required.
 message ObjectStorageBucketByRegionListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where buckets are located (e.g., 'us-east-1', 'us-southeast-1').
   string region = 2;
 }
@@ -230,7 +230,7 @@ message ObjectStorageBucketByRegionListInput {
 // string and the handler forwards it verbatim as an S3 query param.
 message ObjectStorageBucketObjectListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
   string region = 2;
   // The bucket label (name).
@@ -250,7 +250,7 @@ message ObjectStorageBucketObjectListInput {
 // linode_object_storage_bucket_create. label, region, and confirm are required.
 message ObjectStorageBucketCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Bucket label (3-63 chars, lowercase alphanumeric and hyphens, must
   // start/end with alphanumeric).
   string label = 2;
@@ -263,46 +263,46 @@ message ObjectStorageBucketCreateInput {
   optional bool cors_enabled = 5;
   // Must be set to true to confirm bucket creation. This operation incurs
   // billing charges. Ignored when dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // ObjectStorageBucketDeleteInput is the input contract for
 // linode_object_storage_bucket_delete. region, label, and confirm are required.
 message ObjectStorageBucketDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region of the bucket to delete.
   string region = 2;
   // Label of the bucket to delete.
   string label = 3;
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }
 
 // ObjectStorageCancelInput is the input contract for
 // linode_object_storage_cancel. confirm is required.
 message ObjectStorageCancelInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Must be set to true to confirm Object Storage cancellation. Ignored when
   // dry_run=true.
-  bool confirm = 2;
+  bool confirm = 2; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 3;
+  optional bool dry_run = 3; // system param
 }
 
 // ObjectStorageEndpoint mirrors a Linode Object Storage endpoint. s3_endpoint is
@@ -327,7 +327,7 @@ message ObjectStorageEndpointListResponse {
 // linode_object_storage_endpoint_list.
 message ObjectStorageEndpointListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -359,7 +359,7 @@ message ObjectStorageQuotaListResponse {
 // linode_object_storage_quota_list.
 message ObjectStorageQuotaListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // ObjectStorageQuotaGetInput is the input contract for
@@ -367,7 +367,7 @@ message ObjectStorageQuotaListInput {
 // an integer.
 message ObjectStorageQuotaGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The Object Storage quota ID to retrieve.
   string obj_quota_id = 2;
 }
@@ -387,7 +387,7 @@ message ObjectStorageQuotaUsage {
 // id, not an integer.
 message ObjectStorageQuotaUsageGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The Object Storage quota ID to retrieve usage for.
   string obj_quota_id = 2;
 }
@@ -403,7 +403,7 @@ message ObjectStorageTransfer {
 // linode_object_storage_transfer_get.
 message ObjectStorageTransferGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // PresignedURLResponse is the linode_object_storage_presigned_url_create response:
@@ -418,7 +418,7 @@ message PresignedURLResponse {
 // is capability Read despite the create verb, so it has no confirm/dry_run.
 message PresignedURLCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
   string region = 2;
   // The bucket label (name).

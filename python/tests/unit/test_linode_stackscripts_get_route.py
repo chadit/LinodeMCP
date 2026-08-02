@@ -118,8 +118,8 @@ def test_create_linode_stackscript_get_tool_schema() -> None:
 
     assert tool.name == "linode_stackscript_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["stackscript_id"]
-    assert "stackscript_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["stackscript_id"]
+    assert "stackscript_id" in tool.input_schema["properties"]
 
 
 @pytest.mark.asyncio

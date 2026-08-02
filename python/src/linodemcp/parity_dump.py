@@ -29,7 +29,7 @@ def dump_records() -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
 
     for entry in get_tool_registry():
-        schema: dict[str, Any] = entry.tool.inputSchema or {}
+        schema: dict[str, Any] = entry.tool.input_schema or {}
         properties: dict[str, Any] = schema.get("properties", {})
 
         params: dict[str, str] = {}

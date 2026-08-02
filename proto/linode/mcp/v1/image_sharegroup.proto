@@ -52,7 +52,7 @@ message ImageShareGroupListResponse {
 // ImageShareGroupGetInput is the input contract for linode_image_sharegroup_get.
 message ImageShareGroupGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The image share group ID (required).
   int32 sharegroup_id = 2;
 }
@@ -61,7 +61,7 @@ message ImageShareGroupGetInput {
 // linode_image_sharegroup_by_token_get.
 message ImageShareGroupByTokenGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The image share group token UUID (required).
   string token_uuid = 2;
 }
@@ -70,7 +70,7 @@ message ImageShareGroupByTokenGetInput {
 // linode_image_sharegroup_list.
 message ImageShareGroupListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -81,7 +81,7 @@ message ImageShareGroupListInput {
 // linode_image_sharegroup_by_image_list.
 message ImageShareGroupByImageListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Private image ID, for example private/12345.
   string image_id = 2;
   // Page of results to return (optional, minimum 1).
@@ -94,7 +94,7 @@ message ImageShareGroupByImageListInput {
 // linode_image_sharegroup_update. sharegroup_id and confirm are required.
 message ImageShareGroupUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The numeric image share group ID to update.
   int32 sharegroup_id = 2;
   // New descriptive name for the share group (optional).
@@ -103,38 +103,38 @@ message ImageShareGroupUpdateInput {
   optional string description = 4;
   // Must be set to true to confirm the share group update. Ignored when
   // dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // ImageShareGroupDeleteInput is the input contract for
 // linode_image_sharegroup_delete, a two-stage destroy.
 message ImageShareGroupDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The numeric ID of the image share group to delete.
   int32 sharegroup_id = 2;
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // ImageShareGroupImageListInput is the input contract for
 // linode_image_sharegroup_image_list.
 message ImageShareGroupImageListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Image share group ID.
   int32 sharegroup_id = 2;
   // Page of results to return (optional, minimum 1).
@@ -148,7 +148,7 @@ message ImageShareGroupImageListInput {
 // are required. image_id here is the shared image slug (a string).
 message ImageShareGroupImageUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The numeric image share group ID that contains the shared image.
   int32 sharegroup_id = 2;
   // The shared image ID, for example shared/1.
@@ -159,10 +159,10 @@ message ImageShareGroupImageUpdateInput {
   optional string description = 5;
   // Must be set to true to confirm the shared image update. Ignored when
   // dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // ImageShareGroupImageDeleteInput is the input contract for
@@ -171,17 +171,17 @@ message ImageShareGroupImageUpdateInput {
 // is the NUMERIC shared image ID, not the slug.
 message ImageShareGroupImageDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The numeric image share group ID.
   int32 sharegroup_id = 2;
   // The numeric shared image ID to remove from the group.
   int32 image_id = 3;
   // Must be set to true to confirm removing the shared image. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // ImageShareGroupImageSpec is one entry in the images array of
@@ -202,7 +202,7 @@ message ImageShareGroupImageSpec {
 // optional array of image specs.
 message ImageShareGroupCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The share group's descriptive name.
   string label = 2;
   // Detailed description for the share group (optional).
@@ -212,10 +212,10 @@ message ImageShareGroupCreateInput {
   repeated ImageShareGroupImageSpec images = 4;
   // Must be set to true to confirm image share group creation. Ignored when
   // dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // ImageShareGroupImageAddInput is the input contract for
@@ -225,7 +225,7 @@ message ImageShareGroupCreateInput {
 // enforces a non-empty images array).
 message ImageShareGroupImageAddInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The numeric image share group ID to add images to.
   int32 sharegroup_id = 2;
   // Images to add to the share group, each an id with optional
@@ -233,8 +233,8 @@ message ImageShareGroupImageAddInput {
   repeated ImageShareGroupImageSpec images = 3;
   // Must be set to true to confirm adding images to the share group. Ignored
   // when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

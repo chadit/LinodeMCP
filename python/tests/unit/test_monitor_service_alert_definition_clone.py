@@ -258,7 +258,7 @@ def test_clone_tool_is_exported_with_write_capability_and_contract_schema() -> N
     )
     assert tool.name == "linode_monitor_service_alert_definition_clone"
     assert capability is Capability.Write
-    assert set(tool.inputSchema["required"]) == {
+    assert set(tool.input_schema["required"]) == {
         "service_type",
         "alert_id",
         "label",

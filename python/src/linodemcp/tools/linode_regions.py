@@ -38,7 +38,7 @@ def create_linode_region_list_tool() -> tuple[Tool, Capability]:
             "Lists all available Linode regions (datacenters) "
             "with optional filtering by country or capabilities"
         ),
-        inputSchema=schema("linode.mcp.v1.RegionListInput"),
+        input_schema=schema("linode.mcp.v1.RegionListInput"),
     ), Capability.Read
 
 
@@ -95,7 +95,7 @@ def create_linode_region_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_region_get",
         description="Gets details for a specific Linode region",
-        inputSchema=schema("linode.mcp.v1.RegionGetInput"),
+        input_schema=schema("linode.mcp.v1.RegionGetInput"),
     ), Capability.Read
 
 
@@ -123,7 +123,7 @@ def create_linode_region_availability_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_region_availability_list",
         description="Lists compute instance type availability across Linode regions",
-        inputSchema=schema("linode.mcp.v1.RegionAvailabilityListInput"),
+        input_schema=schema("linode.mcp.v1.RegionAvailabilityListInput"),
     ), Capability.Read
 
 
@@ -150,7 +150,7 @@ def create_linode_region_availability_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets compute instance type availability for a specific Linode region"
         ),
-        inputSchema=schema("linode.mcp.v1.RegionAvailabilityGetInput"),
+        input_schema=schema("linode.mcp.v1.RegionAvailabilityGetInput"),
     ), Capability.Read
 
 

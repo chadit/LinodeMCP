@@ -52,7 +52,7 @@ def create_linode_object_storage_bucket_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_bucket_list",
         description="Lists all Object Storage buckets on your Linode account.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketListInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketListInput"),
     ), Capability.Read
 
 
@@ -79,7 +79,7 @@ def create_linode_object_storage_bucket_by_region_list_tool() -> tuple[
     return Tool(
         name="linode_object_storage_bucket_by_region_list",
         description="Lists Object Storage buckets in a region.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketByRegionListInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketByRegionListInput"),
     ), Capability.Read
 
 
@@ -112,7 +112,7 @@ def create_linode_object_storage_bucket_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_bucket_get",
         description="Gets details about a specific Object Storage bucket.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketGetInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketGetInput"),
     ), Capability.Read
 
 
@@ -149,7 +149,7 @@ def create_linode_object_storage_bucket_object_list_tool() -> tuple[Tool, Capabi
             "Lists objects in an Object Storage bucket. "
             "Supports pagination and filtering by prefix/delimiter."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketObjectListInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketObjectListInput"),
     ), Capability.Read
 
 
@@ -237,7 +237,7 @@ def create_linode_object_storage_type_list_tool() -> tuple[Tool, Capability]:
             "Lists Object Storage pricing tiers and capabilities. Shows pricing, "
             "storage limits, and transfer allowances."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageTypeListInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageTypeListInput"),
     ), Capability.Read
 
 
@@ -260,7 +260,7 @@ def create_linode_object_storage_endpoint_list_tool() -> tuple[Tool, Capability]
     return Tool(
         name="linode_object_storage_endpoint_list",
         description="Lists Object Storage endpoints available to your account.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageEndpointListInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageEndpointListInput"),
     ), Capability.Read
 
 
@@ -286,15 +286,12 @@ async def handle_linode_object_storage_endpoint_list(
     )
 
 
-# Phase 2: Read-Only Access Key & Transfer Tools
-
-
 def create_linode_object_storage_key_list_tool() -> tuple[Tool, Capability]:
     """Create the linode_object_storage_key_list tool."""
     return Tool(
         name="linode_object_storage_key_list",
         description="Lists all Object Storage access keys for the authenticated user.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyListInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageKeyListInput"),
     ), Capability.Read
 
 
@@ -358,7 +355,7 @@ def create_linode_object_storage_key_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_key_get",
         description="Gets details about a specific Object Storage access key by ID.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageKeyGetInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageKeyGetInput"),
     ), Capability.Read
 
 
@@ -387,7 +384,7 @@ def create_linode_object_storage_transfer_get_tool() -> tuple[Tool, Capability]:
         description=(
             "Gets Object Storage outbound data transfer usage for the current month."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageTransferGetInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageTransferGetInput"),
     ), Capability.Read
 
 
@@ -412,7 +409,7 @@ def create_linode_object_storage_quota_list_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_quota_list",
         description="Lists Object Storage quotas on your Linode account.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageQuotaListInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageQuotaListInput"),
     ), Capability.Read
 
 
@@ -437,7 +434,7 @@ def create_linode_object_storage_quota_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_object_storage_quota_get",
         description="Gets a single Object Storage quota by quota ID.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageQuotaGetInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageQuotaGetInput"),
     ), Capability.Read
 
 
@@ -477,7 +474,7 @@ def create_linode_object_storage_quota_usage_get_tool() -> tuple[Tool, Capabilit
     return Tool(
         name="linode_object_storage_quota_usage_get",
         description="Gets Object Storage quota usage data by quota ID.",
-        inputSchema=schema("linode.mcp.v1.ObjectStorageQuotaUsageGetInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageQuotaUsageGetInput"),
     ), Capability.Read
 
 
@@ -507,7 +504,7 @@ def create_linode_object_storage_bucket_access_get_tool() -> tuple[Tool, Capabil
         description=(
             "Gets the ACL and CORS settings for a specific Object Storage bucket."
         ),
-        inputSchema=schema("linode.mcp.v1.ObjectStorageBucketAccessGetInput"),
+        input_schema=schema("linode.mcp.v1.ObjectStorageBucketAccessGetInput"),
     ), Capability.Read
 
 

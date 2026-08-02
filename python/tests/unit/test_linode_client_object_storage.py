@@ -25,9 +25,6 @@ def _ok_response(body: Any) -> MagicMock:
     return response
 
 
-# --- Bucket + key + transfer reads -----------------------------------------
-
-
 async def test_list_object_storage_buckets_unwraps_data() -> None:
     """list_object_storage_buckets GETs /object-storage/buckets, unwraps data."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -173,9 +170,6 @@ async def test_get_object_storage_transfer_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- Bucket + key deletes --------------------------------------------------
-
-
 async def test_delete_object_storage_bucket_sends_delete() -> None:
     """delete_object_storage_bucket DELETEs the region/label bucket route."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -232,9 +226,6 @@ async def test_delete_object_storage_key_wraps_http_errors() -> None:
     await client.close()
 
 
-# --- Object ACL ------------------------------------------------------------
-
-
 async def test_get_object_acl_encodes_name_query() -> None:
     """get_object_acl GETs the object-acl route with the name query param."""
     client = Client("https://api.linode.com/v4", "test-token")
@@ -264,9 +255,6 @@ async def test_get_object_acl_wraps_http_errors() -> None:
 
     assert "GetObjectACL" in str(excinfo.value)
     await client.close()
-
-
-# --- Bucket SSL ------------------------------------------------------------
 
 
 async def test_get_bucket_ssl_returns_body() -> None:

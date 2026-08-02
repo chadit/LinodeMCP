@@ -56,8 +56,8 @@ def test_definition() -> None:
 
     assert tool.name == "linode_audit_export"
     assert capability == ProfileCapability.Meta
-    assert "format" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["format"]
+    assert "format" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["format"]
 
 
 async def test_writes_ndjson(

@@ -134,7 +134,7 @@ message NodeBalancerConfigWriteResponse {
 // linode_nodebalancer_config_get.
 message NodeBalancerConfigGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer (required).
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config to retrieve (required).
@@ -155,7 +155,7 @@ message NodeBalancerConfigDeleteResponse {
 // linode_nodebalancer_config_list.
 message NodeBalancerConfigListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose configs should be listed.
   int32 nodebalancer_id = 2;
   // Page number to retrieve.
@@ -185,7 +185,7 @@ message NodeBalancerConfigNodeItem {
 // linode_nodebalancer_config_create.
 message NodeBalancerConfigCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer that should receive a new config.
   int32 nodebalancer_id = 2;
   // The TCP port this config listens on, from 1 through 65535.
@@ -226,17 +226,17 @@ message NodeBalancerConfigCreateInput {
   repeated NodeBalancerConfigNodeItem nodes = 19;
   // Must be set to true to confirm NodeBalancer config creation. Ignored when
   // dry_run=true.
-  bool confirm = 20;
+  bool confirm = 20; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 21;
+  optional bool dry_run = 21; // system param
 }
 
 // NodeBalancerConfigUpdateInput is the input contract for
 // linode_nodebalancer_config_update.
 message NodeBalancerConfigUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose config should be updated.
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config to update.
@@ -276,10 +276,10 @@ message NodeBalancerConfigUpdateInput {
   optional int32 udp_check_port = 19;
   // Must be set to true to confirm NodeBalancer config update. Ignored when
   // dry_run=true.
-  bool confirm = 20;
+  bool confirm = 20; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 21;
+  optional bool dry_run = 21; // system param
 }
 
 // NodeBalancerConfigDeleteInput is the input contract for
@@ -287,31 +287,31 @@ message NodeBalancerConfigUpdateInput {
 // flow, so there is no mode/plan_id (matches the registered schema).
 message NodeBalancerConfigDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose config should be deleted.
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config to delete.
   int32 config_id = 3;
   // Must be set to true to confirm config deletion. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // NodeBalancerConfigRebuildInput is the input contract for
 // linode_nodebalancer_config_rebuild.
 message NodeBalancerConfigRebuildInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose config should be rebuilt.
   int32 nodebalancer_id = 2;
   // The ID of the NodeBalancer config to rebuild.
   int32 config_id = 3;
   // Must be set to true to confirm NodeBalancer config rebuild. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

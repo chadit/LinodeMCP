@@ -142,7 +142,7 @@ def test_create_linode_instance_interfaces_history_list_tool_schema() -> None:
 
     assert tool.name == "linode_instance_interface_history_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["linode_id"]
+    assert tool.input_schema["required"] == ["linode_id"]
 
 
 @pytest.mark.asyncio

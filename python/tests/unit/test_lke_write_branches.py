@@ -37,9 +37,6 @@ def _mock_client(**returns: Any) -> AsyncMock:
     return client
 
 
-# --- Cluster-update preview arms -------------------------------------------
-
-
 async def test_cluster_update_dry_run_previews_label_set_and_upgrade(
     sample_config: Config,
 ) -> None:
@@ -82,9 +79,6 @@ async def test_cluster_update_dry_run_skips_unchanged_version(
     assert not any("Kubernetes version" in s for s in body.get("side_effects", []))
 
 
-# --- ACL-update preview arms -----------------------------------------------
-
-
 async def test_acl_update_dry_run_previews_disabled(sample_config: Config) -> None:
     """Disabling the ACL previews that the API becomes reachable from anywhere."""
     client = _mock_client(get_lke_control_plane_acl={"enabled": True})
@@ -116,9 +110,6 @@ async def test_acl_update_dry_run_previews_reconfigure(sample_config: Config) ->
     assert body["side_effects"] == [
         "The cluster control-plane ACL address list is updated."
     ]
-
-
-# --- Cluster-create required-field guards ----------------------------------
 
 
 @pytest.mark.parametrize(

@@ -20,6 +20,7 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
+	"github.com/chadit/LinodeMCP/go/internal/toolschemas"
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 	"github.com/chadit/LinodeMCP/go/pkg/contracts"
 )
@@ -144,6 +145,30 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 
 	return srv, nil
+}
+
+// ValidateGeneratedSchemas rejects any tool still advertising the permissive
+// placeholder toolschemas.Schema returns for a name the proto contract does not
+// define. Such a tool would accept any arguments at all, so the server refuses
+// to start rather than serve it.
+//
+// The Python twin raises FileNotFoundError from its own schema loader, which
+// aborts startup at the same point. Failing here keeps the two servers behaving
+// the same way: neither starts, and neither serves a tool that validates
+// nothing.
+//
+// Exported because the failure it guards cannot be produced from a config. The
+// tool factories embed their schemas at compile time, so every catalog New can
+// build is already valid, and a test has to hand this a tool directly to prove
+// the check still bites.
+func ValidateGeneratedSchemas(list []mcp.Tool) error {
+	for i := range list {
+		if toolschemas.IsFallback(list[i].RawInputSchema) {
+			return fmt.Errorf("%w: %s", ErrSchemaNotGenerated, list[i].Name)
+		}
+	}
+
+	return nil
 }
 
 // builderToolEntries assembles the Phase 8 profile-builder tool
@@ -826,6 +851,10 @@ func entriesFromFactories(cfg *config.Config, factories []toolFactory) []toolEnt
 // configured profile is unknown or disabled. The error wraps the package's
 // sentinel via fmt.Errorf("...: %w", ...) so callers can match with
 // errors.Is.
+//
+// Finishes by running ValidateGeneratedSchemas over the staged catalog, so a
+// tool whose proto message has no generated schema fails startup instead of
+// registering something that accepts any arguments.
 func (s *Server) registerTools() error {
 	s.profileMu.Lock()
 	defer s.profileMu.Unlock()
@@ -858,7 +887,18 @@ func (s *Server) registerTools() error {
 		s.addTool(&entry.tool, entry.capability, entry.handler)
 	}
 
-	return nil
+	return ValidateGeneratedSchemas(s.entryTools())
+}
+
+// entryTools copies the mcp.Tool out of every staged entry so the schema check
+// can run over the exported type a test can also construct.
+func (s *Server) entryTools() []mcp.Tool {
+	list := make([]mcp.Tool, len(s.allEntries))
+	for i := range s.allEntries {
+		list[i] = s.allEntries[i].tool
+	}
+
+	return list
 }
 
 // resolveProfileLocked is the shared pre-flight that registerTools and
@@ -1335,14 +1375,12 @@ func databaseToolEntries(cfg *config.Config) []toolEntry {
 
 func vpcToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
-		// Read tools
 		tools.NewLinodeVPCListTool,
 		tools.NewLinodeVPCGetTool,
 		tools.NewLinodeVPCIPsListTool,
 		tools.NewLinodeVPCIPListTool,
 		tools.NewLinodeVPCSubnetListTool,
 		tools.NewLinodeVPCSubnetGetTool,
-		// Write tools
 		tools.NewLinodeVPCCreateTool,
 		tools.NewLinodeVPCUpdateTool,
 		tools.NewLinodeVPCDeleteTool,
@@ -1465,7 +1503,6 @@ func instanceActionToolFactories() []toolFactory {
 
 func lkeToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
-		// Read tools
 		tools.NewLinodeLKEClusterListTool,
 		tools.NewLinodeLKEClusterGetTool,
 		tools.NewLinodeLKEPoolListTool,
@@ -1480,7 +1517,6 @@ func lkeToolEntries(cfg *config.Config) []toolEntry {
 		tools.NewLinodeLKETypeListTool,
 		tools.NewLinodeLKETierVersionListTool,
 		tools.NewLinodeLKETierVersionGetTool,
-		// Write tools
 		tools.NewLinodeLKEClusterCreateTool,
 		tools.NewLinodeLKEClusterUpdateTool,
 		tools.NewLinodeLKEClusterDeleteTool,

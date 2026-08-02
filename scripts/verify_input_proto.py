@@ -16,8 +16,8 @@ Two independent classifiers do the static analysis (no factory is executed):
           generated = the factory reaches mcp.NewToolWithRawSchema /
           toolschemas.Schema. hand = it builds the schema from mcp.With* options.
   Python: linodemcp.tools._write_proto_classifier classify("input")
-          generated = the create_<tool>_tool factory sets inputSchema=schema(...).
-          hand = it passes a dict-literal inputSchema.
+          generated = the create_<tool>_tool factory sets input_schema=schema(...).
+          hand = it passes a dict-literal input_schema.
 
 A tool is a STRAGGLER when either side is not generated. The gate passes iff the
 current straggler set is a subset of docs/contracts/input-proto-baseline.txt: a NEW

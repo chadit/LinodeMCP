@@ -32,7 +32,7 @@ message ObjectStorageSSLDeleteResponse {
 // BucketSSLGetInput is the input contract for linode_object_storage_ssl_get.
 message BucketSSLGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (required).
   string region = 2;
   // The bucket label (required).
@@ -44,7 +44,7 @@ message BucketSSLGetInput {
 // and confirm are all required.
 message ObjectStorageSSLUploadInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
   string region = 2;
   // The bucket label (name).
@@ -55,31 +55,31 @@ message ObjectStorageSSLUploadInput {
   string private_key = 5;
   // Must be true to proceed. This uploads a certificate to the bucket. Ignored
   // when dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // ObjectStorageSSLDeleteInput is the input contract for
 // linode_object_storage_ssl_delete. region, label, and confirm are required.
 message ObjectStorageSSLDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
   string region = 2;
   // The bucket label (name).
   string label = 3;
   // Must be true to proceed. This removes the SSL certificate from the bucket.
   // Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }

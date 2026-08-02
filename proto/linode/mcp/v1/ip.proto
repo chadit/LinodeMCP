@@ -222,22 +222,22 @@ message ReservedIPDeleteResponse {
 // linode_networking_reserved_ip_create.
 message ReservedIPCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region in which to reserve the public IPv4 address.
   string region = 2;
   // Existing tags to apply to the reserved address.
   repeated string tags = 3;
   // Must be true to confirm reservation and billing. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // ReservedIPListInput is the input contract for
 // linode_networking_reserved_ip_list.
 message ReservedIPListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -248,7 +248,7 @@ message ReservedIPListInput {
 // linode_networking_reserved_ip_get.
 message ReservedIPGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Reserved public IPv4 address to retrieve.
   string address = 2;
 }
@@ -258,46 +258,46 @@ message ReservedIPGetInput {
 // repeated proto fields cannot appear in generated required arrays.
 message ReservedIPUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Reserved public IPv4 address whose tags will be replaced.
   string address = 2;
   // Complete replacement set of existing tags. An empty list removes all tags.
   repeated string tags = 3;
   // Must be true to confirm replacing tags. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // ReservedIPTypeListInput is the input contract for
 // linode_networking_reserved_ip_type_list.
 message ReservedIPTypeListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
 }
 
 // ReservedIPDeleteInput is the input contract for
 // linode_networking_reserved_ip_delete.
 message ReservedIPDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Reserved public IPv4 address to unreserve permanently.
   string address = 2;
   // Must be true to confirm unreserving the address. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by mode:"plan", supplied with mode:"apply".
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // IPv6PoolListInput is the input contract for linode_ipv6_pool_list.
 message IPv6PoolListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -307,7 +307,7 @@ message IPv6PoolListInput {
 // IPv6RangeListInput is the input contract for linode_ipv6_range_list.
 message IPv6RangeListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).
@@ -317,7 +317,7 @@ message IPv6RangeListInput {
 // IPv6RangeGetInput is the input contract for linode_ipv6_range_get.
 message IPv6RangeGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // IPv6 range prefix, for example 2001:0db8::/64.
   string range = 2;
 }
@@ -325,7 +325,7 @@ message IPv6RangeGetInput {
 // IPv6RangeCreateInput is the input contract for linode_ipv6_range_create.
 message IPv6RangeCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The IPv6 prefix length for the created range.
   int32 prefix_length = 2;
   // Optional Linode ID to assign the new range to.
@@ -333,29 +333,29 @@ message IPv6RangeCreateInput {
   // Optional route target for the new IPv6 range.
   optional string route_target = 4;
   // Must be true to confirm IPv6 range creation. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // IPv6RangeDeleteInput is the input contract for linode_ipv6_range_delete.
 message IPv6RangeDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // IPv6 range prefix, for example 2001:0db8::/64.
   string range = 2;
   // Must be true to confirm IPv6 range deletion. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // InstanceIPDeleteResponse is the id-echo envelope linode_instance_ip_delete
@@ -412,7 +412,7 @@ message InstanceIPsResponse {
 // IPAddressGetInput is the input contract for linode_networking_ip_get.
 message IPAddressGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The IP address to retrieve (required).
   string address = 2;
 }
@@ -421,7 +421,7 @@ message IPAddressGetInput {
 // shared IPAddress).
 message InstanceIPGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The IP address to retrieve (required).
@@ -431,7 +431,7 @@ message InstanceIPGetInput {
 // InstanceIPListInput is the input contract for linode_instance_ip_list.
 message InstanceIPListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
 }
@@ -442,7 +442,7 @@ message InstanceIPListInput {
 // non-optional here).
 message InstanceIPAllocateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The type of IP address to allocate: ipv4 or ipv6.
@@ -451,17 +451,17 @@ message InstanceIPAllocateInput {
   bool public = 4;
   // Must be true to confirm IP allocation. Additional IPs may incur charges.
   // Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // InstanceIPUpdateInput is the input contract for linode_instance_ip_update.
 // linode_id, address, rdns, and confirm are required.
 message InstanceIPUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The IP address to update (e.g. 203.0.113.1).
@@ -469,10 +469,10 @@ message InstanceIPUpdateInput {
   // The reverse DNS hostname to assign to the IP address.
   string rdns = 4;
   // Must be true to confirm the RDNS update. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // InstanceIPDeleteInput is the input contract for linode_instance_ip_delete,
@@ -480,29 +480,29 @@ message InstanceIPUpdateInput {
 // mode/plan_id drive the plan/apply flow.
 message InstanceIPDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
   // The IP address to remove (e.g. 203.0.113.1).
   string address = 3;
   // Must be true to confirm IP removal. This action is irreversible. Ignored
   // when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
   // plan_id re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }
 
 // NetworkingIPListInput is the input contract for linode_networking_ip_list.
 message NetworkingIPListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Skip IPv6 reverse DNS lookups (optional).
   optional bool skip_ipv6_rdns = 2;
 }
@@ -510,16 +510,16 @@ message NetworkingIPListInput {
 // IPAddressUpdateInput is the input contract for linode_networking_ip_update.
 message IPAddressUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The IPv4 or IPv6 address to update.
   string address = 2;
   // The reverse DNS value to set.
   string rdns = 3;
   // Must be true to confirm changing reverse DNS. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // IPAddressAllocateInput is the input contract for
@@ -527,7 +527,7 @@ message IPAddressUpdateInput {
 // so it stays a plain (non-optional) bool.
 message IPAddressAllocateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode that receives the new IP address.
   int32 linode_id = 2;
   // The type of IP address to allocate: ipv4 or ipv6.
@@ -536,10 +536,10 @@ message IPAddressAllocateInput {
   bool public = 4;
   // Must be true to confirm IP allocation. Additional IPs may incur charges.
   // Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // NetworkingIPAssignmentItem is one address-to-Linode binding submitted by the
@@ -560,16 +560,16 @@ message NetworkingIPAssignmentItem {
 // set is [confirm, region] (see the required-flag-loss log).
 message NetworkingIPAssignInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The region for the IP assignments.
   string region = 2;
   // Assignment objects, each with an address and the Linode that receives it.
   repeated NetworkingIPAssignmentItem assignments = 3;
   // Must be true to confirm IP reassignment. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // NetworkingIPv4AssignInput is the input contract for
@@ -578,16 +578,16 @@ message NetworkingIPAssignInput {
 // level but drops from the generated required set (see the loss log).
 message NetworkingIPv4AssignInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The region for the IPv4 assignments.
   string region = 2;
   // Assignment objects, each with an address and the Linode that receives it.
   repeated NetworkingIPAssignmentItem assignments = 3;
   // Must be true to confirm IPv4 reassignment. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // NetworkingIPShareInput is the input contract for linode_networking_ip_share.
@@ -596,7 +596,7 @@ message NetworkingIPv4AssignInput {
 // [confirm, linode_id] (see the required-flag-loss log).
 message NetworkingIPShareInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the primary Linode that receives the shared IP addresses.
   int32 linode_id = 2;
   // IP addresses or IPv6 ranges to share. Use [] to remove all shared IP
@@ -604,10 +604,10 @@ message NetworkingIPShareInput {
   repeated string ips = 3;
   // Must be true to confirm changing shared IP assignments. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // NetworkingIPv4ShareInput is the input contract for
@@ -616,7 +616,7 @@ message NetworkingIPShareInput {
 // the loss log).
 message NetworkingIPv4ShareInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the primary Linode that receives the shared IP addresses.
   int32 linode_id = 2;
   // IP addresses or IPv6 ranges to share. Use [] to remove all shared IP
@@ -624,8 +624,8 @@ message NetworkingIPv4ShareInput {
   repeated string ips = 3;
   // Must be true to confirm changing shared IP assignments. Ignored when
   // dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

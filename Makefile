@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes list-envelope route-evidence env-parity cli-surface docs-links metrics-surface coverage-floor diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes list-envelope route-evidence system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -36,6 +36,14 @@ $(PROTO_STAMP): $(PROTO_SRCS)
 	@# generated tree imports as one module tree under linodemcp.genpb (no top-level `linode`
 	@# on sys.path, no duplicate descriptor registration).
 	perl -pi -e 's{^from linode\.mcp\.v1 import }{from linodemcp.genpb.linode.mcp.v1 import }' python/src/linodemcp/genpb/linode/mcp/v1/*_pb2.py python/src/linodemcp/genpb/linode/mcp/v1/*_pb2.pyi
+	@# protoc emits no __init__.py, which leaves genpb a namespace package while every
+	@# other subpackage under linodemcp is a regular one. mypy derives a module name by
+	@# walking up only while __init__.py exists, so without these it names audit_pb2 as a
+	@# top-level module and then reports linodemcp.genpb.linode.mcp.v1 has no such
+	@# attribute. `make check` hides it by passing src/ and tests/ together from python/;
+	@# any narrower invocation (a shared lint script, an editor, one file) hits it. buf
+	@# runs with clean: true and wipes the tree, so this has to be regenerated here.
+	find python/src/linodemcp/genpb -type d -exec touch {}/__init__.py \;
 	@# proto enums carry an `unspecified = 0` zero-value sentinel (proto3 requires one);
 	@# strip it from the generated JSON Schema enum arrays so clients see only real API
 	@# values. Runs over both schema dirs to keep Go and Python schemas byte-identical.
@@ -60,7 +68,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes list-envelope route-evidence env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes list-envelope route-evidence system-params env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -269,6 +277,18 @@ list-envelope:
 route-evidence:
 	@python3 scripts/verify_route_evidence.py
 
+## system-params: Verify every server-injected proto input field is marked
+# Offline source scan of proto/linode/mcp/v1/. The system params (environment,
+# confirm, dry_run, and the two-stage mode/plan_id) are the server's own
+# plumbing, indistinguishable in the proto from the Linode API params beside
+# them. The gate pins them to a trailing `// system param` marker, which stays
+# out of the generated JSON Schema, so the descriptions MCP clients see do not
+# move. The name-and-type set lives in docs/contracts/system-params.txt, and
+# both directions are hard failures: an unmarked system param, and a marker on
+# a field the contract does not name.
+system-params:
+	@python3 scripts/verify_system_params.py
+
 ## pagination: Verify list tools paginate when their spec route paginates
 # Offline: judges the tool surface against the reviewed snapshot in
 # docs/contracts/api-pagination-baseline.txt (sync-pagination owns that).
@@ -340,7 +360,16 @@ diff-coverage:
 lint: proto fmt-check go-lint python-lint scripts-lint betterleaks trivy actionlint
 
 ## test: Run all tests (go-test + python-test)
-test: proto go-test python-test
+test: proto go-test python-test coverage-report
+
+## coverage-report: Print one coverage line per registered language
+# Each language's suite reports in its own format and neither leaves a single
+# readable number, so this collapses them into one block at the end. Scope
+# comes from docs/contracts/languages.txt, so a newly registered language
+# shows up here without touching this target. Reporting only: the
+# coverage-floor gate in `make check` owns pass/fail.
+coverage-report:
+	@python3 scripts/report_coverage.py
 
 ## install-hooks: Install commit and push hooks from .pre-commit-config.yaml
 install-hooks:

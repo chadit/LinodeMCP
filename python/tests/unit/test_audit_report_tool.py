@@ -64,8 +64,8 @@ def test_definition() -> None:
 
     assert tool.name == "linode_audit_report"
     assert capability == ProfileCapability.Meta
-    assert "name" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["name"]
+    assert "name" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["name"]
 
 
 async def test_unknown_report_returns_error() -> None:

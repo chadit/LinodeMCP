@@ -57,7 +57,7 @@ def test_definition() -> None:
     assert tool.name == "linode_audit_recent"
     assert capability == ProfileCapability.Meta
 
-    props = tool.inputSchema["properties"]
+    props = tool.input_schema["properties"]
     expected_params = (
         "limit",
         "since",

@@ -27,7 +27,7 @@ def create_linode_beta_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_beta_get",
         description="Gets details for an available Linode Beta program.",
-        inputSchema=schema("linode.mcp.v1.BetaGetInput"),
+        input_schema=schema("linode.mcp.v1.BetaGetInput"),
     ), Capability.Read
 
 

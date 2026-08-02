@@ -15,7 +15,6 @@ from datetime import timedelta
 
 from linodemcp.profiles import Capability
 
-# How long a plan stays valid before it expires.
 DEFAULT_PLAN_TTL = timedelta(minutes=5)
 
 _ZERO = timedelta(0)

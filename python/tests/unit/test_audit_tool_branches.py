@@ -78,9 +78,6 @@ def _write_log(tmp_path: Path, events: list[Event]) -> None:
     (audit_dir / "audit.log").write_text(body, encoding="utf-8")
 
 
-# --- export tool ---------------------------------------------------------
-
-
 async def test_export_rejects_malformed_since() -> None:
     """A non-RFC-3339 since surfaces as an error, not a written file."""
     result = await handle_linode_audit_export({"format": "json", "since": "garbage"})
@@ -111,9 +108,6 @@ async def test_export_caps_record_count_to_max_records(
 
     payload = json.loads(result[0].text)
     assert payload["record_count"] == 5
-
-
-# --- report tool ---------------------------------------------------------
 
 
 async def test_report_empty_name_errors() -> None:
@@ -297,9 +291,6 @@ async def test_report_since_offset_excludes_old_events(
     result = await handle_linode_audit_report({"name": "recent-1h"})
     payload = json.loads(result[0].text)
     assert payload["total_events"] == 0, "events older than an hour ago are excluded"
-
-
-# --- summary tool --------------------------------------------------------
 
 
 async def test_summary_rejects_malformed_since() -> None:

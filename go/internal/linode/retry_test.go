@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/chadit/LinodeMCP/go/internal/linode"
@@ -176,64 +177,119 @@ func TestRetryableClientExhaustsRetries(t *testing.T) {
 
 // TestRetryableClientContextCancelStopsRetry verifies that canceling the
 // context stops the retry loop before all retries are exhausted.
+//
+// Driven on synctest's virtual clock. The old shape raced a 10ms timer against
+// the retry loop and could only assert "fewer than 6 attempts happened", which
+// a cancel landing anywhere in a wide window would satisfy. Here each attempt
+// is stepped deliberately: synctest.Wait parks the loop on its backoff, the
+// clock advances exactly one backoff to release the next attempt, and the
+// cancel lands at a known point. That turns a range check into an exact count.
+//
+// The server closes each connection so the transport does not park a read loop
+// on a live socket inside the bubble; see TestRetryClampsRetryAfterToMaxDelay
+// for the full reason.
 func TestRetryableClientContextCancelStopsRetry(t *testing.T) {
 	t.Parallel()
+
+	// First backoff is BaseDelay * BackoffFactor^0.
+	const firstBackoff = 50 * time.Millisecond
 
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Connection", "close")
 		callCount.Add(1)
 		w.WriteHeader(http.StatusInternalServerError)
 		writeRetryTestResponse(t, w, `{"errors":[{"reason":"failing"}]}`)
 	}))
 	defer srv.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
 
-	client := linode.NewClient(
-		srv.URL, "token", nil,
-		linode.WithMaxRetries(5),
-		linode.WithBaseDelay(50*time.Millisecond),
-		linode.WithMaxDelay(100*time.Millisecond),
-		linode.WithBackoffFactor(2.0),
-		linode.WithJitter(false),
-	)
+		client := linode.NewClient(
+			srv.URL, "token", nil,
+			linode.WithMaxRetries(5),
+			linode.WithBaseDelay(firstBackoff),
+			linode.WithMaxDelay(100*time.Millisecond),
+			linode.WithBackoffFactor(2.0),
+			linode.WithJitter(false),
+		)
 
-	done := make(chan struct{})
+		result := make(chan error, 1)
 
-	go func() {
-		defer close(done)
+		go func() {
+			_, err := client.GetProfile(ctx)
+			result <- err
+		}()
 
-		select {
-		case <-time.After(10 * time.Millisecond):
-			cancel()
-		case <-ctx.Done():
+		// The first attempt has run and the loop is parked on its backoff.
+		synctest.Wait()
+
+		if got := callCount.Load(); got != int32(1) {
+			t.Fatalf("callCount after the first attempt = %v, want %v", got, int32(1))
 		}
-	}()
 
-	_, err := client.GetProfile(ctx)
-	if err == nil {
-		t.Fatal("expected an error, got nil")
-	}
-	// Should have been canceled before exhausting all retries.
-	if callCount.Load() >= int32(6) {
-		t.Errorf("callCount.Load() = %v, want < %v", callCount.Load(), int32(6))
-	}
+		// Releasing exactly one backoff admits exactly one more attempt.
+		time.Sleep(firstBackoff)
+		synctest.Wait()
 
-	<-done
+		if got := callCount.Load(); got != int32(2) {
+			t.Fatalf("callCount after one backoff = %v, want %v", got, int32(2))
+		}
+
+		// Cancel while the loop sits on the second backoff. It has budget for
+		// five retries, so without the cancellation check it would keep going.
+		cancelledAt := time.Now()
+
+		cancel()
+		synctest.Wait()
+
+		err := <-result
+		if err == nil {
+			t.Fatal("expected an error, got nil")
+		}
+
+		// The backoff select has to wake on ctx.Done rather than ride the timer
+		// out, so no virtual time may pass between the cancel and the return.
+		// Counting server hits alone would not prove this: once the context is
+		// dead the per-request context also aborts each attempt, so the loop
+		// could spin through its whole retry budget without the server ever
+		// seeing another call. Elapsed virtual time is what separates "stopped"
+		// from "kept waiting and failed fast".
+		if waited := time.Since(cancelledAt); waited != 0 {
+			t.Errorf("retry loop waited %v after cancel, want it to return without further backoff", waited)
+		}
+
+		// No attempt may follow the cancel. The old bound allowed anything
+		// under six; this admits only the two attempts that were actually
+		// released.
+		if got := callCount.Load(); got != int32(2) {
+			t.Errorf("callCount after cancel = %v, want %v", got, int32(2))
+		}
+	})
 }
 
 // TestRetryHonorsRetryAfterHint verifies that when the API returns 429 with
 // a Retry-After hint, the retry loop waits that long instead of running its
 // own exponential backoff. The hint is set well above BaseDelay so a retry
-// that ran the default backoff would clearly fail this timing assertion.
+// that ran the default backoff lands nowhere near the expected wait.
+//
+// Measured on synctest's virtual clock for the reasons spelled out on
+// TestRetryClampsRetryAfterToMaxDelay, including why the server closes each
+// connection. Virtual time turns the old ">= 900ms, allowing for slop" bound
+// into the exact hint, and costs no real second of suite runtime to observe it.
 func TestRetryHonorsRetryAfterHint(t *testing.T) {
 	t.Parallel()
+
+	const retryAfterHint = time.Second
 
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Connection", "close")
+
 		count := callCount.Add(1)
 		if count == 1 {
 			w.Header().Set("Retry-After", "1")
@@ -251,47 +307,68 @@ func TestRetryHonorsRetryAfterHint(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(
-		srv.URL, "token", nil,
-		linode.WithMaxRetries(2),
-		linode.WithBaseDelay(1*time.Millisecond),
-		linode.WithMaxDelay(5*time.Second),
-		linode.WithBackoffFactor(2.0),
-		linode.WithJitter(false),
-	)
+	synctest.Test(t, func(t *testing.T) {
+		client := linode.NewClient(
+			srv.URL, "token", nil,
+			linode.WithMaxRetries(2),
+			linode.WithBaseDelay(1*time.Millisecond),
+			linode.WithMaxDelay(5*time.Second),
+			linode.WithBackoffFactor(2.0),
+			linode.WithJitter(false),
+		)
 
-	start := time.Now()
-	profile, err := client.GetProfile(t.Context())
-	elapsed := time.Since(start)
+		start := time.Now()
+		profile, err := client.GetProfile(t.Context())
+		elapsed := time.Since(start)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-	if profile.Username != managedServiceStatus {
-		t.Errorf("profile.Username = %v, want %v", profile.Username, managedServiceStatus)
-	}
+		if profile.Username != managedServiceStatus {
+			t.Errorf("profile.Username = %v, want %v", profile.Username, managedServiceStatus)
+		}
 
-	if callCount.Load() != int32(2) {
-		t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
-	}
-	// Retry-After of 1s honored; pure exponential with BaseDelay=1ms would
-	// have completed in microseconds. >=900ms tolerates timer slop while
-	// clearly distinguishing from the backoff path.
-	if elapsed < 900*time.Millisecond {
-		t.Errorf("elapsed = %v, want >= %v", elapsed, 900*time.Millisecond)
-	}
+		if callCount.Load() != int32(2) {
+			t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+		}
+
+		// The hint sits well under MaxDelay, so it is honored verbatim. The
+		// exponential path with BaseDelay=1ms would land at 1ms instead, and
+		// on virtual time that difference is exact rather than approximate.
+		if elapsed != retryAfterHint {
+			t.Errorf("elapsed = %v, want exactly %v", elapsed, retryAfterHint)
+		}
+	})
 }
 
 // TestRetryClampsRetryAfterToMaxDelay verifies that an absurdly large
 // Retry-After hint is clamped to MaxDelay so a hostile or buggy server
 // can't make us wait forever.
+//
+// The wait is measured on synctest's virtual clock rather than the wall clock.
+// The retry loop waits on time.After, which the bubble virtualizes, and the two
+// real HTTP round trips cost no virtual time at all. That turns the clamp into
+// an exact equality instead of a "fast enough" ceiling that a loaded machine
+// can miss for reasons that have nothing to do with the clamp.
+//
+// Two details make the bubble work. The server is started outside it, so the
+// server's own goroutines stay out. And the server closes each connection,
+// because the client transport otherwise parks a persistConn read loop on a
+// live socket inside the bubble: a goroutine blocked on real network I/O is not
+// durably blocked, so the virtual clock would never advance and the retry wait
+// would hang instead of completing. Connection teardown leaves every bubble
+// goroutine either running or durably blocked, which is what lets time move.
 func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 	t.Parallel()
+
+	const maxDelay = 50 * time.Millisecond
 
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Connection", "close")
+
 		count := callCount.Add(1)
 		if count == 1 {
 			w.Header().Set("Retry-After", "3600")
@@ -309,27 +386,36 @@ func TestRetryClampsRetryAfterToMaxDelay(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := linode.NewClient(
-		srv.URL, "token", nil,
-		linode.WithMaxRetries(1),
-		linode.WithBaseDelay(1*time.Millisecond),
-		linode.WithMaxDelay(50*time.Millisecond),
-		linode.WithBackoffFactor(2.0),
-		linode.WithJitter(false),
-	)
+	synctest.Test(t, func(t *testing.T) {
+		client := linode.NewClient(
+			srv.URL, "token", nil,
+			linode.WithMaxRetries(1),
+			linode.WithBaseDelay(1*time.Millisecond),
+			linode.WithMaxDelay(maxDelay),
+			linode.WithBackoffFactor(2.0),
+			linode.WithJitter(false),
+		)
 
-	start := time.Now()
-	_, err := client.GetProfile(t.Context())
-	elapsed := time.Since(start)
+		start := time.Now()
+		_, err := client.GetProfile(t.Context())
+		elapsed := time.Since(start)
 
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// 3600s hint must be clamped to 50ms MaxDelay; 200ms ceiling allows
-	// generous CI headroom without admitting an unclamped wait.
-	if elapsed >= 200*time.Millisecond {
-		t.Errorf("elapsed = %v, want < %v", elapsed, 200*time.Millisecond)
-	}
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if callCount.Load() != int32(2) {
+			t.Errorf("callCount.Load() = %v, want %v", callCount.Load(), int32(2))
+		}
+
+		// The 3600s hint has to come back as exactly MaxDelay. On virtual time
+		// that is an equality, not a ceiling: an unclamped wait, a clamp to some
+		// other bound, or the exponential-backoff path running instead of the
+		// hint path all produce a different number and all fail here.
+		if elapsed != maxDelay {
+			t.Errorf("elapsed = %v, want exactly %v", elapsed, maxDelay)
+		}
+	})
 }
 
 // TestRetryableClientListInstanceConfigsRetries verifies that ListInstanceConfigs

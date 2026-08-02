@@ -58,7 +58,7 @@ message ImageListResponse {
 // ImageGetInput is the input contract for linode_image_get.
 message ImageGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The image ID to retrieve (required), such as linode/debian11 or private/123.
   string image_id = 2;
 }
@@ -68,7 +68,7 @@ message ImageGetInput {
 // matching the hand-built schema which advertises them as strings.
 message ImageListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Filter images by type (manual, automatic).
   optional string type = 2;
   // Filter by public status (true, false).
@@ -85,7 +85,7 @@ message ImageListInput {
 // confirm are required.
 message ImageCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode disk to image.
   int32 disk_id = 2;
   // Short label for the new image (optional).
@@ -97,17 +97,17 @@ message ImageCreateInput {
   // Tag strings to apply to the image (optional).
   repeated string tags = 6;
   // Must be set to true to confirm image creation. Ignored when dry_run=true.
-  bool confirm = 7;
+  bool confirm = 7; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8;
+  optional bool dry_run = 8; // system param
 }
 
 // ImageUploadInput is the input contract for linode_image_upload. label,
 // region, and confirm are required.
 message ImageUploadInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The custom image label.
   string label = 2;
   // The region for the image upload.
@@ -119,17 +119,17 @@ message ImageUploadInput {
   // Tag strings to apply to the image (optional).
   repeated string tags = 6;
   // Must be set to true to confirm the image upload. Ignored when dry_run=true.
-  bool confirm = 7;
+  bool confirm = 7; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8;
+  optional bool dry_run = 8; // system param
 }
 
 // ImageUpdateInput is the input contract for linode_image_update. image_id and
 // confirm are required.
 message ImageUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The editable image ID, for example private/12345 or shared/123.
   string image_id = 2;
   // New image label (optional).
@@ -139,31 +139,31 @@ message ImageUpdateInput {
   // Tag strings to apply to the image (optional).
   repeated string tags = 5;
   // Must be set to true to confirm the image update. Ignored when dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }
 
 // ImageDeleteInput is the input contract for linode_image_delete, a two-stage
 // destroy: image_id and confirm are required, mode/plan_id drive plan/apply.
 message ImageDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The image ID to delete, for example private/12345.
   string image_id = 2;
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // ImageReplicateInput is the input contract for linode_image_replicate.
@@ -172,14 +172,14 @@ message ImageDeleteInput {
 // required flag is dropped (the handler still enforces a non-empty region set).
 message ImageReplicateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Image ID to replicate, such as private/123.
   string image_id = 2;
   // Region slug strings to keep or replicate the image to. Required at runtime.
   repeated string regions = 3;
   // Must be set to true to confirm image replication. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }

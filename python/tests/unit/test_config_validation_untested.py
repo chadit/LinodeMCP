@@ -76,9 +76,6 @@ def _valid_config() -> Config:
     )
 
 
-# --- Config.select_environment / get_linode_environment ------------------
-
-
 def test_select_environment_falls_back_to_first_when_no_default() -> None:
     """With no matching name and no ``default`` key, selection returns the
     first configured environment rather than raising."""
@@ -100,9 +97,6 @@ def test_get_linode_environment_without_environments_raises() -> None:
         match="no provider environments configured",
     ):
         cfg.get_linode_environment("default")
-
-
-# --- validate_path -------------------------------------------------------
 
 
 def test_validate_path_empty_raises() -> None:
@@ -154,9 +148,6 @@ def test_validate_path_resolve_failure_raises(
         validate_path(tmp_path / "config.yml")
 
 
-# --- get_config_dir / get_config_path ------------------------------------
-
-
 def test_get_config_dir_custom_valid_returns_parent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -202,9 +193,6 @@ def test_get_config_path_prefers_existing_json(
     assert get_config_path() == tmp_path / "config.json"
 
 
-# --- _parse_config_data --------------------------------------------------
-
-
 def test_load_json_prefixed_yaml_flow_falls_back_to_yaml(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -233,9 +221,6 @@ def test_load_yaml_list_is_malformed(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigMalformedError, match="must be a YAML mapping"):
         load_from_file(cfg_file)
-
-
-# --- _apply_environment_overrides / _apply_audit_overrides ---------------
 
 
 def test_env_token_override_sets_default_label(
@@ -286,9 +271,6 @@ def test_load_audit_retention_env_override_skips_sqlite(
 
     assert cfg.audit.retention_days == 5
     assert cfg.audit.sqlite.enabled is False
-
-
-# --- validate_config -----------------------------------------------------
 
 
 def test_validate_config_empty_server_name_raises() -> None:
@@ -357,9 +339,6 @@ def test_validate_reports_status_and_status_in_conflict() -> None:
         match="sets both status and status_in",
     ):
         validate_config(cfg)
-
-
-# --- profile/override coercion helpers -----------------------------------
 
 
 def test_load_profile_string_tuples_filter_and_default(
@@ -446,9 +425,6 @@ def test_load_builtin_overrides_skip_invalid_entries(
     assert overrides["default-off"].disabled is False
 
 
-# --- _data_to_config deprecation warning ---------------------------------
-
-
 def test_load_warns_on_deprecated_prometheus_keys(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -474,9 +450,6 @@ def test_load_warns_on_deprecated_prometheus_keys(
     assert cfg.observability.metrics.prometheus.path == "/metrics"
 
 
-# --- parse_duration_seconds ----------------------------------------------
-
-
 def test_parse_duration_empty_raises() -> None:
     """A blank duration (after stripping) is rejected."""
     with pytest.raises(ValueError, match="empty duration"):
@@ -498,9 +471,6 @@ def test_parse_duration_gap_raises() -> None:
     """A gap between tokens leaves an unparsed tail and is rejected."""
     with pytest.raises(ValueError, match="invalid duration"):
         parse_duration_seconds("1h 2m")
-
-
-# --- load_from_file / load -----------------------------------------------
 
 
 def test_load_from_file_dangerous_path_raises() -> None:
@@ -541,9 +511,6 @@ environments:
     cfg = load()
 
     assert cfg.environments["default"].linode.token == "tok"
-
-
-# --- write_atomic / exists -----------------------------------------------
 
 
 def test_write_atomic_json_serializes_json(

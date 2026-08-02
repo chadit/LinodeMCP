@@ -39,7 +39,7 @@ def create_linode_lke_cluster_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_cluster_create",
         description="Creates a new LKE (Kubernetes) cluster",
-        inputSchema=schema("linode.mcp.v1.LKEClusterCreateInput"),
+        input_schema=schema("linode.mcp.v1.LKEClusterCreateInput"),
     ), Capability.Write
 
 
@@ -133,7 +133,7 @@ def create_linode_lke_cluster_update_tool() -> tuple[Tool, Capability]:
             "Updates an existing LKE cluster."
             " Pass dry_run=true to preview without modifying."
         ),
-        inputSchema=schema("linode.mcp.v1.LKEClusterUpdateInput"),
+        input_schema=schema("linode.mcp.v1.LKEClusterUpdateInput"),
     ), Capability.Write
 
 
@@ -228,7 +228,7 @@ def create_linode_lke_cluster_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.LKEClusterDeleteInput"),
+        input_schema=schema("linode.mcp.v1.LKEClusterDeleteInput"),
     ), Capability.Destroy
 
 
@@ -371,7 +371,7 @@ def create_linode_lke_cluster_recycle_tool() -> tuple[Tool, Capability]:
             "Recycles all nodes in an LKE cluster."
             " Pass dry_run=true to preview without recycling."
         ),
-        inputSchema=schema("linode.mcp.v1.LKEClusterRecycleInput"),
+        input_schema=schema("linode.mcp.v1.LKEClusterRecycleInput"),
     ), Capability.Destroy
 
 
@@ -429,7 +429,7 @@ def create_linode_lke_cluster_regenerate_tool() -> tuple[Tool, Capability]:
             "Regenerates the service token for an LKE cluster."
             " Pass dry_run=true to preview without regenerating."
         ),
-        inputSchema=schema("linode.mcp.v1.LKEClusterRegenerateInput"),
+        input_schema=schema("linode.mcp.v1.LKEClusterRegenerateInput"),
     ), Capability.Destroy
 
 
@@ -488,7 +488,7 @@ def create_linode_lke_pool_create_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_pool_create",
         description="Creates a new node pool in an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKENodePoolCreateInput"),
+        input_schema=schema("linode.mcp.v1.LKENodePoolCreateInput"),
     ), Capability.Write
 
 
@@ -576,7 +576,7 @@ def create_linode_lke_pool_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_lke_pool_update",
         description="Updates a node pool in an LKE cluster",
-        inputSchema=schema("linode.mcp.v1.LKENodePoolUpdateInput"),
+        input_schema=schema("linode.mcp.v1.LKENodePoolUpdateInput"),
     ), Capability.Write
 
 
@@ -666,7 +666,7 @@ def create_linode_lke_pool_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.LKENodePoolDeleteInput"),
+        input_schema=schema("linode.mcp.v1.LKENodePoolDeleteInput"),
     ), Capability.Destroy
 
 
@@ -833,7 +833,7 @@ def create_linode_lke_pool_recycle_tool() -> tuple[Tool, Capability]:
             "Recycles all nodes in a node pool."
             " Pass dry_run=true to preview without recycling."
         ),
-        inputSchema=schema("linode.mcp.v1.LKEPoolRecycleInput"),
+        input_schema=schema("linode.mcp.v1.LKEPoolRecycleInput"),
     ), Capability.Destroy
 
 
@@ -893,7 +893,7 @@ def create_linode_lke_node_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.LKENodeDeleteInput"),
+        input_schema=schema("linode.mcp.v1.LKENodeDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1048,7 +1048,7 @@ def create_linode_lke_node_recycle_tool() -> tuple[Tool, Capability]:
             "Recycles a specific node in an LKE cluster."
             " Pass dry_run=true to preview without recycling."
         ),
-        inputSchema=schema("linode.mcp.v1.LKENodeRecycleInput"),
+        input_schema=schema("linode.mcp.v1.LKENodeRecycleInput"),
     ), Capability.Destroy
 
 
@@ -1108,7 +1108,7 @@ def create_linode_lke_kubeconfig_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without regenerating."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.LKEKubeconfigDeleteInput"),
+        input_schema=schema("linode.mcp.v1.LKEKubeconfigDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1212,7 +1212,7 @@ def create_linode_lke_service_token_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.LKEServiceTokenDeleteInput"),
+        input_schema=schema("linode.mcp.v1.LKEServiceTokenDeleteInput"),
     ), Capability.Destroy
 
 
@@ -1315,7 +1315,7 @@ def create_linode_lke_acl_update_tool() -> tuple[Tool, Capability]:
             "Updates the control plane ACL for an LKE cluster."
             " Pass dry_run=true to preview without modifying."
         ),
-        inputSchema=schema("linode.mcp.v1.LKEACLUpdateInput"),
+        input_schema=schema("linode.mcp.v1.LKEACLUpdateInput"),
     ), Capability.Write
 
 
@@ -1436,7 +1436,7 @@ def create_linode_lke_acl_delete_tool() -> tuple[Tool, Capability]:
             "Deletes the control plane ACL for an LKE cluster."
             " Pass dry_run=true to preview without deleting."
         ),
-        inputSchema=schema("linode.mcp.v1.LKEACLDeleteInput"),
+        input_schema=schema("linode.mcp.v1.LKEACLDeleteInput"),
     ), Capability.Destroy
 
 

@@ -52,7 +52,7 @@ def create_linode_domain_list_tool() -> tuple[Tool, Capability]:
             "Lists all domains managed by your Linode account. "
             "Can filter by domain name or type (master/slave)."
         ),
-        inputSchema=schema("linode.mcp.v1.DomainListInput"),
+        input_schema=schema("linode.mcp.v1.DomainListInput"),
     ), Capability.Read
 
 
@@ -101,7 +101,7 @@ def create_linode_domain_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_get",
         description="Gets detailed information about a specific domain by its ID.",
-        inputSchema=schema("linode.mcp.v1.DomainGetInput"),
+        input_schema=schema("linode.mcp.v1.DomainGetInput"),
     ), Capability.Read
 
 
@@ -126,7 +126,7 @@ def create_linode_domain_zone_file_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_domain_zone_file_get",
         description="Gets the generated zone file for a specific domain by its ID.",
-        inputSchema=schema("linode.mcp.v1.DomainZoneFileGetInput"),
+        input_schema=schema("linode.mcp.v1.DomainZoneFileGetInput"),
     ), Capability.Read
 
 

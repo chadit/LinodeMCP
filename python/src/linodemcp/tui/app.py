@@ -17,7 +17,7 @@ suppressions.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll
@@ -40,6 +40,8 @@ from linodemcp.tui.run import RunStatus, execute
 from linodemcp.version import get_version_info
 
 if TYPE_CHECKING:
+    from textual.binding import BindingType
+
     from linodemcp.tui.model import CatalogEntry, FormField
     from linodemcp.tui.runtime import TuiRuntime
 
@@ -97,7 +99,7 @@ class CatalogScreen(Screen[None]):
     keys never leak into the model.
     """
 
-    BINDINGS = [  # noqa: RUF012 - Textual reads BINDINGS as a class attribute
+    BINDINGS: ClassVar[list[BindingType]] = [
         ("f", "toggle_surface", "Full surface"),
         ("a", "open_audit", "Audit"),
         ("p", "open_profiles", "Profiles"),
@@ -207,7 +209,7 @@ class FormScreen(Screen[None]):
     the CLI ``call``) and posts ``OpenResult``.
     """
 
-    BINDINGS = [  # noqa: RUF012 - Textual reads BINDINGS as a class attribute
+    BINDINGS: ClassVar[list[BindingType]] = [
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -313,7 +315,7 @@ class ResultScreen(Screen[None]):
     the header line (success vs tool-error vs refused).
     """
 
-    BINDINGS = [  # noqa: RUF012 - Textual reads BINDINGS as a class attribute
+    BINDINGS: ClassVar[list[BindingType]] = [
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -368,7 +370,7 @@ class AuditScreen(Screen[None]):
     events (it requests ``include_meta``).
     """
 
-    BINDINGS = [  # noqa: RUF012 - Textual reads BINDINGS as a class attribute
+    BINDINGS: ClassVar[list[BindingType]] = [
         ("r", "refresh", "Refresh"),
         ("escape", "app.pop_screen", "Back"),
     ]
@@ -425,7 +427,7 @@ class ProfileScreen(Screen[None]):
     ``ProfileSwitched`` so the app re-resolves the catalog's filtered view.
     """
 
-    BINDINGS = [  # noqa: RUF012 - Textual reads BINDINGS as a class attribute
+    BINDINGS: ClassVar[list[BindingType]] = [
         ("escape", "app.pop_screen", "Back"),
     ]
 
@@ -503,7 +505,7 @@ class HealthScreen(Screen[None]):
     pointer to the Prometheus endpoint (the TUI does not scrape it).
     """
 
-    BINDINGS = [  # noqa: RUF012 - Textual reads BINDINGS as a class attribute
+    BINDINGS: ClassVar[list[BindingType]] = [
         ("escape", "app.pop_screen", "Back"),
     ]
 

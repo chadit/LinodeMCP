@@ -218,7 +218,6 @@ func (e *NetworkError) Error() string {
 
 func (e *NetworkError) Unwrap() error { return e.Err }
 
-// isNetworkError returns true if the error is a network-related error.
 func isNetworkError(err error) bool {
 	if _, ok := errors.AsType[*NetworkError](err); ok {
 		return true
@@ -233,7 +232,6 @@ func isNetworkError(err error) bool {
 	return ok
 }
 
-// isTimeoutError returns true if the error is a timeout error.
 func isTimeoutError(err error) bool {
 	if netErr, ok := errors.AsType[net.Error](err); ok {
 		return netErr.Timeout()

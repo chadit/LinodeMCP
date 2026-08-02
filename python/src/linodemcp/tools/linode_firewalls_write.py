@@ -86,7 +86,7 @@ def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
         description=(
             "Creates a new Cloud Firewall. The firewall is created with no rules."
         ),
-        inputSchema=schema("linode.mcp.v1.FirewallCreateInput"),
+        input_schema=schema("linode.mcp.v1.FirewallCreateInput"),
     ), Capability.Write
 
 
@@ -152,7 +152,7 @@ def create_linode_firewall_update_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_firewall_update",
         description="Updates an existing Cloud Firewall.",
-        inputSchema=schema("linode.mcp.v1.FirewallUpdateInput"),
+        input_schema=schema("linode.mcp.v1.FirewallUpdateInput"),
     ), Capability.Write
 
 
@@ -247,7 +247,7 @@ def create_linode_firewall_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without deleting."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.FirewallDeleteInput"),
+        input_schema=schema("linode.mcp.v1.FirewallDeleteInput"),
     ), Capability.Destroy
 
 
@@ -393,7 +393,7 @@ def create_linode_firewall_device_delete_tool() -> tuple[Tool, Capability]:
             " Pass dry_run=true to preview without removing."
         )
         + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.FirewallDeviceDeleteInput"),
+        input_schema=schema("linode.mcp.v1.FirewallDeviceDeleteInput"),
     ), Capability.Destroy
 
 
@@ -495,7 +495,7 @@ def create_linode_firewall_rules_update_tool() -> tuple[Tool, Capability]:
             "Replaces the inbound and outbound rules for a Cloud Firewall. "
             "WARNING: This overwrites all existing rules."
         ),
-        inputSchema=schema("linode.mcp.v1.FirewallRulesUpdateInput"),
+        input_schema=schema("linode.mcp.v1.FirewallRulesUpdateInput"),
     ), Capability.Write
 
 
@@ -583,7 +583,7 @@ def create_linode_instance_firewall_apply_tool() -> tuple[Tool, Capability]:
         description=(
             "Applies the currently assigned Cloud Firewalls to a Linode instance."
         ),
-        inputSchema=schema("linode.mcp.v1.InstanceFirewallApplyInput"),
+        input_schema=schema("linode.mcp.v1.InstanceFirewallApplyInput"),
     ), Capability.Write
 
 
@@ -639,7 +639,7 @@ def create_linode_firewall_settings_update_tool() -> tuple[Tool, Capability]:
             "Updates the account default firewalls for Linodes, NodeBalancers, "
             "public interfaces, and VPC interfaces."
         ),
-        inputSchema=schema("linode.mcp.v1.FirewallSettingsUpdateInput"),
+        input_schema=schema("linode.mcp.v1.FirewallSettingsUpdateInput"),
     ), Capability.Write
 
 
@@ -709,7 +709,7 @@ def create_linode_firewall_device_create_tool() -> tuple[Tool, Capability]:
             "Creates a new device for a Cloud Firewall. "
             "WARNING: This operation requires confirmation."
         ),
-        inputSchema=schema("linode.mcp.v1.FirewallDeviceCreateInput"),
+        input_schema=schema("linode.mcp.v1.FirewallDeviceCreateInput"),
     ), Capability.Write
 
 

@@ -150,15 +150,15 @@ def test_create_linode_instance_config_interface_update_tool_schema() -> None:
 
     assert tool.name == "linode_instance_config_interface_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "linode_id",
         "config_id",
         "interface_id",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert "dry_run" not in tool.inputSchema["required"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert "dry_run" not in tool.input_schema["required"]
 
 
 @pytest.mark.asyncio

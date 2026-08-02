@@ -12,7 +12,7 @@ message LKEDashboard {
 // LKEDashboardGetInput is the input contract for linode_lke_dashboard_get.
 message LKEDashboardGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the LKE cluster (required).
   string cluster_id = 2;
 }

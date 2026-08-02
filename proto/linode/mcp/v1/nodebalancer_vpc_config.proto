@@ -32,7 +32,7 @@ message NodeBalancerVPCConfigListResponse {
 // linode_nodebalancer_vpc_config_get.
 message NodeBalancerVPCConfigGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer (required).
   int32 nodebalancer_id = 2;
   // The ID of the VPC configuration to retrieve (required).
@@ -43,7 +43,7 @@ message NodeBalancerVPCConfigGetInput {
 // linode_nodebalancer_vpc_config_list.
 message NodeBalancerVPCConfigListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose VPC configurations should be listed.
   int32 nodebalancer_id = 2;
   // Page number to retrieve.

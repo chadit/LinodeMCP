@@ -43,11 +43,11 @@ def test_longview_client_delete_tool_schema() -> None:
 
     assert tool.name == "linode_longview_client_delete"
     assert capability is Capability.Destroy
-    properties = tool.inputSchema["properties"]
+    properties = tool.input_schema["properties"]
     assert properties["client_id"]["type"] == "integer"
     assert properties["confirm"]["type"] == "boolean"
     assert properties["dry_run"]["type"] == "boolean"
-    assert tool.inputSchema["required"] == ["client_id", "confirm"]
+    assert tool.input_schema["required"] == ["client_id", "confirm"]
 
 
 @pytest.mark.asyncio
@@ -144,8 +144,8 @@ def test_longview_client_get_tool_schema() -> None:
 
     assert tool.name == "linode_longview_client_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["client_id"]
-    assert "client_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["client_id"]
+    assert "client_id" in tool.input_schema["properties"]
 
 
 @pytest.mark.asyncio
@@ -200,8 +200,8 @@ def test_longview_plan_get_tool_schema() -> None:
 
     assert tool.name == "linode_longview_plan_get"
     assert capability is Capability.Read
-    assert "environment" in tool.inputSchema["properties"]
-    assert "required" not in tool.inputSchema
+    assert "environment" in tool.input_schema["properties"]
+    assert "required" not in tool.input_schema
 
 
 def test_longview_types_list_tool_schema() -> None:
@@ -209,8 +209,8 @@ def test_longview_types_list_tool_schema() -> None:
 
     assert tool.name == "linode_longview_type_list"
     assert capability is Capability.Read
-    assert "environment" in tool.inputSchema["properties"]
-    assert "required" not in tool.inputSchema
+    assert "environment" in tool.input_schema["properties"]
+    assert "required" not in tool.input_schema
 
 
 def test_longview_clients_list_tool_schema() -> None:
@@ -218,10 +218,10 @@ def test_longview_clients_list_tool_schema() -> None:
 
     assert tool.name == "linode_longview_client_list"
     assert capability is Capability.Read
-    properties = tool.inputSchema["properties"]
+    properties = tool.input_schema["properties"]
     assert properties["page"]["type"] == "integer"
     assert properties["page_size"]["type"] == "integer"
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 @pytest.mark.asyncio
@@ -251,10 +251,10 @@ def test_longview_subscriptions_list_tool_schema() -> None:
 
     assert tool.name == "linode_longview_subscription_list"
     assert capability is Capability.Read
-    properties = tool.inputSchema["properties"]
+    properties = tool.input_schema["properties"]
     assert properties["page"]["type"] == "integer"
     assert properties["page_size"]["type"] == "integer"
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 @pytest.mark.asyncio

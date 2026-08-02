@@ -76,7 +76,7 @@ message DomainDeleteResponse {
 // filters and neither is required.
 message DomainListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Filter domains by name containing this string (case-insensitive).
   optional string domain_contains = 2;
   // Filter by domain type (master, slave).
@@ -86,7 +86,7 @@ message DomainListInput {
 // DomainGetInput is the input contract for linode_domain_get.
 message DomainGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain to retrieve (required).
   int32 domain_id = 2;
 }
@@ -94,7 +94,7 @@ message DomainGetInput {
 // DomainCreateInput is the input contract for linode_domain_create.
 message DomainCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The domain name, 1 to 253 characters (e.g., 'example.com').
   string domain = 2;
   // Domain type: 'master' (primary) or 'slave' (secondary).
@@ -106,10 +106,10 @@ message DomainCreateInput {
   // Default TTL in seconds for records (optional).
   optional int32 ttl_sec = 6;
   // Must be set to true to confirm domain creation. Ignored when dry_run=true.
-  bool confirm = 7;
+  bool confirm = 7; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8;
+  optional bool dry_run = 8; // system param
   // IP addresses allowed to perform a zone transfer (optional).
   repeated string axfr_ips = 9;
   // SOA expire time in seconds (optional).
@@ -131,7 +131,7 @@ message DomainCreateInput {
 // DomainUpdateInput is the input contract for linode_domain_update.
 message DomainUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain to update.
   int32 domain_id = 2;
   // New domain name, for example example.com (optional).
@@ -145,60 +145,60 @@ message DomainUpdateInput {
   // New default TTL in seconds (optional).
   optional int32 ttl_sec = 7;
   // Must be set to true to confirm domain update. Ignored when dry_run=true.
-  bool confirm = 8;
+  bool confirm = 8; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 9;
+  optional bool dry_run = 9; // system param
 }
 
 // DomainCloneInput is the input contract for linode_domain_clone.
 message DomainCloneInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain to clone.
   int32 domain_id = 2;
   // The new domain name for the clone.
   string domain = 3;
   // Must be set to true to confirm domain cloning. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // DomainImportInput is the input contract for linode_domain_import.
 message DomainImportInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The domain name to import (for example, 'example.com').
   string domain = 2;
   // The remote nameserver that allows zone transfers (AXFR).
   string remote_nameserver = 3;
   // Must be set to true to confirm domain import. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
 }
 
 // DomainDeleteInput is the input contract for linode_domain_delete.
 message DomainDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain to delete.
   int32 domain_id = 2;
   // Must be set to true to confirm deletion. This deletes all DNS records.
   // Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // DomainRecord mirrors a Linode DNS record within a domain.
@@ -239,7 +239,7 @@ message DomainRecordWriteResponse {
 // applied after the tool fetches all records for the domain.
 message DomainRecordListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain to list records for (required).
   int32 domain_id = 2;
   // Filter by record type (A, AAAA, NS, MX, CNAME, TXT, SRV, CAA).
@@ -251,7 +251,7 @@ message DomainRecordListInput {
 // DomainRecordGetInput is the input contract for linode_domain_record_get.
 message DomainRecordGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain (required).
   int32 domain_id = 2;
   // The ID of the domain record to retrieve (required).
@@ -261,7 +261,7 @@ message DomainRecordGetInput {
 // DomainRecordCreateInput is the input contract for linode_domain_record_create.
 message DomainRecordCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain to add the record to.
   int32 domain_id = 2;
   // Record type: A, AAAA, NS, MX, CNAME, TXT, SRV, CAA, or PTR.
@@ -286,16 +286,16 @@ message DomainRecordCreateInput {
   optional int32 ttl_sec = 12;
   // Must be set to true to confirm DNS record creation. Ignored when
   // dry_run=true.
-  bool confirm = 13;
+  bool confirm = 13; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 14;
+  optional bool dry_run = 14; // system param
 }
 
 // DomainRecordUpdateInput is the input contract for linode_domain_record_update.
 message DomainRecordUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain containing the record.
   int32 domain_id = 2;
   // The ID of the record to update.
@@ -313,32 +313,32 @@ message DomainRecordUpdateInput {
   // New TTL in seconds (optional).
   optional int32 ttl_sec = 9;
   // Must be set to true to confirm DNS record update. Ignored when dry_run=true.
-  bool confirm = 10;
+  bool confirm = 10; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 11;
+  optional bool dry_run = 11; // system param
 }
 
 // DomainRecordDeleteInput is the input contract for linode_domain_record_delete.
 message DomainRecordDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the domain containing the record.
   int32 domain_id = 2;
   // The ID of the record to delete.
   int32 record_id = 3;
   // Must be set to true to confirm DNS record deletion. This action is
   // irreversible. Ignored when dry_run=true.
-  bool confirm = 4;
+  bool confirm = 4; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5;
+  optional bool dry_run = 5; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6;
+  optional string mode = 6; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7;
+  optional string plan_id = 7; // system param
 }
 
 // DomainRecordDeleteResponse is the id-echo envelope linode_domain_record_delete

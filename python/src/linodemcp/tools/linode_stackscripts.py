@@ -39,7 +39,7 @@ def create_linode_stackscript_list_tool() -> tuple[Tool, Capability]:
             "Lists StackScripts. By default returns your own StackScripts. "
             "Can filter by public status, ownership, or label."
         ),
-        inputSchema=schema("linode.mcp.v1.StackScriptListInput"),
+        input_schema=schema("linode.mcp.v1.StackScriptListInput"),
     ), Capability.Read
 
 
@@ -89,7 +89,7 @@ def create_linode_stackscript_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_stackscript_get",
         description="Gets details for a specific StackScript.",
-        inputSchema=schema("linode.mcp.v1.StackScriptGetInput"),
+        input_schema=schema("linode.mcp.v1.StackScriptGetInput"),
     ), Capability.Read
 
 
@@ -119,7 +119,7 @@ def create_linode_stackscript_delete_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_stackscript_delete",
         description="Deletes a StackScript by ID." + TWO_STAGE_NOTE,
-        inputSchema=schema("linode.mcp.v1.StackScriptDeleteInput"),
+        input_schema=schema("linode.mcp.v1.StackScriptDeleteInput"),
     ), Capability.Destroy
 
 
@@ -208,7 +208,7 @@ def create_linode_stackscript_create_tool() -> tuple[Tool, Capability]:
             "Creates a StackScript for deploying configured Linodes."
             " Pass dry_run=true to preview without creating."
         ),
-        inputSchema=schema("linode.mcp.v1.StackScriptCreateInput"),
+        input_schema=schema("linode.mcp.v1.StackScriptCreateInput"),
     ), Capability.Write
 
 
@@ -292,7 +292,7 @@ def create_linode_stackscript_update_tool() -> tuple[Tool, Capability]:
             "Updates an existing StackScript. Pass dry_run=true to preview "
             "without updating."
         ),
-        inputSchema=schema("linode.mcp.v1.StackScriptUpdateInput"),
+        input_schema=schema("linode.mcp.v1.StackScriptUpdateInput"),
     ), Capability.Write
 
 

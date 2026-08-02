@@ -49,17 +49,17 @@ class ArgError(ValueError):
 def schema_properties(tool: Tool) -> dict[str, dict[str, Any]]:
     """Return the ``properties`` map from a tool's input schema.
 
-    ``Tool.inputSchema`` is an untyped ``dict`` at runtime, so the access is
+    ``Tool.input_schema`` is an untyped ``dict`` at runtime, so the access is
     cast for the strict type checkers. Returns an empty dict when the tool
     declares no properties.
     """
-    schema: dict[str, Any] = tool.inputSchema
+    schema: dict[str, Any] = tool.input_schema
     return cast("dict[str, dict[str, Any]]", schema.get("properties", {}))
 
 
 def required_args(tool: Tool) -> list[str]:
     """Return the tool's required argument names from its input schema."""
-    schema: dict[str, Any] = tool.inputSchema
+    schema: dict[str, Any] = tool.input_schema
     req = cast("list[Any]", schema.get("required", []))
     return [str(name) for name in req]
 

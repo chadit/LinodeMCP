@@ -16,7 +16,7 @@ def create_hello_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="hello",
         description="Responds with a friendly greeting from LinodeMCP",
-        inputSchema=schema("linode.mcp.v1.HelloInput"),
+        input_schema=schema("linode.mcp.v1.HelloInput"),
     ), Capability.Meta
 
 

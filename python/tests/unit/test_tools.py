@@ -575,7 +575,7 @@ def test_create_linode_profile_preferences_get_tool() -> None:
 
     assert tool.name == "linode_profile_preferences_get"
     assert capability == Capability.Read
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 def test_create_linode_account_payment_method_delete_tool() -> None:
@@ -584,10 +584,10 @@ def test_create_linode_account_payment_method_delete_tool() -> None:
 
     assert tool.name == "linode_account_payment_method_delete"
     assert capability == Capability.Admin
-    assert tool.inputSchema["required"] == ["payment_method_id", "confirm"]
-    assert tool.inputSchema["properties"]["payment_method_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["payment_method_id", "confirm"]
+    assert tool.input_schema["properties"]["payment_method_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_account_payment_method_delete_success(
@@ -709,9 +709,9 @@ def test_create_linode_profile_preferences_update_tool() -> None:
 
     assert tool.name == "linode_profile_preferences_update"
     assert capability == Capability.Write
-    assert tool.inputSchema["required"] == ["confirm"]
-    assert tool.inputSchema["properties"]["preferences"]["type"] == "object"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["confirm"]
+    assert tool.input_schema["properties"]["preferences"]["type"] == "object"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_profile_preferences_update_success(
@@ -797,9 +797,9 @@ async def test_linode_instance_config_delete_tool_definition() -> None:
 
     assert tool.name == "linode_instance_config_delete"
     assert capability == Capability.Destroy
-    assert tool.inputSchema["required"] == ["linode_id", "config_id", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["linode_id", "config_id", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_instance_config_delete(sample_config: Config) -> None:
@@ -936,9 +936,9 @@ async def test_linode_instance_config_get_tool_definition() -> None:
 
     assert tool.name == "linode_instance_config_get"
     assert capability == Capability.Read
-    assert tool.inputSchema["required"] == ["linode_id", "config_id"]
-    assert "linode_id" in tool.inputSchema["properties"]
-    assert "config_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["linode_id", "config_id"]
+    assert "linode_id" in tool.input_schema["properties"]
+    assert "config_id" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_instance_config_get(sample_config: Config) -> None:
@@ -1016,14 +1016,14 @@ async def test_linode_instance_config_interface_get_tool_definition() -> None:
 
     assert tool.name == "linode_instance_config_interface_get"
     assert capability == Capability.Read
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "linode_id",
         "config_id",
         "interface_id",
     ]
-    assert "linode_id" in tool.inputSchema["properties"]
-    assert "config_id" in tool.inputSchema["properties"]
-    assert "interface_id" in tool.inputSchema["properties"]
+    assert "linode_id" in tool.input_schema["properties"]
+    assert "config_id" in tool.input_schema["properties"]
+    assert "interface_id" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_instance_config_interface_get(
@@ -1112,15 +1112,15 @@ async def test_linode_instance_config_interfaces_list_tool_definition() -> None:
 
     assert tool.name == "linode_instance_config_interface_list"
     assert capability == Capability.Read
-    assert tool.inputSchema["additionalProperties"] is False
-    assert set(tool.inputSchema["properties"]) == {
+    assert tool.input_schema["additionalProperties"] is False
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "linode_id",
         "config_id",
     }
-    assert tool.inputSchema["properties"]["linode_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["config_id"]["type"] == "integer"
-    assert tool.inputSchema["required"] == ["linode_id", "config_id"]
+    assert tool.input_schema["properties"]["linode_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["config_id"]["type"] == "integer"
+    assert tool.input_schema["required"] == ["linode_id", "config_id"]
 
 
 async def test_handle_linode_instance_config_interfaces_list(
@@ -1224,7 +1224,7 @@ async def test_linode_instance_configs_list_tool_definition() -> None:
 
     assert tool.name == "linode_instance_config_list"
     assert capability == Capability.Read
-    assert tool.inputSchema["required"] == ["linode_id"]
+    assert tool.input_schema["required"] == ["linode_id"]
 
 
 def test_create_linode_instance_stats_tool_schema() -> None:
@@ -1233,8 +1233,8 @@ def test_create_linode_instance_stats_tool_schema() -> None:
 
     assert tool.name == "linode_instance_stats_get"
     assert capability == Capability.Read
-    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceStatsGetInput")
-    assert tool.inputSchema["required"] == ["linode_id"]
+    assert tool.input_schema == proto_schema("linode.mcp.v1.InstanceStatsGetInput")
+    assert tool.input_schema["required"] == ["linode_id"]
 
 
 async def test_handle_linode_instance_stats(sample_config: Config) -> None:
@@ -1433,9 +1433,6 @@ async def test_handle_linode_instances_list_error(sample_config: Config) -> None
         )
 
 
-# Stage 2 Tool Tests
-
-
 async def test_handle_linode_instance_get(
     sample_config: Config, sample_instance_data: dict[str, Any]
 ) -> None:
@@ -1519,10 +1516,10 @@ async def test_create_linode_account_beta_enroll_tool() -> None:
 
     assert tool.name == "linode_account_beta_enroll"
     assert capability is Capability.Admin
-    assert tool.inputSchema["properties"]["id"]["type"] == "string"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert "id" in tool.inputSchema.get("required", [])
-    assert "confirm" in tool.inputSchema.get("required", [])
+    assert tool.input_schema["properties"]["id"]["type"] == "string"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert "id" in tool.input_schema.get("required", [])
+    assert "confirm" in tool.input_schema.get("required", [])
 
 
 async def test_handle_linode_account_beta_enroll_dry_run(
@@ -1624,17 +1621,17 @@ async def test_create_linode_account_agreements_acknowledge_tool() -> None:
 
     assert tool.name == "linode_account_agreement_acknowledge"
     assert capability.name == "Admin"
-    assert "eu_model" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert "confirm" in tool.inputSchema.get("required", [])
+    assert "eu_model" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert "confirm" in tool.input_schema.get("required", [])
 
 
 async def test_account_agreements_ack_schema_requires_confirm() -> None:
     """The schema requires confirm for mutating acknowledgement calls."""
     tool, _capability = create_linode_account_agreement_acknowledge_tool()
 
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert "confirm" in tool.inputSchema.get("required", [])
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert "confirm" in tool.input_schema.get("required", [])
 
 
 async def test_handle_linode_account_agreements_acknowledge_dry_run(
@@ -1745,8 +1742,8 @@ async def test_create_linode_account_update_tool() -> None:
 
     assert tool.name == "linode_account_update"
     assert capability.name == "Admin"
-    assert "email" in tool.inputSchema["properties"]
-    assert "confirm" in tool.inputSchema["required"]
+    assert "email" in tool.input_schema["properties"]
+    assert "confirm" in tool.input_schema["required"]
 
 
 async def test_handle_linode_account_update(sample_config: Config) -> None:
@@ -1863,11 +1860,11 @@ async def test_create_linode_managed_contacts_list_tool() -> None:
 
     assert tool.name == "linode_managed_contact_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert "required" not in tool.inputSchema
-    assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
+    assert tool.input_schema["type"] == "object"
+    assert "required" not in tool.input_schema
+    assert "environment" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["page"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_contacts_list(sample_config: Config) -> None:
@@ -1939,10 +1936,10 @@ async def test_create_linode_managed_issues_list_tool() -> None:
 
     assert tool.name == "linode_managed_issue_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert "required" not in tool.inputSchema
-    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
+    assert tool.input_schema["type"] == "object"
+    assert "required" not in tool.input_schema
+    assert tool.input_schema["properties"]["page"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_issues_list(sample_config: Config) -> None:
@@ -2019,11 +2016,11 @@ async def test_create_linode_managed_linode_settings_list_tool() -> None:
 
     assert tool.name == "linode_managed_linode_settings_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert "required" not in tool.inputSchema
-    assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
+    assert tool.input_schema["type"] == "object"
+    assert "required" not in tool.input_schema
+    assert "environment" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["page"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_linode_settings_list(
@@ -2117,11 +2114,11 @@ async def test_create_linode_managed_service_disable_tool() -> None:
 
     assert tool.name == "linode_managed_service_disable"
     assert capability is Capability.Admin
-    assert tool.inputSchema["type"] == "object"
-    assert tool.inputSchema["required"] == ["service_id", "confirm"]
-    assert tool.inputSchema["properties"]["service_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["type"] == "object"
+    assert tool.input_schema["required"] == ["service_id", "confirm"]
+    assert tool.input_schema["properties"]["service_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_managed_service_disable(sample_config: Config) -> None:
@@ -2191,11 +2188,11 @@ async def test_create_linode_managed_contact_delete_tool() -> None:
 
     assert tool.name == "linode_managed_contact_delete"
     assert capability is Capability.Admin
-    assert tool.inputSchema["type"] == "object"
-    assert tool.inputSchema["required"] == ["contact_id", "confirm"]
-    assert tool.inputSchema["properties"]["contact_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["type"] == "object"
+    assert tool.input_schema["required"] == ["contact_id", "confirm"]
+    assert tool.input_schema["properties"]["contact_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_managed_contact_delete(sample_config: Config) -> None:
@@ -2274,8 +2271,8 @@ async def test_create_linode_managed_credential_get_tool() -> None:
 
     assert tool.name == "linode_managed_credential_get"
     assert capability == Capability.Admin
-    assert "credential_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["credential_id"]
+    assert "credential_id" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["credential_id"]
 
 
 async def test_handle_linode_managed_credential_get(sample_config: Config) -> None:
@@ -2319,15 +2316,15 @@ async def test_create_linode_managed_credential_username_password_update_tool() 
     tool, capability = create_linode_managed_credential_username_password_update_tool()
     assert tool.name == "linode_managed_credential_username_password_update"
     assert capability is Capability.Admin
-    assert set(tool.inputSchema["required"]) == {
+    assert set(tool.input_schema["required"]) == {
         "credential_id",
         "password",
         "confirm",
     }
-    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["password"]["type"] == "string"
-    assert tool.inputSchema["properties"]["username"]["type"] == "string"
+    assert tool.input_schema["properties"]["credential_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["password"]["type"] == "string"
+    assert tool.input_schema["properties"]["username"]["type"] == "string"
 
 
 async def test_handle_linode_managed_credential_username_password_update(
@@ -2367,10 +2364,10 @@ async def test_create_linode_managed_credential_revoke_tool() -> None:
 
     assert tool.name == "linode_managed_credential_revoke"
     assert capability is Capability.Admin
-    assert set(tool.inputSchema["required"]) == {"credential_id", "confirm"}
-    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert set(tool.input_schema["required"]) == {"credential_id", "confirm"}
+    assert tool.input_schema["properties"]["credential_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_managed_credential_revoke(sample_config: Config) -> None:
@@ -2413,8 +2410,8 @@ async def test_create_linode_managed_credentials_list_tool() -> None:
 
     assert tool.name == "linode_managed_credential_list"
     assert capability == Capability.Read
-    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page_size"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_credentials_list(sample_config: Config) -> None:
@@ -2481,8 +2478,8 @@ async def test_create_linode_managed_ssh_key_get_tool() -> None:
 
     assert tool.name == "linode_managed_sshkey_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert "required" not in tool.inputSchema
+    assert tool.input_schema["type"] == "object"
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_managed_ssh_key_get(sample_config: Config) -> None:
@@ -2531,10 +2528,10 @@ async def test_create_linode_managed_credential_update_tool() -> None:
 
     assert tool.name == "linode_managed_credential_update"
     assert capability is Capability.Admin
-    assert set(tool.inputSchema["required"]) == {"credential_id", "label", "confirm"}
-    assert tool.inputSchema["properties"]["credential_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["label"]["type"] == "string"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert set(tool.input_schema["required"]) == {"credential_id", "label", "confirm"}
+    assert tool.input_schema["properties"]["credential_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["label"]["type"] == "string"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_managed_credential_update(sample_config: Config) -> None:
@@ -2667,8 +2664,8 @@ async def test_create_linode_managed_stats_tool() -> None:
 
     assert tool.name == "linode_managed_stats_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert "required" not in tool.inputSchema
+    assert tool.input_schema["type"] == "object"
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_managed_stats(sample_config: Config) -> None:
@@ -2694,9 +2691,9 @@ async def test_create_linode_managed_issue_get_tool() -> None:
 
     assert tool.name == "linode_managed_issue_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert tool.inputSchema["required"] == ["issue_id"]
-    assert tool.inputSchema["properties"]["issue_id"]["type"] == "integer"
+    assert tool.input_schema["type"] == "object"
+    assert tool.input_schema["required"] == ["issue_id"]
+    assert tool.input_schema["properties"]["issue_id"]["type"] == "integer"
 
 
 async def test_handle_linode_managed_issue_get(sample_config: Config) -> None:
@@ -2768,9 +2765,9 @@ async def test_create_linode_managed_contact_get_tool() -> None:
 
     assert tool.name == "linode_managed_contact_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert tool.inputSchema["required"] == ["contact_id"]
-    assert "contact_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["type"] == "object"
+    assert tool.input_schema["required"] == ["contact_id"]
+    assert "contact_id" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_managed_contact_get(sample_config: Config) -> None:
@@ -2847,10 +2844,10 @@ async def test_create_linode_managed_service_get_tool() -> None:
 
     assert tool.name == "linode_managed_service_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert tool.inputSchema["required"] == ["service_id"]
-    assert "service_id" in tool.inputSchema["properties"]
-    assert "confirm" not in tool.inputSchema["properties"]
+    assert tool.input_schema["type"] == "object"
+    assert tool.input_schema["required"] == ["service_id"]
+    assert "service_id" in tool.input_schema["properties"]
+    assert "confirm" not in tool.input_schema["properties"]
 
 
 async def test_handle_linode_managed_service_get(sample_config: Config) -> None:
@@ -2927,8 +2924,8 @@ async def test_create_linode_account_beta_get_tool() -> None:
 
     assert tool.name == "linode_account_beta_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["beta_id"]
-    assert tool.inputSchema["properties"]["beta_id"]["type"] == "string"
+    assert tool.input_schema["required"] == ["beta_id"]
+    assert tool.input_schema["properties"]["beta_id"]["type"] == "string"
 
 
 async def test_handle_linode_account_beta_get(sample_config: Config) -> None:
@@ -2998,8 +2995,8 @@ async def test_create_linode_account_settings_get_tool() -> None:
 
     assert tool.name == "linode_account_settings_get"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {"environment"}
-    assert "required" not in tool.inputSchema
+    assert set(tool.input_schema["properties"]) == {"environment"}
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_account_settings_get(sample_config: Config) -> None:
@@ -3038,12 +3035,12 @@ async def test_create_linode_account_maintenance_list_tool() -> None:
 
     assert tool.name == "linode_account_maintenance_list"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "page",
         "page_size",
     }
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_account_maintenance_list(sample_config: Config) -> None:
@@ -3698,12 +3695,12 @@ async def test_create_linode_maintenance_policies_list_tool() -> None:
 
     assert tool.name == "linode_maintenance_policy_list"
     assert capability is Capability.Read
-    assert set(tool.inputSchema["properties"]) == {
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "page",
         "page_size",
     }
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_maintenance_policies_list(sample_config: Config) -> None:
@@ -3750,8 +3747,8 @@ async def test_create_linode_account_availability_list_tool() -> None:
 
     assert tool.name == "linode_account_availability_list"
     assert capability is Capability.Read
-    assert "page" not in tool.inputSchema.get("required", [])
-    assert "page_size" not in tool.inputSchema.get("required", [])
+    assert "page" not in tool.input_schema.get("required", [])
+    assert "page_size" not in tool.input_schema.get("required", [])
 
 
 @pytest.mark.parametrize(
@@ -3815,8 +3812,8 @@ async def test_create_linode_account_tags_list_tool() -> None:
 
     assert tool.name == "linode_tag_list"
     assert capability is Capability.Read
-    assert "page" not in tool.inputSchema.get("required", [])
-    assert "page_size" not in tool.inputSchema.get("required", [])
+    assert "page" not in tool.input_schema.get("required", [])
+    assert "page_size" not in tool.input_schema.get("required", [])
 
 
 async def test_handle_linode_account_tags_list_rejects_invalid_page(
@@ -3877,8 +3874,8 @@ async def test_create_linode_account_tag_objects_list_tool() -> None:
 
     assert tool.name == "linode_tag_object_list"
     assert capability is Capability.Read
-    assert "tag_label" in tool.inputSchema["required"]
-    assert "page" not in tool.inputSchema["required"]
+    assert "tag_label" in tool.input_schema["required"]
+    assert "page" not in tool.input_schema["required"]
 
 
 async def test_handle_linode_account_tag_objects_list_requires_label(
@@ -3987,9 +3984,9 @@ async def test_create_linode_account_tag_create_tool() -> None:
 
     assert tool.name == "linode_tag_create"
     assert capability is Capability.Write
-    assert "label" in tool.inputSchema["required"]
-    assert "confirm" in tool.inputSchema["required"]
-    assert "linodes" not in tool.inputSchema["required"]
+    assert "label" in tool.input_schema["required"]
+    assert "confirm" in tool.input_schema["required"]
+    assert "linodes" not in tool.input_schema["required"]
 
 
 async def test_handle_linode_account_tag_create_requires_confirm(
@@ -4194,8 +4191,8 @@ async def test_create_linode_account_support_ticket_create_tool() -> None:
 
     assert tool.name == "linode_support_ticket_create"
     assert capability is Capability.Write
-    assert set(tool.inputSchema["required"]) == {"summary", "description", "confirm"}
-    assert "severity" in tool.inputSchema["properties"]
+    assert set(tool.input_schema["required"]) == {"summary", "description", "confirm"}
+    assert "severity" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_account_support_ticket_create_requires_confirm(
@@ -4367,7 +4364,7 @@ async def test_create_linode_account_support_ticket_get_tool() -> None:
 
     assert tool.name == "linode_support_ticket_get"
     assert capability is Capability.Read
-    assert "ticket_id" in tool.inputSchema["required"]
+    assert "ticket_id" in tool.input_schema["required"]
 
 
 async def test_create_linode_account_support_tickets_list_tool() -> None:
@@ -4376,9 +4373,9 @@ async def test_create_linode_account_support_tickets_list_tool() -> None:
 
     assert tool.name == "linode_support_ticket_list"
     assert capability is Capability.Read
-    assert "required" not in tool.inputSchema
-    assert "page" in tool.inputSchema["properties"]
-    assert "page_size" in tool.inputSchema["properties"]
+    assert "required" not in tool.input_schema
+    assert "page" in tool.input_schema["properties"]
+    assert "page_size" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_account_support_tickets_list_rejects_page_size(
@@ -4526,8 +4523,8 @@ async def test_create_linode_account_oauth_client_get_tool() -> None:
 
     assert tool.name == "linode_account_oauth_client_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["client_id"]
-    assert tool.inputSchema["properties"]["client_id"]["type"] == "string"
+    assert tool.input_schema["required"] == ["client_id"]
+    assert tool.input_schema["properties"]["client_id"]["type"] == "string"
 
 
 async def test_handle_linode_account_oauth_client_get_requires_client_id(
@@ -4587,8 +4584,8 @@ async def test_create_linode_account_payment_method_get_tool() -> None:
 
     assert tool.name == "linode_account_payment_method_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["payment_method_id"]
-    assert tool.inputSchema["properties"]["payment_method_id"]["type"] == "integer"
+    assert tool.input_schema["required"] == ["payment_method_id"]
+    assert tool.input_schema["properties"]["payment_method_id"]["type"] == "integer"
 
 
 async def test_handle_linode_account_payment_method_get_requires_payment_method_id(
@@ -4685,8 +4682,8 @@ async def test_create_linode_account_oauth_client_thumbnail_get_tool() -> None:
 
     assert tool.name == "linode_account_oauth_client_thumbnail_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["client_id"]
-    assert tool.inputSchema["properties"]["client_id"]["type"] == "string"
+    assert tool.input_schema["required"] == ["client_id"]
+    assert tool.input_schema["properties"]["client_id"]["type"] == "string"
 
 
 async def test_handle_linode_account_oauth_client_thumbnail_get_requires_client_id(
@@ -4792,9 +4789,9 @@ async def test_create_linode_account_support_ticket_replies_list_tool() -> None:
 
     assert tool.name == "linode_support_ticket_reply_list"
     assert capability is Capability.Read
-    assert "ticket_id" in tool.inputSchema["required"]
-    assert "page" not in tool.inputSchema["required"]
-    assert "page_size" not in tool.inputSchema["required"]
+    assert "ticket_id" in tool.input_schema["required"]
+    assert "page" not in tool.input_schema["required"]
+    assert "page_size" not in tool.input_schema["required"]
 
 
 async def test_handle_linode_account_support_ticket_replies_list_requires_ticket_id(
@@ -4869,7 +4866,7 @@ async def test_create_linode_account_event_get_tool() -> None:
 
     assert tool.name == "linode_account_event_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["event_id"]
+    assert tool.input_schema["required"] == ["event_id"]
 
 
 async def test_create_linode_account_invoice_items_list_tool() -> None:
@@ -4878,8 +4875,8 @@ async def test_create_linode_account_invoice_items_list_tool() -> None:
 
     assert tool.name == "linode_account_invoice_item_list"
     assert capability is Capability.Read
-    assert tool.inputSchema.get("required") == ["invoice_id"]
-    properties = tool.inputSchema.get("properties", {})
+    assert tool.input_schema.get("required") == ["invoice_id"]
+    properties = tool.input_schema.get("properties", {})
     assert properties["invoice_id"]["type"] == "integer"
     assert properties["page_size"]["type"] == "integer"
 
@@ -5048,7 +5045,7 @@ async def test_create_linode_account_support_ticket_close_tool() -> None:
 
     assert tool.name == "linode_support_ticket_close"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["ticket_id", "confirm"]
+    assert tool.input_schema["required"] == ["ticket_id", "confirm"]
 
 
 async def test_handle_linode_account_support_ticket_close_requires_confirm(
@@ -5201,7 +5198,7 @@ async def test_create_linode_account_support_ticket_reply_create_tool() -> None:
 
     assert tool.name == "linode_support_ticket_reply_create"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "ticket_id",
         "description",
         "confirm",
@@ -5315,7 +5312,7 @@ async def test_create_linode_account_support_ticket_attachment_create_tool() -> 
 
     assert tool.name == "linode_support_ticket_attachment_create"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["ticket_id", "file", "confirm"]
+    assert tool.input_schema["required"] == ["ticket_id", "file", "confirm"]
 
 
 async def test_handle_linode_account_support_ticket_attachment_create_requires_confirm(
@@ -5456,8 +5453,8 @@ async def test_create_linode_account_tag_delete_tool() -> None:
 
     assert tool.name == "linode_tag_delete"
     assert capability is Capability.Destroy
-    assert "tag_label" in tool.inputSchema["required"]
-    assert "confirm" in tool.inputSchema["required"]
+    assert "tag_label" in tool.input_schema["required"]
+    assert "confirm" in tool.input_schema["required"]
 
 
 async def test_handle_linode_account_tag_delete_requires_confirm(
@@ -5516,7 +5513,7 @@ async def test_create_linode_regions_get_tool() -> None:
 
     assert tool.name == "linode_region_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["region_id"]
+    assert tool.input_schema["required"] == ["region_id"]
 
 
 async def test_linode_regions_get_tool_is_exported_and_registered() -> None:
@@ -5605,7 +5602,7 @@ async def test_create_linode_regions_availability_list_tool() -> None:
 
     assert tool.name == "linode_region_availability_list"
     assert capability is Capability.Read
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_regions_availability_list(sample_config: Config) -> None:
@@ -5655,7 +5652,7 @@ async def test_create_linode_regions_availability_get_tool() -> None:
 
     assert tool.name == "linode_region_availability_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["region_id"]
+    assert tool.input_schema["required"] == ["region_id"]
 
 
 async def test_handle_linode_regions_availability_get(sample_config: Config) -> None:
@@ -5828,12 +5825,12 @@ def test_linode_kernels_list_tool_schema() -> None:
     tool, capability = create_linode_kernel_list_tool()
     assert tool.name == "linode_kernel_list"
     assert capability is Capability.Read
-    props: dict[str, Any] = tool.inputSchema["properties"]
+    props: dict[str, Any] = tool.input_schema["properties"]
     # page/page_size convert to int32 proto fields; the generated schema carries
     # int32 bounds instead of the old hand-built minimum:1 / 25-500 refinements.
     assert props["page"]["type"] == "integer"
     assert props["page_size"]["type"] == "integer"
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_kernels_list(sample_config: Config) -> None:
@@ -6279,8 +6276,8 @@ async def test_create_linode_image_upload_tool_def() -> None:
     tool, capability = create_linode_image_upload_tool()
     assert tool.name == "linode_image_upload"
     assert capability.name == "Write"
-    assert tool.inputSchema["required"] == ["label", "region", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["label", "region", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_image_upload_success(sample_config: Config) -> None:
@@ -6430,8 +6427,8 @@ async def test_create_linode_image_update_tool_def() -> None:
     tool, capability = create_linode_image_update_tool()
     assert tool.name == "linode_image_update"
     assert capability.name == "Write"
-    assert tool.inputSchema["required"] == ["image_id", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["image_id", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_image_update_success(sample_config: Config) -> None:
@@ -6573,8 +6570,8 @@ async def test_create_linode_kernel_get_tool_def() -> None:
     tool, capability = create_linode_kernel_get_tool()
     assert tool.name == "linode_kernel_get"
     assert capability.name == "Read"
-    assert tool.inputSchema["required"] == ["kernel_id"]
-    assert "kernel_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["kernel_id"]
+    assert "kernel_id" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_kernel_get_success(sample_config: Config) -> None:
@@ -6675,8 +6672,8 @@ async def test_create_linode_image_get_tool_def() -> None:
     tool, capability = create_linode_image_get_tool()
     assert tool.name == "linode_image_get"
     assert capability.name == "Read"
-    assert tool.inputSchema["required"] == ["image_id"]
-    assert "image_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["image_id"]
+    assert "image_id" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_image_get_success(sample_config: Config) -> None:
@@ -6750,7 +6747,7 @@ async def test_create_linode_image_create_tool_def() -> None:
     tool, capability = create_linode_image_create_tool()
     assert tool.name == "linode_image_create"
     assert capability.name == "Write"
-    assert tool.inputSchema["required"] == ["disk_id", "confirm"]
+    assert tool.input_schema["required"] == ["disk_id", "confirm"]
 
 
 async def test_handle_linode_image_create_success(sample_config: Config) -> None:
@@ -6891,8 +6888,8 @@ async def test_create_linode_images_sharegroups_token_update_tool_def() -> None:
 
     assert tool.name == "linode_image_sharegroup_token_update"
     assert capability.name == "Write"
-    assert tool.inputSchema["required"] == ["token_uuid", "label", "confirm"]
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["token_uuid", "label", "confirm"]
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_images_sharegroups_token_update_success(
@@ -6933,9 +6930,9 @@ async def test_create_linode_images_sharegroups_token_create_tool_def() -> None:
 
     assert tool.name == "linode_image_sharegroup_token_create"
     assert capability.name == "Write"
-    assert tool.inputSchema["required"] == ["valid_for_sharegroup_uuid", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["valid_for_sharegroup_uuid", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_images_sharegroups_token_create_success(
@@ -7391,9 +7388,6 @@ async def test_handle_linode_regions_list_filter_capability(
         assert "eu-west" not in result[0].text
 
 
-# Stage 3 Tool Tests
-
-
 async def test_handle_linode_sshkeys_list(sample_config: Config) -> None:
     """Test linode_sshkey_list tool."""
     raw_keys: dict[str, Any] = {
@@ -7826,8 +7820,8 @@ def test_create_linode_firewall_get_tool_schema() -> None:
 
     assert tool.name == "linode_firewall_get"
     assert capability is Capability.Read
-    assert "firewall_id" in tool.inputSchema["properties"]
-    assert "firewall_id" in tool.inputSchema["required"]
+    assert "firewall_id" in tool.input_schema["properties"]
+    assert "firewall_id" in tool.input_schema["required"]
 
 
 def test_create_linode_firewall_rules_get_tool_schema() -> None:
@@ -7836,8 +7830,8 @@ def test_create_linode_firewall_rules_get_tool_schema() -> None:
 
     assert tool.name == "linode_firewall_rules_get"
     assert capability is Capability.Read
-    assert "firewall_id" in tool.inputSchema["properties"]
-    assert "firewall_id" in tool.inputSchema["required"]
+    assert "firewall_id" in tool.input_schema["properties"]
+    assert "firewall_id" in tool.input_schema["required"]
 
 
 async def test_handle_linode_firewall_get(sample_config: Config) -> None:
@@ -8187,9 +8181,9 @@ async def test_linode_nodebalancer_config_get_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_config_get_tool()
     assert tool.name == "linode_nodebalancer_config_get"
     assert capability == Capability.Read
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "config_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["nodebalancer_id", "config_id"]
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "config_id" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["nodebalancer_id", "config_id"]
 
 
 async def test_handle_linode_nodebalancer_config_get(sample_config: Config) -> None:
@@ -8287,10 +8281,10 @@ async def test_linode_nodebalancer_configs_list_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_config_list_tool()
     assert tool.name == "linode_nodebalancer_config_list"
     assert capability == Capability.Read
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "page" in tool.inputSchema["properties"]
-    assert "page_size" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["nodebalancer_id"]
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "page" in tool.input_schema["properties"]
+    assert "page_size" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["nodebalancer_id"]
 
 
 async def test_handle_linode_nodebalancer_configs_list(sample_config: Config) -> None:
@@ -8597,13 +8591,13 @@ def test_linode_nodebalancer_config_node_create_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_config_node_create_tool()
     assert tool.name == "linode_nodebalancer_config_node_create"
     assert capability == Capability.Write
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "nodebalancer_id" in required
     assert "config_id" in required
     assert "address" in required
     assert "label" in required
     assert "confirm" in required
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
@@ -8813,10 +8807,10 @@ async def test_linode_nodebalancer_vpc_configs_list_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_vpc_config_list"
     assert capability == Capability.Read
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "page" in tool.inputSchema["properties"]
-    assert "page_size" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["nodebalancer_id"]
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "page" in tool.input_schema["properties"]
+    assert "page_size" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["nodebalancer_id"]
 
 
 async def test_handle_linode_nodebalancer_vpc_configs_list(
@@ -8928,9 +8922,9 @@ async def test_linode_nodebalancer_vpc_config_get_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_vpc_config_get"
     assert capability == Capability.Read
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "vpc_config_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["nodebalancer_id", "vpc_config_id"]
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "vpc_config_id" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["nodebalancer_id", "vpc_config_id"]
 
 
 async def test_handle_linode_nodebalancer_vpc_config_get(
@@ -9197,7 +9191,7 @@ async def test_linode_stackscript_delete_tool_schema() -> None:
 
     assert tool.name == "linode_stackscript_delete"
     assert capability == Capability.Destroy
-    assert set(tool.inputSchema["properties"]) == {
+    assert set(tool.input_schema["properties"]) == {
         "environment",
         "stackscript_id",
         "confirm",
@@ -9205,9 +9199,9 @@ async def test_linode_stackscript_delete_tool_schema() -> None:
         "mode",
         "plan_id",
     }
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    assert set(tool.inputSchema["required"]) == {"stackscript_id", "confirm"}
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    assert set(tool.input_schema["required"]) == {"stackscript_id", "confirm"}
 
 
 async def test_handle_linode_stackscript_delete_dry_run(sample_config: Config) -> None:
@@ -9333,8 +9327,8 @@ async def test_linode_stackscript_create_tool_schema() -> None:
 
     assert tool.name == "linode_stackscript_create"
     assert capability.name == "Write"
-    assert set(tool.inputSchema["required"]) == {"label", "script", "confirm"}
-    assert "images" in tool.inputSchema["properties"]
+    assert set(tool.input_schema["required"]) == {"label", "script", "confirm"}
+    assert "images" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_stackscript_create(sample_config: Config) -> None:
@@ -9428,9 +9422,6 @@ async def test_handle_linode_stackscript_create_validates_required_fields(
     assert len(result) == 1
     assert "Error" in result[0].text
     assert "images" in result[0].text
-
-
-# Stage 4: Write operations tests
 
 
 async def test_handle_linode_sshkey_create(sample_config: Config) -> None:
@@ -9771,8 +9762,8 @@ def test_linode_instance_create_tool_schema() -> None:
     from linodemcp.tools import create_linode_instance_create_tool
 
     tool, _ = create_linode_instance_create_tool()
-    props: dict[str, Any] = tool.inputSchema["properties"]
-    required: list[str] = tool.inputSchema["required"]
+    props: dict[str, Any] = tool.input_schema["properties"]
+    required: list[str] = tool.input_schema["required"]
 
     assert "firewall_id" in props, "schema must include firewall_id"
     assert "route_ipv4" in props, "schema must include route_ipv4"
@@ -9936,18 +9927,20 @@ async def test_handle_linode_instance_firewalls_update_rejects_invalid_paginatio
 def test_linode_instance_firewalls_update_tool_schema() -> None:
     """The Linode firewall assignment update schema exposes safety controls."""
     tool, capability = create_linode_instance_firewall_update_tool()
-    props: dict[str, Any] = tool.inputSchema["properties"]
+    props: dict[str, Any] = tool.input_schema["properties"]
 
     assert tool.name == "linode_instance_firewall_update"
     assert capability.name == "Write"
-    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceFirewallUpdateInput")
-    assert "linode_id" in tool.inputSchema["required"]
-    assert "confirm" in tool.inputSchema["required"]
+    assert tool.input_schema == proto_schema(
+        "linode.mcp.v1.InstanceFirewallUpdateInput"
+    )
+    assert "linode_id" in tool.input_schema["required"]
+    assert "confirm" in tool.input_schema["required"]
     # A repeated proto field cannot land in the generated required set, so
     # firewall_ids is optional at the schema level; the handler enforces it.
     assert "firewall_ids" in props
-    assert "firewall_ids" not in tool.inputSchema["required"]
-    assert "dry_run" not in tool.inputSchema["required"]
+    assert "firewall_ids" not in tool.input_schema["required"]
+    assert "dry_run" not in tool.input_schema["required"]
     assert props["dry_run"]["type"] == "boolean"
     assert props["confirm"]["type"] == "boolean"
 
@@ -10069,12 +10062,12 @@ async def test_handle_linode_instance_update_missing_field(
 def test_linode_instance_update_tool_schema() -> None:
     """The update tool schema exposes documented editable fields."""
     tool, capability = create_linode_instance_update_tool()
-    props: dict[str, Any] = tool.inputSchema["properties"]
+    props: dict[str, Any] = tool.input_schema["properties"]
 
     assert tool.name == "linode_instance_update"
     assert capability.name == "Write"
-    assert "instance_id" in tool.inputSchema["required"]
-    assert "confirm" in tool.inputSchema["required"]
+    assert "instance_id" in tool.input_schema["required"]
+    assert "confirm" in tool.input_schema["required"]
     for field in (
         "label",
         "group",
@@ -10168,8 +10161,10 @@ def test_linode_instance_mutate_tool_schema_requires_confirm() -> None:
 
     assert tool.name == "linode_instance_mutate"
     assert capability is Capability.Write
-    assert "confirm" in tool.inputSchema["required"]
-    assert tool.inputSchema["properties"]["allow_auto_disk_resize"]["type"] == "boolean"
+    assert "confirm" in tool.input_schema["required"]
+    assert (
+        tool.input_schema["properties"]["allow_auto_disk_resize"]["type"] == "boolean"
+    )
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -10269,8 +10264,8 @@ def test_linode_instance_upgrade_interfaces_tool_schema_requires_confirm() -> No
 
     assert tool.name == "linode_instance_interface_upgrade"
     assert capability is Capability.Write
-    assert "confirm" in tool.inputSchema["required"]
-    assert tool.inputSchema["properties"]["api_dry_run"]["type"] == "boolean"
+    assert "confirm" in tool.input_schema["required"]
+    assert tool.input_schema["properties"]["api_dry_run"]["type"] == "boolean"
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -10995,10 +10990,10 @@ async def test_linode_instance_firewalls_apply_tool_definition() -> None:
 
     assert tool.name == "linode_instance_firewall_apply"
     assert capability is Capability.Write
-    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceFirewallApplyInput")
-    assert tool.inputSchema["required"] == ["linode_id", "confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema == proto_schema("linode.mcp.v1.InstanceFirewallApplyInput")
+    assert tool.input_schema["required"] == ["linode_id", "confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_instance_firewalls_apply(sample_config: Config) -> None:
@@ -11084,9 +11079,9 @@ async def test_linode_firewall_settings_update_tool_definition() -> None:
 
     assert tool.name == "linode_firewall_settings_update"
     assert capability is Capability.Write
-    assert tool.inputSchema["required"] == ["confirm"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["default_firewall_ids"]["type"] == "object"
+    assert tool.input_schema["required"] == ["confirm"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["default_firewall_ids"]["type"] == "object"
 
 
 async def test_handle_linode_firewall_settings_update(sample_config: Config) -> None:
@@ -12195,15 +12190,15 @@ async def test_linode_nodebalancer_firewalls_update_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_firewall_update"
     assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["firewall_ids"]["type"] == "array"
-    assert "page" in tool.inputSchema["properties"]
-    assert "page_size" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["firewall_ids"]["type"] == "array"
+    assert "page" in tool.input_schema["properties"]
+    assert "page_size" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
     # firewall_ids is a required array in the hand-built schema; a repeated proto
     # field cannot land in the generated required set, so it drops to optional
     # there while the handler still enforces its presence.
-    assert tool.inputSchema["required"] == ["nodebalancer_id", "confirm"]
+    assert tool.input_schema["required"] == ["nodebalancer_id", "confirm"]
 
 
 async def test_handle_linode_nodebalancer_firewalls_update(
@@ -12354,10 +12349,10 @@ def test_linode_nodebalancer_config_rebuild_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_config_rebuild"
     assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "config_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["required"] == [
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "config_id" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == [
         "nodebalancer_id",
         "config_id",
         "confirm",
@@ -12563,8 +12558,8 @@ def test_linode_nodebalancer_create_tool_exposes_optional_ipv4() -> None:
     tool, capability = create_linode_nodebalancer_create_tool()
 
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["ipv4"]["type"] == "string"
-    assert "ipv4" not in tool.inputSchema["required"]
+    assert tool.input_schema["properties"]["ipv4"]["type"] == "string"
+    assert "ipv4" not in tool.input_schema["required"]
 
 
 async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
@@ -12992,13 +12987,13 @@ async def test_linode_nodebalancer_config_node_update_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_config_node_update_tool()
     assert tool.name == "linode_nodebalancer_config_node_update"
     assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "config_id" in tool.inputSchema["properties"]
-    assert "node_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert "mode" in tool.inputSchema["properties"]
-    assert "weight" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == [
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "config_id" in tool.input_schema["properties"]
+    assert "node_id" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert "mode" in tool.input_schema["properties"]
+    assert "weight" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == [
         "nodebalancer_id",
         "config_id",
         "node_id",
@@ -13316,12 +13311,12 @@ async def test_linode_nodebalancer_config_delete_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_config_delete_tool()
     assert tool.name == "linode_nodebalancer_config_delete"
     assert capability == Capability.Destroy
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "nodebalancer_id",
         "config_id",
         "confirm",
     ]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_nodebalancer_config_delete(
@@ -13474,7 +13469,7 @@ async def test_linode_nodebalancer_config_node_delete_tool_definition() -> None:
     """Test linode_nodebalancer_config_node_delete tool definition."""
     tool, _ = create_linode_nodebalancer_config_node_delete_tool()
     assert tool.name == "linode_nodebalancer_config_node_delete"
-    assert tool.inputSchema["required"] == [
+    assert tool.input_schema["required"] == [
         "nodebalancer_id",
         "config_id",
         "node_id",
@@ -13622,9 +13617,6 @@ async def test_nodebalancer_config_node_delete_dry_run_still_validates_ids(
 
     assert len(result) == 1
     assert "node_id is required" in result[0].text
-
-
-# Object Storage tools
 
 
 async def test_handle_linode_object_storage_buckets_list(
@@ -14178,16 +14170,13 @@ async def test_handle_linode_object_storage_types_list_error(
         assert "Failed" in result[0].text
 
 
-# Phase 2: Access Key & Transfer Tests
-
-
 def test_linode_object_storage_endpoints_list_tool_schema() -> None:
     """Object Storage endpoints list schema has no route-specific arguments."""
     tool, capability = create_linode_object_storage_endpoint_list_tool()
 
     assert capability is Capability.Read
     assert tool.name == "linode_object_storage_endpoint_list"
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_object_storage_endpoints_list(
@@ -14355,7 +14344,7 @@ def test_linode_object_storage_quotas_list_tool_schema() -> None:
 
     assert capability is Capability.Read
     assert tool.name == "linode_object_storage_quota_list"
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_object_storage_quotas_list(
@@ -14407,8 +14396,8 @@ def test_linode_object_storage_quota_get_tool_schema() -> None:
 
     assert capability is Capability.Read
     assert tool.name == "linode_object_storage_quota_get"
-    assert tool.inputSchema["required"] == ["obj_quota_id"]
-    assert tool.inputSchema["properties"]["obj_quota_id"]["type"] == "string"
+    assert tool.input_schema["required"] == ["obj_quota_id"]
+    assert tool.input_schema["properties"]["obj_quota_id"]["type"] == "string"
 
 
 async def test_handle_linode_object_storage_quota_get(
@@ -14498,8 +14487,8 @@ def test_linode_object_storage_quota_usage_tool_schema() -> None:
 
     assert capability is Capability.Read
     assert tool.name == "linode_object_storage_quota_usage_get"
-    assert tool.inputSchema["required"] == ["obj_quota_id"]
-    assert tool.inputSchema["properties"]["obj_quota_id"]["type"] == "string"
+    assert tool.input_schema["required"] == ["obj_quota_id"]
+    assert tool.input_schema["properties"]["obj_quota_id"]["type"] == "string"
 
 
 async def test_handle_linode_object_storage_quota_usage(
@@ -14685,17 +14674,14 @@ async def test_handle_linode_object_storage_bucket_access_get_error(
         assert "Failed" in result[0].text
 
 
-# Phase 3: Object Storage Write Bucket Tool Tests
-
-
 def test_linode_object_storage_cancel_tool_schema() -> None:
     """Object Storage cancel tool should require boolean confirmation."""
     tool, capability = create_linode_object_storage_cancel_tool()
 
     assert capability is Capability.Write
     assert tool.name == "linode_object_storage_cancel"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert "confirm" in tool.inputSchema["required"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert "confirm" in tool.input_schema["required"]
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -15187,9 +15173,6 @@ async def test_handle_object_storage_bucket_access_update_success(
         assert payload["access"] == {"acl": "public-read", "cors_enabled": False}
 
 
-# Phase 4: Object Storage Access Key Write Tool Tests
-
-
 async def test_object_storage_key_create_requires_confirm(
     sample_config: Config,
 ) -> None:
@@ -15460,9 +15443,6 @@ async def test_object_storage_key_delete_missing_env() -> None:
 
     assert len(result) == 1
     assert "Error" in result[0].text
-
-
-# Phase 5: Presigned URLs, Object ACL & SSL Tool Tests
 
 
 async def test_presigned_url_missing_name(
@@ -16287,9 +16267,6 @@ async def test_ssl_delete_missing_env() -> None:
     assert "Error" in result[0].text
 
 
-# ── LKE Tool Tests ──────────────────────────────────────────────
-
-
 async def test_lke_clusters_list_tool_definition() -> None:
     """LKE clusters list tool should have correct name."""
     tool, _ = create_linode_lke_cluster_list_tool()
@@ -16300,14 +16277,14 @@ async def test_lke_cluster_get_tool_definition() -> None:
     """LKE cluster get tool should require cluster_id."""
     tool, _ = create_linode_lke_cluster_get_tool()
     assert tool.name == "linode_lke_cluster_get"
-    assert "cluster_id" in (tool.inputSchema.get("required") or [])
+    assert "cluster_id" in (tool.input_schema.get("required") or [])
 
 
 async def test_lke_cluster_create_tool_definition() -> None:
     """LKE cluster create tool should require label, region, k8s_version."""
     tool, _ = create_linode_lke_cluster_create_tool()
     assert tool.name == "linode_lke_cluster_create"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "label" in required
     assert "region" in required
     assert "k8s_version" in required
@@ -16317,7 +16294,7 @@ async def test_lke_cluster_delete_tool_definition() -> None:
     """LKE cluster delete tool should require cluster_id and confirm."""
     tool, _ = create_linode_lke_cluster_delete_tool()
     assert tool.name == "linode_lke_cluster_delete"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "cluster_id" in required
     assert "confirm" in required
 
@@ -17648,9 +17625,6 @@ async def test_lke_tier_versions_list_rejects_malformed_tier(
     mock_cls.assert_not_called()
 
 
-# VPC tool definition tests
-
-
 async def test_vpcs_list_tool_definition() -> None:
     """VPCs list tool should have correct name."""
     tool, _ = create_linode_vpc_list_tool()
@@ -17667,7 +17641,7 @@ async def test_vlan_delete_tool_definition() -> None:
     """VLAN delete tool should have correct name and required params."""
     tool, _ = create_linode_vlan_delete_tool()
     assert tool.name == "linode_vlan_delete"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "region_id" in required
     assert "label" in required
     assert "confirm" in required
@@ -17677,14 +17651,14 @@ async def test_vpc_get_tool_definition() -> None:
     """VPC get tool should require vpc_id."""
     tool, _ = create_linode_vpc_get_tool()
     assert tool.name == "linode_vpc_get"
-    assert "vpc_id" in (tool.inputSchema.get("required") or [])
+    assert "vpc_id" in (tool.input_schema.get("required") or [])
 
 
 async def test_vpc_create_tool_definition() -> None:
     """VPC create tool should require label, region, confirm."""
     tool, _ = create_linode_vpc_create_tool()
     assert tool.name == "linode_vpc_create"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "label" in required
     assert "region" in required
     assert "confirm" in required
@@ -17694,7 +17668,7 @@ async def test_vpc_delete_tool_definition() -> None:
     """VPC delete tool should require vpc_id and confirm."""
     tool, _ = create_linode_vpc_delete_tool()
     assert tool.name == "linode_vpc_delete"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "vpc_id" in required
     assert "confirm" in required
 
@@ -17703,8 +17677,8 @@ async def test_ipv6_range_create_tool_definition() -> None:
     """IPv6 range create tool should require prefix_length and confirm."""
     tool, _ = create_linode_ipv6_range_create_tool()
     assert tool.name == "linode_ipv6_range_create"
-    required: list[str] = tool.inputSchema.get("required") or []
-    properties: dict[str, Any] = tool.inputSchema.get("properties") or {}
+    required: list[str] = tool.input_schema.get("required") or []
+    properties: dict[str, Any] = tool.input_schema.get("properties") or {}
     assert "prefix_length" in required
     assert "confirm" in required
     assert "linode_id" in properties
@@ -17717,8 +17691,8 @@ async def test_ipv6_range_get_tool_definition() -> None:
     """IPv6 range get tool should require range without confirm."""
     tool, _ = create_linode_ipv6_range_get_tool()
     assert tool.name == "linode_ipv6_range_get"
-    required: list[str] = tool.inputSchema.get("required") or []
-    properties: dict[str, Any] = tool.inputSchema.get("properties") or {}
+    required: list[str] = tool.input_schema.get("required") or []
+    properties: dict[str, Any] = tool.input_schema.get("properties") or {}
     assert "range" in required
     assert "confirm" not in required
     assert "confirm" not in properties
@@ -17728,7 +17702,7 @@ async def test_ipv6_range_delete_tool_definition() -> None:
     """IPv6 range delete tool should require range and confirm."""
     tool, _ = create_linode_ipv6_range_delete_tool()
     assert tool.name == "linode_ipv6_range_delete"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "range" in required
     assert "confirm" in required
 
@@ -17737,7 +17711,7 @@ async def test_vpc_subnet_create_tool_definition() -> None:
     """VPC subnet create tool should require vpc_id, label, ipv4, confirm."""
     tool, _ = create_linode_vpc_subnet_create_tool()
     assert tool.name == "linode_vpc_subnet_create"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "vpc_id" in required
     assert "label" in required
     assert "ipv4" in required
@@ -17748,13 +17722,10 @@ async def test_vpc_subnet_delete_tool_definition() -> None:
     """VPC subnet delete tool should require vpc_id, subnet_id, confirm."""
     tool, _ = create_linode_vpc_subnet_delete_tool()
     assert tool.name == "linode_vpc_subnet_delete"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "vpc_id" in required
     assert "subnet_id" in required
     assert "confirm" in required
-
-
-# VPC handler tests
 
 
 async def test_vpcs_list(sample_config: Config) -> None:
@@ -19182,21 +19153,18 @@ async def test_vpc_subnet_update_dry_run_still_validates_label(
     assert "label is required" in result[0].text
 
 
-# ── Instance Backups tool definition tests ──
-
-
 async def test_instance_backups_list_tool_definition() -> None:
     """Backups list tool should require linode_id."""
     tool, _ = create_linode_instance_backup_list_tool()
     assert tool.name == "linode_instance_backup_list"
-    assert "linode_id" in (tool.inputSchema.get("required") or [])
+    assert "linode_id" in (tool.input_schema.get("required") or [])
 
 
 async def test_instance_backup_get_tool_definition() -> None:
     """Backup get tool should require linode_id and backup_id."""
     tool, _ = create_linode_instance_backup_get_tool()
     assert tool.name == "linode_instance_backup_get"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "backup_id" in required
 
@@ -19205,7 +19173,7 @@ async def test_instance_backup_create_tool_def() -> None:
     """Backup create tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_backup_create_tool()
     assert tool.name == "linode_instance_backup_create"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "confirm" in required
 
@@ -19214,7 +19182,7 @@ async def test_instance_backup_restore_tool_def() -> None:
     """Backup restore should require linode_id, backup_id, linode_id, confirm."""
     tool, _ = create_linode_instance_backup_restore_tool()
     assert tool.name == "linode_instance_backup_restore"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "backup_id" in required
     assert "linode_id" in required
@@ -19225,7 +19193,7 @@ async def test_instance_backups_enable_tool_def() -> None:
     """Backups enable tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_backups_enable_tool()
     assert tool.name == "linode_instance_backups_enable"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "confirm" in required
 
@@ -19234,12 +19202,9 @@ async def test_instance_backups_cancel_tool_def() -> None:
     """Backups cancel tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_backups_cancel_tool()
     assert tool.name == "linode_instance_backups_cancel"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "confirm" in required
-
-
-# ── Instance Backups handler tests ──
 
 
 async def test_instance_backups_list_missing_id(
@@ -19416,21 +19381,18 @@ async def test_instance_backup_get_invalid_linode_id(
     assert "linode_id must be a valid integer" in result[0].text
 
 
-# ── Instance Disks tool definition tests ──
-
-
 async def test_instance_disks_list_tool_def() -> None:
     """Disks list tool should require linode_id."""
     tool, _ = create_linode_instance_disk_list_tool()
     assert tool.name == "linode_instance_disk_list"
-    assert "linode_id" in (tool.inputSchema.get("required") or [])
+    assert "linode_id" in (tool.input_schema.get("required") or [])
 
 
 async def test_instance_disk_get_tool_def() -> None:
     """Disk get tool should require linode_id and disk_id."""
     tool, _ = create_linode_instance_disk_get_tool()
     assert tool.name == "linode_instance_disk_get"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "disk_id" in required
 
@@ -19439,7 +19401,7 @@ async def test_instance_disk_create_tool_def() -> None:
     """Disk create should require linode_id, label, size, confirm."""
     tool, _ = create_linode_instance_disk_create_tool()
     assert tool.name == "linode_instance_disk_create"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "label" in required
     assert "size" in required
@@ -19450,7 +19412,7 @@ async def test_instance_disk_update_tool_def() -> None:
     """Disk update should require linode_id, disk_id, confirm."""
     tool, _ = create_linode_instance_disk_update_tool()
     assert tool.name == "linode_instance_disk_update"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "disk_id" in required
     assert "confirm" in required
@@ -19460,7 +19422,7 @@ async def test_instance_disk_delete_tool_def() -> None:
     """Disk delete should require linode_id, disk_id, confirm."""
     tool, _ = create_linode_instance_disk_delete_tool()
     assert tool.name == "linode_instance_disk_delete"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "disk_id" in required
     assert "confirm" in required
@@ -19470,7 +19432,7 @@ async def test_instance_disk_clone_tool_def() -> None:
     """Disk clone should require linode_id, disk_id, confirm."""
     tool, _ = create_linode_instance_disk_clone_tool()
     assert tool.name == "linode_instance_disk_clone"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "disk_id" in required
     assert "confirm" in required
@@ -19480,14 +19442,11 @@ async def test_instance_disk_resize_tool_def() -> None:
     """Disk resize should require linode_id, disk_id, size, confirm."""
     tool, _ = create_linode_instance_disk_resize_tool()
     assert tool.name == "linode_instance_disk_resize"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "disk_id" in required
     assert "size" in required
     assert "confirm" in required
-
-
-# ── Instance Disks handler tests ──
 
 
 async def test_instance_disks_list_success(
@@ -19599,21 +19558,18 @@ async def test_instance_disk_resize_no_confirm(
     assert "confirm" in result[0].text.lower()
 
 
-# ── Instance IPs tool definition tests ──
-
-
 async def test_instance_ips_list_tool_def() -> None:
     """IPs list tool should require linode_id."""
     tool, _ = create_linode_instance_ip_list_tool()
     assert tool.name == "linode_instance_ip_list"
-    assert "linode_id" in (tool.inputSchema.get("required") or [])
+    assert "linode_id" in (tool.input_schema.get("required") or [])
 
 
 async def test_instance_ip_get_tool_def() -> None:
     """IP get tool should require linode_id and address."""
     tool, _ = create_linode_instance_ip_get_tool()
     assert tool.name == "linode_instance_ip_get"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "address" in required
 
@@ -19622,7 +19578,7 @@ async def test_instance_ip_allocate_tool_def() -> None:
     """IP allocate should require linode_id, type, confirm."""
     tool, _ = create_linode_instance_ip_allocate_tool()
     assert tool.name == "linode_instance_ip_allocate"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "type" in required
     assert "confirm" in required
@@ -19632,7 +19588,7 @@ async def test_instance_ip_update_tool_def() -> None:
     """IP update should require linode_id, address, rdns, confirm."""
     tool, _ = create_linode_instance_ip_update_tool()
     assert tool.name == "linode_instance_ip_update"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "address" in required
     assert "rdns" in required
@@ -19643,13 +19599,10 @@ async def test_instance_ip_delete_tool_def() -> None:
     """IP delete should require linode_id, address, confirm."""
     tool, _ = create_linode_instance_ip_delete_tool()
     assert tool.name == "linode_instance_ip_delete"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "address" in required
     assert "confirm" in required
-
-
-# ── Instance IPs handler tests ──
 
 
 async def test_instance_ips_list_success(
@@ -19810,14 +19763,11 @@ async def test_instance_ip_delete_no_confirm(
     assert "confirm" in result[0].text.lower()
 
 
-# ── Instance Actions tool definition tests ──
-
-
 async def test_instance_clone_tool_def() -> None:
     """Clone tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_clone_tool()
     assert tool.name == "linode_instance_clone"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "confirm" in required
 
@@ -19826,7 +19776,7 @@ async def test_instance_migrate_tool_def() -> None:
     """Migrate tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_migrate_tool()
     assert tool.name == "linode_instance_migrate"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "confirm" in required
 
@@ -19835,7 +19785,7 @@ async def test_instance_rebuild_tool_def() -> None:
     """Rebuild should require linode_id, image, root_pass, confirm."""
     tool, _ = create_linode_instance_rebuild_tool()
     assert tool.name == "linode_instance_rebuild"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "image" in required
     assert "root_pass" in required
@@ -19846,7 +19796,7 @@ async def test_instance_rescue_tool_def() -> None:
     """Rescue tool should require linode_id and confirm."""
     tool, _ = create_linode_instance_rescue_tool()
     assert tool.name == "linode_instance_rescue"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "confirm" in required
 
@@ -19855,13 +19805,10 @@ async def test_instance_password_reset_tool_def() -> None:
     """Password reset should require linode_id, root_pass, confirm."""
     tool, _ = create_linode_instance_password_reset_tool()
     assert tool.name == "linode_instance_password_reset"
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "root_pass" in required
     assert "confirm" in required
-
-
-# ── Instance Actions handler tests ──
 
 
 async def test_instance_clone_no_confirm(
@@ -20017,11 +19964,6 @@ async def test_instance_password_reset_missing_pass(
     assert "root_pass" in result[0].text.lower()
 
 
-# ---------------------------------------------------------------------------
-# execute_tool wrapper tests
-# ---------------------------------------------------------------------------
-
-
 async def test_execute_tool_missing_environment(sample_config: Config) -> None:
     """execute_tool returns an error when the requested environment doesn't exist."""
     result = await handle_linode_profile_get(
@@ -20093,11 +20035,6 @@ async def test_execute_tool_callback_exception(sample_config: Config) -> None:
         assert len(result) == 1
         assert "Failed to" in result[0].text
         assert "boom" in result[0].text
-
-
-# ---------------------------------------------------------------------------
-# Instance status filter tests
-# ---------------------------------------------------------------------------
 
 
 def _make_instance(
@@ -20180,11 +20117,6 @@ async def test_instance_no_filter_returns_all(
 
     data = json.loads(result[0].text)
     assert data["count"] == 2
-
-
-# ---------------------------------------------------------------------------
-# Region capability filter tests
-# ---------------------------------------------------------------------------
 
 
 async def test_region_capability_filter(sample_config: Config) -> None:
@@ -20276,11 +20208,6 @@ async def test_region_no_filter_returns_all(sample_config: Config) -> None:
 
     data = json.loads(result[0].text)
     assert data["count"] == 2
-
-
-# ---------------------------------------------------------------------------
-# Instance Deep: success-path tests (Phase 2)
-# ---------------------------------------------------------------------------
 
 
 async def test_handle_linode_instance_backup_get_success(
@@ -21500,9 +21427,9 @@ def test_create_linode_monitor_services_list_tool() -> None:
     tool, capability = create_linode_monitor_service_list_tool()
     assert tool.name == "linode_monitor_service_list"
     assert capability is Capability.Read
-    assert tool.inputSchema["type"] == "object"
-    assert "environment" in tool.inputSchema["properties"]
-    assert "confirm" not in tool.inputSchema["properties"]
+    assert tool.input_schema["type"] == "object"
+    assert "environment" in tool.input_schema["properties"]
+    assert "confirm" not in tool.input_schema["properties"]
 
 
 async def test_handle_linode_monitor_services_list(
@@ -21543,7 +21470,7 @@ def test_create_linode_monitor_service_get_tool() -> None:
     tool, capability = create_linode_monitor_service_get_tool()
     assert tool.name == "linode_monitor_service_get"
     assert capability is Capability.Read
-    schema = tool.inputSchema
+    schema = tool.input_schema
     assert "confirm" not in schema["properties"]
     assert schema["required"] == ["service_type"]
     assert "service_type" in schema["properties"]
@@ -21598,7 +21525,7 @@ def test_create_linode_monitor_service_alert_definition_get_tool() -> None:
     tool, capability = create_linode_monitor_service_alert_definition_get_tool()
     assert tool.name == "linode_monitor_service_alert_definition_get"
     assert capability is Capability.Read
-    schema = tool.inputSchema
+    schema = tool.input_schema
     assert "confirm" not in schema["properties"]
     assert sorted(schema["required"]) == ["alert_id", "service_type"]
     assert "service_type" in schema["properties"]
@@ -21663,7 +21590,7 @@ def test_create_linode_monitor_service_token_create_tool() -> None:
     """Tool definition advertises service_type; entity_ids is handler-enforced."""
     tool, _ = create_linode_monitor_service_token_create_tool()
     assert tool.name == "linode_monitor_service_token_create"
-    schema = tool.inputSchema
+    schema = tool.input_schema
     required = schema["required"]
     assert "service_type" in required
     # entity_ids converts to a repeated proto field, which the generator never
@@ -21784,9 +21711,9 @@ def test_create_linode_profile_tfa_enable_tool() -> None:
 
     assert tool.name == "linode_profile_tfa_enable"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["confirm"]
-    assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["confirm"]
+    assert "environment" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_profile_tfa_enable_requires_confirm(
@@ -21859,9 +21786,9 @@ def test_create_linode_profile_tfa_disable_tool() -> None:
 
     assert tool.name == "linode_profile_tfa_disable"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["confirm"]
-    assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["confirm"]
+    assert "environment" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_profile_tfa_disable_requires_confirm(
@@ -21928,10 +21855,10 @@ def test_create_linode_profile_tfa_enable_confirm_tool() -> None:
 
     assert tool.name == "linode_profile_tfa_enable_confirm"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["tfa_code", "confirm"]
-    assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["tfa_code"]["type"] == "string"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["tfa_code", "confirm"]
+    assert "environment" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["tfa_code"]["type"] == "string"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_profile_tfa_enable_confirm_requires_tfa_code(
@@ -22016,11 +21943,11 @@ def test_create_linode_profile_phone_number_send_tool() -> None:
 
     assert tool.name == "linode_profile_phone_number_send"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["iso_code", "phone_number", "confirm"]
-    assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["iso_code"]["type"] == "string"
-    assert tool.inputSchema["properties"]["phone_number"]["type"] == "string"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["iso_code", "phone_number", "confirm"]
+    assert "environment" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["iso_code"]["type"] == "string"
+    assert tool.input_schema["properties"]["phone_number"]["type"] == "string"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_profile_phone_number_send_requires_iso_code(
@@ -22153,9 +22080,9 @@ def test_create_linode_profile_phone_number_delete_tool() -> None:
 
     assert tool.name == "linode_profile_phone_number_delete"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["confirm"]
-    assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["confirm"]
+    assert "environment" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_profile_phone_number_delete_requires_confirm(
@@ -22229,10 +22156,10 @@ def test_create_linode_profile_phone_number_verify_tool() -> None:
 
     assert tool.name == "linode_profile_phone_number_verify"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["otp_code", "confirm"]
-    assert "environment" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["otp_code"]["type"] == "string"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["otp_code", "confirm"]
+    assert "environment" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["otp_code"]["type"] == "string"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_profile_phone_number_verify_requires_otp_code(
@@ -22312,7 +22239,7 @@ def test_create_linode_profile_security_questions_list_tool() -> None:
 
     assert tool.name == "linode_profile_security_question_list"
     assert capability == Capability.Read
-    assert "required" not in tool.inputSchema
+    assert "required" not in tool.input_schema
 
 
 async def test_handle_linode_profile_security_questions_list_success(
@@ -22457,10 +22384,10 @@ def test_create_linode_profile_security_questions_answer_tool() -> None:
 
     assert tool.name == "linode_profile_security_question_answer"
     assert capability == Capability.Admin
-    assert "security_questions" not in tool.inputSchema["required"]
-    assert "confirm" in tool.inputSchema["required"]
-    assert tool.inputSchema["properties"]["security_questions"]["type"] == "array"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert "security_questions" not in tool.input_schema["required"]
+    assert "confirm" in tool.input_schema["required"]
+    assert tool.input_schema["properties"]["security_questions"]["type"] == "array"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 async def test_handle_linode_profile_security_questions_answer_requires_confirm(
@@ -22598,10 +22525,10 @@ def test_create_linode_profile_token_create_tool() -> None:
 
     assert tool.name == "linode_profile_token_create"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["confirm"]
-    assert tool.inputSchema["properties"]["label"]["type"] == "string"
-    assert "expiry" in tool.inputSchema["properties"]
-    assert "scopes" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["confirm"]
+    assert tool.input_schema["properties"]["label"]["type"] == "string"
+    assert "expiry" in tool.input_schema["properties"]
+    assert "scopes" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_profile_token_create_requires_confirm(
@@ -22718,8 +22645,8 @@ def test_create_linode_profile_tokens_list_tool() -> None:
 
     assert tool.name == "linode_profile_token_list"
     assert capability is Capability.Read
-    assert "required" not in tool.inputSchema
-    assert "environment" in tool.inputSchema["properties"]
+    assert "required" not in tool.input_schema
+    assert "environment" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_profile_tokens_list_success(
@@ -22828,8 +22755,8 @@ def test_create_linode_profile_token_get_tool() -> None:
 
     assert tool.name == "linode_profile_token_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["token_id"]
-    assert tool.inputSchema["properties"]["token_id"]["type"] == "integer"
+    assert tool.input_schema["required"] == ["token_id"]
+    assert tool.input_schema["properties"]["token_id"]["type"] == "integer"
 
 
 async def test_handle_linode_profile_token_get_requires_token_id(
@@ -22944,8 +22871,8 @@ def test_create_linode_profile_logins_list_tool() -> None:
 
     assert tool.name == "linode_profile_login_list"
     assert capability is Capability.Read
-    assert "required" not in tool.inputSchema
-    assert "environment" in tool.inputSchema["properties"]
+    assert "required" not in tool.input_schema
+    assert "environment" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_profile_logins_list_success(
@@ -23031,8 +22958,8 @@ def test_create_linode_profile_login_get_tool() -> None:
 
     assert tool.name == "linode_profile_login_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["login_id"]
-    assert "login_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["login_id"]
+    assert "login_id" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_profile_login_get_requires_login_id(
@@ -23113,8 +23040,8 @@ def test_create_linode_profile_token_revoke_tool() -> None:
 
     assert tool.name == "linode_profile_token_delete"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["token_id", "confirm"]
-    assert tool.inputSchema["properties"]["token_id"]["type"] == "integer"
+    assert tool.input_schema["required"] == ["token_id", "confirm"]
+    assert tool.input_schema["properties"]["token_id"]["type"] == "integer"
 
 
 async def test_handle_linode_profile_token_revoke_requires_token_id(
@@ -23180,9 +23107,9 @@ def test_create_linode_profile_token_update_tool() -> None:
 
     assert tool.name == "linode_profile_token_update"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["token_id", "confirm"]
-    assert tool.inputSchema["properties"]["token_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["label"]["type"] == "string"
+    assert tool.input_schema["required"] == ["token_id", "confirm"]
+    assert tool.input_schema["properties"]["token_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["label"]["type"] == "string"
 
 
 async def test_handle_linode_profile_token_update_requires_token_id(
@@ -23289,8 +23216,8 @@ def test_create_linode_profile_devices_list_tool() -> None:
 
     assert tool.name == "linode_profile_device_list"
     assert capability is Capability.Read
-    assert "required" not in tool.inputSchema
-    assert "environment" in tool.inputSchema["properties"]
+    assert "required" not in tool.input_schema
+    assert "environment" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_profile_devices_list_success(
@@ -23380,9 +23307,9 @@ def test_create_linode_profile_apps_list_tool() -> None:
 
     assert tool.name == "linode_profile_app_list"
     assert capability is Capability.Read
-    assert "required" not in tool.inputSchema
-    assert tool.inputSchema["properties"]["page"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["page_size"]["type"] == "integer"
+    assert "required" not in tool.input_schema
+    assert tool.input_schema["properties"]["page"]["type"] == "integer"
+    assert tool.input_schema["properties"]["page_size"]["type"] == "integer"
 
 
 def test_linode_profile_apps_list_tool_is_exported_and_registered() -> None:
@@ -23466,8 +23393,8 @@ def test_create_linode_profile_app_get_tool() -> None:
 
     assert tool.name == "linode_profile_app_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["app_id"]
-    assert "app_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["app_id"]
+    assert "app_id" in tool.input_schema["properties"]
 
 
 def test_linode_profile_app_get_tool_is_exported_and_registered() -> None:
@@ -23533,9 +23460,9 @@ def test_create_linode_profile_app_revoke_tool() -> None:
 
     assert tool.name == "linode_profile_app_delete"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["app_id", "confirm"]
-    assert tool.inputSchema["properties"]["app_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["app_id", "confirm"]
+    assert tool.input_schema["properties"]["app_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 def test_linode_profile_app_revoke_tool_is_exported_and_registered() -> None:
@@ -23621,8 +23548,8 @@ def test_create_linode_profile_device_get_tool() -> None:
 
     assert tool.name == "linode_profile_device_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["device_id"]
-    assert tool.inputSchema["properties"]["device_id"]["type"] == "integer"
+    assert tool.input_schema["required"] == ["device_id"]
+    assert tool.input_schema["properties"]["device_id"]["type"] == "integer"
 
 
 @pytest.mark.parametrize("device_id", [None, 0, -1, True, "123", "/", "?", ".."])
@@ -23689,9 +23616,9 @@ def test_create_linode_profile_device_revoke_tool() -> None:
 
     assert tool.name == "linode_profile_device_revoke"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["device_id", "confirm"]
-    assert tool.inputSchema["properties"]["device_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == ["device_id", "confirm"]
+    assert tool.input_schema["properties"]["device_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -23762,11 +23689,11 @@ def test_create_linode_placement_groups_list_tool() -> None:
 
     assert tool.name == "linode_placement_group_list"
     assert capability is Capability.Read
-    assert "page" not in tool.inputSchema.get("required", [])
-    assert "page_size" not in tool.inputSchema.get("required", [])
-    assert "environment" in tool.inputSchema["properties"]
-    assert "page" in tool.inputSchema["properties"]
-    assert "page_size" in tool.inputSchema["properties"]
+    assert "page" not in tool.input_schema.get("required", [])
+    assert "page_size" not in tool.input_schema.get("required", [])
+    assert "environment" in tool.input_schema["properties"]
+    assert "page" in tool.input_schema["properties"]
+    assert "page_size" in tool.input_schema["properties"]
 
 
 def test_linode_placement_groups_list_tool_is_exported_and_registered() -> None:
@@ -23865,8 +23792,8 @@ def test_create_linode_placement_group_get_tool() -> None:
 
     assert tool.name == "linode_placement_group_get"
     assert capability is Capability.Read
-    assert tool.inputSchema["required"] == ["group_id"]
-    assert "group_id" in tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["group_id"]
+    assert "group_id" in tool.input_schema["properties"]
 
 
 @pytest.mark.parametrize("group_id", [None, 0, -1, True, "789", "/", "?", ".."])
@@ -23931,7 +23858,7 @@ def test_create_linode_placement_group_create_tool() -> None:
 
     assert tool.name == "linode_placement_group_create"
     assert capability is Capability.Write
-    assert set(tool.inputSchema["required"]) == {
+    assert set(tool.input_schema["required"]) == {
         "label",
         "region",
         "placement_group_type",
@@ -23945,8 +23872,8 @@ def test_create_linode_placement_group_create_tool() -> None:
         "placement_group_policy",
         "confirm",
     ):
-        assert key in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+        assert key in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -24119,9 +24046,9 @@ def test_create_linode_placement_group_delete_tool() -> None:
 
     assert tool.name == "linode_placement_group_delete"
     assert capability is Capability.Destroy
-    assert set(tool.inputSchema["required"]) == {"group_id", "confirm"}
-    assert "group_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert set(tool.input_schema["required"]) == {"group_id", "confirm"}
+    assert "group_id" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -24198,10 +24125,10 @@ def test_create_linode_placement_group_update_tool() -> None:
 
     assert tool.name == "linode_placement_group_update"
     assert capability is Capability.Write
-    assert set(tool.inputSchema["required"]) == {"group_id", "label", "confirm"}
-    assert "group_id" in tool.inputSchema["properties"]
-    assert "label" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert set(tool.input_schema["required"]) == {"group_id", "label", "confirm"}
+    assert "group_id" in tool.input_schema["properties"]
+    assert "label" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -24298,10 +24225,10 @@ def test_create_linode_placement_group_assign_tool() -> None:
 
     assert tool.name == "linode_placement_group_assign"
     assert capability is Capability.Write
-    assert set(tool.inputSchema["required"]) == {"group_id", "confirm"}
-    assert "group_id" in tool.inputSchema["properties"]
-    assert "linodes" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert set(tool.input_schema["required"]) == {"group_id", "confirm"}
+    assert "group_id" in tool.input_schema["properties"]
+    assert "linodes" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -24394,10 +24321,10 @@ def test_create_linode_placement_group_unassign_tool() -> None:
 
     assert tool.name == "linode_placement_group_unassign"
     assert capability is Capability.Write
-    assert set(tool.inputSchema["required"]) == {"group_id", "confirm"}
-    assert "group_id" in tool.inputSchema["properties"]
-    assert "linodes" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert set(tool.input_schema["required"]) == {"group_id", "confirm"}
+    assert "group_id" in tool.input_schema["properties"]
+    assert "linodes" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
 
 
 @pytest.mark.parametrize("confirm", [None, False, "true", 1])
@@ -24489,8 +24416,8 @@ async def test_create_linode_nodebalancer_stats_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_stats_get_tool()
     assert tool.name == "linode_nodebalancer_stats_get"
     assert capability == Capability.Read
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["nodebalancer_id"]
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["nodebalancer_id"]
 
 
 async def test_handle_linode_nodebalancer_stats(sample_config: Config) -> None:
@@ -24556,8 +24483,8 @@ async def test_linode_nodebalancer_firewalls_list_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_firewall_list"
     assert capability == Capability.Read
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["nodebalancer_id"]
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["nodebalancer_id"]
 
 
 async def test_handle_linode_nodebalancer_firewalls_list(
@@ -24662,10 +24589,10 @@ async def test_linode_nodebalancer_config_node_get_tool_definition() -> None:
     """Test linode_nodebalancer_config_node_get tool definition."""
     tool, _capability = create_linode_nodebalancer_config_node_get_tool()
     assert tool.name == "linode_nodebalancer_config_node_get"
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "config_id" in tool.inputSchema["properties"]
-    assert "node_id" in tool.inputSchema["properties"]
-    assert set(tool.inputSchema["required"]) == {
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "config_id" in tool.input_schema["properties"]
+    assert "node_id" in tool.input_schema["properties"]
+    assert set(tool.input_schema["required"]) == {
         "nodebalancer_id",
         "config_id",
         "node_id",
@@ -24755,10 +24682,10 @@ def test_linode_nodebalancer_config_update_tool_definition() -> None:
 
     assert tool.name == "linode_nodebalancer_config_update"
     assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "config_id" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["required"] == [
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "config_id" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["required"] == [
         "nodebalancer_id",
         "config_id",
         "confirm",
@@ -24966,11 +24893,10 @@ async def test_linode_nodebalancer_config_create_tool_definition() -> None:
     tool, capability = create_linode_nodebalancer_config_create_tool()
     assert tool.name == "linode_nodebalancer_config_create"
     assert capability == Capability.Write
-    assert "nodebalancer_id" in tool.inputSchema["properties"]
-    assert "confirm" in tool.inputSchema["properties"]
-    assert tool.inputSchema["required"] == ["nodebalancer_id", "port", "confirm"]
-    # Verify optional body fields are present
-    props = tool.inputSchema["properties"]
+    assert "nodebalancer_id" in tool.input_schema["properties"]
+    assert "confirm" in tool.input_schema["properties"]
+    assert tool.input_schema["required"] == ["nodebalancer_id", "port", "confirm"]
+    props = tool.input_schema["properties"]
     assert "port" in props
     assert "protocol" in props
     assert "algorithm" in props
@@ -25228,7 +25154,6 @@ async def test_handle_linode_firewall_rule_version_get_missing_args(
     assert len(result) == 1
     assert "firewall_id is required" in result[0].text
 
-    # Invalid firewall_id types
     result = await handle_linode_firewall_rule_version_get(
         {"firewall_id": True, "version": "v1"}, sample_config
     )
@@ -25273,10 +25198,10 @@ def test_create_linode_firewall_template_get_tool_schema() -> None:
 
     assert tool.name == "linode_firewall_template_get"
     assert capability is Capability.Read
-    assert "slug" in tool.inputSchema["properties"]
-    assert "slug" in tool.inputSchema["required"]
-    assert "page" in tool.inputSchema["properties"]
-    assert "page_size" in tool.inputSchema["properties"]
+    assert "slug" in tool.input_schema["properties"]
+    assert "slug" in tool.input_schema["required"]
+    assert "page" in tool.input_schema["properties"]
+    assert "page_size" in tool.input_schema["properties"]
 
 
 async def test_handle_linode_firewall_template_get(sample_config: Config) -> None:
@@ -25445,7 +25370,6 @@ async def test_handle_linode_firewall_device_get_missing_args(
     assert len(result) == 1
     assert "firewall_id is required" in result[0].text
 
-    # Invalid types
     result = await handle_linode_firewall_device_get(
         {"firewall_id": True, "device_id": 456}, sample_config
     )
@@ -25506,7 +25430,6 @@ async def test_handle_linode_firewall_device_create_requires_confirm(
         handle_linode_firewall_device_create,
     )
 
-    # Test with confirm=False
     arguments = {
         "firewall_id": 12345,
         "id": 123,
@@ -25518,7 +25441,6 @@ async def test_handle_linode_firewall_device_create_requires_confirm(
     assert "Set confirm=true to proceed" in result[0].text
     assert "confirm=true" in result[0].text
 
-    # Test with missing confirm
     arguments = {"firewall_id": 12345, "id": 123, "type": "linode"}
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
@@ -25535,19 +25457,16 @@ async def test_handle_linode_firewall_device_create_missing_required_args(
         handle_linode_firewall_device_create,
     )
 
-    # Test missing firewall_id
     arguments = {"id": 123, "type": "linode", "confirm": True}
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
     assert "firewall_id is required" in result[0].text
 
-    # Test missing id
     arguments = {"firewall_id": 12345, "type": "linode", "confirm": True}
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
     assert "id is required" in result[0].text
 
-    # Test missing type
     arguments = {"firewall_id": 12345, "id": 123, "confirm": True}
     result = await handle_linode_firewall_device_create(arguments, sample_config)
     assert len(result) == 1
@@ -25563,7 +25482,6 @@ async def test_handle_linode_firewall_device_create_invalid_args(
         handle_linode_firewall_device_create,
     )
 
-    # Test invalid firewall_id
     arguments = {
         "firewall_id": "invalid",
         "id": 123,
@@ -25574,7 +25492,6 @@ async def test_handle_linode_firewall_device_create_invalid_args(
     assert len(result) == 1
     assert "firewall_id must be a positive integer" in result[0].text
 
-    # Test invalid id
     arguments = {
         "firewall_id": 12345,
         "id": "invalid",
@@ -25585,7 +25502,6 @@ async def test_handle_linode_firewall_device_create_invalid_args(
     assert len(result) == 1
     assert "id must be a positive integer" in result[0].text
 
-    # Test invalid type
     arguments = {
         "firewall_id": 12345,
         "id": 123,
@@ -25596,7 +25512,6 @@ async def test_handle_linode_firewall_device_create_invalid_args(
     assert len(result) == 1
     assert "type must be a string" in result[0].text
 
-    # Test empty type
     arguments = {
         "firewall_id": 12345,
         "id": 123,
@@ -26455,10 +26370,10 @@ def test_networking_ip_share_schema_requires_confirm_linode_id() -> None:
 
     assert tool.name == "linode_networking_ip_share"
     assert capability is Capability.Write
-    assert sorted(tool.inputSchema["required"]) == ["confirm", "linode_id"]
-    assert "ips" not in tool.inputSchema["required"]
-    assert "ips" in tool.inputSchema["properties"]
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
+    assert sorted(tool.input_schema["required"]) == ["confirm", "linode_id"]
+    assert "ips" not in tool.input_schema["required"]
+    assert "ips" in tool.input_schema["properties"]
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
     assert "IP addresses" in (tool.description or "")
 
 
@@ -26747,15 +26662,15 @@ def test_networking_ip_assign_tool_definition() -> None:
     assert capability is Capability.Write
     assert tool.description
 
-    props = tool.inputSchema["properties"]
+    props = tool.input_schema["properties"]
     for key in ("environment", "region", "assignments", "confirm", "dry_run"):
         assert key in props, f"schema missing property {key}"
 
     # assignments is enforced by the handler, but the proto-generated schema
     # cannot mark a repeated message field required, so it drops from the
     # required set (see the input-proto required-flag-loss log).
-    assert sorted(tool.inputSchema["required"]) == ["confirm", "region"]
-    assert "assignments" not in tool.inputSchema["required"]
+    assert sorted(tool.input_schema["required"]) == ["confirm", "region"]
+    assert "assignments" not in tool.input_schema["required"]
 
 
 async def test_networking_ip_assign_success(sample_config: Config) -> None:
@@ -27764,12 +27679,12 @@ def test_create_linode_instance_config_create_tool_schema() -> None:
 
     assert tool.name == "linode_instance_config_create"
     assert capability is Capability.Write
-    assert tool.inputSchema["properties"]["linode_id"]["type"] == "integer"
-    assert tool.inputSchema["properties"]["label"]["type"] == "string"
-    assert tool.inputSchema["properties"]["devices"]["type"] == "object"
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
-    props = tool.inputSchema["properties"]
+    assert tool.input_schema["properties"]["linode_id"]["type"] == "integer"
+    assert tool.input_schema["properties"]["label"]["type"] == "string"
+    assert tool.input_schema["properties"]["devices"]["type"] == "object"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
+    props = tool.input_schema["properties"]
     assert props["comments"]["type"] == "string"
     assert props["kernel"]["type"] == "string"
     assert props["memory_limit"]["type"] == "integer"
@@ -27779,7 +27694,7 @@ def test_create_linode_instance_config_create_tool_schema() -> None:
     assert props["interfaces"]["type"] == "string"
     # devices maps to a proto map field, so it drops out of the generated
     # required set even though the handler still enforces it.
-    assert set(tool.inputSchema["required"]) == {
+    assert set(tool.input_schema["required"]) == {
         "linode_id",
         "label",
         "confirm",
@@ -28163,13 +28078,13 @@ async def test_instance_disk_password_reset_tool_def() -> None:
     tool, capability = create_linode_instance_disk_password_reset_tool()
     assert tool.name == "linode_instance_disk_password_reset"
     assert capability is Capability.Write
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
     assert "disk_id" in required
     assert "password" in required
     assert "confirm" in required
-    assert tool.inputSchema["properties"]["confirm"]["type"] == "boolean"
-    assert tool.inputSchema["properties"]["dry_run"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["confirm"]["type"] == "boolean"
+    assert tool.input_schema["properties"]["dry_run"]["type"] == "boolean"
 
 
 async def test_handle_linode_instance_disk_password_reset_success(
@@ -28282,10 +28197,10 @@ async def test_instance_volumes_list_tool_def() -> None:
     tool, capability = create_linode_instance_volume_list_tool()
     assert tool.name == "linode_instance_volume_list"
     assert capability is Capability.Read
-    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceVolumeListInput")
-    required: list[str] = tool.inputSchema.get("required") or []
+    assert tool.input_schema == proto_schema("linode.mcp.v1.InstanceVolumeListInput")
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
-    props = tool.inputSchema["properties"]
+    props = tool.input_schema["properties"]
     assert "page" in props
     assert "page_size" in props
 
@@ -28364,10 +28279,10 @@ async def test_instance_firewalls_list_tool_def() -> None:
     """Linode firewalls list tool should require linode_id and expose pagination."""
     tool, _ = create_linode_instance_firewall_list_tool()
     assert tool.name == "linode_instance_firewall_list"
-    assert tool.inputSchema == proto_schema("linode.mcp.v1.InstanceFirewallListInput")
-    required: list[str] = tool.inputSchema.get("required") or []
+    assert tool.input_schema == proto_schema("linode.mcp.v1.InstanceFirewallListInput")
+    required: list[str] = tool.input_schema.get("required") or []
     assert "linode_id" in required
-    props = tool.inputSchema["properties"]
+    props = tool.input_schema["properties"]
     assert "page" in props
     assert "page_size" in props
 
@@ -28421,7 +28336,7 @@ async def test_instance_interface_firewalls_list_tool_def() -> None:
     tool, capability = create_linode_instance_interface_firewall_list_tool()
     assert tool.name == "linode_instance_interface_firewall_list"
     assert capability is Capability.Read
-    required: list[str] = tool.inputSchema.get("required") or []
+    required: list[str] = tool.input_schema.get("required") or []
     assert required == ["linode_id", "interface_id"]
 
 

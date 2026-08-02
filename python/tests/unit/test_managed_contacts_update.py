@@ -22,9 +22,9 @@ def test_create_linode_managed_contacts_update_tool() -> None:
 
     assert tool.name == "linode_managed_contact_update"
     assert capability is Capability.Admin
-    assert tool.inputSchema["type"] == "object"
-    assert tool.inputSchema["required"] == ["contact_id", "confirm"]
-    properties = tool.inputSchema["properties"]
+    assert tool.input_schema["type"] == "object"
+    assert tool.input_schema["required"] == ["contact_id", "confirm"]
+    properties = tool.input_schema["properties"]
     assert properties["contact_id"]["type"] == "integer"
     assert properties["confirm"]["type"] == "boolean"
     assert properties["dry_run"]["type"] == "boolean"

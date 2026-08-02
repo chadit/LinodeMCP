@@ -53,7 +53,7 @@ message NodeBalancerDeleteResponse {
 // NodeBalancerGetInput is the input contract for linode_nodebalancer_get.
 message NodeBalancerGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer to retrieve (required).
   int32 nodebalancer_id = 2;
 }
@@ -62,7 +62,7 @@ message NodeBalancerGetInput {
 // linode_instance_nodebalancer_list.
 message InstanceNodeBalancerListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the Linode instance (required).
   int32 linode_id = 2;
 }
@@ -70,7 +70,7 @@ message InstanceNodeBalancerListInput {
 // NodeBalancerListInput is the input contract for linode_nodebalancer_list.
 message NodeBalancerListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Filter by region ID (e.g., us-east, eu-west).
   optional string region = 2;
   // Filter NodeBalancers by label containing this string (case-insensitive).
@@ -80,7 +80,7 @@ message NodeBalancerListInput {
 // NodeBalancerCreateInput is the input contract for linode_nodebalancer_create.
 message NodeBalancerCreateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Region where the NodeBalancer will be created (e.g., 'us-east').
   string region = 2;
   // A label for the NodeBalancer (optional).
@@ -89,10 +89,10 @@ message NodeBalancerCreateInput {
   optional int32 client_conn_throttle = 4;
   // Must be set to true to confirm creation. This operation incurs billing
   // charges. Ignored when dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
   // Reserved public IPv4 address to assign. When omitted, the API allocates
   // an ephemeral IPv4 address.
   optional string ipv4 = 7;
@@ -101,7 +101,7 @@ message NodeBalancerCreateInput {
 // NodeBalancerUpdateInput is the input contract for linode_nodebalancer_update.
 message NodeBalancerUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer to update.
   int32 nodebalancer_id = 2;
   // New label for the NodeBalancer (optional).
@@ -110,36 +110,36 @@ message NodeBalancerUpdateInput {
   optional int32 client_conn_throttle = 4;
   // Must be set to true to confirm NodeBalancer update. Ignored when
   // dry_run=true.
-  bool confirm = 5;
+  bool confirm = 5; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6;
+  optional bool dry_run = 6; // system param
 }
 
 // NodeBalancerDeleteInput is the input contract for linode_nodebalancer_delete.
 message NodeBalancerDeleteInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer to delete.
   int32 nodebalancer_id = 2;
   // Must be set to true to confirm deletion. Ignored when dry_run=true.
-  bool confirm = 3;
+  bool confirm = 3; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4;
+  optional bool dry_run = 4; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5;
+  optional string mode = 5; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6;
+  optional string plan_id = 6; // system param
 }
 
 // NodeBalancerFirewallListInput is the input contract for
 // linode_nodebalancer_firewall_list.
 message NodeBalancerFirewallListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose Cloud Firewalls should be listed.
   int32 nodebalancer_id = 2;
   // Page number to retrieve.
@@ -154,7 +154,7 @@ message NodeBalancerFirewallListInput {
 // set, so it drops to optional there while the handler still enforces presence.
 message NodeBalancerFirewallUpdateInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The ID of the NodeBalancer whose Cloud Firewall assignments should be
   // replaced.
   int32 nodebalancer_id = 2;
@@ -167,8 +167,8 @@ message NodeBalancerFirewallUpdateInput {
   optional int32 page_size = 5;
   // Must be set to true to confirm firewall assignment changes. Ignored when
   // dry_run=true.
-  bool confirm = 6;
+  bool confirm = 6; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7;
+  optional bool dry_run = 7; // system param
 }

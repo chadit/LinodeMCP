@@ -56,9 +56,6 @@ def _mock_client_returning(method: str, value: object) -> AsyncMock:
     return client
 
 
-# --- create --------------------------------------------------------------
-
-
 async def test_create_dry_run_notes_attachment(sample_config: Config) -> None:
     """A dry-run create with linode_id adds the on-create attach note."""
     result = await handle_linode_volume_create(
@@ -101,9 +98,6 @@ async def test_create_threads_linode_id_into_body(sample_config: Config) -> None
     )
 
 
-# --- clone ---------------------------------------------------------------
-
-
 async def test_clone_dry_run_requires_volume_id(sample_config: Config) -> None:
     """A dry-run clone validates volume_id before fetching state."""
     result = await handle_linode_volume_clone(
@@ -118,9 +112,6 @@ async def test_clone_rejects_invalid_label(sample_config: Config) -> None:
         {"volume_id": 5, "label": "bad label!", "confirm": True}, sample_config
     )
     assert "invalid character" in result[0].text
-
-
-# --- attach --------------------------------------------------------------
 
 
 async def test_attach_dry_run_requires_linode_id(sample_config: Config) -> None:
@@ -160,16 +151,10 @@ async def test_attach_threads_config_id_into_body(sample_config: Config) -> None
     )
 
 
-# --- detach --------------------------------------------------------------
-
-
 async def test_detach_requires_volume_id(sample_config: Config) -> None:
     """A detach with no volume_id errors before any branch."""
     result = await handle_linode_volume_detach({}, sample_config)
     assert "volume_id is required" in result[0].text
-
-
-# --- resize --------------------------------------------------------------
 
 
 async def test_resize_dry_run_requires_volume_id(sample_config: Config) -> None:
@@ -218,9 +203,6 @@ async def test_resize_dry_run_reports_size_change(sample_config: Config) -> None
     assert any("from 20 GB to 40 GB" in s for s in body["side_effects"])
 
 
-# --- update --------------------------------------------------------------
-
-
 async def test_update_dry_run_requires_volume_id(sample_config: Config) -> None:
     """A dry-run update validates volume_id first."""
     result = await handle_linode_volume_update(
@@ -258,9 +240,6 @@ async def test_update_rejects_invalid_label(sample_config: Config) -> None:
         {"volume_id": 5, "label": "bad label!", "confirm": True}, sample_config
     )
     assert "invalid character" in result[0].text
-
-
-# --- delete --------------------------------------------------------------
 
 
 async def test_delete_plan_requires_volume_id(sample_config: Config) -> None:

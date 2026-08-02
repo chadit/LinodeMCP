@@ -33,8 +33,8 @@ def test_create_linode_managed_service_update_tool() -> None:
     tool, capability = create_linode_managed_service_update_tool()
     assert tool.name == "linode_managed_service_update"
     assert capability is Capability.Admin
-    assert tool.inputSchema["required"] == ["service_id", "confirm"]
-    properties = tool.inputSchema["properties"]
+    assert tool.input_schema["required"] == ["service_id", "confirm"]
+    properties = tool.input_schema["properties"]
     assert properties["service_id"]["type"] == "integer"
     assert properties["confirm"]["type"] == "boolean"
     assert properties["dry_run"]["type"] == "boolean"

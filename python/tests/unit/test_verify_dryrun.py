@@ -46,9 +46,9 @@ def test_factory_map_survives_a_schemaless_neighbor(tmp_path: Path) -> None:
     """
     (tmp_path / "tools.py").write_text(
         'Tool(\n    name="tool_a",\n    description="x",\n'
-        "    inputSchema={'type': 'object'},\n)\n"
+        "    input_schema={'type': 'object'},\n)\n"
         'Tool(\n    name="tool_b",\n    description="y",\n'
-        '    inputSchema=schema("linode.mcp.v1.BInput"),\n)\n',
+        '    input_schema=schema("linode.mcp.v1.BInput"),\n)\n',
         encoding="utf-8",
     )
 
@@ -59,7 +59,7 @@ def test_factory_map_matches_wrapped_schema_call(tmp_path: Path) -> None:
     """Long message names wrap schema( across lines and must still map."""
     (tmp_path / "tools.py").write_text(
         'Tool(\n    name="tool_long",\n    description="x",\n'
-        "    inputSchema=schema(\n"
+        "    input_schema=schema(\n"
         '        "linode.mcp.v1.VeryLongMessageNameInput"\n'
         "    ),\n)\n",
         encoding="utf-8",

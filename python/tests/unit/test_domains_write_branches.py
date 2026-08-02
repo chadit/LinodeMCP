@@ -54,18 +54,12 @@ def _patch_client(**attrs: object) -> AsyncMock:
     return client
 
 
-# --- clone ---------------------------------------------------------------
-
-
 async def test_clone_rejects_invalid_label(sample_config: Config) -> None:
     """A clone whose domain name has an illegal character aborts."""
     result = await handle_linode_domain_clone(
         {"domain_id": 5, "domain": "bad domain!"}, sample_config
     )
     assert "invalid character" in result[0].text
-
-
-# --- create --------------------------------------------------------------
 
 
 async def test_create_requires_confirm(sample_config: Config) -> None:
@@ -107,9 +101,6 @@ async def test_create_threads_description_into_body(sample_config: Config) -> No
         },
         retry=False,
     )
-
-
-# --- update --------------------------------------------------------------
 
 
 async def test_update_dry_run_requires_domain_id(sample_config: Config) -> None:
@@ -194,9 +185,6 @@ async def test_update_body_omits_absent_and_keeps_present(
         "/domains/5",
         {"domain": "new.example.com", "soa_email": "new@example.com"},
     )
-
-
-# --- delete --------------------------------------------------------------
 
 
 async def test_delete_plan_requires_domain_id(sample_config: Config) -> None:

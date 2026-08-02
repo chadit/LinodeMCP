@@ -22,7 +22,7 @@ message DatabaseEngineListResponse {
 // DatabaseEngineGetInput is the input contract for linode_database_engine_get.
 message DatabaseEngineGetInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // The Managed Database engine ID, for example mysql/8.0.26 (required).
   string engine_id = 2;
 }
@@ -31,7 +31,7 @@ message DatabaseEngineGetInput {
 // linode_database_engine_list.
 message DatabaseEngineListInput {
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1;
+  optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
   optional int32 page = 2;
   // Number of results per page (optional, 25-500).

@@ -23,7 +23,7 @@ def create_linode_sshkey_get_tool() -> tuple[Tool, Capability]:
     return Tool(
         name="linode_sshkey_get",
         description="Gets one SSH key associated with your Linode profile.",
-        inputSchema=schema("linode.mcp.v1.SSHKeyGetInput"),
+        input_schema=schema("linode.mcp.v1.SSHKeyGetInput"),
     ), Capability.Read
 
 
@@ -61,7 +61,7 @@ def create_linode_sshkey_list_tool() -> tuple[Tool, Capability]:
             "Lists all SSH keys associated with your Linode profile. "
             "Can filter by label."
         ),
-        inputSchema=schema("linode.mcp.v1.SSHKeyListInput"),
+        input_schema=schema("linode.mcp.v1.SSHKeyListInput"),
     ), Capability.Read
 
 
