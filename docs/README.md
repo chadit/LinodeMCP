@@ -94,6 +94,24 @@ issue on the sync schedule and fails when one is closed; an acceptance whose
 issue can never close belongs in an exempt file, not a ratchet. Each file's
 header comment holds its full rules and exact regenerate command.
 
+Which Linode API operation a tool calls is not one of these files. It lives in
+the proto contract, as a `linode.mcp.v1.tool_route` option on the tool's
+`*Input` message carrying the tool name, the method, and the path template.
+That makes an input message the equivalent of an OpenAPI operation object, so
+the generated descriptors answer "which route?" for every consumer.
+`scripts/_toolroutes.py` is the shared reader; `make tool-routes` pins the
+annotations from both sides against `tools-manifest.txt`.
+
+A path template names each of its parameters in snake_case, the way the Linode
+API documentation names them:
+`/databases/postgresql/instances/{postgresql_instance_id}`. The name is there
+to be read, not dispatched on. The two route scanners resolve routes out of
+code that builds URLs from variables, where no name exists, so they emit the
+`{p}` placeholder for every parameter and anything comparing a declared route
+against a resolved one runs it through `_toolroutes.norm_template` first.
+Shape is what the gates enforce; `make tool-routes` is the only place a name
+is checked, and only for the convention.
+
 ### Registries
 
 | File | Pins | Consumed by |
@@ -103,7 +121,6 @@ header comment holds its full rules and exact regenerate command.
 | [languages.txt](./contracts/languages.txt) | The registered language implementations: name, working dir, surface-dump command | `Makefile`, `scripts/verify_tool_parity.py` |
 | [env-vars.txt](./contracts/env-vars.txt) | The complete environment-variable surface every language reads (observability has none by design) | `scripts/verify_env_parity.py` |
 | [coverage-floors.txt](./contracts/coverage-floors.txt) | Minimum total unit-test statement coverage per registered language (rise-only; the per-line half is `make diff-coverage`) | `scripts/verify_coverage_floor.py` |
-| [tool-routes.txt](./contracts/tool-routes.txt) | Which Linode API operation (method plus path template) each tool calls; checked from both sides against the registry and the live spec, and against what each client can actually build | `scripts/verify_sync_scopes.py`, `scripts/verify_route_evidence.py` |
 | [system-params.txt](./contracts/system-params.txt) | The proto input fields the server consumes itself rather than passing to the Linode API, by field name and proto type; each one carries a trailing `// system param` marker that stays out of the generated schema | `scripts/verify_system_params.py` |
 
 ### Ratchet baselines

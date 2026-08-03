@@ -37,8 +37,6 @@ def _violations_for_case(
 ) -> list[str]:
     snapshot = tmp_path / "api-response-shapes-baseline.txt"
     snapshot.write_text("GET /widgets array\n", encoding="utf-8")
-    routes = tmp_path / "tool-routes.txt"
-    routes.write_text("linode_widget_list: GET /widgets\n", encoding="utf-8")
     fixtures = tmp_path / "behavior"
     fixtures.mkdir()
     (fixtures / "linode_widget_list.json").write_text(
@@ -46,7 +44,9 @@ def _violations_for_case(
         encoding="utf-8",
     )
     monkeypatch.setattr(gate, "_SNAPSHOT", snapshot)
-    monkeypatch.setattr(gate, "_ROUTES", routes)
+    monkeypatch.setattr(
+        gate, "tool_routes", lambda: {"linode_widget_list": ("GET", "/widgets")}
+    )
     monkeypatch.setattr(gate, "_FIXTURES", fixtures)
     return cast("list[str]", gate.current_violations())
 

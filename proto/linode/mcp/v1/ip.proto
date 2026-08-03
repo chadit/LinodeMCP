@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // InstanceIPType is the address family requested by the IP allocate tools
 // (linode_instance_ip_allocate and linode_networking_ip_allocate). Values are
@@ -221,6 +222,12 @@ message ReservedIPDeleteResponse {
 // ReservedIPCreateInput is the input contract for
 // linode_networking_reserved_ip_create.
 message ReservedIPCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_reserved_ip_create"
+    method: "POST"
+    path: "/networking/reserved/ips"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region in which to reserve the public IPv4 address.
@@ -236,6 +243,12 @@ message ReservedIPCreateInput {
 // ReservedIPListInput is the input contract for
 // linode_networking_reserved_ip_list.
 message ReservedIPListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_reserved_ip_list"
+    method: "GET"
+    path: "/networking/reserved/ips"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -247,6 +260,12 @@ message ReservedIPListInput {
 // ReservedIPGetInput is the input contract for
 // linode_networking_reserved_ip_get.
 message ReservedIPGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_reserved_ip_get"
+    method: "GET"
+    path: "/networking/reserved/ips/{address}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Reserved public IPv4 address to retrieve.
@@ -257,6 +276,12 @@ message ReservedIPGetInput {
 // linode_networking_reserved_ip_update. tags is required by the handler;
 // repeated proto fields cannot appear in generated required arrays.
 message ReservedIPUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_reserved_ip_update"
+    method: "PUT"
+    path: "/networking/reserved/ips/{address}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Reserved public IPv4 address whose tags will be replaced.
@@ -272,6 +297,12 @@ message ReservedIPUpdateInput {
 // ReservedIPTypeListInput is the input contract for
 // linode_networking_reserved_ip_type_list.
 message ReservedIPTypeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_reserved_ip_type_list"
+    method: "GET"
+    path: "/networking/reserved/ips/types"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -279,6 +310,12 @@ message ReservedIPTypeListInput {
 // ReservedIPDeleteInput is the input contract for
 // linode_networking_reserved_ip_delete.
 message ReservedIPDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_reserved_ip_delete"
+    method: "DELETE"
+    path: "/networking/reserved/ips/{address}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Reserved public IPv4 address to unreserve permanently.
@@ -296,6 +333,12 @@ message ReservedIPDeleteInput {
 
 // IPv6PoolListInput is the input contract for linode_ipv6_pool_list.
 message IPv6PoolListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_ipv6_pool_list"
+    method: "GET"
+    path: "/networking/ipv6/pools"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -306,6 +349,12 @@ message IPv6PoolListInput {
 
 // IPv6RangeListInput is the input contract for linode_ipv6_range_list.
 message IPv6RangeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_ipv6_range_list"
+    method: "GET"
+    path: "/networking/ipv6/ranges"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -316,6 +365,12 @@ message IPv6RangeListInput {
 
 // IPv6RangeGetInput is the input contract for linode_ipv6_range_get.
 message IPv6RangeGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_ipv6_range_get"
+    method: "GET"
+    path: "/networking/ipv6/ranges/{range}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // IPv6 range prefix, for example 2001:0db8::/64.
@@ -324,6 +379,12 @@ message IPv6RangeGetInput {
 
 // IPv6RangeCreateInput is the input contract for linode_ipv6_range_create.
 message IPv6RangeCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_ipv6_range_create"
+    method: "POST"
+    path: "/networking/ipv6/ranges"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The IPv6 prefix length for the created range.
@@ -341,6 +402,12 @@ message IPv6RangeCreateInput {
 
 // IPv6RangeDeleteInput is the input contract for linode_ipv6_range_delete.
 message IPv6RangeDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_ipv6_range_delete"
+    method: "DELETE"
+    path: "/networking/ipv6/ranges/{range}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // IPv6 range prefix, for example 2001:0db8::/64.
@@ -411,6 +478,12 @@ message InstanceIPsResponse {
 
 // IPAddressGetInput is the input contract for linode_networking_ip_get.
 message IPAddressGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_ip_get"
+    method: "GET"
+    path: "/networking/ips/{address}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The IP address to retrieve (required).
@@ -420,6 +493,12 @@ message IPAddressGetInput {
 // InstanceIPGetInput is the input contract for linode_instance_ip_get (returns a
 // shared IPAddress).
 message InstanceIPGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_ip_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/ips/{address}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -430,6 +509,12 @@ message InstanceIPGetInput {
 
 // InstanceIPListInput is the input contract for linode_instance_ip_list.
 message InstanceIPListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_ip_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/ips"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -441,6 +526,12 @@ message InstanceIPListInput {
 // required (public is a required boolean in the hand-built schema, so it stays
 // non-optional here).
 message InstanceIPAllocateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_ip_allocate"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/ips"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -460,6 +551,12 @@ message InstanceIPAllocateInput {
 // InstanceIPUpdateInput is the input contract for linode_instance_ip_update.
 // linode_id, address, rdns, and confirm are required.
 message InstanceIPUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_ip_update"
+    method: "PUT"
+    path: "/linode/instances/{linode_id}/ips/{address}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -479,6 +576,12 @@ message InstanceIPUpdateInput {
 // a two-stage destroy: linode_id, address, and confirm are required, and
 // mode/plan_id drive the plan/apply flow.
 message InstanceIPDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_ip_delete"
+    method: "DELETE"
+    path: "/linode/instances/{linode_id}/ips/{address}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -501,6 +604,12 @@ message InstanceIPDeleteInput {
 
 // NetworkingIPListInput is the input contract for linode_networking_ip_list.
 message NetworkingIPListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_ip_list"
+    method: "GET"
+    path: "/networking/ips"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Skip IPv6 reverse DNS lookups (optional).
@@ -509,6 +618,12 @@ message NetworkingIPListInput {
 
 // IPAddressUpdateInput is the input contract for linode_networking_ip_update.
 message IPAddressUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_ip_update"
+    method: "PUT"
+    path: "/networking/ips/{address}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The IPv4 or IPv6 address to update.
@@ -526,6 +641,12 @@ message IPAddressUpdateInput {
 // linode_networking_ip_allocate. public is a required boolean beyond confirm,
 // so it stays a plain (non-optional) bool.
 message IPAddressAllocateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_ip_allocate"
+    method: "POST"
+    path: "/networking/ips"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode that receives the new IP address.
@@ -559,6 +680,12 @@ message NetworkingIPAssignmentItem {
 // can never land in the generated required array, so the advertised required
 // set is [confirm, region] (see the required-flag-loss log).
 message NetworkingIPAssignInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_ip_assign"
+    method: "POST"
+    path: "/networking/ips/assign"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The region for the IP assignments.
@@ -577,6 +704,12 @@ message NetworkingIPAssignInput {
 // the shared NetworkingIPAssignmentItem; assignments is required at the handler
 // level but drops from the generated required set (see the loss log).
 message NetworkingIPv4AssignInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_ipv4_assign"
+    method: "POST"
+    path: "/networking/ipv4/assign"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The region for the IPv4 assignments.
@@ -595,6 +728,12 @@ message NetworkingIPv4AssignInput {
 // the generated required array, so the advertised required set is
 // [confirm, linode_id] (see the required-flag-loss log).
 message NetworkingIPShareInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_ip_share"
+    method: "POST"
+    path: "/networking/ips/share"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the primary Linode that receives the shared IP addresses.
@@ -615,6 +754,12 @@ message NetworkingIPShareInput {
 // required at the handler level but drops from the generated required set (see
 // the loss log).
 message NetworkingIPv4ShareInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_networking_ipv4_share"
+    method: "POST"
+    path: "/networking/ipv4/share"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the primary Linode that receives the shared IP addresses.

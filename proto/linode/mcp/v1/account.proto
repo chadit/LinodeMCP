@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // Promo is an active promotion attached to an account.
 message Promo {
@@ -51,6 +52,12 @@ message AccountWriteResponse {
 // AccountGetInput is the input contract for linode_account_get (the singular
 // account, so no resource ID).
 message AccountGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_get"
+    method: "GET"
+    path: "/account"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -69,6 +76,12 @@ message AccountAgreements {
 // AccountAgreementsListInput is the input contract for
 // linode_account_agreement_list (the singular agreement set, so no resource ID).
 message AccountAgreementsListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_agreement_list"
+    method: "GET"
+    path: "/account/agreements"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -87,6 +100,12 @@ message AccountSettings {
 
 // AccountSettingsGetInput is the input contract for linode_account_settings_get.
 message AccountSettingsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_settings_get"
+    method: "GET"
+    path: "/account/settings"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -118,6 +137,12 @@ message AccountTransfer {
 
 // AccountTransferGetInput is the input contract for linode_account_transfer_get.
 message AccountTransferGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_transfer_get"
+    method: "GET"
+    path: "/account/transfer"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -132,6 +157,12 @@ message AccountInvoice {
 
 // AccountInvoiceGetInput is the input contract for linode_account_invoice_get.
 message AccountInvoiceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_invoice_get"
+    method: "GET"
+    path: "/account/invoices/{invoice_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the invoice to retrieve (required).
@@ -159,6 +190,12 @@ message AccountLogin {
 
 // AccountLoginGetInput is the input contract for linode_account_login_get.
 message AccountLoginGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_login_get"
+    method: "GET"
+    path: "/account/logins/{login_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the login to retrieve (required).
@@ -176,6 +213,12 @@ message AccountLoginListResponse {
 // ProfileLoginGetInput is the input contract for linode_profile_login_get (returns
 // a shared AccountLogin).
 message ProfileLoginGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_login_get"
+    method: "GET"
+    path: "/profile/logins/{login_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the login to retrieve (required).
@@ -193,6 +236,12 @@ message ProfileLoginListResponse {
 
 // ProfileLoginListInput is the input contract for linode_profile_login_list.
 message ProfileLoginListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_login_list"
+    method: "GET"
+    path: "/profile/logins"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -210,6 +259,12 @@ message AccountPayment {
 
 // AccountPaymentGetInput is the input contract for linode_account_payment_get.
 message AccountPaymentGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_payment_get"
+    method: "GET"
+    path: "/account/payments/{payment_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the payment to retrieve (required).
@@ -280,6 +335,12 @@ message OAuthClientListResponse {
 // AccountOAuthClientGetInput is the input contract for
 // linode_account_oauth_client_get.
 message AccountOAuthClientGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_oauth_client_get"
+    method: "GET"
+    path: "/account/oauth-clients/{client_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the OAuth client to retrieve (required).
@@ -420,6 +481,12 @@ message MaintenancePolicyListResponse {
 // MaintenancePolicyListInput is the input contract for
 // linode_maintenance_policy_list.
 message MaintenancePolicyListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_maintenance_policy_list"
+    method: "GET"
+    path: "/maintenance/policies"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -579,6 +646,12 @@ message AccountBetaEnrollResponse {
 // linode_account_agreement_acknowledge. Only confirm is required; each
 // agreement flag is optional.
 message AccountAgreementsAcknowledgeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_agreement_acknowledge"
+    method: "POST"
+    path: "/account/agreements"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Acknowledge the billing agreement (optional).
@@ -600,6 +673,12 @@ message AccountAgreementsAcknowledgeInput {
 // AccountCancelInput is the input contract for linode_account_cancel. Only
 // confirm is required.
 message AccountCancelInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_cancel"
+    method: "POST"
+    path: "/account/cancel"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Reason for canceling the account or other feedback (optional).
@@ -614,6 +693,12 @@ message AccountCancelInput {
 // AccountChildAccountGetInput is the input contract for
 // linode_account_child_account_get.
 message AccountChildAccountGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_child_account_get"
+    method: "GET"
+    path: "/account/child-accounts/{euu_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // External unique identifier for the child account (required).
@@ -623,6 +708,12 @@ message AccountChildAccountGetInput {
 // AccountChildAccountListInput is the input contract for
 // linode_account_child_account_list.
 message AccountChildAccountListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_child_account_list"
+    method: "GET"
+    path: "/account/child-accounts"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -634,6 +725,12 @@ message AccountChildAccountListInput {
 // AccountChildAccountTokenCreateInput is the input contract for
 // linode_account_child_account_token_create. euuid and confirm are required.
 message AccountChildAccountTokenCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_child_account_token_create"
+    method: "POST"
+    path: "/account/child-accounts/{euu_id}/token"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // External unique identifier for the child account (required).
@@ -649,6 +746,12 @@ message AccountChildAccountTokenCreateInput {
 // AccountInvoiceItemListInput is the input contract for
 // linode_account_invoice_item_list. invoice_id is required.
 message AccountInvoiceItemListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_invoice_item_list"
+    method: "GET"
+    path: "/account/invoices/{invoice_id}/items"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Invoice ID whose items should be listed (required).
@@ -662,6 +765,12 @@ message AccountInvoiceItemListInput {
 // AccountInvoiceListInput is the input contract for
 // linode_account_invoice_list.
 message AccountInvoiceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_invoice_list"
+    method: "GET"
+    path: "/account/invoices"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -672,6 +781,12 @@ message AccountInvoiceListInput {
 
 // AccountLoginListInput is the input contract for linode_account_login_list.
 message AccountLoginListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_login_list"
+    method: "GET"
+    path: "/account/logins"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -683,6 +798,12 @@ message AccountLoginListInput {
 // AccountMaintenanceListInput is the input contract for
 // linode_account_maintenance_list.
 message AccountMaintenanceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_maintenance_list"
+    method: "GET"
+    path: "/account/maintenance"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -694,6 +815,12 @@ message AccountMaintenanceListInput {
 // AccountNotificationListInput is the input contract for
 // linode_account_notification_list.
 message AccountNotificationListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_notification_list"
+    method: "GET"
+    path: "/account/notifications"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -706,6 +833,12 @@ message AccountNotificationListInput {
 // linode_account_oauth_client_create. label, redirect_uri, and confirm are
 // required.
 message AccountOAuthClientCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_oauth_client_create"
+    method: "POST"
+    path: "/account/oauth-clients"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Label for the OAuth client (required).
@@ -724,6 +857,12 @@ message AccountOAuthClientCreateInput {
 // linode_account_oauth_client_delete. Not a two-stage destroy: the ground-truth
 // dump shows no mode/plan_id params.
 message AccountOAuthClientDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_oauth_client_delete"
+    method: "DELETE"
+    path: "/account/oauth-clients/{client_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // OAuth client ID (required).
@@ -738,6 +877,12 @@ message AccountOAuthClientDeleteInput {
 // AccountOAuthClientListInput is the input contract for
 // linode_account_oauth_client_list.
 message AccountOAuthClientListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_oauth_client_list"
+    method: "GET"
+    path: "/account/oauth-clients"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -749,6 +894,12 @@ message AccountOAuthClientListInput {
 // AccountOAuthClientSecretResetInput is the input contract for
 // linode_account_oauth_client_secret_reset.
 message AccountOAuthClientSecretResetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_oauth_client_secret_reset"
+    method: "POST"
+    path: "/account/oauth-clients/{client_id}/reset-secret"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // OAuth client ID (required).
@@ -765,6 +916,12 @@ message AccountOAuthClientSecretResetInput {
 // linode_account_oauth_client_update. client_id and confirm are required; the
 // mutable fields are optional.
 message AccountOAuthClientUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_oauth_client_update"
+    method: "PUT"
+    path: "/account/oauth-clients/{client_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // OAuth client ID (required).
@@ -786,6 +943,12 @@ message AccountOAuthClientUpdateInput {
 // linode_account_payment_create. usd and confirm are required; usd stays a
 // string because the API takes a decimal-string amount.
 message AccountPaymentCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_payment_create"
+    method: "POST"
+    path: "/account/payments"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Payment method ID to charge (optional).
@@ -803,6 +966,12 @@ message AccountPaymentCreateInput {
 // AccountPaymentListInput is the input contract for
 // linode_account_payment_list.
 message AccountPaymentListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_payment_list"
+    method: "GET"
+    path: "/account/payments"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -815,6 +984,12 @@ message AccountPaymentListInput {
 // linode_account_payment_method_delete. Not a two-stage destroy: the
 // ground-truth dump shows no mode/plan_id params.
 message AccountPaymentMethodDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_payment_method_delete"
+    method: "DELETE"
+    path: "/account/payment-methods/{payment_method_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Payment method ID (required).
@@ -834,6 +1009,12 @@ message AccountPaymentMethodDeleteInput {
 // be marked required in the generated schema, so the required flag is dropped
 // (the handler still enforces presence).
 message AccountPaymentMethodCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_payment_method_create"
+    method: "POST"
+    path: "/account/payment-methods"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Payment method details. The shape varies by payment method type. Required at
@@ -853,6 +1034,12 @@ message AccountPaymentMethodCreateInput {
 // AccountPaymentMethodGetInput is the input contract for
 // linode_account_payment_method_get.
 message AccountPaymentMethodGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_payment_method_get"
+    method: "GET"
+    path: "/account/payment-methods/{payment_method_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Payment method ID (required).
@@ -862,6 +1049,12 @@ message AccountPaymentMethodGetInput {
 // AccountPaymentMethodListInput is the input contract for
 // linode_account_payment_method_list.
 message AccountPaymentMethodListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_payment_method_list"
+    method: "GET"
+    path: "/account/payment-methods"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -873,6 +1066,12 @@ message AccountPaymentMethodListInput {
 // AccountPaymentMethodMakeDefaultInput is the input contract for
 // linode_account_payment_method_make_default.
 message AccountPaymentMethodMakeDefaultInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_payment_method_make_default"
+    method: "POST"
+    path: "/account/payment-methods/{payment_method_id}/make-default"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Payment method ID (required).
@@ -888,6 +1087,12 @@ message AccountPaymentMethodMakeDefaultInput {
 // AccountPromoCreditAddInput is the input contract for
 // linode_account_promo_credit_add.
 message AccountPromoCreditAddInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_promo_credit_add"
+    method: "POST"
+    path: "/account/promo-codes"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Promo code to apply to the account (required).
@@ -903,6 +1108,12 @@ message AccountPromoCreditAddInput {
 // AccountSettingsManagedEnableInput is the input contract for
 // linode_account_settings_managed_enable. confirm is the only required field.
 message AccountSettingsManagedEnableInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_settings_managed_enable"
+    method: "POST"
+    path: "/account/settings/managed-enable"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Must be true to confirm enabling Linode Managed. Ignored when
@@ -917,6 +1128,12 @@ message AccountSettingsManagedEnableInput {
 // linode_account_settings_update. Only confirm is required; every setting is
 // optional.
 message AccountSettingsUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_settings_update"
+    method: "PUT"
+    path: "/account/settings"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Whether backups are enabled by default for new Linodes (optional).
@@ -944,6 +1161,12 @@ message AccountSettingsUpdateInput {
 // AccountUpdateInput is the input contract for linode_account_update. Only
 // confirm is required; every billing/contact field is optional.
 message AccountUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_update"
+    method: "PUT"
+    path: "/account"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // First line of the account billing address (optional).

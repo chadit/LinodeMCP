@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // AccountAvailability reports which services are available and unavailable to the
 // account in one region.
 message AccountAvailability {
@@ -24,6 +26,12 @@ message AccountAvailabilityListResponse {
 // AccountAvailabilityGetInput is the input contract for
 // linode_account_availability_get.
 message AccountAvailabilityGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_availability_get"
+    method: "GET"
+    path: "/account/availability/{region_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The region slug to inspect (required).
@@ -33,6 +41,12 @@ message AccountAvailabilityGetInput {
 // AccountAvailabilityListInput is the input contract for
 // linode_account_availability_list.
 message AccountAvailabilityListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_availability_list"
+    method: "GET"
+    path: "/account/availability"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).

@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // FirewallDeviceType is the kind of resource a firewall device assignment
 // attaches to. Values are the exact lowercase Linode API strings, authored from
 // the live OpenAPI spec (POST /networking/firewalls/{firewallId}/devices). See
@@ -45,6 +47,12 @@ message FirewallDeviceListResponse {
 
 // FirewallDeviceGetInput is the input contract for linode_firewall_device_get.
 message FirewallDeviceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_device_get"
+    method: "GET"
+    path: "/networking/firewalls/{firewall_id}/devices/{device_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall (required).
@@ -56,6 +64,12 @@ message FirewallDeviceGetInput {
 // FirewallDeviceListInput is the input contract for
 // linode_firewall_device_list.
 message FirewallDeviceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_device_list"
+    method: "GET"
+    path: "/networking/firewalls/{firewall_id}/devices"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall whose assigned devices should be listed.
@@ -69,6 +83,12 @@ message FirewallDeviceListInput {
 // FirewallDeviceCreateInput is the input contract for
 // linode_firewall_device_create.
 message FirewallDeviceCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_device_create"
+    method: "POST"
+    path: "/networking/firewalls/{firewall_id}/devices"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall to assign the device to.
@@ -89,6 +109,12 @@ message FirewallDeviceCreateInput {
 // FirewallDeviceDeleteInput is the input contract for
 // linode_firewall_device_delete.
 message FirewallDeviceDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_device_delete"
+    method: "DELETE"
+    path: "/networking/firewalls/{firewall_id}/devices/{device_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall whose device assignment should be removed.

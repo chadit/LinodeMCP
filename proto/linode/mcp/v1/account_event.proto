@@ -5,6 +5,7 @@ package linode.mcp.v1;
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // AccountEventEntity is the resource an account event is about. id is a
 // passthrough value (the API returns an int or string depending on entity type).
@@ -44,6 +45,12 @@ message AccountEventListResponse {
 
 // AccountEventGetInput is the input contract for linode_account_event_get.
 message AccountEventGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_event_get"
+    method: "GET"
+    path: "/account/events/{event_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the account event to retrieve (required).
@@ -52,6 +59,12 @@ message AccountEventGetInput {
 
 // AccountEventListInput is the input contract for linode_account_event_list.
 message AccountEventListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_event_list"
+    method: "GET"
+    path: "/account/events"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -62,6 +75,12 @@ message AccountEventListInput {
 
 // AccountEventSeenInput is the input contract for linode_account_event_seen.
 message AccountEventSeenInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_event_seen"
+    method: "POST"
+    path: "/account/events/{event_id}/seen"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Numeric account event ID to mark as seen (required).

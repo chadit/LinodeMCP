@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package linode.mcp.v1;
+
+option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/descriptor.proto";
+
+// ToolRoute is the Linode API operation one MCP tool calls. Carrying it on the
+// tool's *Input message makes that message self-describing the way an OpenAPI
+// operation object is: the tool name and the route travel together, so reading
+// the descriptors alone yields the whole tool-to-route map with no separate
+// tool-to-message mapping to maintain.
+message ToolRoute {
+  // Registered MCP tool name, exactly as it appears in
+  // docs/contracts/tools-manifest.txt.
+  string tool = 1;
+  // HTTP method in uppercase: GET, POST, PUT, or DELETE.
+  string method = 2;
+  // Path template rooted at the API version, naming every path parameter:
+  // "/databases/postgresql/instances/{postgresql_instance_id}".
+  //
+  // Names are snake_case, matching this file's field convention, and come
+  // from the Linode API documentation for that operation. They exist so a
+  // reader can bind a parameter to the documented one of the same name;
+  // nothing in this repo dispatches on them.
+  //
+  // The two route scanners cannot see a name. They read code that builds a
+  // URL out of variables, so scripts/_routescan.py and go/cmd/route-dump both
+  // collapse every parameter to the {p} placeholder. A consumer comparing a
+  // declared route against either scanner normalizes the names away first
+  // (scripts/_toolroutes.py norm_template) and matches on shape. Shape is what
+  // is enforced; a name is free-form documentation.
+  string path = 3;
+}
+
+extend google.protobuf.MessageOptions {
+  // Declares the Linode API route the annotated *Input message's tool calls.
+  // Meta tools (profile builder, audit, version, hello) reach no Linode route
+  // and carry no annotation. Field numbers from 50000 are the range reserved
+  // for extensions private to one organization.
+  ToolRoute tool_route = 50001;
+}

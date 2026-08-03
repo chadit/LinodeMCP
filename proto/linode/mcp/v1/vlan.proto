@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // VLAN mirrors a Linode VLAN. linodes is the list of attached Linode instance
 // ids; the live Go struct types it as []int, so it is modeled as repeated int32.
 message VLAN {
@@ -32,6 +34,12 @@ message VLANListResponse {
 
 // VLANListInput is the input contract for linode_vlan_list.
 message VLANListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vlan_list"
+    method: "GET"
+    path: "/networking/vlans"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -42,6 +50,12 @@ message VLANListInput {
 
 // VLANDeleteInput is the input contract for linode_vlan_delete.
 message VLANDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vlan_delete"
+    method: "DELETE"
+    path: "/networking/vlans/{region_id}/{label}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The region ID for the VLAN, for example us-east.

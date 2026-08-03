@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // NodeBalancer config choice enums.
 //
 // Each enum is wrapped in its own message so its value names, which are the
@@ -133,6 +135,12 @@ message NodeBalancerConfigWriteResponse {
 // NodeBalancerConfigGetInput is the input contract for
 // linode_nodebalancer_config_get.
 message NodeBalancerConfigGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_get"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer (required).
@@ -154,6 +162,12 @@ message NodeBalancerConfigDeleteResponse {
 // NodeBalancerConfigListInput is the input contract for
 // linode_nodebalancer_config_list.
 message NodeBalancerConfigListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_list"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}/configs"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose configs should be listed.
@@ -184,6 +198,12 @@ message NodeBalancerConfigNodeItem {
 // NodeBalancerConfigCreateInput is the input contract for
 // linode_nodebalancer_config_create.
 message NodeBalancerConfigCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_create"
+    method: "POST"
+    path: "/nodebalancers/{node_balancer_id}/configs"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer that should receive a new config.
@@ -235,6 +255,12 @@ message NodeBalancerConfigCreateInput {
 // NodeBalancerConfigUpdateInput is the input contract for
 // linode_nodebalancer_config_update.
 message NodeBalancerConfigUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_update"
+    method: "PUT"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose config should be updated.
@@ -286,6 +312,12 @@ message NodeBalancerConfigUpdateInput {
 // linode_nodebalancer_config_delete. This destroy does not use the two-stage
 // flow, so there is no mode/plan_id (matches the registered schema).
 message NodeBalancerConfigDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_delete"
+    method: "DELETE"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose config should be deleted.
@@ -302,6 +334,12 @@ message NodeBalancerConfigDeleteInput {
 // NodeBalancerConfigRebuildInput is the input contract for
 // linode_nodebalancer_config_rebuild.
 message NodeBalancerConfigRebuildInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_rebuild"
+    method: "POST"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}/rebuild"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose config should be rebuilt.

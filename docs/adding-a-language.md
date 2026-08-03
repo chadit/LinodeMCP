@@ -142,10 +142,10 @@ cannot derive. A new language must mirror all three, and two gates hold it in pl
 
 There is no sync-gate enrollment step here: the scheduled `sync-scopes` gate compares
 Python's mapping against the live spec's per-operation security blocks (routed through
-`docs/contracts/tool-routes.txt`), and `tool-parity` pins every other language equal to
-Python, so the docs comparison covers the new language transitively. New tools DO need a
-`tool-routes.txt` line, whatever language adds them; the gate fails loudly when one is
-missing.
+the proto contract's `tool_route` options), and `tool-parity` pins every other language
+equal to Python, so the docs comparison covers the new language transitively. New tools
+DO need a `tool_route` option on their proto input message, whatever language adds them;
+`make tool-routes` fails loudly when one is missing.
 
 ## The endgame (so you know these hand-lists are temporary)
 

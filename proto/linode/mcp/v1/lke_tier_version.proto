@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // LKETier is the service tier of an LKE cluster. Values are the exact lowercase
 // Linode API strings, authored from the live OpenAPI spec (POST /lke/clusters).
 // See the enum-wrapper convention in nodebalancer_config.proto.
@@ -31,6 +33,12 @@ message LKETierVersionListResponse {
 
 // LKETierVersionGetInput is the input contract for linode_lke_tier_version_get.
 message LKETierVersionGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_tier_version_get"
+    method: "GET"
+    path: "/lke/tiers/{tier}/versions/{version}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The LKE tier ID, standard or enterprise (required).
@@ -42,6 +50,12 @@ message LKETierVersionGetInput {
 // LKETierVersionListInput is the input contract for
 // linode_lke_tier_version_list.
 message LKETierVersionListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_tier_version_list"
+    method: "GET"
+    path: "/lke/tiers/{tier}/versions"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // LKE tier: standard or enterprise (required).

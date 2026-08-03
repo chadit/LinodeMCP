@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // UDF is one user-defined field declared by a StackScript.
 message UDF {
   string label = 1;
@@ -43,6 +45,12 @@ message StackScriptListResponse {
 
 // StackScriptGetInput is the input contract for linode_stackscript_get.
 message StackScriptGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_stackscript_get"
+    method: "GET"
+    path: "/linode/stackscripts/{stackscript_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the StackScript to retrieve (required).
@@ -69,6 +77,12 @@ message StackScriptDeleteResponse {
 // The filters are client-side string filters ("true"/"false" for the
 // booleans), matching the hand-built schema.
 message StackScriptListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_stackscript_list"
+    method: "GET"
+    path: "/linode/stackscripts"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter by public status (true, false).
@@ -85,6 +99,12 @@ message StackScriptListInput {
 // into the generated required list, so it becomes optional here (the handler
 // still rejects an empty images list at runtime).
 message StackScriptCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_stackscript_create"
+    method: "POST"
+    path: "/linode/stackscripts"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // A label for the StackScript (max 64 characters, must be unique).
@@ -113,6 +133,12 @@ message StackScriptCreateInput {
 // supplied (handler-enforced). images stays optional here (repeated fields
 // are never required in the generated schema, and the ground truth agrees).
 message StackScriptUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_stackscript_update"
+    method: "PUT"
+    path: "/linode/stackscripts/{stackscript_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the StackScript to update.
@@ -141,6 +167,12 @@ message StackScriptUpdateInput {
 // StackScriptDeleteInput is the input contract for linode_stackscript_delete,
 // a two-stage destroy.
 message StackScriptDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_stackscript_delete"
+    method: "DELETE"
+    path: "/linode/stackscripts/{stackscript_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the StackScript to delete.

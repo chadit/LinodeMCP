@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // SSHKey mirrors a Linode profile SSH key.
 message SSHKey {
   int32 id = 1;
@@ -39,6 +41,12 @@ message SSHKeyDeleteResponse {
 
 // SSHKeyGetInput is the input contract for linode_sshkey_get.
 message SSHKeyGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_sshkey_get"
+    method: "GET"
+    path: "/profile/sshkeys/{ssh_key_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the SSH key to retrieve (required).
@@ -48,6 +56,12 @@ message SSHKeyGetInput {
 // SSHKeyListInput is the input contract for linode_sshkey_list. label_contains
 // is a client-side filter (fetch-all-then-filter, not an API param).
 message SSHKeyListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_sshkey_list"
+    method: "GET"
+    path: "/profile/sshkeys"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter SSH keys by label containing this string (case-insensitive).
@@ -56,6 +70,12 @@ message SSHKeyListInput {
 
 // SSHKeyCreateInput is the input contract for linode_sshkey_create.
 message SSHKeyCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_sshkey_create"
+    method: "POST"
+    path: "/profile/sshkeys"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // A label for the SSH key (must be unique).
@@ -72,6 +92,12 @@ message SSHKeyCreateInput {
 // SSHKeyUpdateInput is the input contract for linode_sshkey_update. label is
 // required in the hand-built schema (the label is the only updatable field).
 message SSHKeyUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_sshkey_update"
+    method: "PUT"
+    path: "/profile/sshkeys/{ssh_key_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the SSH key to update.
@@ -88,6 +114,12 @@ message SSHKeyUpdateInput {
 // SSHKeyDeleteInput is the input contract for linode_sshkey_delete (two-stage
 // destroy: optional mode/plan_id).
 message SSHKeyDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_sshkey_delete"
+    method: "DELETE"
+    path: "/profile/sshkeys/{ssh_key_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the SSH key to delete.

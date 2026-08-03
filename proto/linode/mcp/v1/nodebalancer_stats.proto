@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // NodeBalancerStats is the response for linode_nodebalancer_stats_get
 // (GET /nodebalancers/{nodeBalancerId}/stats). Like the instance-stats
@@ -34,6 +35,12 @@ message NodeBalancerTrafficStats {
 // NodeBalancerStatsGetInput is the input contract for
 // linode_nodebalancer_stats_get.
 message NodeBalancerStatsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_stats_get"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}/stats"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose statistics should be retrieved.

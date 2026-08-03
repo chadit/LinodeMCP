@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // MonitorService mirrors a Linode Monitor supported service type.
 message MonitorService {
@@ -14,6 +15,12 @@ message MonitorService {
 
 // MonitorServiceGetInput is the input contract for linode_monitor_service_get.
 message MonitorServiceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_get"
+    method: "GET"
+    path: "/monitor/services/{service_type}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The monitoring service type to retrieve (required).
@@ -23,6 +30,12 @@ message MonitorServiceGetInput {
 // MonitorServiceListInput is the input contract for
 // linode_monitor_service_list.
 message MonitorServiceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_list"
+    method: "GET"
+    path: "/monitor/services"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -30,6 +43,12 @@ message MonitorServiceListInput {
 // MonitorServiceDashboardListInput is the input contract for
 // linode_monitor_service_dashboard_list.
 message MonitorServiceDashboardListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_dashboard_list"
+    method: "GET"
+    path: "/monitor/services/{service_type}/dashboards"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug whose dashboards should be listed.
@@ -39,6 +58,12 @@ message MonitorServiceDashboardListInput {
 // MonitorServiceMetricDefinitionListInput is the input contract for
 // linode_monitor_service_metric_definition_list.
 message MonitorServiceMetricDefinitionListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_metric_definition_list"
+    method: "GET"
+    path: "/monitor/services/{service_type}/metric-definitions"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug whose metric definitions should be
@@ -49,6 +74,12 @@ message MonitorServiceMetricDefinitionListInput {
 // MonitorServiceAlertDefinitionListInput is the input contract for
 // linode_monitor_service_alert_definition_list.
 message MonitorServiceAlertDefinitionListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_alert_definition_list"
+    method: "GET"
+    path: "/monitor/services/{service_type}/alert-definitions"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug whose alert definitions should be
@@ -60,6 +91,12 @@ message MonitorServiceAlertDefinitionListInput {
 // linode_monitor_service_metric_query. The hand-built schema advertises only
 // service_type (the ground-truth dump confirms).
 message MonitorServiceMetricQueryInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_metric_query"
+    method: "POST"
+    path: "/monitor/services/{service_type}/metrics"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug whose metrics should be retrieved.
@@ -70,6 +107,12 @@ message MonitorServiceMetricQueryInput {
 // linode_monitor_service_alert_definition_get (service-scoped alert
 // definition, addressed by service_type + alert_id).
 message MonitorAlertDefinitionGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_alert_definition_get"
+    method: "GET"
+    path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug whose alert definition should be
@@ -83,6 +126,12 @@ message MonitorAlertDefinitionGetInput {
 // linode_monitor_service_alert_definition_delete. Plain confirm destroy.
 // Pairs with MonitorAlertDefinitionDeleteResponse.
 message MonitorAlertDefinitionDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_alert_definition_delete"
+    method: "DELETE"
+    path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug whose alert definition should be
@@ -104,6 +153,12 @@ message MonitorAlertDefinitionDeleteInput {
 // are never emitted into the generated required set, so it converts to an
 // optional-in-schema field enforced by the handler at runtime.
 message MonitorServiceTokenCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_token_create"
+    method: "POST"
+    path: "/monitor/services/{service_type}/token"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug for the token.
@@ -134,6 +189,12 @@ message MonitorServiceTokenCreateResponse {
 // int array, and entity_ids is a string array; the required map/array fields
 // drop out of the generated required set (handler still enforces them).
 message MonitorServiceAlertDefinitionCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_alert_definition_create"
+    method: "POST"
+    path: "/monitor/services/{service_type}/alert-definitions"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug for the alert definition.
@@ -164,6 +225,12 @@ message MonitorServiceAlertDefinitionCreateInput {
 // linode_monitor_service_alert_definition_clone. label is the only required
 // request-body field; the remaining clone overrides are optional.
 message MonitorServiceAlertDefinitionCloneInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_alert_definition_clone"
+    method: "POST"
+    path: "/monitor/services/{service_type}/alert-definitions/{alert_id}/clone"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug for the source alert definition.
@@ -201,6 +268,12 @@ message MonitorServiceAlertDefinitionCloneInput {
 // trigger_conditions are optional free-form objects (map); all other mutable
 // fields are optional. service_type, alert_id, and confirm are required.
 message MonitorServiceAlertDefinitionUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_service_alert_definition_update"
+    method: "PUT"
+    path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Supported monitoring service type slug for the alert definition.
@@ -234,6 +307,12 @@ message MonitorServiceAlertDefinitionUpdateInput {
 // MonitorDashboardListInput is the input contract for
 // linode_monitor_dashboard_list.
 message MonitorDashboardListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_dashboard_list"
+    method: "GET"
+    path: "/monitor/dashboards"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -245,6 +324,12 @@ message MonitorDashboardListInput {
 // MonitorDashboardGetInput is the input contract for
 // linode_monitor_dashboard_get.
 message MonitorDashboardGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_dashboard_get"
+    method: "GET"
+    path: "/monitor/dashboards/{dashboard_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Monitoring dashboard ID to retrieve.
@@ -254,6 +339,12 @@ message MonitorDashboardGetInput {
 // MonitorAlertDefinitionListInput is the input contract for the top-level
 // linode_monitor_alert_definition_list (all service types).
 message MonitorAlertDefinitionListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_alert_definition_list"
+    method: "GET"
+    path: "/monitor/alert-definitions"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -265,6 +356,12 @@ message MonitorAlertDefinitionListInput {
 // MonitorAlertChannelListInput is the input contract for
 // linode_monitor_alert_channel_list.
 message MonitorAlertChannelListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_monitor_alert_channel_list"
+    method: "GET"
+    path: "/monitor/alert-channels"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).

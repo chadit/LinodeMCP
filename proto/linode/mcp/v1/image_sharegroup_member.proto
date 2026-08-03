@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // ImageShareGroupMember is one membership token in an image share group. updated
 // and expiry are nullable (omitted when unset).
 message ImageShareGroupMember {
@@ -41,6 +43,12 @@ message ImageShareGroupMemberListResponse {
 // ImageShareGroupMemberTokenGetInput is the input contract for
 // linode_image_sharegroup_member_token_get.
 message ImageShareGroupMemberTokenGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_member_token_get"
+    method: "GET"
+    path: "/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The image share group ID (required).
@@ -52,6 +60,12 @@ message ImageShareGroupMemberTokenGetInput {
 // ImageShareGroupMemberListInput is the input contract for
 // linode_image_sharegroup_member_list.
 message ImageShareGroupMemberListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_member_list"
+    method: "GET"
+    path: "/images/sharegroups/{sharegroup_id}/members"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Image share group ID.
@@ -66,6 +80,12 @@ message ImageShareGroupMemberListInput {
 // linode_image_sharegroup_member_add. sharegroup_id, label, token, and confirm
 // are required.
 message ImageShareGroupMemberAddInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_member_add"
+    method: "POST"
+    path: "/images/sharegroups/{sharegroup_id}/members"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric image share group ID to add members to.
@@ -86,6 +106,12 @@ message ImageShareGroupMemberAddInput {
 // linode_image_sharegroup_member_token_update. sharegroup_id, token_uuid,
 // label, and confirm are required.
 message ImageShareGroupMemberTokenUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_member_token_update"
+    method: "PUT"
+    path: "/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric ID of the image share group.
@@ -106,6 +132,12 @@ message ImageShareGroupMemberTokenUpdateInput {
 // linode_image_sharegroup_member_token_delete. Plain confirm destroy (no
 // mode/plan_id in the ground truth).
 message ImageShareGroupMemberTokenDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_member_token_delete"
+    method: "DELETE"
+    path: "/images/sharegroups/{sharegroup_id}/members/{token_uuid}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric image share group ID.

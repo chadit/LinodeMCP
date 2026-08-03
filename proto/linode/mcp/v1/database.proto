@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "linode/mcp/v1/longview.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "linode/mcp/v1/longview.proto";
+import "linode/mcp/v1/options.proto";
 
 // DatabaseTypeEngine is one engine pricing entry nested in a database type.
 message DatabaseTypeEngine {
@@ -41,6 +42,12 @@ message DatabaseTypeListResponse {
 
 // DatabaseTypeGetInput is the input contract for linode_database_type_get.
 message DatabaseTypeGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_type_get"
+    method: "GET"
+    path: "/databases/types/{type_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the database type to retrieve (required).
@@ -53,6 +60,12 @@ message DatabaseTypeGetInput {
 
 // DatabaseTypeListInput is the input contract for linode_database_type_list.
 message DatabaseTypeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_type_list"
+    method: "GET"
+    path: "/databases/types"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -64,6 +77,12 @@ message DatabaseTypeListInput {
 // DatabaseMySQLConfigGetInput is the input contract for
 // linode_database_mysql_config_get.
 message DatabaseMySQLConfigGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_config_get"
+    method: "GET"
+    path: "/databases/mysql/config"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -71,6 +90,12 @@ message DatabaseMySQLConfigGetInput {
 // DatabasePostgreSQLConfigGetInput is the input contract for
 // linode_database_postgresql_config_get.
 message DatabasePostgreSQLConfigGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_config_get"
+    method: "GET"
+    path: "/databases/postgresql/config"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }

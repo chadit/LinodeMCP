@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // FirewallPolicy is the default inbound/outbound traffic policy of a firewall.
 // Values are the exact Linode API strings, authored from the live OpenAPI spec
@@ -137,6 +138,12 @@ message FirewallRuleVersionListResponse {
 
 // FirewallGetInput is the input contract for linode_firewall_get.
 message FirewallGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_get"
+    method: "GET"
+    path: "/networking/firewalls/{firewall_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall to retrieve (required).
@@ -145,6 +152,12 @@ message FirewallGetInput {
 
 // FirewallRulesGetInput is the input contract for linode_firewall_rules_get.
 message FirewallRulesGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_rules_get"
+    method: "GET"
+    path: "/networking/firewalls/{firewall_id}/rules"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall whose rules to retrieve (required).
@@ -153,6 +166,12 @@ message FirewallRulesGetInput {
 
 // FirewallListInput is the input contract for linode_firewall_list.
 message FirewallListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_list"
+    method: "GET"
+    path: "/networking/firewalls"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter by firewall status (enabled, disabled, deleted).
@@ -163,6 +182,12 @@ message FirewallListInput {
 
 // FirewallCreateInput is the input contract for linode_firewall_create.
 message FirewallCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_create"
+    method: "POST"
+    path: "/networking/firewalls"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // A label for the firewall (must be unique).
@@ -183,6 +208,12 @@ message FirewallCreateInput {
 
 // FirewallUpdateInput is the input contract for linode_firewall_update.
 message FirewallUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_update"
+    method: "PUT"
+    path: "/networking/firewalls/{firewall_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall to update.
@@ -204,6 +235,12 @@ message FirewallUpdateInput {
 
 // FirewallDeleteInput is the input contract for linode_firewall_delete.
 message FirewallDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_delete"
+    method: "DELETE"
+    path: "/networking/firewalls/{firewall_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall to delete.
@@ -224,6 +261,12 @@ message FirewallDeleteInput {
 // FirewallSettingsGetInput is the input contract for
 // linode_firewall_settings_get.
 message FirewallSettingsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_settings_get"
+    method: "GET"
+    path: "/networking/firewalls/settings"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -235,6 +278,12 @@ message FirewallSettingsGetInput {
 // FirewallRuleVersionListInput is the input contract for
 // linode_firewall_rule_version_list.
 message FirewallRuleVersionListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_rule_version_list"
+    method: "GET"
+    path: "/networking/firewalls/{firewall_id}/history"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall whose rule versions should be listed.
@@ -244,6 +293,12 @@ message FirewallRuleVersionListInput {
 // FirewallRuleVersionGetInput is the input contract for
 // linode_firewall_rule_version_get.
 message FirewallRuleVersionGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_rule_version_get"
+    method: "GET"
+    path: "/networking/firewalls/{firewall_id}/history/rules/{version}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall whose rule version should be retrieved.
@@ -255,6 +310,12 @@ message FirewallRuleVersionGetInput {
 // FirewallTemplateListInput is the input contract for
 // linode_firewall_template_list.
 message FirewallTemplateListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_template_list"
+    method: "GET"
+    path: "/networking/firewalls/templates"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -266,6 +327,12 @@ message FirewallTemplateListInput {
 // FirewallTemplateGetInput is the input contract for
 // linode_firewall_template_get.
 message FirewallTemplateGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_template_get"
+    method: "GET"
+    path: "/networking/firewalls/templates/{slug}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Firewall template slug to retrieve. Must be public or vpc.
@@ -283,6 +350,12 @@ message FirewallTemplateGetInput {
 // enforces presence). The hand-built schema advertised bare arrays with no item
 // shape, so each is a repeated free-form firewall-rule object.
 message FirewallRulesUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_rules_update"
+    method: "PUT"
+    path: "/networking/firewalls/{firewall_id}/rules"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the firewall whose rules should be replaced.
@@ -306,6 +379,12 @@ message FirewallRulesUpdateInput {
 // enforces presence). It is keyed by linode, nodebalancer, public_interface, or
 // vpc_interface with positive-int firewall IDs.
 message FirewallSettingsUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_firewall_settings_update"
+    method: "PUT"
+    path: "/networking/firewalls/settings"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Object of positive firewall IDs keyed by linode, nodebalancer,
@@ -322,6 +401,12 @@ message FirewallSettingsUpdateInput {
 // InstanceFirewallListInput is the input contract for
 // linode_instance_firewall_list.
 message InstanceFirewallListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_firewall_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/firewalls"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -335,6 +420,12 @@ message InstanceFirewallListInput {
 // InstanceInterfaceFirewallListInput is the input contract for
 // linode_instance_interface_firewall_list.
 message InstanceInterfaceFirewallListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_firewall_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/interfaces/{interface_id}/firewalls"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -350,6 +441,12 @@ message InstanceInterfaceFirewallListInput {
 // required flag is dropped from the advertised schema (runtime still enforces
 // presence).
 message InstanceFirewallUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_firewall_update"
+    method: "PUT"
+    path: "/linode/instances/{linode_id}/firewalls"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).

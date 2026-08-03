@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // ManagedIssueEntity is the support ticket entity attached to a managed issue.
 message ManagedIssueEntity {
   int32 id = 1;
@@ -30,6 +32,12 @@ message ManagedIssueListResponse {
 
 // ManagedIssueGetInput is the input contract for linode_managed_issue_get.
 message ManagedIssueGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_issue_get"
+    method: "GET"
+    path: "/managed/issues/{issue_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the managed issue to retrieve (required).
@@ -38,6 +46,12 @@ message ManagedIssueGetInput {
 
 // ManagedIssueListInput is the input contract for linode_managed_issue_list.
 message ManagedIssueListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_issue_list"
+    method: "GET"
+    path: "/managed/issues"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).

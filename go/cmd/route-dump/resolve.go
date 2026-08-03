@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// pathParam is what every path parameter collapses to. tool-routes.txt
+// pathParam is what every path parameter collapses to. A declared route
 // shape-matches parameters, so the name a route gives a segment never has to
 // agree across languages and the resolver never has to recover it.
 const pathParam = "{p}"
@@ -60,7 +60,7 @@ func (pkg *clientPackage) resolveConcat(node *ast.BinaryExpr, locals map[string]
 //
 // The trade-off is deliberate. A helper that returns a multi-segment subpath
 // and resists resolution collapses to a single {p} here and yields a route that
-// matches nothing in tool-routes.txt, which fails the gate out loud. That is
+// matches no declared route, which fails the gate out loud. That is
 // the direction to be wrong in: the alternative, treating it as no evidence at
 // all, is the silent miss this whole tool exists to remove.
 func (pkg *clientPackage) resolveSegment(expr ast.Expr, locals map[string]string) (string, bool) {

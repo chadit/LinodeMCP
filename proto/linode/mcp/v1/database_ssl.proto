@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // DatabaseSSL is the SSL CA certificate of a Managed Database instance.
 message DatabaseSSL {
   string ca_certificate = 1;
@@ -12,6 +14,12 @@ message DatabaseSSL {
 // DatabaseMySQLInstanceSSLGetInput is the input contract for
 // linode_database_mysql_instance_ssl_get.
 message DatabaseMySQLInstanceSSLGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_ssl_get"
+    method: "GET"
+    path: "/databases/mysql/instances/{mysql_instance_id}/ssl"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID (required).
@@ -21,6 +29,12 @@ message DatabaseMySQLInstanceSSLGetInput {
 // DatabasePostgreSQLInstanceSSLGetInput is the input contract for
 // linode_database_postgresql_instance_ssl_get.
 message DatabasePostgreSQLInstanceSSLGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_ssl_get"
+    method: "GET"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}/ssl"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID (required).

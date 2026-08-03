@@ -13,19 +13,24 @@ Go (and any future language) equal to Python per tool, so python-vs-spec
 plus parity transitively pins every language against the docs without
 this script growing a per-language dumper matrix.
 
-The comparison needs to know which route each tool calls, and nothing in
-the tool registry records that. docs/contracts/tool-routes.txt is that
-contract: one `<tool>: <METHOD> <path-template>` line per non-meta tool.
-It is hand-maintained but machine-checked on every run from both sides
-(every registered tool must have a line, every line must name a
-registered tool and a route that exists in the spec), so it cannot rot
-silently.
+The comparison needs to know which route each tool calls, and the tool
+registry does not record that. The proto contract does: every non-meta
+tool's *Input message carries a `tool_route` option naming the tool, the
+method, and the path template, which makes the message the equivalent of
+an OpenAPI operation object. verify_tool_routes.py pins those options
+from both sides offline, so this gate reads them rather than re-checking
+them.
+
+The spec is NOT the route oracle here. It demonstrably lags techdocs, so
+a route it has never published (the reserved-ip family) is a gap in the
+spec rather than a defect in the contract; a tool whose route the spec
+documents no operation for is counted and skipped. Whether a client can
+actually build a declared route is verify_route_evidence.py's job, and
+it runs offline on every push rather than weekly.
 
 Drift classes reported, each one line, each baselineable:
-- `<tool>: no route entry` - registry grew a tool the contract missed.
-- `<tool>: route entry but tool not registered` - stale contract line.
-- `<tool>: route <METHOD> <path> not in spec` - upstream removed or has
-  never documented the route (the reserved-ip family today).
+- `<tool>: no route entry` - registry grew a tool with no annotation.
+- `<tool>: route entry but tool not registered` - stale annotation.
 - `<tool>: scopes doc=[...] mapped=[...]` - the mapping disagrees with
   the documented scopes. Deliberate deviations live in the baseline with
   an annotation naming the tracking issue; see the scopeOverrides
@@ -60,9 +65,9 @@ from pathlib import Path
 from typing import Any
 
 import _baselines
+import _toolroutes
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_ROUTES = _REPO_ROOT / "docs" / "contracts" / "tool-routes.txt"
 _BASELINE = _REPO_ROOT / "docs" / "contracts" / "scope-sync-baseline.txt"
 
 SPEC_URL = (
@@ -148,41 +153,22 @@ def norm_template(path: str) -> str:
 
     Parameter NAMES differ between the spec and the handlers (linodeId vs
     encoded_instance_id), so every `{...}` segment collapses to `{p}` and
-    matching happens on shape. Query strings never participate.
+    matching happens on shape. Shared with the other gates rather than written
+    twice, since both sides of this comparison have to be shaped identically.
     """
-    bare = path.split("?", maxsplit=1)[0]
-    segments = [
-        "{p}" if segment.startswith("{") else segment
-        for segment in bare.strip("/").split("/")
-    ]
-    return "/" + "/".join(segments)
+    return _toolroutes.norm_template(path)
 
 
-def parse_routes(text: str) -> dict[str, tuple[str, str]]:
-    """Parse tool-routes.txt into {tool: (METHOD, template)}.
+def contract_routes() -> dict[str, tuple[str, str]]:
+    """The declared routes as {tool: (METHOD, template)}.
 
-    Malformed or duplicate lines are a broken contract, not drift, so
-    they abort instead of becoming baseline entries.
+    Templates are normalized rather than trusted, so this side of the
+    comparison and the spec side are shaped by the same function.
     """
-    routes: dict[str, tuple[str, str]] = {}
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        tool, sep, rest = line.partition(": ")
-        parts = rest.split()
-        expected_parts = 2
-        if not sep or len(parts) != expected_parts:
-            raise SystemExit(f"tool-routes.txt: malformed line: {line!r}")
-        method, path = parts
-        if method not in {m.upper() for m in _METHODS}:
-            raise SystemExit(f"tool-routes.txt: unknown method in: {line!r}")
-        if not path.startswith("/"):
-            raise SystemExit(f"tool-routes.txt: path must start with /: {line!r}")
-        if tool in routes:
-            raise SystemExit(f"tool-routes.txt: duplicate entry for {tool}")
-        routes[tool] = (method, norm_template(path))
-    return routes
+    return {
+        tool: (method, norm_template(path))
+        for tool, (method, path) in _toolroutes.routes().items()
+    }
 
 
 def spec_operations(spec: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
@@ -213,9 +199,10 @@ def compare(
     routes: dict[str, tuple[str, str]],
     dump: list[dict[str, Any]],
     operations: dict[str, dict[str, list[str]]],
-) -> list[str]:
-    """Return one sorted drift line per disagreement."""
+) -> tuple[list[str], list[str]]:
+    """One sorted drift line per disagreement, plus the routes the spec skips."""
     problems: list[str] = []
+    undocumented: list[str] = []
     registered: set[str] = set()
 
     for record in dump:
@@ -232,7 +219,10 @@ def compare(
         method, template = route
         documented = operations.get(template, {}).get(method)
         if documented is None:
-            problems.append(f"{name}: route {method} {template} not in spec")
+            # The spec lags techdocs, so a route it never published documents
+            # no scopes to compare against. That is a hole in the spec, not
+            # drift here, and route-evidence proves the route is real.
+            undocumented.append(f"{name}: {method} {template}")
             continue
 
         fixup = _UPSTREAM_SCOPE_FIXUPS.get((method, template))
@@ -257,7 +247,7 @@ def compare(
         if tool not in registered
     )
 
-    return sorted(problems)
+    return sorted(problems), sorted(undocumented)
 
 
 def load_dump(path: str | None) -> list[dict[str, Any]]:
@@ -305,13 +295,14 @@ def _flag_value(argv: list[str], flag: str) -> str | None:
 
 
 def main(argv: list[str]) -> int:
-    routes = parse_routes(_ROUTES.read_text(encoding="utf-8"))
+    routes = contract_routes()
     dump = load_dump(_flag_value(argv, "--dump"))
     spec = load_spec(_flag_value(argv, "--spec"))
     version = str(spec.get("info", {}).get("version", "unknown"))
 
     exempt = _exempt_deviations()
-    generated = set(compare(routes, dump, spec_operations(spec)))
+    drift, undocumented = compare(routes, dump, spec_operations(spec))
+    generated = set(drift)
     # Exempt deviations leave the ratchet entirely: they are upstream facts, not
     # work waiting on someone here, so a baseline line would be a promise with
     # nothing behind it.
@@ -335,10 +326,19 @@ def main(argv: list[str]) -> int:
     fixed = sorted(baseline - current)
     pending = _baselines.unannotated(current & baseline, stored)
 
+    if undocumented:
+        # Named rather than only counted: these tools get no scope check at
+        # all, so the set has to stay visible as it changes.
+        print(f"routes the spec documents no operation for ({len(undocumented)}):")
+        for line in undocumented:
+            print(f"  {line}")
+
     if not new and not fixed and not pending and not stale_exemptions:
         print(
-            f"sync-scopes OK: {len(routes)} route(s) checked against spec "
-            f"{version}, {len(baseline)} accepted deviation(s) unchanged, "
+            f"sync-scopes OK: {len(routes) - len(undocumented)} of "
+            f"{len(routes)} declared route(s) compared against spec "
+            f"{version} ({len(undocumented)} the spec documents no operation "
+            f"for), {len(baseline)} accepted deviation(s) unchanged, "
             f"{len(exempt)} exemption(s)"
         )
         return 0

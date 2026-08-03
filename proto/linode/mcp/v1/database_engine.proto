@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // DatabaseEngine is one Managed Database engine version.
 message DatabaseEngine {
   string id = 1;
@@ -21,6 +23,12 @@ message DatabaseEngineListResponse {
 
 // DatabaseEngineGetInput is the input contract for linode_database_engine_get.
 message DatabaseEngineGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_engine_get"
+    method: "GET"
+    path: "/databases/engines/{engine_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Managed Database engine ID, for example mysql/8.0.26 (required).
@@ -30,6 +38,12 @@ message DatabaseEngineGetInput {
 // DatabaseEngineListInput is the input contract for
 // linode_database_engine_list.
 message DatabaseEngineListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_engine_list"
+    method: "GET"
+    path: "/databases/engines"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).

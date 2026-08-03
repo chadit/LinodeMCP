@@ -1,4 +1,4 @@
-.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes list-envelope route-evidence system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
+.PHONY: help build test check check-container lint fmt-check go-fmt-check python-fmt-check scripts-fmt-check scripts-lint clean install-hooks check-hooks tool-parity tool-count dryrun pagination response-shapes list-envelope tool-routes route-evidence system-params env-parity cli-surface docs-links metrics-surface coverage-floor coverage-report diff-coverage write-proto read-proto input-proto meta-proto behavior messages sync sync-enums sync-defaults sync-pagination sync-response-shapes sync-scopes sync-issues baseline-guard tool-float parity-todo \
 	docker-build-go docker-build-python docker-build-all \
 	docker-run-go docker-run-python docker-clean \
 	go-build go-build-prod go-test go-lint go-fmt go-clean go-run go-check \
@@ -68,7 +68,7 @@ build: proto go-build python-build
 # pass a check a fresh CI venv fails. Ordering after that is cheap-fails-first:
 # format/lint/workflow checks, the two language suites, gates, security scans,
 # then builds.
-check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes list-envelope route-evidence system-params env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
+check: proto python-install-dev fmt-check scripts-lint actionlint baseline-guard tool-float go-check python-check coverage-floor diff-coverage tool-parity tool-count dryrun pagination response-shapes list-envelope tool-routes route-evidence system-params env-parity cli-surface docs-links metrics-surface write-proto read-proto input-proto meta-proto behavior messages betterleaks trivy build go-build-prod
 
 ## check-container: Run the full `make check` gate inside the CI-mirror Linux container
 # The local rehearsal of CI itself: same OS family, same toolchain (the image
@@ -187,10 +187,13 @@ sync-defaults:
 ## sync-scopes: LIVE-check per-tool OAuth scopes against the Linode API spec (scheduled agent; needs network + venv)
 # The tool-parity gate pins every language's scope mapping equal to Python's;
 # this proves Python's mapping still matches the spec's per-operation security
-# blocks, so all languages transitively track the docs. Routes come from
-# docs/contracts/tool-routes.txt; accepted deviations live annotated in
-# docs/contracts/scope-sync-baseline.txt. Unlike the other sync gates this one
-# needs the venv, because the tool dump comes from the Python registry.
+# blocks, so all languages transitively track the docs. Routes come from the
+# proto contract's tool_route options; accepted deviations live annotated in
+# docs/contracts/scope-sync-baseline.txt. A route the spec documents no
+# operation for is named and skipped rather than failed: the spec lags
+# techdocs, and route-evidence proves offline that the route is real. Unlike
+# the other sync gates this one needs the venv, because the tool dump comes
+# from the Python registry.
 sync-scopes: python-install-dev
 	@python3 scripts/verify_sync_scopes.py
 
@@ -266,7 +269,18 @@ response-shapes:
 list-envelope:
 	@python3 scripts/verify_list_envelope.py
 
-## route-evidence: Verify every contracted route is one a client can build
+## tool-routes: Verify every non-meta tool declares its Linode route in the proto
+# Offline and hard (no baseline): each tool's proto input message carries a
+# `linode.mcp.v1.tool_route` option naming the tool, the method, and the path
+# template, which is what makes the descriptors the single source for
+# tool-to-route. The gate pins that from both sides against
+# docs/contracts/tools-manifest.txt: a non-meta tool with no option fails, a
+# Meta tool carrying one fails, and an option naming an unregistered tool or
+# sitting on the wrong input message fails.
+tool-routes:
+	@python3 scripts/verify_tool_routes.py
+
+## route-evidence: Verify every declared route is one a client can build
 # Offline source scan, scoped by docs/contracts/languages.txt rather than a
 # path in the script. Go resolves through go/cmd/route-dump, Python through
 # scripts/_routescan.py; both follow the call graph outward from the request

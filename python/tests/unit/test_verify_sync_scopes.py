@@ -2,8 +2,8 @@
 
 verify_sync_scopes.py compares the Python scope mapping against the
 OpenAPI spec's per-operation security blocks, routed through the
-docs/contracts/tool-routes.txt contract. These tests pin the path
-normalization, the contract parser, every drift class, and the baseline
+tool_route options the proto contract carries. These tests pin the path
+normalization, the route reader, every drift class, and the baseline
 ratchet; the full gate runs live via `make sync-scopes`.
 """
 
@@ -15,10 +15,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import pytest
-
 if TYPE_CHECKING:
     from types import ModuleType
+
+    import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -65,38 +65,28 @@ def test_norm_template_collapses_params_and_query() -> None:
     assert gate.norm_template("/a/{x}/b/{y}") == "/a/{p}/b/{p}"
 
 
-def test_parse_routes_happy_path() -> None:
-    """Comments and blanks are skipped; entries parse into tuples."""
-    text = (
-        "# header\n\nlinode_tag_list: GET /tags\n"
-        "linode_tag_delete: DELETE /tags/{label}\n"
+def test_contract_routes_normalizes_what_the_proto_declares(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Declared paths pass through the same shaping the spec side gets.
+
+    Both sides of the comparison have to be normalized by one function, or a
+    parameter the proto happened to name would never match the spec's own
+    name for it.
+    """
+    monkeypatch.setattr(
+        gate._toolroutes,
+        "routes",
+        lambda: {
+            "linode_tag_list": ("GET", "/tags"),
+            "linode_tag_delete": ("DELETE", "/tags/{label}"),
+        },
     )
-    assert gate.parse_routes(text) == {
+
+    assert gate.contract_routes() == {
         "linode_tag_list": ("GET", "/tags"),
         "linode_tag_delete": ("DELETE", "/tags/{p}"),
     }
-
-
-@pytest.mark.parametrize(
-    "line",
-    [
-        "linode_tag_list GET /tags",
-        "linode_tag_list: FETCH /tags",
-        "linode_tag_list: GET tags",
-        "linode_tag_list: GET",
-    ],
-)
-def test_parse_routes_rejects_malformed_lines(line: str) -> None:
-    """A broken contract aborts instead of becoming drift."""
-    with pytest.raises(SystemExit):
-        gate.parse_routes(line + "\n")
-
-
-def test_parse_routes_rejects_duplicates() -> None:
-    """Two lines for one tool is a contract bug, not a choice."""
-    text = "linode_tag_list: GET /tags\nlinode_tag_list: GET /tags\n"
-    with pytest.raises(SystemExit):
-        gate.parse_routes(text)
 
 
 def test_spec_operations_scoped_public_and_token_only() -> None:
@@ -115,9 +105,10 @@ def test_spec_operations_scoped_public_and_token_only() -> None:
 
 
 def _base_fixture() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
-    routes = gate.parse_routes(
-        "linode_tag_list: GET /tags\nlinode_kernel_list: GET /linode/kernels\n"
-    )
+    routes = {
+        "linode_tag_list": ("GET", "/tags"),
+        "linode_kernel_list": ("GET", "/linode/kernels"),
+    }
     dump = [
         _record("linode_tag_list", "Read", ["account:read_only"]),
         _record("linode_kernel_list", "Read", []),
@@ -135,37 +126,41 @@ def _base_fixture() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any
 def test_compare_clean_surface_reports_nothing() -> None:
     """Matching scopes, public routes, and meta tools produce no drift."""
     routes, dump, spec = _base_fixture()
-    assert gate.compare(routes, dump, gate.spec_operations(spec)) == []
+    assert gate.compare(routes, dump, gate.spec_operations(spec)) == ([], [])
 
 
 def test_compare_flags_scope_mismatch() -> None:
     """A mapping that disagrees with the documented scopes is one line."""
     routes, dump, spec = _base_fixture()
     dump[0]["scopes"] = ["account:read_write"]
-    assert gate.compare(routes, dump, gate.spec_operations(spec)) == [
+    drift, undocumented = gate.compare(routes, dump, gate.spec_operations(spec))
+    assert drift == [
         (
             "linode_tag_list: scopes doc=['account:read_only']"
             " mapped=['account:read_write']"
         )
     ]
+    assert undocumented == []
 
 
 def test_compare_flags_missing_route_entry() -> None:
     """A registered tool absent from the contract is flagged."""
     routes, dump, spec = _base_fixture()
     dump.append(_record("linode_volume_list", "Read", ["volumes:read_only"]))
-    assert gate.compare(routes, dump, gate.spec_operations(spec)) == [
-        "linode_volume_list: no route entry"
-    ]
+    assert gate.compare(routes, dump, gate.spec_operations(spec)) == (
+        ["linode_volume_list: no route entry"],
+        [],
+    )
 
 
 def test_compare_flags_stale_route_entry() -> None:
     """A contract line for an unregistered tool is flagged."""
     routes, dump, spec = _base_fixture()
     routes["linode_gone_tool"] = ("GET", "/tags")
-    assert gate.compare(routes, dump, gate.spec_operations(spec)) == [
-        "linode_gone_tool: route entry but tool not registered"
-    ]
+    assert gate.compare(routes, dump, gate.spec_operations(spec)) == (
+        ["linode_gone_tool: route entry but tool not registered"],
+        [],
+    )
 
 
 def test_compare_applies_upstream_fixup() -> None:
@@ -175,12 +170,12 @@ def test_compare_applies_upstream_fixup() -> None:
     grantable registry defines; the fixup maps it to the family's
     linodes:read_only, so a mapping carrying that value is clean.
     """
-    routes = gate.parse_routes("linode_placement_group_list: GET /placement/groups\n")
+    routes = {"linode_placement_group_list": ("GET", "/placement/groups")}
     dump = [_record("linode_placement_group_list", "Read", ["linodes:read_only"])]
     spec = _spec(
         {"/{apiVersion}/placement/groups": {"get": _op(["placement:read_only"])}}
     )
-    assert gate.compare(routes, dump, gate.spec_operations(spec)) == []
+    assert gate.compare(routes, dump, gate.spec_operations(spec)) == ([], [])
 
 
 def test_compare_reports_stale_upstream_fixup() -> None:
@@ -189,23 +184,29 @@ def test_compare_reports_stale_upstream_fixup() -> None:
     If upstream fixes the placement scope, the fixup must be dropped
     rather than silently rewriting the new documented value.
     """
-    routes = gate.parse_routes("linode_placement_group_list: GET /placement/groups\n")
+    routes = {"linode_placement_group_list": ("GET", "/placement/groups")}
     dump = [_record("linode_placement_group_list", "Read", ["linodes:read_only"])]
     spec = _spec(
         {"/{apiVersion}/placement/groups": {"get": _op(["linodes:read_only"])}}
     )
-    problems = gate.compare(routes, dump, gate.spec_operations(spec))
+    problems, _ = gate.compare(routes, dump, gate.spec_operations(spec))
     assert len(problems) == 1
     assert problems[0].startswith("linode_placement_group_list: stale fixup")
 
 
-def test_compare_flags_route_missing_from_spec() -> None:
-    """A route upstream never documented is its own drift class."""
+def test_compare_skips_a_route_the_spec_never_documented() -> None:
+    """A route the spec has no operation for is counted, never drift.
+
+    The spec lags techdocs, so its silence about a route says nothing about
+    the mapping. Failing on it would make the gate report a defect here for
+    a hole upstream, which is what the exempt file used to paper over.
+    """
     routes, dump, spec = _base_fixture()
     routes["linode_tag_list"] = ("GET", "/tags/nowhere")
-    assert gate.compare(routes, dump, gate.spec_operations(spec)) == [
-        "linode_tag_list: route GET /tags/nowhere not in spec"
-    ]
+    assert gate.compare(routes, dump, gate.spec_operations(spec)) == (
+        [],
+        ["linode_tag_list: GET /tags/nowhere"],
+    )
 
 
 def _write_env(
@@ -214,23 +215,20 @@ def _write_env(
     baseline: str | None,
     exempt: str = "",
 ) -> tuple[Path, Path]:
-    """Point the module at tmp contract/baseline/exempt/spec/dump files.
+    """Point the module at a tiny route set and tmp baseline/exempt/spec/dump.
 
     The exempt file is redirected even when empty: left pointing at the real
     one, every deviation it lists would read as an exemption that no longer
     applies against this fixture's tiny route set.
     """
-    routes_file = tmp_path / "tool-routes.txt"
-    routes_file.write_text(
-        "linode_tag_list: GET /tags\n",
-        encoding="utf-8",
-    )
     baseline_file = tmp_path / "scope-sync-baseline.txt"
     if baseline is not None:
         baseline_file.write_text(baseline, encoding="utf-8")
     exempt_file = tmp_path / "scope-sync-exempt.txt"
     exempt_file.write_text(exempt, encoding="utf-8")
-    monkeypatch.setattr(gate, "_ROUTES", routes_file)
+    monkeypatch.setattr(
+        gate, "contract_routes", lambda: {"linode_tag_list": ("GET", "/tags")}
+    )
     monkeypatch.setattr(gate, "_BASELINE", baseline_file)
     monkeypatch.setattr(gate, "_EXEMPT", exempt_file)
 
@@ -338,17 +336,13 @@ def test_main_update_baseline_preserves_annotations(
 
 
 def test_live_contract_files_are_coherent() -> None:
-    """The checked-in contract parses and covers the checked-in baseline.
+    """The declared routes resolve and cover the checked-in baseline.
 
-    Full spec comparison needs the network, but the contract file's format
-    and the baseline's annotations are verifiable offline, so a malformed
-    line never waits for the Monday cron to surface.
+    Full spec comparison needs the network, but the proto's declarations and
+    the baseline's annotations are verifiable offline, so an orphaned entry
+    never waits for the Monday cron to surface.
     """
-    routes = gate.parse_routes(
-        (REPO_ROOT / "docs" / "contracts" / "tool-routes.txt").read_text(
-            encoding="utf-8"
-        )
-    )
+    routes = gate.contract_routes()
     assert len(routes) > 400
 
     baselines = _load_script("_baselines")
@@ -423,11 +417,7 @@ def test_live_exemptions_are_real_deviations() -> None:
     A renamed tool would otherwise leave an exemption suppressing nothing.
     """
     exempt_path = REPO_ROOT / "docs" / "contracts" / "scope-sync-exempt.txt"
-    routes = gate.parse_routes(
-        (REPO_ROOT / "docs" / "contracts" / "tool-routes.txt").read_text(
-            encoding="utf-8"
-        )
-    )
+    routes = gate.contract_routes()
 
     for raw in exempt_path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()

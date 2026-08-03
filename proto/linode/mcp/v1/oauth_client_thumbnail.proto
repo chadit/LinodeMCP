@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // OAuthClientThumbnail is the linode_account_oauth_client_thumbnail_get response.
 // The thumbnail endpoint returns raw image/png bytes; both languages base64-encode
 // them and return the echoed client_id alongside. thumbnail_png_base64 is a plain
@@ -17,6 +19,12 @@ message OAuthClientThumbnail {
 // AccountOAuthClientThumbnailGetInput is the input contract for
 // linode_account_oauth_client_thumbnail_get.
 message AccountOAuthClientThumbnailGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_oauth_client_thumbnail_get"
+    method: "GET"
+    path: "/account/oauth-clients/{client_id}/thumbnail"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // OAuth client ID (required).
@@ -26,6 +34,12 @@ message AccountOAuthClientThumbnailGetInput {
 // AccountOAuthClientThumbnailUpdateInput is the input contract for
 // linode_account_oauth_client_thumbnail_update.
 message AccountOAuthClientThumbnailUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_oauth_client_thumbnail_update"
+    method: "PUT"
+    path: "/account/oauth-clients/{client_id}/thumbnail"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // OAuth client ID (required).

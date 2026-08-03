@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // ImageShareGroup mirrors one image share group. description, updated, and expiry
 // are nullable (omitted when unset).
 message ImageShareGroup {
@@ -51,6 +53,12 @@ message ImageShareGroupListResponse {
 
 // ImageShareGroupGetInput is the input contract for linode_image_sharegroup_get.
 message ImageShareGroupGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_get"
+    method: "GET"
+    path: "/images/sharegroups/{sharegroup_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The image share group ID (required).
@@ -60,6 +68,12 @@ message ImageShareGroupGetInput {
 // ImageShareGroupByTokenGetInput is the input contract for
 // linode_image_sharegroup_by_token_get.
 message ImageShareGroupByTokenGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_by_token_get"
+    method: "GET"
+    path: "/images/sharegroups/tokens/{token_uuid}/sharegroup"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The image share group token UUID (required).
@@ -69,6 +83,12 @@ message ImageShareGroupByTokenGetInput {
 // ImageShareGroupListInput is the input contract for
 // linode_image_sharegroup_list.
 message ImageShareGroupListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_list"
+    method: "GET"
+    path: "/images/sharegroups"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -80,6 +100,12 @@ message ImageShareGroupListInput {
 // ImageShareGroupByImageListInput is the input contract for
 // linode_image_sharegroup_by_image_list.
 message ImageShareGroupByImageListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_by_image_list"
+    method: "GET"
+    path: "/images/{image_id}/sharegroups"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Private image ID, for example private/12345.
@@ -93,6 +119,12 @@ message ImageShareGroupByImageListInput {
 // ImageShareGroupUpdateInput is the input contract for
 // linode_image_sharegroup_update. sharegroup_id and confirm are required.
 message ImageShareGroupUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_update"
+    method: "PUT"
+    path: "/images/sharegroups/{sharegroup_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric image share group ID to update.
@@ -112,6 +144,12 @@ message ImageShareGroupUpdateInput {
 // ImageShareGroupDeleteInput is the input contract for
 // linode_image_sharegroup_delete, a two-stage destroy.
 message ImageShareGroupDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_delete"
+    method: "DELETE"
+    path: "/images/sharegroups/{sharegroup_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric ID of the image share group to delete.
@@ -133,6 +171,12 @@ message ImageShareGroupDeleteInput {
 // ImageShareGroupImageListInput is the input contract for
 // linode_image_sharegroup_image_list.
 message ImageShareGroupImageListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_image_list"
+    method: "GET"
+    path: "/images/sharegroups/{sharegroup_id}/images"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Image share group ID.
@@ -147,6 +191,12 @@ message ImageShareGroupImageListInput {
 // linode_image_sharegroup_image_update. sharegroup_id, image_id, and confirm
 // are required. image_id here is the shared image slug (a string).
 message ImageShareGroupImageUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_image_update"
+    method: "PUT"
+    path: "/images/sharegroups/{sharegroup_id}/images/{image_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric image share group ID that contains the shared image.
@@ -170,6 +220,12 @@ message ImageShareGroupImageUpdateInput {
 // plain confirm destroy (no mode/plan_id in the ground truth). image_id here
 // is the NUMERIC shared image ID, not the slug.
 message ImageShareGroupImageDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_image_delete"
+    method: "DELETE"
+    path: "/images/sharegroups/{sharegroup_id}/images/{image_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric image share group ID.
@@ -201,6 +257,12 @@ message ImageShareGroupImageSpec {
 // linode_image_sharegroup_create. label and confirm are required; images is an
 // optional array of image specs.
 message ImageShareGroupCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_create"
+    method: "POST"
+    path: "/images/sharegroups"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The share group's descriptive name.
@@ -224,6 +286,12 @@ message ImageShareGroupCreateInput {
 // in the generated schema, so the required flag is dropped (the handler still
 // enforces a non-empty images array).
 message ImageShareGroupImageAddInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_sharegroup_image_add"
+    method: "POST"
+    path: "/images/sharegroups/{sharegroup_id}/images"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric image share group ID to add images to.

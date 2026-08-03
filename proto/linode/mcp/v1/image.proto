@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // Image mirrors the Linode image object. expiry and eol are nullable on the wire
 // (omitted when unset); capabilities and tags are repeated (emitted as []).
 message Image {
@@ -57,6 +59,12 @@ message ImageListResponse {
 
 // ImageGetInput is the input contract for linode_image_get.
 message ImageGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_get"
+    method: "GET"
+    path: "/images/{image_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The image ID to retrieve (required), such as linode/debian11 or private/123.
@@ -67,6 +75,12 @@ message ImageGetInput {
 // filters are client-side string filters ("true"/"false" for the booleans),
 // matching the hand-built schema which advertises them as strings.
 message ImageListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_list"
+    method: "GET"
+    path: "/images"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter images by type (manual, automatic).
@@ -84,6 +98,12 @@ message ImageListInput {
 // ImageCreateInput is the input contract for linode_image_create. disk_id and
 // confirm are required.
 message ImageCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_create"
+    method: "POST"
+    path: "/images"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode disk to image.
@@ -106,6 +126,12 @@ message ImageCreateInput {
 // ImageUploadInput is the input contract for linode_image_upload. label,
 // region, and confirm are required.
 message ImageUploadInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_upload"
+    method: "POST"
+    path: "/images/upload"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The custom image label.
@@ -128,6 +154,12 @@ message ImageUploadInput {
 // ImageUpdateInput is the input contract for linode_image_update. image_id and
 // confirm are required.
 message ImageUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_update"
+    method: "PUT"
+    path: "/images/{image_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The editable image ID, for example private/12345 or shared/123.
@@ -148,6 +180,12 @@ message ImageUpdateInput {
 // ImageDeleteInput is the input contract for linode_image_delete, a two-stage
 // destroy: image_id and confirm are required, mode/plan_id drive plan/apply.
 message ImageDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_delete"
+    method: "DELETE"
+    path: "/images/{image_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The image ID to delete, for example private/12345.
@@ -171,6 +209,12 @@ message ImageDeleteInput {
 // repeated field cannot be marked required in the generated schema, so the
 // required flag is dropped (the handler still enforces a non-empty region set).
 message ImageReplicateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_image_replicate"
+    method: "POST"
+    path: "/images/{image_id}/regions"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Image ID to replicate, such as private/123.

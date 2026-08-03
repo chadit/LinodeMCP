@@ -35,8 +35,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-# What a path parameter collapses to. tool-routes.txt shape-matches parameters,
-# so the name a route gives a segment never has to agree across languages.
+# What a path parameter collapses to. Nothing here can do better: the source
+# being read builds a path out of variables, so the segment has no name in it.
+# A declared route does name its parameters, and _toolroutes.norm_template
+# collapses them to this same placeholder before any comparison, which is what
+# lets the name stay free of the cross-language agreement problem.
 PATH_PARAM = "{p}"
 
 # The HTTP library call that puts a request on the wire, taking the method

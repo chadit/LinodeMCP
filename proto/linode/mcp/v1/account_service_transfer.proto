@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // AccountEntityTransferEntities is the set of entities included in a service
 // transfer.
 message AccountEntityTransferEntities {
@@ -24,6 +26,12 @@ message AccountEntityTransfer {
 // AccountServiceTransferGetInput is the input contract for
 // linode_account_service_transfer_get.
 message AccountServiceTransferGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_service_transfer_get"
+    method: "GET"
+    path: "/account/service-transfers/{token}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The service transfer token to retrieve (required).
@@ -51,6 +59,12 @@ message AccountServiceTransferWriteResponse {
 // AccountServiceTransferListInput is the input contract for
 // linode_account_service_transfer_list.
 message AccountServiceTransferListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_service_transfer_list"
+    method: "GET"
+    path: "/account/service-transfers"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -63,6 +77,12 @@ message AccountServiceTransferListInput {
 // linode_account_service_transfer_delete. Not a two-stage destroy: the
 // ground-truth dump shows no mode/plan_id params.
 message AccountServiceTransferDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_service_transfer_delete"
+    method: "DELETE"
+    path: "/account/service-transfers/{token}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Service transfer token to cancel (required).
@@ -78,6 +98,12 @@ message AccountServiceTransferDeleteInput {
 // AccountServiceTransferAcceptInput is the input contract for
 // linode_account_service_transfer_accept.
 message AccountServiceTransferAcceptInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_service_transfer_accept"
+    method: "POST"
+    path: "/account/service-transfers/{token}/accept"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Service transfer token to accept (required).
@@ -95,6 +121,12 @@ message AccountServiceTransferAcceptInput {
 // a repeated field cannot be marked required in the generated schema, so the
 // required flag is dropped (the handler still enforces presence).
 message AccountServiceTransferCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_service_transfer_create"
+    method: "POST"
+    path: "/account/service-transfers"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Linode IDs to include in the service transfer. Required at runtime,

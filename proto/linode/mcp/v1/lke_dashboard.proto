@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // LKEDashboard is the Kubernetes dashboard URL for an LKE cluster.
 message LKEDashboard {
   string url = 1;
@@ -11,6 +13,12 @@ message LKEDashboard {
 
 // LKEDashboardGetInput is the input contract for linode_lke_dashboard_get.
 message LKEDashboardGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_dashboard_get"
+    method: "GET"
+    path: "/lke/clusters/{cluster_id}/dashboard"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster (required).

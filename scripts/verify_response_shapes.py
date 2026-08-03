@@ -23,8 +23,8 @@ can be resolved, the body's shape must match the snapshot:
     object    any other JSON object
 
 A case body is judged when its route is explicit (an api_responses key or an
-expect_request), or when the case has a single api_response and the tool has
-exactly one route in docs/contracts/tool-routes.txt. Empty bodies ({} or [])
+expect_request), or when the case has a single api_response and the tool
+declares a route in the proto contract. Empty bodies ({} or [])
 assert nothing about shape and are skipped. Pre-request expect_error cases
 (which never reach the API) and post-request expect_api_error cases (which
 deliberately serve a rejected body) are also skipped. Routes absent from the
@@ -35,7 +35,9 @@ the fixture in a shape-correct way (and every language along with it) and
 remove its line; never add a line by hand (regenerate with --update-baseline,
 then attach the required acceptance annotation).
 
-Stdlib only, so no venv is needed. Run via `make response-shapes` (in
+Stdlib plus scripts/_toolroutes.py, which reads the declared routes from the
+generated descriptors (through python/.venv/bin/python when the running
+interpreter cannot import them). Run via `make response-shapes` (in
 `make check`, and so the pre-push hook and the CI gate on every branch).
 
 Usage: verify_response_shapes.py [--update-baseline]
@@ -49,11 +51,11 @@ from pathlib import Path
 from typing import Any
 
 import _baselines
+import _toolroutes
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SNAPSHOT = _REPO_ROOT / "docs" / "contracts" / "api-response-shapes-baseline.txt"
 _BASELINE = _REPO_ROOT / "docs" / "contracts" / "response-shape-baseline.txt"
-_ROUTES = _REPO_ROOT / "docs" / "contracts" / "tool-routes.txt"
 _FIXTURES = _REPO_ROOT / "testdata" / "behavior"
 
 _ENVELOPE_KEYS = {"data", "page", "pages", "results"}
@@ -84,18 +86,18 @@ def snapshot_shapes(path: Path) -> dict[tuple[str, str], str]:
     return shapes
 
 
-def tool_routes(path: Path) -> dict[str, tuple[str, str]]:
-    """Tool name to its one (METHOD, template path) from tool-routes.txt."""
-    routes: dict[str, tuple[str, str]] = {}
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        stripped = raw.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        name, _, rest = stripped.partition(":")
-        parts = rest.split()
-        if len(parts) == 2:
-            routes[name.strip()] = (parts[0], parts[1])
-    return routes
+def tool_routes() -> dict[str, tuple[str, str]]:
+    """Tool name to its one (METHOD, template path) from the proto contract.
+
+    Declared parameter names are normalized off before matching. The snapshot
+    names the same parameters the way the spec does, so leaving both names in
+    would make the two sides look comparable when they are not; matching is on
+    shape, and only shape.
+    """
+    return {
+        tool: (method, _toolroutes.norm_template(path))
+        for tool, (method, path) in _toolroutes.routes().items()
+    }
 
 
 def _segments_match(left: str, right: str) -> bool:
@@ -110,7 +112,7 @@ def match_template(
 ) -> tuple[str, str] | None:
     """Best snapshot key for a path: literal segments beat placeholders.
 
-    The path may itself contain placeholders (tool-routes.txt uses {p}), so
+    The path may itself contain placeholders (a declared route uses {p}), so
     matching is placeholder-tolerant on both sides.
     """
     path_parts = path.strip("/").split("/")
@@ -177,7 +179,7 @@ def _case_bodies(
         return entries
 
     # A dry-run walk reads sibling GET routes, not the tool's own write
-    # route, so the tool-routes fallback would judge the body against the
+    # route, so the declared-route fallback would judge the body against the
     # wrong operation.
     if case.get("args", {}).get("dry_run") is True:
         return []
@@ -191,7 +193,7 @@ def _case_bodies(
 def current_violations() -> list[str]:
     """One entry per fixture case body whose shape diverges from the spec."""
     shapes = snapshot_shapes(_SNAPSHOT)
-    routes = tool_routes(_ROUTES)
+    routes = tool_routes()
 
     violations: set[str] = set()
     for fixture in sorted(_FIXTURES.glob("*.json")):

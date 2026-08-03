@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // Transfer is the bandwidth transfer summary attached to several resources.
 message Transfer {
   double in = 1;
@@ -52,6 +54,12 @@ message NodeBalancerDeleteResponse {
 
 // NodeBalancerGetInput is the input contract for linode_nodebalancer_get.
 message NodeBalancerGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_get"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer to retrieve (required).
@@ -61,6 +69,12 @@ message NodeBalancerGetInput {
 // InstanceNodeBalancerListInput is the input contract for
 // linode_instance_nodebalancer_list.
 message InstanceNodeBalancerListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_nodebalancer_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/nodebalancers"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -69,6 +83,12 @@ message InstanceNodeBalancerListInput {
 
 // NodeBalancerListInput is the input contract for linode_nodebalancer_list.
 message NodeBalancerListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_list"
+    method: "GET"
+    path: "/nodebalancers"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter by region ID (e.g., us-east, eu-west).
@@ -79,6 +99,12 @@ message NodeBalancerListInput {
 
 // NodeBalancerCreateInput is the input contract for linode_nodebalancer_create.
 message NodeBalancerCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_create"
+    method: "POST"
+    path: "/nodebalancers"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where the NodeBalancer will be created (e.g., 'us-east').
@@ -100,6 +126,12 @@ message NodeBalancerCreateInput {
 
 // NodeBalancerUpdateInput is the input contract for linode_nodebalancer_update.
 message NodeBalancerUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_update"
+    method: "PUT"
+    path: "/nodebalancers/{node_balancer_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer to update.
@@ -118,6 +150,12 @@ message NodeBalancerUpdateInput {
 
 // NodeBalancerDeleteInput is the input contract for linode_nodebalancer_delete.
 message NodeBalancerDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_delete"
+    method: "DELETE"
+    path: "/nodebalancers/{node_balancer_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer to delete.
@@ -138,6 +176,12 @@ message NodeBalancerDeleteInput {
 // NodeBalancerFirewallListInput is the input contract for
 // linode_nodebalancer_firewall_list.
 message NodeBalancerFirewallListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_firewall_list"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}/firewalls"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose Cloud Firewalls should be listed.
@@ -153,6 +197,12 @@ message NodeBalancerFirewallListInput {
 // hand-built schema; a repeated field cannot land in the generated required
 // set, so it drops to optional there while the handler still enforces presence.
 message NodeBalancerFirewallUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_firewall_update"
+    method: "PUT"
+    path: "/nodebalancers/{node_balancer_id}/firewalls"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose Cloud Firewall assignments should be

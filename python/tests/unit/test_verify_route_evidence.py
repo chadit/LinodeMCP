@@ -244,13 +244,24 @@ def test_a_tree_that_reaches_no_http_library_is_a_hard_fail(tmp_path: Path) -> N
         routescan.scan_python(tmp_path, tmp_path)
 
 
-def test_contract_routes_rejects_an_unparsable_line(tmp_path: Path) -> None:
-    """A malformed contract line fails the gate instead of being skipped."""
-    path = tmp_path / "tool-routes.txt"
-    path.write_text("# comment\nlinode_thing_get GET /things\n", encoding="utf-8")
+def test_contract_routes_reads_the_scanners_shape() -> None:
+    """Declared routes reach the scanners as the "<METHOD> <path>" they emit."""
+    assert gate.contract_routes()["linode_tag_list"] == "GET /tags"
 
-    with pytest.raises(SystemExit):
-        gate.contract_routes(path)
+
+def test_contract_routes_drops_declared_parameter_names() -> None:
+    """A declared name never reaches the comparison.
+
+    Scanners resolve routes from code that builds URLs out of variables, so
+    they emit the placeholder and nothing else. A name that survived to here
+    would report every parameterized route as missing evidence.
+    """
+    routes = gate.contract_routes()
+
+    assert routes["linode_tag_delete"] == "DELETE /tags/{p}"
+    assert [
+        route for route in routes.values() if "{" in route and "{p}" not in route
+    ] == []
 
 
 def test_language_gaps_names_the_tool_and_the_route() -> None:
@@ -304,7 +315,7 @@ def test_baseline_entries_are_still_real() -> None:
         .splitlines()
         if line.strip() and not line.startswith("#")
     }
-    routes = gate.contract_routes(REPO_ROOT / "docs" / "contracts" / "tool-routes.txt")
+    routes = gate.contract_routes()
     contracted = {f"go missing {tool}: {route}" for tool, route in routes.items()}
     python_gaps = set(
         gate.language_gaps("python", routes, gate.python_evidence(REPO_ROOT / "python"))

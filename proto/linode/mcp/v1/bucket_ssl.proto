@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // BucketSSL reports whether an Object Storage bucket has a TLS certificate
 // configured.
 message BucketSSL {
@@ -31,6 +33,12 @@ message ObjectStorageSSLDeleteResponse {
 
 // BucketSSLGetInput is the input contract for linode_object_storage_ssl_get.
 message BucketSSLGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_ssl_get"
+    method: "GET"
+    path: "/object-storage/buckets/{region_id}/{bucket}/ssl"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where the bucket is located (required).
@@ -43,6 +51,12 @@ message BucketSSLGetInput {
 // linode_object_storage_ssl_upload. region, label, certificate, private_key,
 // and confirm are all required.
 message ObjectStorageSSLUploadInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_ssl_upload"
+    method: "POST"
+    path: "/object-storage/buckets/{region_id}/{bucket}/ssl"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
@@ -64,6 +78,12 @@ message ObjectStorageSSLUploadInput {
 // ObjectStorageSSLDeleteInput is the input contract for
 // linode_object_storage_ssl_delete. region, label, and confirm are required.
 message ObjectStorageSSLDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_ssl_delete"
+    method: "DELETE"
+    path: "/object-storage/buckets/{region_id}/{bucket}/ssl"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').

@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // ConfigInterfacePurpose is the legacy config-profile network interface purpose.
 // Values are the exact lowercase Linode API strings, authored from the live
@@ -195,6 +196,12 @@ message InstanceInterfaceSettings {
 // InstanceInterfaceSettingsGetInput is the input contract for
 // linode_instance_interface_settings_get.
 message InstanceInterfaceSettingsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_settings_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/interfaces/settings"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -204,6 +211,12 @@ message InstanceInterfaceSettingsGetInput {
 // InstanceInterfaceGetInput is the input contract for
 // linode_instance_interface_get.
 message InstanceInterfaceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -330,6 +343,12 @@ message InstanceBackupSnapshots {
 
 // InstanceBackupGetInput is the input contract for linode_instance_backup_get.
 message InstanceBackupGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_backup_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/backups/{backup_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -341,6 +360,12 @@ message InstanceBackupGetInput {
 // InstanceConfigInterfaceGetInput is the input contract for
 // linode_instance_config_interface_get.
 message InstanceConfigInterfaceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_interface_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -533,6 +558,12 @@ message InstanceDiskActionResponse {
 // is required in the schema; an optional field is not. No external validation
 // annotation is needed.
 message InstanceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to retrieve (required).
@@ -542,6 +573,12 @@ message InstanceGetInput {
 // InstanceListInput is the input contract for linode_instance_list. Both fields
 // are optional, so the generated schema has no required entries.
 message InstanceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_list"
+    method: "GET"
+    path: "/linode/instances"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter instances by status (running, stopped, etc.).
@@ -555,6 +592,12 @@ message InstanceListInput {
 // InstanceBootInput is the input contract for linode_instance_boot.
 // instance_id and confirm are required.
 message InstanceBootInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_boot"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/boot"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to boot (required).
@@ -572,6 +615,12 @@ message InstanceBootInput {
 // InstanceRebootInput is the input contract for linode_instance_reboot.
 // instance_id and confirm are required.
 message InstanceRebootInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_reboot"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/reboot"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to reboot (required).
@@ -589,6 +638,12 @@ message InstanceRebootInput {
 // InstanceShutdownInput is the input contract for linode_instance_shutdown.
 // instance_id and confirm are required.
 message InstanceShutdownInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_shutdown"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/shutdown"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to shut down (required).
@@ -604,6 +659,12 @@ message InstanceShutdownInput {
 // InstanceCreateInput is the input contract for linode_instance_create.
 // region, type, firewall_id, and confirm are required.
 message InstanceCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_create"
+    method: "POST"
+    path: "/linode/instances"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The region where the instance will be created (e.g., 'us-east').
@@ -646,6 +707,12 @@ message InstanceCreateInput {
 // instance_id and confirm are required. alerts is a free-form threshold object
 // and tags is a string array, both optional.
 message InstanceUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_update"
+    method: "PUT"
+    path: "/linode/instances/{linode_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the instance to update (required).
@@ -673,6 +740,12 @@ message InstanceUpdateInput {
 // two-stage destroy: instance_id and confirm are required, and mode/plan_id
 // drive the plan/apply flow.
 message InstanceDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_delete"
+    method: "DELETE"
+    path: "/linode/instances/{linode_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to delete (required).
@@ -694,6 +767,12 @@ message InstanceDeleteInput {
 // InstanceCloneInput is the input contract for linode_instance_clone.
 // linode_id and confirm are required.
 message InstanceCloneInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_clone"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/clone"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to clone (required).
@@ -722,6 +801,12 @@ message InstanceCloneInput {
 // InstanceMigrateInput is the input contract for linode_instance_migrate.
 // linode_id and confirm are required.
 message InstanceMigrateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_migrate"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/migrate"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to migrate (required).
@@ -739,6 +824,12 @@ message InstanceMigrateInput {
 // InstanceMutateInput is the input contract for linode_instance_mutate.
 // linode_id and confirm are required.
 message InstanceMutateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_mutate"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/mutate"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to upgrade (required).
@@ -757,6 +848,12 @@ message InstanceMutateInput {
 // two-stage destroy: linode_id, image, root_pass, and confirm are required,
 // and mode/plan_id drive the plan/apply flow.
 message InstanceRebuildInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_rebuild"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/rebuild"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to rebuild (required).
@@ -791,6 +888,12 @@ message InstanceRebuildInput {
 // linode_instance_password_reset, a two-stage destroy: linode_id, root_pass,
 // and confirm are required, and mode/plan_id drive the plan/apply flow.
 message InstancePasswordResetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_password_reset"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/password"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -814,6 +917,12 @@ message InstancePasswordResetInput {
 // opt-in two-stage write: instance_id, type, and confirm are required, and
 // mode/plan_id drive the plan/apply flow when enabled in the two_stage config.
 message InstanceResizeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_resize"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/resize"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to resize (required).
@@ -843,6 +952,12 @@ message InstanceResizeInput {
 // linode_id and confirm are required. devices is a free-form slot-to-disk map,
 // optional.
 message InstanceRescueInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_rescue"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/rescue"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to boot into rescue mode (required).
@@ -861,6 +976,12 @@ message InstanceRescueInput {
 // InstanceFirewallApplyInput is the input contract for
 // linode_instance_firewall_apply. linode_id and confirm are required.
 message InstanceFirewallApplyInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_firewall_apply"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/firewalls/apply"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -876,6 +997,12 @@ message InstanceFirewallApplyInput {
 // InstanceTransferGetInput is the input contract for
 // linode_instance_transfer_get.
 message InstanceTransferGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_transfer_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/transfer"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -885,6 +1012,12 @@ message InstanceTransferGetInput {
 // InstanceTransferMonthGetInput is the input contract for
 // linode_instance_transfer_month_get. All three fields are required.
 message InstanceTransferMonthGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_transfer_month_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/transfer/{year}/{month}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -897,6 +1030,12 @@ message InstanceTransferMonthGetInput {
 
 // InstanceConfigGetInput is the input contract for linode_instance_config_get.
 message InstanceConfigGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/configs/{config_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -908,6 +1047,12 @@ message InstanceConfigGetInput {
 // InstanceConfigListInput is the input contract for
 // linode_instance_config_list.
 message InstanceConfigListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/configs"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -925,6 +1070,12 @@ message InstanceConfigListInput {
 // advertised schema (runtime still enforces presence). helpers and interfaces
 // are JSON-encoded strings on this tool.
 message InstanceConfigCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_create"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/configs"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -964,6 +1115,12 @@ message InstanceConfigCreateInput {
 // interfaces is a bare object array (repeated Struct); none carried inner item
 // detail in the hand-built schema.
 message InstanceConfigUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_update"
+    method: "PUT"
+    path: "/linode/instances/{linode_id}/configs/{config_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1003,6 +1160,12 @@ message InstanceConfigUpdateInput {
 // required. This destroy is single-step (no mode/plan_id in the registered
 // schema).
 message InstanceConfigDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_delete"
+    method: "DELETE"
+    path: "/linode/instances/{linode_id}/configs/{config_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1020,6 +1183,12 @@ message InstanceConfigDeleteInput {
 // InstanceConfigInterfaceListInput is the input contract for
 // linode_instance_config_interface_list.
 message InstanceConfigInterfaceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_interface_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1034,6 +1203,12 @@ message InstanceConfigInterfaceListInput {
 // (public/vlan/vpc) in the schema and the handler validates the same set.
 // ipv4/ipv6 are open objects (map<string, Value>), ip_ranges is a string array.
 message InstanceConfigInterfaceAddInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_interface_add"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1069,6 +1244,12 @@ message InstanceConfigInterfaceAddInput {
 // and confirm are required. ip_ranges is a string array and ipv4 is an open
 // object (map<string, Value>).
 message InstanceConfigInterfaceUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_interface_update"
+    method: "PUT"
+    path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1095,6 +1276,12 @@ message InstanceConfigInterfaceUpdateInput {
 // linode_instance_config_interface_delete. All three IDs and confirm are
 // required. Single-step destroy (no mode/plan_id in the registered schema).
 message InstanceConfigInterfaceDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_interface_delete"
+    method: "DELETE"
+    path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1117,6 +1304,12 @@ message InstanceConfigInterfaceDeleteInput {
 // required flag is dropped from the generated schema (runtime still enforces
 // presence).
 message InstanceConfigInterfaceReorderInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_config_interface_reorder"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/order"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1137,6 +1330,12 @@ message InstanceConfigInterfaceReorderInput {
 // InstanceInterfaceListInput is the input contract for
 // linode_instance_interface_list.
 message InstanceInterfaceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/interfaces"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1149,6 +1348,12 @@ message InstanceInterfaceListInput {
 // public/vpc/vlan) so its required flag is dropped from the generated schema
 // (runtime still enforces presence).
 message InstanceInterfaceAddInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_add"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/interfaces"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1167,6 +1372,12 @@ message InstanceInterfaceAddInput {
 // linode_instance_interface_delete. linode_id, interface_id, and confirm are
 // required. Single-step destroy (no mode/plan_id in the registered schema).
 message InstanceInterfaceDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_delete"
+    method: "DELETE"
+    path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1186,6 +1397,12 @@ message InstanceInterfaceDeleteInput {
 // required. default_route/public/vlan/vpc are open objects (map<string,
 // Value>) with exactly-one-of union validation in the handler.
 message InstanceInterfaceUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_update"
+    method: "PUT"
+    path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1213,6 +1430,12 @@ message InstanceInterfaceUpdateInput {
 // linode_instance_interface_settings_update. linode_id and confirm are
 // required. default_route is an open object (map<string, Value>).
 message InstanceInterfaceSettingsUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_settings_update"
+    method: "PUT"
+    path: "/linode/instances/{linode_id}/interfaces/settings"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1235,6 +1458,12 @@ message InstanceInterfaceSettingsUpdateInput {
 // api_dry_run is the Linode API's own validation flag, distinct from the MCP
 // dry_run preview.
 message InstanceInterfaceUpgradeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_upgrade"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/upgrade-interfaces"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1255,6 +1484,12 @@ message InstanceInterfaceUpgradeInput {
 // InstanceInterfaceHistoryListInput is the input contract for
 // linode_instance_interface_history_list.
 message InstanceInterfaceHistoryListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_interface_history_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/interfaces/history"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1268,6 +1503,12 @@ message InstanceInterfaceHistoryListInput {
 // InstanceBackupListInput is the input contract for
 // linode_instance_backup_list.
 message InstanceBackupListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_backup_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/backups"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1277,6 +1518,12 @@ message InstanceBackupListInput {
 // InstanceBackupCreateInput is the input contract for
 // linode_instance_backup_create. linode_id and confirm are required.
 message InstanceBackupCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_backup_create"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/backups"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance to snapshot (required).
@@ -1295,6 +1542,12 @@ message InstanceBackupCreateInput {
 // linode_instance_backup_restore. linode_id, backup_id, target_linode_id, and
 // confirm are required.
 message InstanceBackupRestoreInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_backup_restore"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/backups/{backup_id}/restore"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance that owns the backup (required).
@@ -1317,6 +1570,12 @@ message InstanceBackupRestoreInput {
 // InstanceBackupsEnableInput is the input contract for
 // linode_instance_backups_enable. linode_id and confirm are required.
 message InstanceBackupsEnableInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_backups_enable"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/backups/enable"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -1333,6 +1592,12 @@ message InstanceBackupsEnableInput {
 // linode_instance_backups_cancel, a two-stage destroy: linode_id and confirm
 // are required, and mode/plan_id drive the plan/apply flow.
 message InstanceBackupsCancelInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_backups_cancel"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/backups/cancel"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).

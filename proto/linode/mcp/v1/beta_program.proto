@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // BetaProgram is one available Linode Beta program. description and ended are
 // nullable (omitted when unset).
 message BetaProgram {
@@ -27,6 +29,12 @@ message BetaProgramListResponse {
 
 // BetaGetInput is the input contract for linode_beta_get.
 message BetaGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_beta_get"
+    method: "GET"
+    path: "/betas/{beta_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Beta program ID to retrieve (required).
@@ -35,6 +43,12 @@ message BetaGetInput {
 
 // BetaListInput is the input contract for linode_beta_list.
 message BetaListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_beta_list"
+    method: "GET"
+    path: "/betas"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).

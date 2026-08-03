@@ -4,9 +4,17 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // InstanceDiskGetInput is the input contract for linode_instance_disk_get. The
 // InstanceDisk response message is defined in instance.proto.
 message InstanceDiskGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_disk_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/disks/{disk_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -17,6 +25,12 @@ message InstanceDiskGetInput {
 
 // InstanceDiskListInput is the input contract for linode_instance_disk_list.
 message InstanceDiskListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_disk_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/disks"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -33,6 +47,12 @@ message InstanceDiskListInput {
 // (unlike the array form on instance create/rebuild), matching the hand-built
 // schema.
 message InstanceDiskCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_disk_create"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/disks"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -64,6 +84,12 @@ message InstanceDiskCreateInput {
 // InstanceDiskUpdateInput is the input contract for
 // linode_instance_disk_update. linode_id, disk_id, and confirm are required.
 message InstanceDiskUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_disk_update"
+    method: "PUT"
+    path: "/linode/instances/{linode_id}/disks/{disk_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -83,6 +109,12 @@ message InstanceDiskUpdateInput {
 // linode_instance_disk_delete, a two-stage destroy: linode_id, disk_id, and
 // confirm are required, and mode/plan_id drive the plan/apply flow.
 message InstanceDiskDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_disk_delete"
+    method: "DELETE"
+    path: "/linode/instances/{linode_id}/disks/{disk_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -106,6 +138,12 @@ message InstanceDiskDeleteInput {
 // InstanceDiskCloneInput is the input contract for linode_instance_disk_clone.
 // linode_id, disk_id, and confirm are required.
 message InstanceDiskCloneInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_disk_clone"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/disks/{disk_id}/clone"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -123,6 +161,12 @@ message InstanceDiskCloneInput {
 // linode_instance_disk_resize. linode_id, disk_id, size, and confirm are
 // required.
 message InstanceDiskResizeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_disk_resize"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/disks/{disk_id}/resize"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -142,6 +186,12 @@ message InstanceDiskResizeInput {
 // linode_instance_disk_password_reset. linode_id, disk_id, password, and
 // confirm are required.
 message InstanceDiskPasswordResetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_disk_password_reset"
+    method: "POST"
+    path: "/linode/instances/{linode_id}/disks/{disk_id}/password"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).

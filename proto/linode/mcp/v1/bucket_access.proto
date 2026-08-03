@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // ObjectStorageBucketAccess is the ACL and CORS configuration of an Object
 // Storage bucket.
 message ObjectStorageBucketAccess {
@@ -22,6 +24,12 @@ message ObjectStorageBucketAccessWriteResponse {
 // ObjectStorageBucketAccessGetInput is the input contract for
 // linode_object_storage_bucket_access_get.
 message ObjectStorageBucketAccessGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_access_get"
+    method: "GET"
+    path: "/object-storage/buckets/{region_id}/{bucket}/access"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where the bucket is located (required).
@@ -34,6 +42,12 @@ message ObjectStorageBucketAccessGetInput {
 // linode_object_storage_bucket_access_allow. region, label, and confirm are
 // required.
 message ObjectStorageBucketAccessAllowInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_access_allow"
+    method: "POST"
+    path: "/object-storage/buckets/{region_id}/{bucket}/access"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region of the bucket.
@@ -56,6 +70,12 @@ message ObjectStorageBucketAccessAllowInput {
 // linode_object_storage_bucket_access_update. region, label, and confirm are
 // required.
 message ObjectStorageBucketAccessUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_access_update"
+    method: "PUT"
+    path: "/object-storage/buckets/{region_id}/{bucket}/access"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region of the bucket.

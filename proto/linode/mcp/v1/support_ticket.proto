@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // SupportTicketAttachment is one file attached to a support ticket.
 message SupportTicketAttachment {
@@ -51,6 +52,12 @@ message SupportTicketListResponse {
 
 // SupportTicketGetInput is the input contract for linode_support_ticket_get.
 message SupportTicketGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_support_ticket_get"
+    method: "GET"
+    path: "/support/tickets/{ticket_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the support ticket to retrieve (required).
@@ -104,6 +111,12 @@ message SupportTicketIDResponse {
 
 // SupportTicketListInput is the input contract for linode_support_ticket_list.
 message SupportTicketListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_support_ticket_list"
+    method: "GET"
+    path: "/support/tickets"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -116,6 +129,12 @@ message SupportTicketListInput {
 // linode_support_ticket_create. summary, description, and confirm are
 // required; the entity references are optional and mutually independent.
 message SupportTicketCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_support_ticket_create"
+    method: "POST"
+    path: "/support/tickets"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Short summary for the support ticket.
@@ -161,6 +180,12 @@ message SupportTicketCreateInput {
 // SupportTicketCloseInput is the input contract for
 // linode_support_ticket_close.
 message SupportTicketCloseInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_support_ticket_close"
+    method: "POST"
+    path: "/support/tickets/{ticket_id}/close"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Support ticket ID to close.
@@ -176,6 +201,12 @@ message SupportTicketCloseInput {
 // SupportTicketReplyListInput is the input contract for
 // linode_support_ticket_reply_list.
 message SupportTicketReplyListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_support_ticket_reply_list"
+    method: "GET"
+    path: "/support/tickets/{ticket_id}/replies"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Support ticket ID whose replies should be listed.
@@ -189,6 +220,12 @@ message SupportTicketReplyListInput {
 // SupportTicketReplyCreateInput is the input contract for
 // linode_support_ticket_reply_create.
 message SupportTicketReplyCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_support_ticket_reply_create"
+    method: "POST"
+    path: "/support/tickets/{ticket_id}/replies"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Support ticket ID to reply to.
@@ -206,6 +243,12 @@ message SupportTicketReplyCreateInput {
 // SupportTicketAttachmentCreateInput is the input contract for
 // linode_support_ticket_attachment_create.
 message SupportTicketAttachmentCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_support_ticket_attachment_create"
+    method: "POST"
+    path: "/support/tickets/{ticket_id}/attachments"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Support ticket ID to attach the file to.

@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // NodeBalancerVPCConfig mirrors one VPC configuration attached to a NodeBalancer.
 // The range/vpc id fields are nullable (omitted when unset).
 message NodeBalancerVPCConfig {
@@ -31,6 +33,12 @@ message NodeBalancerVPCConfigListResponse {
 // NodeBalancerVPCConfigGetInput is the input contract for
 // linode_nodebalancer_vpc_config_get.
 message NodeBalancerVPCConfigGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_vpc_config_get"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}/vpcs/{node_balancer_vpc_config_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer (required).
@@ -42,6 +50,12 @@ message NodeBalancerVPCConfigGetInput {
 // NodeBalancerVPCConfigListInput is the input contract for
 // linode_nodebalancer_vpc_config_list.
 message NodeBalancerVPCConfigListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_vpc_config_list"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}/vpcs"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose VPC configurations should be listed.

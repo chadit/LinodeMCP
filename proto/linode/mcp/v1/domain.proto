@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // DomainType is the primary/secondary role a domain is created with. Values are
 // the exact Linode API wire strings from POST /domains. See the enum-wrapper
 // convention in nodebalancer_config.proto.
@@ -75,6 +77,12 @@ message DomainDeleteResponse {
 // fetches all domains and filters locally, so both params are client-side
 // filters and neither is required.
 message DomainListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_list"
+    method: "GET"
+    path: "/domains"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter domains by name containing this string (case-insensitive).
@@ -85,6 +93,12 @@ message DomainListInput {
 
 // DomainGetInput is the input contract for linode_domain_get.
 message DomainGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_get"
+    method: "GET"
+    path: "/domains/{domain_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain to retrieve (required).
@@ -93,6 +107,12 @@ message DomainGetInput {
 
 // DomainCreateInput is the input contract for linode_domain_create.
 message DomainCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_create"
+    method: "POST"
+    path: "/domains"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The domain name, 1 to 253 characters (e.g., 'example.com').
@@ -130,6 +150,12 @@ message DomainCreateInput {
 
 // DomainUpdateInput is the input contract for linode_domain_update.
 message DomainUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_update"
+    method: "PUT"
+    path: "/domains/{domain_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain to update.
@@ -153,6 +179,12 @@ message DomainUpdateInput {
 
 // DomainCloneInput is the input contract for linode_domain_clone.
 message DomainCloneInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_clone"
+    method: "POST"
+    path: "/domains/{domain_id}/clone"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain to clone.
@@ -168,6 +200,12 @@ message DomainCloneInput {
 
 // DomainImportInput is the input contract for linode_domain_import.
 message DomainImportInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_import"
+    method: "POST"
+    path: "/domains/import"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The domain name to import (for example, 'example.com').
@@ -183,6 +221,12 @@ message DomainImportInput {
 
 // DomainDeleteInput is the input contract for linode_domain_delete.
 message DomainDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_delete"
+    method: "DELETE"
+    path: "/domains/{domain_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain to delete.
@@ -238,6 +282,12 @@ message DomainRecordWriteResponse {
 // domain_id is required; type and name_contains are client-side filters
 // applied after the tool fetches all records for the domain.
 message DomainRecordListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_record_list"
+    method: "GET"
+    path: "/domains/{domain_id}/records"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain to list records for (required).
@@ -250,6 +300,12 @@ message DomainRecordListInput {
 
 // DomainRecordGetInput is the input contract for linode_domain_record_get.
 message DomainRecordGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_record_get"
+    method: "GET"
+    path: "/domains/{domain_id}/records/{record_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain (required).
@@ -260,6 +316,12 @@ message DomainRecordGetInput {
 
 // DomainRecordCreateInput is the input contract for linode_domain_record_create.
 message DomainRecordCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_record_create"
+    method: "POST"
+    path: "/domains/{domain_id}/records"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain to add the record to.
@@ -294,6 +356,12 @@ message DomainRecordCreateInput {
 
 // DomainRecordUpdateInput is the input contract for linode_domain_record_update.
 message DomainRecordUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_record_update"
+    method: "PUT"
+    path: "/domains/{domain_id}/records/{record_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain containing the record.
@@ -321,6 +389,12 @@ message DomainRecordUpdateInput {
 
 // DomainRecordDeleteInput is the input contract for linode_domain_record_delete.
 message DomainRecordDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_domain_record_delete"
+    method: "DELETE"
+    path: "/domains/{domain_id}/records/{record_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the domain containing the record.

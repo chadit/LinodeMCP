@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "linode/mcp/v1/longview.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "linode/mcp/v1/longview.proto";
+import "linode/mcp/v1/options.proto";
 
 // BackupsAddon is the backups add-on pricing nested in a type's Addons.
 message BackupsAddon {
@@ -35,6 +36,12 @@ message InstanceType {
 
 // InstanceTypeGetInput is the input contract for linode_type_get.
 message InstanceTypeGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_type_get"
+    method: "GET"
+    path: "/linode/types/{type_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the instance type to retrieve (required).
@@ -44,6 +51,12 @@ message InstanceTypeGetInput {
 // InstanceTypeListInput is the input contract for linode_type_list. class is a
 // client-side filter.
 message InstanceTypeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_type_list"
+    method: "GET"
+    path: "/linode/types"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter types by class (standard, dedicated, gpu, highmem, premium).
@@ -90,6 +103,12 @@ message LKETypeListResponse {
 
 // LKETypeListInput is the input contract for linode_lke_type_list.
 message LKETypeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_type_list"
+    method: "GET"
+    path: "/lke/types"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -106,6 +125,12 @@ message NodeBalancerTypeListResponse {
 // NodeBalancerTypeListInput is the input contract for
 // linode_nodebalancer_type_list.
 message NodeBalancerTypeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_type_list"
+    method: "GET"
+    path: "/nodebalancers/types"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -132,6 +157,12 @@ message ObjectStorageTypeListResponse {
 // ObjectStorageTypeListInput is the input contract for
 // linode_object_storage_type_list.
 message ObjectStorageTypeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_type_list"
+    method: "GET"
+    path: "/object-storage/types"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -151,6 +182,12 @@ message NetworkTransferPriceListResponse {
 // linode_network_transfer_price_list. Pairs with
 // NetworkTransferPriceListResponse.
 message NetworkTransferPriceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_network_transfer_price_list"
+    method: "GET"
+    path: "/network-transfer/prices"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }

@@ -7,9 +7,9 @@
 // reports the route as unimplemented in Go while the client has had it all
 // along, and each false positive costs a full investigation to disprove. This
 // resolves the concatenation instead of grepping for it, so
-// scripts/verify_route_evidence.py can check docs/contracts/tool-routes.txt
-// against a real route surface rather than against whatever a text search
-// happened to match.
+// scripts/verify_route_evidence.py can check the routes the proto contract
+// declares against a real route surface rather than against whatever a text
+// search happened to match.
 //
 // The tool reads .go source as text only with go/parser and go/ast. It never
 // imports internal/linode or builds the package: the genpb generated tree is
@@ -31,8 +31,10 @@ import (
 // dump is the JSON contract scripts/verify_route_evidence.py reads.
 type dump struct {
 	// Routes is the sorted "<METHOD> <path>" set the client can build, with
-	// every path parameter collapsed to the {p} placeholder tool-routes.txt
-	// uses.
+	// every path parameter collapsed to the {p} placeholder. The client
+	// assembles paths from variables, so no name is available here; a
+	// declared route names its parameters and the gate normalizes them off
+	// before comparing.
 	Routes []string `json:"routes"`
 	// Unresolved names the request call sites whose method or path the
 	// resolver could not follow, as "<file>:<line> <function>: <reason>". They

@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // Vpc mirrors the Linode Virtual Private Cloud object. Field order and JSON names
 // match what both implementations emit today.
 message Vpc {
@@ -64,6 +66,12 @@ message VpcDeleteResponse {
 
 // VpcGetInput is the input contract for linode_vpc_get.
 message VpcGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_get"
+    method: "GET"
+    path: "/vpcs/{vpc_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC to retrieve (required).
@@ -87,6 +95,12 @@ message VpcSubnetListResponse {
 
 // VpcSubnetGetInput is the input contract for linode_vpc_subnet_get.
 message VpcSubnetGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_subnet_get"
+    method: "GET"
+    path: "/vpcs/{vpc_id}/subnets/{vpc_subnet_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC (required).
@@ -136,6 +150,12 @@ message VpcSubnetDeleteResponse {
 // VpcListInput is the input contract for linode_vpc_list. The list tools take
 // vpc_id as a STRING (matching VpcGetInput); the write tools take it as int32.
 message VpcListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_list"
+    method: "GET"
+    path: "/vpcs"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter VPCs by label containing this string (case-insensitive).
@@ -158,6 +178,12 @@ message VpcSubnetCreateItem {
 // OPTIONAL array, so it is not required and the named item message preserves
 // the advertised {label, ipv4} item shape.
 message VpcCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_create"
+    method: "POST"
+    path: "/vpcs"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Label for the VPC (1-64 characters).
@@ -179,6 +205,12 @@ message VpcCreateInput {
 
 // VpcUpdateInput is the input contract for linode_vpc_update.
 message VpcUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_update"
+    method: "PUT"
+    path: "/vpcs/{vpc_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC to update.
@@ -196,6 +228,12 @@ message VpcUpdateInput {
 
 // VpcDeleteInput is the input contract for linode_vpc_delete.
 message VpcDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_delete"
+    method: "DELETE"
+    path: "/vpcs/{vpc_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC to delete.
@@ -216,12 +254,24 @@ message VpcDeleteInput {
 
 // VPCIPAllListInput is the input contract for linode_vpc_ip_all_list.
 message VPCIPAllListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_ip_all_list"
+    method: "GET"
+    path: "/vpcs/ips"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
 
 // VPCIPListInput is the input contract for linode_vpc_ip_list.
 message VPCIPListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_ip_list"
+    method: "GET"
+    path: "/vpcs/{vpc_id}/ips"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC.
@@ -230,6 +280,12 @@ message VPCIPListInput {
 
 // VpcSubnetListInput is the input contract for linode_vpc_subnet_list.
 message VpcSubnetListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_subnet_list"
+    method: "GET"
+    path: "/vpcs/{vpc_id}/subnets"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC.
@@ -238,6 +294,12 @@ message VpcSubnetListInput {
 
 // VpcSubnetCreateInput is the input contract for linode_vpc_subnet_create.
 message VpcSubnetCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_subnet_create"
+    method: "POST"
+    path: "/vpcs/{vpc_id}/subnets"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC to add the subnet to.
@@ -255,6 +317,12 @@ message VpcSubnetCreateInput {
 
 // VpcSubnetUpdateInput is the input contract for linode_vpc_subnet_update.
 message VpcSubnetUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_subnet_update"
+    method: "PUT"
+    path: "/vpcs/{vpc_id}/subnets/{vpc_subnet_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC containing the subnet.
@@ -272,6 +340,12 @@ message VpcSubnetUpdateInput {
 
 // VpcSubnetDeleteInput is the input contract for linode_vpc_subnet_delete.
 message VpcSubnetDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_vpc_subnet_delete"
+    method: "DELETE"
+    path: "/vpcs/{vpc_id}/subnets/{vpc_subnet_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the VPC containing the subnet.

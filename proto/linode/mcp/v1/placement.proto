@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // PlacementGroupPolicy is the placement group affinity-enforcement policy.
 // Values are the exact lowercase Linode API strings, authored from the live
 // OpenAPI spec. See the enum-wrapper convention in nodebalancer_config.proto.
@@ -48,6 +50,12 @@ message PlacementGroupMigration {
 
 // PlacementGroupGetInput is the input contract for linode_placement_group_get.
 message PlacementGroupGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_placement_group_get"
+    method: "GET"
+    path: "/placement/groups/{group_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the placement group to retrieve (required).
@@ -80,6 +88,12 @@ message PlacementGroupListResponse {
 // PlacementGroupListInput is the input contract for
 // linode_placement_group_list.
 message PlacementGroupListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_placement_group_list"
+    method: "GET"
+    path: "/placement/groups"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -92,6 +106,12 @@ message PlacementGroupListInput {
 // linode_placement_group_create. label, region, placement_group_type,
 // placement_group_policy, and confirm are required.
 message PlacementGroupCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_placement_group_create"
+    method: "POST"
+    path: "/placement/groups"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Placement group label.
@@ -112,6 +132,12 @@ message PlacementGroupCreateInput {
 // PlacementGroupUpdateInput is the input contract for
 // linode_placement_group_update. group_id, label, and confirm are required.
 message PlacementGroupUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_placement_group_update"
+    method: "PUT"
+    path: "/placement/groups/{group_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Placement group ID to update.
@@ -128,6 +154,12 @@ message PlacementGroupUpdateInput {
 // PlacementGroupDeleteInput is the input contract for
 // linode_placement_group_delete, a two-stage destroy.
 message PlacementGroupDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_placement_group_delete"
+    method: "DELETE"
+    path: "/placement/groups/{group_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the placement group to delete.
@@ -151,6 +183,12 @@ message PlacementGroupDeleteInput {
 // cannot be marked required in the generated schema, so it drops to optional
 // there (the handler still enforces a non-empty list at runtime).
 message PlacementGroupAssignInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_placement_group_assign"
+    method: "POST"
+    path: "/placement/groups/{group_id}/assign"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the placement group to assign Linodes to.
@@ -171,6 +209,12 @@ message PlacementGroupAssignInput {
 // fields cannot be marked required in the generated schema, so it drops to
 // optional there (the handler still enforces a non-empty list at runtime).
 message PlacementGroupUnassignInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_placement_group_unassign"
+    method: "POST"
+    path: "/placement/groups/{group_id}/unassign"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the placement group.

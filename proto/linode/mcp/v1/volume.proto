@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // Volume mirrors the Linode block storage volume object. Field order and JSON
 // names match what both implementations emit today, so protojson output is
 // byte-compatible with the existing tool response.
@@ -66,6 +68,12 @@ message VolumeDetachResponse {
 
 // VolumeGetInput is the input contract for linode_volume_get.
 message VolumeGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_get"
+    method: "GET"
+    path: "/volumes/{volume_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the volume to retrieve (required).
@@ -75,6 +83,12 @@ message VolumeGetInput {
 // VolumeListInput is the input contract for linode_volume_list. region and
 // label_contains are client-side filters.
 message VolumeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_list"
+    method: "GET"
+    path: "/volumes"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter volumes by region (e.g., 'us-east', 'eu-west').
@@ -85,6 +99,12 @@ message VolumeListInput {
 
 // VolumeTypeListInput is the input contract for linode_volume_type_list.
 message VolumeTypeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_type_list"
+    method: "GET"
+    path: "/volumes/types"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -93,6 +113,12 @@ message VolumeTypeListInput {
 // (non-optional) field is required in the generated schema; an optional field
 // is not. label and confirm are required; the rest are optional.
 message VolumeCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_create"
+    method: "POST"
+    path: "/volumes"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // A label for the volume (must be unique within your account).
@@ -114,6 +140,12 @@ message VolumeCreateInput {
 // VolumeCloneInput is the input contract for linode_volume_clone. volume_id,
 // label, and confirm are required.
 message VolumeCloneInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_clone"
+    method: "POST"
+    path: "/volumes/{volume_id}/clone"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the source volume to clone.
@@ -131,6 +163,12 @@ message VolumeCloneInput {
 // VolumeAttachInput is the input contract for linode_volume_attach. volume_id,
 // linode_id, and confirm are required.
 message VolumeAttachInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_attach"
+    method: "POST"
+    path: "/volumes/{volume_id}/attach"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the volume to attach.
@@ -151,6 +189,12 @@ message VolumeAttachInput {
 // VolumeDetachInput is the input contract for linode_volume_detach. volume_id
 // and confirm are required.
 message VolumeDetachInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_detach"
+    method: "POST"
+    path: "/volumes/{volume_id}/detach"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the volume to detach.
@@ -165,6 +209,12 @@ message VolumeDetachInput {
 // VolumeResizeInput is the input contract for linode_volume_resize. volume_id,
 // size, and confirm are required.
 message VolumeResizeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_resize"
+    method: "POST"
+    path: "/volumes/{volume_id}/resize"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the volume to resize.
@@ -183,6 +233,12 @@ message VolumeResizeInput {
 // and confirm are required; label and tags are optional (repeated fields are
 // never required in the generated schema).
 message VolumeUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_update"
+    method: "PUT"
+    path: "/volumes/{volume_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the volume to update.
@@ -202,6 +258,12 @@ message VolumeUpdateInput {
 // two-stage destroy: volume_id and confirm are required, and mode/plan_id drive
 // the plan/apply flow.
 message VolumeDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_volume_delete"
+    method: "DELETE"
+    path: "/volumes/{volume_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the volume to delete.
@@ -223,6 +285,12 @@ message VolumeDeleteInput {
 // InstanceVolumeListInput is the input contract for
 // linode_instance_volume_list.
 message InstanceVolumeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_volume_list"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/volumes"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).

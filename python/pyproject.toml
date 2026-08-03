@@ -96,7 +96,20 @@ addopts = [
 
 [tool.coverage.run]
 source = ["src/linodemcp"]
-omit = ["*/tests/*", "*/test_*", "*/main.py", "*/server/__init__.py"]
+# genpb is the buf-generated tree, never hand-edited, and part of it can never
+# run: protobuf's C descriptor implementation skips the whole
+# `if not _USE_C_DESCRIPTORS` block each _pb2 module carries, so measuring it
+# reports the generator's shape rather than anything tests could cover. Go
+# already excludes its own genpb tree from the coverage floor
+# (scripts/_coverage.py GO_EXCLUDED_PREFIXES); this is the Python side of the
+# same rule.
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/main.py",
+    "*/server/__init__.py",
+    "*/genpb/*",
+]
 
 [tool.coverage.report]
 exclude_lines = [

@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // DatabaseInstance is one Managed Database instance summary element. The
 // cross-engine /databases/instances list and the per-engine MySQL and
@@ -94,6 +95,12 @@ message DatabaseCredentials {
 // DatabaseInstanceListInput is the input contract for
 // linode_database_instance_list (cross-engine /databases/instances).
 message DatabaseInstanceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_instance_list"
+    method: "GET"
+    path: "/databases/instances"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -105,6 +112,12 @@ message DatabaseInstanceListInput {
 // DatabaseMySQLInstanceListInput is the input contract for
 // linode_database_mysql_instance_list.
 message DatabaseMySQLInstanceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_list"
+    method: "GET"
+    path: "/databases/mysql/instances"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -116,6 +129,12 @@ message DatabaseMySQLInstanceListInput {
 // DatabasePostgreSQLInstanceListInput is the input contract for
 // linode_database_postgresql_instance_list.
 message DatabasePostgreSQLInstanceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_list"
+    method: "GET"
+    path: "/databases/postgresql/instances"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -127,6 +146,12 @@ message DatabasePostgreSQLInstanceListInput {
 // DatabaseMySQLInstanceGetInput is the input contract for
 // linode_database_mysql_instance_get.
 message DatabaseMySQLInstanceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_get"
+    method: "GET"
+    path: "/databases/mysql/instances/{mysql_instance_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID to retrieve.
@@ -136,6 +161,12 @@ message DatabaseMySQLInstanceGetInput {
 // DatabasePostgreSQLInstanceGetInput is the input contract for
 // linode_database_postgresql_instance_get.
 message DatabasePostgreSQLInstanceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_get"
+    method: "GET"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID to retrieve.
@@ -145,6 +176,12 @@ message DatabasePostgreSQLInstanceGetInput {
 // DatabaseMySQLInstanceCredentialsGetInput is the input contract for
 // linode_database_mysql_instance_credentials_get.
 message DatabaseMySQLInstanceCredentialsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_credentials_get"
+    method: "GET"
+    path: "/databases/mysql/instances/{mysql_instance_id}/credentials"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID whose credentials to retrieve.
@@ -160,6 +197,12 @@ message DatabaseMySQLInstanceCredentialsGetInput {
 // DatabasePostgreSQLInstanceCredentialsGetInput is the input contract for
 // linode_database_postgresql_instance_credentials_get.
 message DatabasePostgreSQLInstanceCredentialsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_credentials_get"
+    method: "GET"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}/credentials"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID whose credentials to retrieve.
@@ -175,6 +218,12 @@ message DatabasePostgreSQLInstanceCredentialsGetInput {
 // DatabaseMySQLInstanceCredentialsResetInput is the input contract for
 // linode_database_mysql_instance_credentials_reset.
 message DatabaseMySQLInstanceCredentialsResetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_credentials_reset"
+    method: "POST"
+    path: "/databases/mysql/instances/{mysql_instance_id}/credentials/reset"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID whose credentials to reset.
@@ -190,6 +239,12 @@ message DatabaseMySQLInstanceCredentialsResetInput {
 // DatabasePostgreSQLInstanceCredentialsResetInput is the input contract for
 // linode_database_postgresql_instance_credentials_reset.
 message DatabasePostgreSQLInstanceCredentialsResetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_credentials_reset"
+    method: "POST"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}/credentials/reset"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID whose credentials to reset.
@@ -205,6 +260,12 @@ message DatabasePostgreSQLInstanceCredentialsResetInput {
 // DatabaseMySQLInstanceDeleteInput is the input contract for
 // linode_database_mysql_instance_delete.
 message DatabaseMySQLInstanceDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_delete"
+    method: "DELETE"
+    path: "/databases/mysql/instances/{mysql_instance_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID to delete.
@@ -226,6 +287,12 @@ message DatabaseMySQLInstanceDeleteInput {
 // DatabasePostgreSQLInstanceDeleteInput is the input contract for
 // linode_database_postgresql_instance_delete.
 message DatabasePostgreSQLInstanceDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_delete"
+    method: "DELETE"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID to delete.
@@ -247,6 +314,12 @@ message DatabasePostgreSQLInstanceDeleteInput {
 // DatabaseMySQLInstancePatchInput is the input contract for
 // linode_database_mysql_instance_patch.
 message DatabaseMySQLInstancePatchInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_patch"
+    method: "POST"
+    path: "/databases/mysql/instances/{mysql_instance_id}/patch"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID to patch.
@@ -262,6 +335,12 @@ message DatabaseMySQLInstancePatchInput {
 // DatabasePostgreSQLInstancePatchInput is the input contract for
 // linode_database_postgresql_instance_patch.
 message DatabasePostgreSQLInstancePatchInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_patch"
+    method: "POST"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}/patch"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID to patch.
@@ -277,6 +356,12 @@ message DatabasePostgreSQLInstancePatchInput {
 // DatabaseMySQLInstanceSuspendInput is the input contract for
 // linode_database_mysql_instance_suspend.
 message DatabaseMySQLInstanceSuspendInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_suspend"
+    method: "POST"
+    path: "/databases/mysql/instances/{mysql_instance_id}/suspend"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID to suspend.
@@ -292,6 +377,12 @@ message DatabaseMySQLInstanceSuspendInput {
 // DatabasePostgreSQLInstanceSuspendInput is the input contract for
 // linode_database_postgresql_instance_suspend.
 message DatabasePostgreSQLInstanceSuspendInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_suspend"
+    method: "POST"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}/suspend"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID to suspend.
@@ -307,6 +398,12 @@ message DatabasePostgreSQLInstanceSuspendInput {
 // DatabaseMySQLInstanceResumeInput is the input contract for
 // linode_database_mysql_instance_resume.
 message DatabaseMySQLInstanceResumeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_resume"
+    method: "POST"
+    path: "/databases/mysql/instances/{mysql_instance_id}/resume"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID to resume.
@@ -322,6 +419,12 @@ message DatabaseMySQLInstanceResumeInput {
 // DatabasePostgreSQLInstanceResumeInput is the input contract for
 // linode_database_postgresql_instance_resume.
 message DatabasePostgreSQLInstanceResumeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_resume"
+    method: "POST"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}/resume"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID to resume.
@@ -340,6 +443,12 @@ message DatabasePostgreSQLInstanceResumeInput {
 // map<string, google.protobuf.Value> that renders top-level {"type":"object"};
 // the runtime handler validates their inner shape.
 message DatabaseMySQLInstanceCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_create"
+    method: "POST"
+    path: "/databases/mysql/instances"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Label for the database instance.
@@ -377,6 +486,12 @@ message DatabaseMySQLInstanceCreateInput {
 // map<string, google.protobuf.Value> that renders top-level {"type":"object"};
 // the runtime handler validates their inner shape.
 message DatabasePostgreSQLInstanceCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_create"
+    method: "POST"
+    path: "/databases/postgresql/instances"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Label for the database instance.
@@ -415,6 +530,12 @@ message DatabasePostgreSQLInstanceCreateInput {
 // the runtime handler validates their inner shape. private_network also accepts
 // an explicit JSON null at runtime to detach the VPC.
 message DatabaseMySQLInstanceUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_mysql_instance_update"
+    method: "PUT"
+    path: "/databases/mysql/instances/{mysql_instance_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The MySQL Managed Database instance ID to update.
@@ -448,6 +569,12 @@ message DatabaseMySQLInstanceUpdateInput {
 // the runtime handler validates their inner shape. private_network also accepts
 // an explicit JSON null at runtime to detach the VPC.
 message DatabasePostgreSQLInstanceUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_database_postgresql_instance_update"
+    method: "PUT"
+    path: "/databases/postgresql/instances/{postgresql_instance_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The PostgreSQL Managed Database instance ID to update.

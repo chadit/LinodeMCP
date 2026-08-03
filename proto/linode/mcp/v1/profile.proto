@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // Profile mirrors the authenticated user's Linode profile.
 message Profile {
@@ -21,6 +22,12 @@ message Profile {
 // ProfileGetInput is the input contract for linode_profile_get (the singular
 // authenticated profile, so no resource ID).
 message ProfileGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_get"
+    method: "GET"
+    path: "/profile"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -43,6 +50,12 @@ message ProfileAppListResponse {
 
 // ProfileAppGetInput is the input contract for linode_profile_app_get.
 message ProfileAppGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_app_get"
+    method: "GET"
+    path: "/profile/apps/{app_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the authorized app to retrieve (required).
@@ -195,6 +208,12 @@ message ProfileTfaEnableConfirmResponse {
 // ProfilePreferencesGetInput is the input contract for
 // linode_profile_preferences_get (singular preferences object, no resource ID).
 message ProfilePreferencesGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_preferences_get"
+    method: "GET"
+    path: "/profile/preferences"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -205,6 +224,12 @@ message ProfilePreferencesGetInput {
 // at runtime but a map field cannot be marked required in the generated schema,
 // so the required flag is dropped (the handler still enforces presence).
 message ProfilePreferencesUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_preferences_update"
+    method: "PUT"
+    path: "/profile/preferences"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Free-form user preferences to store. Required at runtime, though the
@@ -220,6 +245,12 @@ message ProfilePreferencesUpdateInput {
 
 // ProfileAppListInput is the input contract for linode_profile_app_list.
 message ProfileAppListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_app_list"
+    method: "GET"
+    path: "/profile/apps"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -230,6 +261,12 @@ message ProfileAppListInput {
 
 // ProfileAppDeleteInput is the input contract for linode_profile_app_delete.
 message ProfileAppDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_app_delete"
+    method: "DELETE"
+    path: "/profile/apps/{app_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Profile authorized app ID to revoke.
@@ -243,6 +280,12 @@ message ProfileAppDeleteInput {
 
 // ProfileDeviceListInput is the input contract for linode_profile_device_list.
 message ProfileDeviceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_device_list"
+    method: "GET"
+    path: "/profile/devices"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -253,6 +296,12 @@ message ProfileDeviceListInput {
 
 // ProfileDeviceGetInput is the input contract for linode_profile_device_get.
 message ProfileDeviceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_device_get"
+    method: "GET"
+    path: "/profile/devices/{device_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Profile trusted device ID.
@@ -262,6 +311,12 @@ message ProfileDeviceGetInput {
 // ProfileDeviceRevokeInput is the input contract for
 // linode_profile_device_revoke.
 message ProfileDeviceRevokeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_device_revoke"
+    method: "DELETE"
+    path: "/profile/devices/{device_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Profile trusted device ID to revoke.
@@ -275,6 +330,12 @@ message ProfileDeviceRevokeInput {
 
 // ProfileTokenListInput is the input contract for linode_profile_token_list.
 message ProfileTokenListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_token_list"
+    method: "GET"
+    path: "/profile/tokens"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -285,6 +346,12 @@ message ProfileTokenListInput {
 
 // ProfileTokenGetInput is the input contract for linode_profile_token_get.
 message ProfileTokenGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_token_get"
+    method: "GET"
+    path: "/profile/tokens/{token_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Personal access token ID to retrieve.
@@ -293,6 +360,12 @@ message ProfileTokenGetInput {
 
 // ProfileTokenCreateInput is the input contract for linode_profile_token_create.
 message ProfileTokenCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_token_create"
+    method: "POST"
+    path: "/profile/tokens"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Token expiry timestamp (optional).
@@ -311,6 +384,12 @@ message ProfileTokenCreateInput {
 
 // ProfileTokenUpdateInput is the input contract for linode_profile_token_update.
 message ProfileTokenUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_token_update"
+    method: "PUT"
+    path: "/profile/tokens/{token_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Personal access token ID.
@@ -328,6 +407,12 @@ message ProfileTokenUpdateInput {
 // ProfileTokenDeleteInput is the input contract for linode_profile_token_delete
 // (revoke; single-stage, no mode/plan_id in the hand-built schema).
 message ProfileTokenDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_token_delete"
+    method: "DELETE"
+    path: "/profile/tokens/{token_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The personal access token ID to revoke.
@@ -342,6 +427,12 @@ message ProfileTokenDeleteInput {
 
 // ProfileTfaEnableInput is the input contract for linode_profile_tfa_enable.
 message ProfileTfaEnableInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_tfa_enable"
+    method: "POST"
+    path: "/profile/tfa-enable"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Must be true to confirm generating a two-factor authentication secret.
@@ -354,6 +445,12 @@ message ProfileTfaEnableInput {
 
 // ProfileTfaDisableInput is the input contract for linode_profile_tfa_disable.
 message ProfileTfaDisableInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_tfa_disable"
+    method: "POST"
+    path: "/profile/tfa-disable"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Must be true to confirm disabling profile two-factor authentication.
@@ -367,6 +464,12 @@ message ProfileTfaDisableInput {
 // ProfileTfaEnableConfirmInput is the input contract for
 // linode_profile_tfa_enable_confirm.
 message ProfileTfaEnableConfirmInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_tfa_enable_confirm"
+    method: "POST"
+    path: "/profile/tfa-enable-confirm"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Two-factor authentication code to confirm enablement.
@@ -382,6 +485,12 @@ message ProfileTfaEnableConfirmInput {
 // ProfilePhoneNumberSendInput is the input contract for
 // linode_profile_phone_number_send.
 message ProfilePhoneNumberSendInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_phone_number_send"
+    method: "POST"
+    path: "/profile/phone-number"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // ISO 3166-1 alpha-2 country code for the phone number.
@@ -400,6 +509,12 @@ message ProfilePhoneNumberSendInput {
 // linode_profile_phone_number_delete (the profile has one phone number, so
 // there is no resource ID).
 message ProfilePhoneNumberDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_phone_number_delete"
+    method: "DELETE"
+    path: "/profile/phone-number"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Must be true to confirm deleting the profile phone number. Ignored when
@@ -413,6 +528,12 @@ message ProfilePhoneNumberDeleteInput {
 // ProfilePhoneNumberVerifyInput is the input contract for
 // linode_profile_phone_number_verify.
 message ProfilePhoneNumberVerifyInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_phone_number_verify"
+    method: "POST"
+    path: "/profile/phone-number/verify"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // One-time SMS code sent to the profile phone number.
@@ -429,6 +550,12 @@ message ProfilePhoneNumberVerifyInput {
 // linode_profile_security_question_list (pairs with
 // SecurityQuestionListResponse; the endpoint is not paginated).
 message SecurityQuestionListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_security_question_list"
+    method: "GET"
+    path: "/profile/security-questions"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -440,6 +567,12 @@ message SecurityQuestionListInput {
 // is dropped (the handler still enforces presence). The item detail (per-object
 // question_id/response) is not carried in the generated schema either.
 message SecurityQuestionAnswerInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_security_question_answer"
+    method: "POST"
+    path: "/profile/security-questions"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The security question answers to submit. Each entry is an object with a

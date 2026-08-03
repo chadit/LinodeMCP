@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // Tag mirrors the Linode tag object. The entity-ID lists are repeated fields,
 // emitted as [] when empty (vs the Go struct's omitempty).
@@ -52,6 +53,12 @@ message TaggedObjectListResponse {
 
 // TagListInput is the input contract for linode_tag_list.
 message TagListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_tag_list"
+    method: "GET"
+    path: "/tags"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -63,6 +70,12 @@ message TagListInput {
 // TagCreateInput is the input contract for linode_tag_create. label and
 // confirm are required; the resource-ID arrays are optional.
 message TagCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_tag_create"
+    method: "POST"
+    path: "/tags"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The tag label.
@@ -85,6 +98,12 @@ message TagCreateInput {
 // TagDeleteInput is the input contract for linode_tag_delete, a two-stage
 // destroy addressed by tag label (tags have no numeric ID).
 message TagDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_tag_delete"
+    method: "DELETE"
+    path: "/tags/{tag_label}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Tag label to delete.
@@ -105,6 +124,12 @@ message TagDeleteInput {
 // TaggedObjectListInput is the input contract for linode_tag_object_list.
 // Pairs with TaggedObjectListResponse.
 message TaggedObjectListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_tag_object_list"
+    method: "GET"
+    path: "/tags/{tag_label}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Tag label to list objects for.

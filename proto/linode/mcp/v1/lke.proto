@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // LKEControlPlane is the control-plane configuration nested in an LKE cluster.
 message LKEControlPlane {
@@ -58,6 +59,12 @@ message LKEClusterActionResponse {
 
 // LKEClusterGetInput is the input contract for linode_lke_cluster_get.
 message LKEClusterGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_cluster_get"
+    method: "GET"
+    path: "/lke/clusters/{cluster_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster to retrieve (required).
@@ -66,6 +73,12 @@ message LKEClusterGetInput {
 
 // LKEClusterListInput is the input contract for linode_lke_cluster_list.
 message LKEClusterListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_cluster_list"
+    method: "GET"
+    path: "/lke/clusters"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Filter clusters by label containing this string (case-insensitive).
@@ -95,6 +108,12 @@ message LKENodePoolCreateItem {
 // out of required (recorded in the required-flag-loss log); the handler still
 // rejects an empty node_pools at runtime.
 message LKEClusterCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_cluster_create"
+    method: "POST"
+    path: "/lke/clusters"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Label for the cluster (3-32 characters).
@@ -122,6 +141,12 @@ message LKEClusterCreateInput {
 
 // LKEClusterUpdateInput is the input contract for linode_lke_cluster_update.
 message LKEClusterUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_cluster_update"
+    method: "PUT"
+    path: "/lke/clusters/{cluster_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster to update.
@@ -144,6 +169,12 @@ message LKEClusterUpdateInput {
 
 // LKEClusterDeleteInput is the input contract for linode_lke_cluster_delete.
 message LKEClusterDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_cluster_delete"
+    method: "DELETE"
+    path: "/lke/clusters/{cluster_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster to delete.
@@ -164,6 +195,12 @@ message LKEClusterDeleteInput {
 
 // LKEClusterRecycleInput is the input contract for linode_lke_cluster_recycle.
 message LKEClusterRecycleInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_cluster_recycle"
+    method: "POST"
+    path: "/lke/clusters/{cluster_id}/recycle"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster to recycle.
@@ -179,6 +216,12 @@ message LKEClusterRecycleInput {
 // LKEClusterRegenerateInput is the input contract for
 // linode_lke_cluster_regenerate.
 message LKEClusterRegenerateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_cluster_regenerate"
+    method: "POST"
+    path: "/lke/clusters/{cluster_id}/regenerate"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster.
@@ -193,6 +236,12 @@ message LKEClusterRegenerateInput {
 // LKEServiceTokenDeleteInput is the input contract for
 // linode_lke_service_token_delete.
 message LKEServiceTokenDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_service_token_delete"
+    method: "DELETE"
+    path: "/lke/clusters/{cluster_id}/servicetoken"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster.
@@ -253,6 +302,12 @@ message LKEACLDeleteResponse {
 // string here, matching the hand-built schema and the LKEClusterGetInput
 // read-side convention.
 message LKEACLGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_acl_get"
+    method: "GET"
+    path: "/lke/clusters/{cluster_id}/control_plane_acl"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster (required).
@@ -265,6 +320,12 @@ message LKEACLGetInput {
 // the generated required set, so acl drops out of required (recorded in the
 // required-flag-loss log); the handler still requires it at runtime.
 message LKEACLUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_acl_update"
+    method: "PUT"
+    path: "/lke/clusters/{cluster_id}/control_plane_acl"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster.
@@ -282,6 +343,12 @@ message LKEACLUpdateInput {
 // LKEACLDeleteInput is the input contract for linode_lke_acl_delete. Note: no
 // mode/plan_id; this destroy is not on the two-stage flow per the dump.
 message LKEACLDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_acl_delete"
+    method: "DELETE"
+    path: "/lke/clusters/{cluster_id}/control_plane_acl"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster.

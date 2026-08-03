@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // NodeBalancerNodeMode is the backend node traffic mode. Values are the exact
 // lowercase API strings, authored from the live OpenAPI spec, which includes
 // `none` (both languages' hand-maintained allowlists were missing it). See the
@@ -51,6 +53,12 @@ message NodeBalancerConfigNodeWriteResponse {
 // NodeBalancerConfigNodeGetInput is the input contract for
 // linode_nodebalancer_config_node_get.
 message NodeBalancerConfigNodeGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_node_get"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}/nodes/{node_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer (required).
@@ -74,6 +82,12 @@ message NodeBalancerConfigNodeDeleteResponse {
 // NodeBalancerConfigNodeListInput is the input contract for
 // linode_nodebalancer_config_node_list.
 message NodeBalancerConfigNodeListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_node_list"
+    method: "GET"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}/nodes"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer whose config nodes should be listed.
@@ -90,6 +104,12 @@ message NodeBalancerConfigNodeListInput {
 // linode_nodebalancer_config_node_create. Note: mode here is the backend node
 // mode, not the two-stage plan/apply mode.
 message NodeBalancerConfigNodeCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_node_create"
+    method: "POST"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}/nodes"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer that owns the config.
@@ -118,6 +138,12 @@ message NodeBalancerConfigNodeCreateInput {
 // linode_nodebalancer_config_node_update. Note: mode here is the backend node
 // mode, not the two-stage plan/apply mode.
 message NodeBalancerConfigNodeUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_node_update"
+    method: "PUT"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}/nodes/{node_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer that owns the config.
@@ -148,6 +174,12 @@ message NodeBalancerConfigNodeUpdateInput {
 // linode_nodebalancer_config_node_delete. This destroy does not use the
 // two-stage flow, so there is no mode/plan_id (matches the registered schema).
 message NodeBalancerConfigNodeDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_nodebalancer_config_node_delete"
+    method: "DELETE"
+    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}/nodes/{node_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the NodeBalancer that owns the config.

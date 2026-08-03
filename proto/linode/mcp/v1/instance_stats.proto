@@ -2,12 +2,19 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // InstanceStatsGetInput is the input contract for linode_instance_stats_get.
 message InstanceStatsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_stats_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/stats"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).
@@ -17,6 +24,12 @@ message InstanceStatsGetInput {
 // InstanceStatsMonthGetInput is the input contract for
 // linode_instance_stats_month_get. All three fields are required.
 message InstanceStatsMonthGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_instance_stats_month_get"
+    method: "GET"
+    path: "/linode/instances/{linode_id}/stats/{year}/{month}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode instance (required).

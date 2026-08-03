@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // LKEAPIEndpoint is one API server endpoint of an LKE cluster, returned by
 // GET /lke/clusters/{cluster_id}/api-endpoints.
 message LKEAPIEndpoint {
@@ -23,6 +25,12 @@ message LKEAPIEndpointListResponse {
 // linode_lke_api_endpoint_list. cluster_id is a string, matching the
 // read-side convention.
 message LKEAPIEndpointListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_lke_api_endpoint_list"
+    method: "GET"
+    path: "/lke/clusters/{cluster_id}/api-endpoints"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the LKE cluster (required).

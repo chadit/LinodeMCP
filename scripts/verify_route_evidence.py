@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Route-evidence gate: every contracted route is one a client can actually build.
+"""Route-evidence gate: every declared route is one a client can actually build.
 
-docs/contracts/tool-routes.txt records which Linode operation each tool calls,
-and the sync gate checks those lines against the live OpenAPI spec. Nothing
-checked them against the clients. A route could sit in the contract with no code
+The proto contract records which Linode operation each tool calls, as a
+`tool_route` option on the tool's input message. Nothing checked those
+declarations against the clients. A route could sit in the contract with no code
 behind it in one language, and the catalog scan that goes looking finds nothing
 when the path is assembled rather than written out: no grep for
 "/linode/instances/{id}/interfaces" matches
@@ -35,9 +35,11 @@ Known gaps live in docs/contracts/route-evidence-baseline.txt, a ratchet: build
 the route and remove its line; never add a line by hand (regenerate with
 --update-baseline, then attach the required acceptance annotation).
 
-Stdlib only, so no venv is needed, though the Go scanner does need the Go
-toolchain. Run via `make route-evidence` (in `make check`, and so in the
-pre-push hook and the CI gate on every branch).
+Stdlib plus scripts/_toolroutes.py, which reads the declared routes from the
+generated descriptors (through python/.venv/bin/python when the running
+interpreter cannot import them); the Go scanner needs the Go toolchain. Run via
+`make route-evidence` (in `make check`, and so in the pre-push hook and the CI
+gate on every branch).
 
 Usage: verify_route_evidence.py [--update-baseline] [--go-routes PATH]
 """
@@ -53,6 +55,7 @@ from typing import TYPE_CHECKING
 
 import _baselines
 import _routescan
+import _toolroutes
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -63,7 +66,6 @@ if TYPE_CHECKING:
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _LANGUAGES = _REPO_ROOT / "docs" / "contracts" / "languages.txt"
-_ROUTES = _REPO_ROOT / "docs" / "contracts" / "tool-routes.txt"
 _BASELINE = _REPO_ROOT / "docs" / "contracts" / "route-evidence-baseline.txt"
 
 _BASELINE_HEADER = (
@@ -76,24 +78,19 @@ _BASELINE_HEADER = (
 )
 
 
-def contract_routes(path: Path) -> dict[str, str]:
-    """Read tool-routes.txt into {tool: "<METHOD> <path>"}."""
-    routes: dict[str, str] = {}
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        tool, sep, route = line.partition(": ")
-        if not sep:
-            msg = f"unparsable {path.name} line {raw!r}"
-            raise SystemExit(msg)
-        routes[tool] = route.strip()
+def contract_routes() -> dict[str, str]:
+    """The declared routes as {tool: "<METHOD> <path>"}, the scanners' shape.
 
-    if not routes:
-        msg = f"{path.name} lists no routes"
-        raise SystemExit(msg)
-
-    return routes
+    A declared path names its parameters; a resolved one cannot, because the
+    scanners read code that builds URLs out of variables. Names are normalized
+    off here, at the comparison, rather than being kept out of the contract:
+    the gate is about whether a client can build a route of that shape, and the
+    name a route gives a segment was never part of that question.
+    """
+    return {
+        tool: f"{method} {_toolroutes.norm_template(path)}"
+        for tool, (method, path) in _toolroutes.routes().items()
+    }
 
 
 def go_evidence(workdir: Path, dump_path: str | None = None) -> _routescan.Evidence:
@@ -193,7 +190,7 @@ def language_gaps(
 
 def current_gaps(go_routes: str | None = None) -> list[str]:
     """Every route gap across every registered language."""
-    routes = contract_routes(_ROUTES)
+    routes = contract_routes()
     scanners = coverage(go_routes)
 
     gaps: list[str] = []

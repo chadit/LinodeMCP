@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // ObjectStorageKeyPermission is the per-bucket grant level for an Object Storage
 // access key. Values are the exact lowercase Linode API strings, authored from
 // the live OpenAPI spec. See the enum-wrapper convention in
@@ -86,6 +88,12 @@ message ObjectStorageKeyDeleteResponse {
 
 // ObjectStorageKeyGetInput is the input contract for linode_object_storage_key_get.
 message ObjectStorageKeyGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_key_get"
+    method: "GET"
+    path: "/object-storage/keys/{key_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Object Storage key to retrieve (required).
@@ -95,6 +103,12 @@ message ObjectStorageKeyGetInput {
 // ObjectStorageKeyListInput is the input contract for
 // linode_object_storage_key_list.
 message ObjectStorageKeyListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_key_list"
+    method: "GET"
+    path: "/object-storage/keys"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -104,6 +118,12 @@ message ObjectStorageKeyListInput {
 // bucket_access is a JSON array passed as a string; the handler parses and
 // validates it, so the schema type stays string.
 message ObjectStorageKeyCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_key_create"
+    method: "POST"
+    path: "/object-storage/keys"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Label for the access key (max 50 characters).
@@ -123,6 +143,12 @@ message ObjectStorageKeyCreateInput {
 // ObjectStorageKeyUpdateInput is the input contract for
 // linode_object_storage_key_update. key_id and confirm are required.
 message ObjectStorageKeyUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_key_update"
+    method: "PUT"
+    path: "/object-storage/keys/{key_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // ID of the access key to update.
@@ -142,6 +168,12 @@ message ObjectStorageKeyUpdateInput {
 // ObjectStorageKeyDeleteInput is the input contract for
 // linode_object_storage_key_delete. key_id and confirm are required.
 message ObjectStorageKeyDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_key_delete"
+    method: "DELETE"
+    path: "/object-storage/keys/{key_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // ID of the access key to revoke.
@@ -200,6 +232,12 @@ message ObjectStorageBucketDeleteResponse {
 // ObjectStorageBucketGetInput is the input contract for
 // linode_object_storage_bucket_get.
 message ObjectStorageBucketGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_get"
+    method: "GET"
+    path: "/object-storage/buckets/{region_id}/{bucket}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where the bucket is located (required).
@@ -211,6 +249,12 @@ message ObjectStorageBucketGetInput {
 // ObjectStorageBucketListInput is the input contract for
 // linode_object_storage_bucket_list.
 message ObjectStorageBucketListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_list"
+    method: "GET"
+    path: "/object-storage/buckets"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -218,6 +262,12 @@ message ObjectStorageBucketListInput {
 // ObjectStorageBucketByRegionListInput is the input contract for
 // linode_object_storage_bucket_by_region_list. region is required.
 message ObjectStorageBucketByRegionListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_by_region_list"
+    method: "GET"
+    path: "/object-storage/buckets/{region_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where buckets are located (e.g., 'us-east-1', 'us-southeast-1').
@@ -229,6 +279,12 @@ message ObjectStorageBucketByRegionListInput {
 // page_size is a string on purpose: the hand-built schema advertised it as a
 // string and the handler forwards it verbatim as an S3 query param.
 message ObjectStorageBucketObjectListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_object_list"
+    method: "GET"
+    path: "/object-storage/buckets/{region_id}/{bucket}/object-list"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
@@ -249,6 +305,12 @@ message ObjectStorageBucketObjectListInput {
 // ObjectStorageBucketCreateInput is the input contract for
 // linode_object_storage_bucket_create. label, region, and confirm are required.
 message ObjectStorageBucketCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_create"
+    method: "POST"
+    path: "/object-storage/buckets"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Bucket label (3-63 chars, lowercase alphanumeric and hyphens, must
@@ -272,6 +334,12 @@ message ObjectStorageBucketCreateInput {
 // ObjectStorageBucketDeleteInput is the input contract for
 // linode_object_storage_bucket_delete. region, label, and confirm are required.
 message ObjectStorageBucketDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_bucket_delete"
+    method: "DELETE"
+    path: "/object-storage/buckets/{region_id}/{bucket}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region of the bucket to delete.
@@ -295,6 +363,12 @@ message ObjectStorageBucketDeleteInput {
 // ObjectStorageCancelInput is the input contract for
 // linode_object_storage_cancel. confirm is required.
 message ObjectStorageCancelInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_cancel"
+    method: "POST"
+    path: "/object-storage/cancel"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Must be set to true to confirm Object Storage cancellation. Ignored when
@@ -326,6 +400,12 @@ message ObjectStorageEndpointListResponse {
 // ObjectStorageEndpointListInput is the input contract for
 // linode_object_storage_endpoint_list.
 message ObjectStorageEndpointListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_endpoint_list"
+    method: "GET"
+    path: "/object-storage/endpoints"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -358,6 +438,12 @@ message ObjectStorageQuotaListResponse {
 // ObjectStorageQuotaListInput is the input contract for
 // linode_object_storage_quota_list.
 message ObjectStorageQuotaListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_quota_list"
+    method: "GET"
+    path: "/object-storage/quotas"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -366,6 +452,12 @@ message ObjectStorageQuotaListInput {
 // linode_object_storage_quota_get. obj_quota_id is a slug-style string id, not
 // an integer.
 message ObjectStorageQuotaGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_quota_get"
+    method: "GET"
+    path: "/object-storage/quotas/{obj_quota_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Object Storage quota ID to retrieve.
@@ -386,6 +478,12 @@ message ObjectStorageQuotaUsage {
 // linode_object_storage_quota_usage_get. obj_quota_id is a slug-style string
 // id, not an integer.
 message ObjectStorageQuotaUsageGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_quota_usage_get"
+    method: "GET"
+    path: "/object-storage/quotas/{obj_quota_id}/usage"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Object Storage quota ID to retrieve usage for.
@@ -402,6 +500,12 @@ message ObjectStorageTransfer {
 // ObjectStorageTransferGetInput is the input contract for
 // linode_object_storage_transfer_get.
 message ObjectStorageTransferGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_transfer_get"
+    method: "GET"
+    path: "/object-storage/transfer"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -417,6 +521,12 @@ message PresignedURLResponse {
 // PresignedURLResponse. region, label, name, and method are required. The tool
 // is capability Read despite the create verb, so it has no confirm/dry_run.
 message PresignedURLCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_presigned_url_create"
+    method: "POST"
+    path: "/object-storage/buckets/{region_id}/{bucket}/object-url"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').

@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // AccountBetaProgram is one beta program the account is enrolled in. description
 // and ended are nullable (omitted when unset).
 message AccountBetaProgram {
@@ -25,6 +27,12 @@ message AccountBetaProgramListResponse {
 
 // AccountBetaGetInput is the input contract for linode_account_beta_get.
 message AccountBetaGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_beta_get"
+    method: "GET"
+    path: "/account/betas/{beta_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Beta program ID to retrieve (required).
@@ -33,6 +41,12 @@ message AccountBetaGetInput {
 
 // AccountBetaListInput is the input contract for linode_account_beta_list.
 message AccountBetaListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_beta_list"
+    method: "GET"
+    path: "/account/betas"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -45,6 +59,12 @@ message AccountBetaListInput {
 // The hand-built param is named id (string beta program slug), so the field
 // keeps that name.
 message AccountBetaEnrollInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_account_beta_enroll"
+    method: "POST"
+    path: "/account/betas"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Unique identifier for the beta program (required).

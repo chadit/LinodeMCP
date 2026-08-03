@@ -2,9 +2,10 @@ syntax = "proto3";
 
 package linode.mcp.v1;
 
-import "google/protobuf/struct.proto";
-
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
+
+import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // ManagedServiceType is the Managed monitored-service protocol. Values are the
 // exact lowercase API strings, authored from the live OpenAPI spec. See the
@@ -45,6 +46,12 @@ message ManagedServiceListResponse {
 
 // ManagedServiceGetInput is the input contract for linode_managed_service_get.
 message ManagedServiceGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_service_get"
+    method: "GET"
+    path: "/managed/services/{service_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Managed service to retrieve (required).
@@ -54,6 +61,12 @@ message ManagedServiceGetInput {
 // ManagedServiceListInput is the input contract for
 // linode_managed_service_list.
 message ManagedServiceListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_service_list"
+    method: "GET"
+    path: "/managed/services"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -66,6 +79,12 @@ message ManagedServiceListInput {
 // linode_managed_service_create. address, label, service_type, timeout, and
 // confirm are required.
 message ManagedServiceCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_service_create"
+    method: "POST"
+    path: "/managed/services"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Label for the Managed service.
@@ -98,6 +117,12 @@ message ManagedServiceCreateInput {
 // linode_managed_service_update. service_id and confirm are required; all
 // mutable fields are optional.
 message ManagedServiceUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_service_update"
+    method: "PUT"
+    path: "/managed/services/{service_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric Managed service monitor ID to update.
@@ -130,6 +155,12 @@ message ManagedServiceUpdateInput {
 // ManagedServiceDeleteInput is the input contract for
 // linode_managed_service_delete. Plain confirm destroy.
 message ManagedServiceDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_service_delete"
+    method: "DELETE"
+    path: "/managed/services/{service_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Managed service monitor ID to delete.
@@ -145,6 +176,12 @@ message ManagedServiceDeleteInput {
 // ManagedServiceDisableInput is the input contract for
 // linode_managed_service_disable.
 message ManagedServiceDisableInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_service_disable"
+    method: "POST"
+    path: "/managed/services/{service_id}/disable"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Managed service monitor ID to disable.
@@ -160,6 +197,12 @@ message ManagedServiceDisableInput {
 // ManagedServiceEnableInput is the input contract for
 // linode_managed_service_enable.
 message ManagedServiceEnableInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_service_enable"
+    method: "POST"
+    path: "/managed/services/{service_id}/enable"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Managed service monitor ID to enable.
@@ -200,6 +243,12 @@ message ManagedLinodeSettingsListResponse {
 // ManagedLinodeSettingsGetInput is the input contract for
 // linode_managed_linode_settings_get.
 message ManagedLinodeSettingsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_linode_settings_get"
+    method: "GET"
+    path: "/managed/linode-settings/{linode_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Linode whose Managed settings to retrieve (required).
@@ -209,6 +258,12 @@ message ManagedLinodeSettingsGetInput {
 // ManagedLinodeSettingsListInput is the input contract for
 // linode_managed_linode_settings_list.
 message ManagedLinodeSettingsListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_linode_settings_list"
+    method: "GET"
+    path: "/managed/linode-settings"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -225,6 +280,12 @@ message ManagedLinodeSettingsListInput {
 // required flag and the inner detail. The handler still enforces presence and
 // at least one mutable SSH setting.
 message ManagedLinodeSettingsUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_linode_settings_update"
+    method: "PUT"
+    path: "/managed/linode-settings/{linode_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric Linode ID whose Managed settings should be updated.
@@ -268,6 +329,12 @@ message ManagedContactListResponse {
 
 // ManagedContactGetInput is the input contract for linode_managed_contact_get.
 message ManagedContactGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_contact_get"
+    method: "GET"
+    path: "/managed/contacts/{contact_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Managed contact to retrieve (required).
@@ -277,6 +344,12 @@ message ManagedContactGetInput {
 // ManagedContactListInput is the input contract for
 // linode_managed_contact_list.
 message ManagedContactListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_contact_list"
+    method: "GET"
+    path: "/managed/contacts"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -291,6 +364,12 @@ message ManagedContactListInput {
 // map<string, google.protobuf.Value> (top-level object), which drops the inner
 // detail (the handler still parses primary/secondary).
 message ManagedContactCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_contact_create"
+    method: "POST"
+    path: "/managed/contacts"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Name for the Managed contact (optional).
@@ -315,6 +394,12 @@ message ManagedContactCreateInput {
 // rendered as map<string, google.protobuf.Value> (top-level object), which
 // drops the inner detail (the handler still parses primary/secondary).
 message ManagedContactUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_contact_update"
+    method: "PUT"
+    path: "/managed/contacts/{contact_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric Managed contact ID to update.
@@ -339,6 +424,12 @@ message ManagedContactUpdateInput {
 // ManagedContactDeleteInput is the input contract for
 // linode_managed_contact_delete. Plain confirm destroy.
 message ManagedContactDeleteInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_contact_delete"
+    method: "DELETE"
+    path: "/managed/contacts/{contact_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The Managed contact ID to delete.
@@ -359,12 +450,24 @@ message ManagedSSHKey {
 
 // ManagedSSHKeyGetInput is the input contract for linode_managed_sshkey_get.
 message ManagedSSHKeyGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_sshkey_get"
+    method: "GET"
+    path: "/managed/credentials/sshkey"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
 
 // ManagedStatsGetInput is the input contract for linode_managed_stats_get.
 message ManagedStatsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_stats_get"
+    method: "GET"
+    path: "/managed/stats"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
 }
@@ -388,6 +491,12 @@ message ManagedCredentialListResponse {
 
 // ManagedCredentialGetInput is the input contract for linode_managed_credential_get.
 message ManagedCredentialGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_credential_get"
+    method: "GET"
+    path: "/managed/credentials/{credential_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The ID of the Managed credential to retrieve (required).
@@ -399,6 +508,12 @@ message ManagedCredentialGetInput {
 // ManagedCredentialListInput is the input contract for
 // linode_managed_credential_list.
 message ManagedCredentialListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_credential_list"
+    method: "GET"
+    path: "/managed/credentials"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Page of results to return (optional, minimum 1).
@@ -410,6 +525,12 @@ message ManagedCredentialListInput {
 // ManagedCredentialCreateInput is the input contract for
 // linode_managed_credential_create. label, password, and confirm are required.
 message ManagedCredentialCreateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_credential_create"
+    method: "POST"
+    path: "/managed/credentials"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Label for the Managed credential.
@@ -430,6 +551,12 @@ message ManagedCredentialCreateInput {
 // linode_managed_credential_update. credential_id, label, and confirm are
 // required.
 message ManagedCredentialUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_credential_update"
+    method: "PUT"
+    path: "/managed/credentials/{credential_id}"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // The numeric Managed credential ID to update.
@@ -448,6 +575,12 @@ message ManagedCredentialUpdateInput {
 // linode_managed_credential_username_password_update. credential_id, password,
 // and confirm are required; username is optional.
 message ManagedCredentialUsernamePasswordUpdateInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_credential_username_password_update"
+    method: "POST"
+    path: "/managed/credentials/{credential_id}/update"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Managed credential ID to update.
@@ -467,6 +600,12 @@ message ManagedCredentialUsernamePasswordUpdateInput {
 // ManagedCredentialRevokeInput is the input contract for
 // linode_managed_credential_revoke.
 message ManagedCredentialRevokeInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_managed_credential_revoke"
+    method: "POST"
+    path: "/managed/credentials/{credential_id}/revoke"
+  };
+
   // Linode environment to use (optional, defaults to "default").
   optional string environment = 1; // system param
   // Managed credential ID to revoke.
