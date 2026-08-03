@@ -2,7 +2,7 @@
 repos:
   # Go linter (managed - auto-installed by pre-commit)
   - repo: https://github.com/golangci/golangci-lint
-    rev: v2.10.1
+    rev: v2.12.2
     hooks:
       - id: golangci-lint
         args: ['--max-issues-per-linter=0', '--max-same-issues=0']
@@ -51,7 +51,7 @@ repos:
 
   # Markdown linter (managed - auto-installed by pre-commit)
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.21.0
+    rev: v0.23.2
     hooks:
       - id: markdownlint-cli2
 
