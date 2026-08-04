@@ -32,11 +32,13 @@ message AccountBetaGetInput {
     method: "GET"
     path: "/account/betas/{beta_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountBetaProgram";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Beta program ID to retrieve (required).
-  string beta_id = 2;
+  string beta_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountBetaListInput is the input contract for linode_account_beta_list.
@@ -46,13 +48,15 @@ message AccountBetaListInput {
     method: "GET"
     path: "/account/betas"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountBetaProgramListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountBetaEnrollInput is the input contract for linode_account_beta_enroll.
@@ -64,15 +68,19 @@ message AccountBetaEnrollInput {
     method: "POST"
     path: "/account/betas"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountBetaEnrollResponse";
+  option (linode.mcp.v1.confirm_message) = "This enrolls the account in a beta program. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account beta enrollment requested successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Unique identifier for the beta program (required).
-  string id = 2;
+  string id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm beta program enrollment. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

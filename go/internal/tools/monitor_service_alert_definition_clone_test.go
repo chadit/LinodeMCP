@@ -257,7 +257,7 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolSuccessPreservesOverridesAn
 			"service_type":                     monitorServiceToolTypeDatabase,
 			"severity":                         0,
 			monitorAlertDefinitionGroupByParam: []string{monitorAlertDefinitionGroupByValue},
-			"scope":                            keySupportTicketRegion,
+			keyScope:                           keySupportTicketRegion,
 			monitorAlertDefinitionRegionsParam: []string{regionUSEast},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -333,7 +333,7 @@ func TestLinodeMonitorServiceAlertDefinitionCloneToolDryRun(t *testing.T) {
 			monitorServiceTypeParam:             monitorServiceToolTypeDatabase,
 			monitorAlertDefinitionSeverityParam: 0,
 			monitorAlertDefinitionGroupByParam:  []string{monitorAlertDefinitionGroupByValue},
-			"scope":                             keySupportTicketRegion,
+			keyScope:                            keySupportTicketRegion,
 			monitorAlertDefinitionRegionsParam:  []string{regionUSEast},
 		}); err != nil {
 			t.Errorf("unexpected error: %v", err)

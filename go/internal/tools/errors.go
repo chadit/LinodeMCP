@@ -6,8 +6,6 @@ import "errors"
 var (
 	ErrEnvironmentNotFound    = errors.New("environment not found in configuration")
 	ErrLinodeConfigIncomplete = errors.New("linode configuration is incomplete: check your API URL and token")
-	ErrInstanceIDRequired     = errors.New("instance_id is required")
-	ErrInvalidInstanceID      = errors.New("instance_id must be a valid integer")
 	ErrLinodeIDRequired       = errors.New("linode_id is required")
 	ErrLinodeIDInvalid        = errors.New("linode_id must be a valid integer")
 	errUnexpectedTrailingJSON = errors.New("unexpected trailing JSON")
@@ -96,19 +94,7 @@ var (
 
 // Sentinel errors for LKE validation.
 var (
-	ErrLKEClusterIDRequired = errors.New("cluster_id is required")
-	ErrLKEClusterIDInvalid  = errors.New("cluster_id must be a valid integer")
-	ErrLKEPoolIDRequired    = errors.New("pool_id is required")
-	ErrLKEPoolIDInvalid     = errors.New("pool_id must be a valid integer")
-	ErrLKETierRequired      = errors.New("tier is required")
-)
-
-// Sentinel errors for VPC validation.
-var (
-	ErrVPCIDRequired    = errors.New("vpc_id is required")
-	ErrVPCIDInvalid     = errors.New("vpc_id must be a valid integer")
-	ErrSubnetIDRequired = errors.New("subnet_id is required")
-	ErrSubnetIDInvalid  = errors.New("subnet_id must be a valid integer")
+	ErrLKETierRequired = errors.New("tier is required")
 )
 
 // Sentinel errors for placement group validation.

@@ -51,14 +51,15 @@ func handleLinodeVolumeGetRequest(ctx context.Context, request *mcp.CallToolRequ
 
 // NewLinodeVolumeListTool creates a tool for listing Linode block storage volumes.
 func NewLinodeVolumeListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolRawSchema(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_volume_list",
 		"Lists all block storage volumes for the authenticated user with optional filtering by region or label",
 		"linode.mcp.v1.VolumeListInput",
-		func(ctx context.Context, client *linode.Client) ([]*linodev1.Volume, error) {
-			return client.ListVolumesProto(ctx)
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Volume, error) {
+			return client.ListVolumesProto(ctx, page, pageSize)
 		},
+		standardPaginationFromTool,
 		[]listFilterParam[*linodev1.Volume]{
 			fieldFilter("region", "Filter volumes by region (e.g., 'us-east', 'eu-west')",
 				func(vol *linodev1.Volume) string { return vol.GetRegion() }),

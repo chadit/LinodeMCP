@@ -209,7 +209,9 @@ async def handle_linode_instance_ip_allocate(
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        ip = await client.allocate_instance_ip(iid, ip_type=ip_type, public=public)
+        ip = await client.allocate_instance_ip(
+            iid, ip_type=ip_type, public=public, address=arguments.get("address")
+        )
         return serialize_api_response(
             {
                 "message": f"IP {ip.get('address')} allocated for instance {iid}",
@@ -366,10 +368,14 @@ async def handle_linode_networking_ip_update(
         return parsed
     address, rdns = parsed
 
+    reserved: Any = arguments.get("reserved")
+    if reserved is not None and not isinstance(reserved, bool):
+        return _error_response("reserved must be a boolean")
+
     async def _call(
         client: RetryableClient,
     ) -> dict[str, Any]:
-        ip = await client.update_networking_ip(address, rdns)
+        ip = await client.update_networking_ip(address, rdns, reserved)
         return {
             "message": f"Networking IP {address} RDNS updated",
             "ip": serialize_api_response(ip, ip_pb2.IPAddress()),

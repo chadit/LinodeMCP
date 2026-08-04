@@ -47,15 +47,17 @@ message DatabaseTypeGetInput {
     method: "GET"
     path: "/databases/types/{type_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseType";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the database type to retrieve (required).
-  string type_id = 2;
+  string type_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // DatabaseTypeListInput is the input contract for linode_database_type_list.
@@ -65,13 +67,15 @@ message DatabaseTypeListInput {
     method: "GET"
     path: "/databases/types"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseTypeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // DatabaseMySQLConfigGetInput is the input contract for
@@ -82,9 +86,10 @@ message DatabaseMySQLConfigGetInput {
     method: "GET"
     path: "/databases/mysql/config"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLConfigGetInput is the input contract for
@@ -95,7 +100,8 @@ message DatabasePostgreSQLConfigGetInput {
     method: "GET"
     path: "/databases/postgresql/config"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

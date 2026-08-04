@@ -2,33 +2,25 @@ package linode
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const (
-	endpointDomains = "/domains"
-)
-
-// httpListDomainsProto retrieves all DNS domains as proto messages, decoded
-// directly from the API JSON for the proto-backed read path.
-func (c *Client) httpListDomainsProto(ctx context.Context) ([]*linodev1.Domain, error) {
-	return listProtoElements(ctx, c, "ListDomains", endpointDomains,
+// httpListDomainsProto retrieves one page of DNS domains as proto messages.
+func (c *Client) httpListDomainsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Domain, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListDomains",
+		"linode_domain_list", "", nil, page, pageSize,
 		func() *linodev1.Domain { return &linodev1.Domain{} })
 }
 
-// GetDomain retrieves a single DNS domain by its ID.
+// httpGetDomain retrieves a single DNS domain by its ID.
 func (c *Client) httpGetDomain(ctx context.Context, domainID int) (*Domain, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d", domainID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_get", nil, domainID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDomain", Err: err}
+		return nil, wrapRequestError("GetDomain", err)
 	}
 
 	defer drainClose(resp)
@@ -41,16 +33,14 @@ func (c *Client) httpGetDomain(ctx context.Context, domainID int) (*Domain, erro
 	return &domain, nil
 }
 
-// ListDomainRecords retrieves all DNS records for a specific domain.
+// httpListDomainRecords retrieves one page of a domain's DNS records.
 func (c *Client) httpListDomainRecords(ctx context.Context, domainID int) ([]DomainRecord, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/records", domainID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_record_list", nil, domainID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ListDomainRecords", Err: err}
+		return nil, wrapRequestError("ListDomainRecords", err)
 	}
 
 	defer drainClose(resp)
@@ -64,14 +54,11 @@ func (c *Client) httpListDomainRecords(ctx context.Context, domainID int) ([]Dom
 	return response.Data, nil
 }
 
-// httpListDomainRecordsProto retrieves a domain's DNS records as proto messages
-// for the proto-backed list path. The endpoint is formatted with the same
-// fmt.Sprintf(endpointDomains+"/%d/records", domainID) pattern
-// httpListDomainRecords uses, so the runtime path matches exactly.
-func (c *Client) httpListDomainRecordsProto(ctx context.Context, domainID int) ([]*linodev1.DomainRecord, error) {
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/records", domainID)
-
-	return listProtoElements(ctx, c, "ListDomainRecords", endpoint,
+// httpListDomainRecordsProto is the proto-backed httpListDomainRecords. Both
+// name the same tool, so both resolve the one declared route.
+func (c *Client) httpListDomainRecordsProto(ctx context.Context, domainID, page, pageSize int) ([]*linodev1.DomainRecord, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListDomainRecords",
+		"linode_domain_record_list", "", []any{domainID}, page, pageSize,
 		func() *linodev1.DomainRecord { return &linodev1.DomainRecord{} })
 }
 
@@ -81,11 +68,9 @@ func (c *Client) httpGetDomainZoneFileProto(ctx context.Context, domainID int) (
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/zone-file", domainID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_zone_file_get", nil, domainID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDomainZoneFile", Err: err}
+		return nil, wrapRequestError("GetDomainZoneFile", err)
 	}
 
 	defer drainClose(resp)
@@ -103,9 +88,9 @@ func (c *Client) httpImportDomainProto(ctx context.Context, req *ImportDomainReq
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDomains+"/import", req)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_import", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ImportDomain", Err: err}
+		return nil, wrapRequestError("ImportDomain", err)
 	}
 
 	defer drainClose(resp)
@@ -123,11 +108,9 @@ func (c *Client) httpCloneDomainProto(ctx context.Context, domainID int, req *Cl
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/clone", domainID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_clone", req, domainID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CloneDomain", Err: err}
+		return nil, wrapRequestError("CloneDomain", err)
 	}
 
 	defer drainClose(resp)
@@ -145,11 +128,9 @@ func (c *Client) httpGetDomainProto(ctx context.Context, domainID int) (*linodev
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d", domainID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_get", nil, domainID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDomain", Err: err}
+		return nil, wrapRequestError("GetDomain", err)
 	}
 
 	defer drainClose(resp)
@@ -167,9 +148,9 @@ func (c *Client) httpCreateDomainProto(ctx context.Context, req *CreateDomainReq
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDomains, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateDomain", Err: err}
+		return nil, wrapRequestError("CreateDomain", err)
 	}
 
 	defer drainClose(resp)
@@ -187,11 +168,9 @@ func (c *Client) httpUpdateDomainProto(ctx context.Context, domainID int, req *U
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d", domainID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_update", req, domainID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateDomain", Err: err}
+		return nil, wrapRequestError("UpdateDomain", err)
 	}
 
 	defer drainClose(resp)
@@ -209,11 +188,9 @@ func (c *Client) httpDeleteDomain(ctx context.Context, domainID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d", domainID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_delete", nil, domainID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteDomain", Err: err}
+		return wrapRequestError("DeleteDomain", err)
 	}
 
 	defer drainClose(resp)
@@ -226,11 +203,9 @@ func (c *Client) httpGetDomainRecord(ctx context.Context, domainID, recordID int
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/records/%d", domainID, recordID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_record_get", nil, domainID, recordID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDomainRecord", Err: err}
+		return nil, wrapRequestError("GetDomainRecord", err)
 	}
 
 	defer drainClose(resp)
@@ -248,11 +223,9 @@ func (c *Client) httpGetDomainRecordProto(ctx context.Context, domainID, recordI
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/records/%d", domainID, recordID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_record_get", nil, domainID, recordID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDomainRecord", Err: err}
+		return nil, wrapRequestError("GetDomainRecord", err)
 	}
 
 	defer drainClose(resp)
@@ -270,11 +243,9 @@ func (c *Client) httpCreateDomainRecordProto(ctx context.Context, domainID int, 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/records", domainID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_record_create", req, domainID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateDomainRecord", Err: err}
+		return nil, wrapRequestError("CreateDomainRecord", err)
 	}
 
 	defer drainClose(resp)
@@ -292,11 +263,9 @@ func (c *Client) httpUpdateDomainRecordProto(ctx context.Context, domainID, reco
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/records/%d", domainID, recordID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_record_update", req, domainID, recordID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateDomainRecord", Err: err}
+		return nil, wrapRequestError("UpdateDomainRecord", err)
 	}
 
 	defer drainClose(resp)
@@ -314,11 +283,9 @@ func (c *Client) httpDeleteDomainRecord(ctx context.Context, domainID, recordID 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointDomains+"/%d/records/%d", domainID, recordID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_domain_record_delete", nil, domainID, recordID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteDomainRecord", Err: err}
+		return wrapRequestError("DeleteDomainRecord", err)
 	}
 
 	defer drainClose(resp)

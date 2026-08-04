@@ -1,0 +1,30 @@
+# Route-source counts: how many call sites in each registered language
+# still build their request endpoint by hand, instead of resolving it
+# from the tool_route option on the tool's proto input message.
+# Owner: scripts/verify_route_source.py (`make route-source`, inside
+# `make check`).
+#
+# Direction: counts only FALL. A count above its line fails (a new
+# hand-built call site, or a migration that went backwards). A count
+# below its line fails too, asking for the line to be lowered in the
+# same change, so this file always states the real remaining work
+# rather than an old high-water mark. Every ratchet under
+# docs/contracts/ behaves that way: what got fixed leaves the file.
+#
+# One line per language registered in languages.txt:
+#   <language> <hand-built call sites>
+# A registered language with no line fails by name, and a line naming no
+# registered language fails by name, so this file and the registry
+# cannot drift apart.
+#
+# Deliberately not named *-baseline.txt: files under that glob hold one
+# accepted divergence per line, and scripts/verify_baseline_direction.py
+# makes every line a change ADDS carry a dated tracking-issue
+# annotation. A line here is a measurement, not an acceptance, so there
+# is no promise for an annotation to record. Growth is already refused
+# outright by the gate, which is stricter than the annotation rule.
+#
+# Regenerate with:
+#   python3 scripts/verify_route_source.py --update-baseline
+go 6
+python 7

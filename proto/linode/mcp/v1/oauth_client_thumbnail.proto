@@ -24,11 +24,13 @@ message AccountOAuthClientThumbnailGetInput {
     method: "GET"
     path: "/account/oauth-clients/{client_id}/thumbnail"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientThumbnail";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // OAuth client ID (required).
-  string client_id = 2;
+  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountOAuthClientThumbnailUpdateInput is the input contract for
@@ -39,17 +41,21 @@ message AccountOAuthClientThumbnailUpdateInput {
     method: "PUT"
     path: "/account/oauth-clients/{client_id}/thumbnail"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates an OAuth client thumbnail. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "OAuth client thumbnail updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // OAuth client ID (required).
-  string client_id = 2;
+  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Base64-encoded PNG image for the OAuth client thumbnail (required).
-  string thumbnail_png_base64 = 3;
+  string thumbnail_png_base64 = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm OAuth client thumbnail update. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

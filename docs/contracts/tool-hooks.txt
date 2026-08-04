@@ -1,0 +1,48 @@
+# Tool hooks: the per-tool logic the proto contract cannot express, and the
+# function in each language's hook package that supplies it.
+# Owner: go/cmd/toolgen and scripts/toolgen_py.py (both read this file),
+# go/internal/toolhooks and linodemcp.toolhooks (implement the functions),
+# checked by TestManifestNamesEveryDeclaredHook on the Go side and by the
+# emitter itself on the Python side.
+#
+# Each emitter writes a direct call to the named function, so a hook this file
+# declares and the language does not implement fails to build rather than
+# failing on the first tool call: a compile error in Go, a refusal to emit in
+# Python. The reverse, a function nothing declares, is what the Go test
+# catches: an orphan hook reads as behavior a tool has when nothing calls it.
+#
+# Format, one hook per line:
+#   <tool-name> <kind> <language> <function name>
+#
+# The language column is here because a hook is not a property of the tool. It
+# records that one language's handler answers differently than the contract
+# would derive, and the other language may well derive exactly what it already
+# answers, in which case a hook there would be wiring nothing needs. The
+# function spelling follows the language's own convention, which is a second
+# reason one column cannot serve both.
+#
+# The language must be one docs/contracts/languages.txt registers.
+# scripts/toolgen_py.py checks the whole file, every line and every language,
+# rather than only its own: an emitter that read only its own lines would let a
+# typo in another language's name sit unread in a file both of them trust.
+#
+# Kinds:
+#   validate  Checks the arguments before anything else runs, returning the
+#             message the tool answers with, or "" to continue. It replaces the
+#             required-field checks the emitter would otherwise derive, so a
+#             tool declaring one owns its whole argument check.
+#
+# Blank lines and # comments are ignored.
+
+# Go's linode_domain_record_get rejects a non-positive id with different words
+# than the rest of its read surface: the siblings answer "domain_id is
+# required", which is what the emitter derives from a required path field, and
+# this one answers "domain_id must be a positive integer". Both sentences reach
+# clients today, so making them agree is a deliberate change to the tool's
+# answers rather than something codegen may decide while migrating it.
+#
+# Python has no line here because its handler for the same tool already answers
+# the derived sentence, so the emitter reproduces it without a hook. The two
+# languages differ on this tool's rejection text, which testdata/behavior/
+# linode_domain_record_get.json records by pinning only the success path.
+linode_domain_record_get validate go DomainRecordGetValidate

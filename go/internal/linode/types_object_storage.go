@@ -39,10 +39,12 @@ type ObjectStorageQuota map[string]any
 
 // CreateObjectStorageBucketRequest represents the request body for creating an Object Storage bucket.
 type CreateObjectStorageBucketRequest struct {
-	CORSEnabled *bool  `json:"cors_enabled,omitempty"`
-	Label       string `json:"label"`
-	Region      string `json:"region"`
-	ACL         string `json:"acl,omitempty"`
+	CORSEnabled  *bool  `json:"cors_enabled,omitempty"`
+	Label        string `json:"label"`
+	Region       string `json:"region"`
+	ACL          string `json:"acl,omitempty"`
+	EndpointType string `json:"endpoint_type,omitempty"`
+	S3Endpoint   string `json:"s3_endpoint,omitempty"`
 }
 
 // UpdateObjectStorageBucketAccessRequest represents the request body for updating bucket access.
@@ -74,13 +76,15 @@ type CreateObjectStorageKeyRequest struct {
 type UpdateObjectStorageKeyRequest struct {
 	Label        string                         `json:"label,omitempty"`
 	BucketAccess []ObjectStorageKeyBucketAccess `json:"bucket_access,omitempty"`
+	Regions      []string                       `json:"regions,omitempty"`
 }
 
 // PresignedURLRequest represents the request body for generating a presigned URL.
 type PresignedURLRequest struct {
-	Method    string `json:"method"`
-	Name      string `json:"name"`
-	ExpiresIn int    `json:"expires_in,omitempty"`
+	Method      string `json:"method"`
+	Name        string `json:"name"`
+	ContentType string `json:"content_type,omitempty"`
+	ExpiresIn   int    `json:"expires_in,omitempty"`
 }
 
 // ObjectACL represents the ACL of an object in Object Storage.

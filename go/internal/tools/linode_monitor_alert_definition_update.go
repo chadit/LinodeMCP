@@ -100,9 +100,9 @@ func monitorServiceAlertDefinitionUpdateRequestFromTool(request *mcp.CallToolReq
 		fieldsSet++
 	}
 
-	statusSet, validationMessage := setMonitorAlertDefinitionUpdateStatus(args, updateRequest)
-	if validationMessage != "" {
-		return nil, validationMessage
+	statusSet, statusMessage := setMonitorAlertDefinitionUpdateStatus(args, updateRequest)
+	if statusMessage != "" {
+		return nil, statusMessage
 	}
 
 	if statusSet {
@@ -149,6 +149,27 @@ func monitorServiceAlertDefinitionUpdateRequestFromTool(request *mcp.CallToolReq
 		fieldsSet++
 	}
 
+	collectionsSet, validationMessage := setMonitorAlertDefinitionUpdateCollections(args, updateRequest)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	fieldsSet += collectionsSet
+
+	if fieldsSet == 0 {
+		return nil, errMonitorAlertDefinitionUpdateEmpty
+	}
+
+	return updateRequest, ""
+}
+
+// setMonitorAlertDefinitionUpdateCollections fills the array-valued update
+// fields and reports how many the caller supplied. It is split out of
+// monitorServiceAlertDefinitionUpdateRequestFromTool so neither half exceeds
+// the complexity ceiling.
+func setMonitorAlertDefinitionUpdateCollections(args map[string]any, updateRequest *linode.UpdateAlertDefinitionRequest) (int, string) {
+	var fieldsSet int
+
 	if _, exists := args[monitorAlertDefinitionEntityIDsParam]; exists {
 		entityIDs, validationMessage := optionalStringArrayArgument(
 			args,
@@ -156,22 +177,28 @@ func monitorServiceAlertDefinitionUpdateRequestFromTool(request *mcp.CallToolReq
 			errMonitorAlertDefinitionEntityIDs,
 		)
 		if validationMessage != "" {
-			return nil, validationMessage
+			return 0, validationMessage
 		}
 
 		if len(entityIDs) == 0 {
-			return nil, errMonitorAlertDefinitionEntityIDs
+			return 0, errMonitorAlertDefinitionEntityIDs
 		}
 
 		updateRequest.EntityIDs = entityIDs
 		fieldsSet++
 	}
 
-	if fieldsSet == 0 {
-		return nil, errMonitorAlertDefinitionUpdateEmpty
+	if _, exists := args[monitorAlertDefinitionGroupByParam]; exists {
+		groupBy, validationMessage := monitorAlertDefinitionGroupByFromArgs(args)
+		if validationMessage != "" {
+			return 0, validationMessage
+		}
+
+		updateRequest.GroupBy = groupBy
+		fieldsSet++
 	}
 
-	return updateRequest, ""
+	return fieldsSet, ""
 }
 
 func setMonitorAlertDefinitionUpdateStatus(args map[string]any, updateRequest *linode.UpdateAlertDefinitionRequest) (bool, string) {

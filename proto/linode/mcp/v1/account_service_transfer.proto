@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
 // AccountEntityTransferEntities is the set of entities included in a service
@@ -31,11 +32,13 @@ message AccountServiceTransferGetInput {
     method: "GET"
     path: "/account/service-transfers/{token}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEntityTransfer";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The service transfer token to retrieve (required).
-  string token = 2;
+  string token = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountServiceTransferListResponse is the envelope
@@ -64,13 +67,15 @@ message AccountServiceTransferListInput {
     method: "GET"
     path: "/account/service-transfers"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountServiceTransferDeleteInput is the input contract for
@@ -82,17 +87,20 @@ message AccountServiceTransferDeleteInput {
     method: "DELETE"
     path: "/account/service-transfers/{token}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferActionResponse";
+  option (linode.mcp.v1.confirm_message) = "This cancels an account service transfer. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Service transfer token to cancel (required).
-  string token = 2;
+  string token = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm service transfer cancellation. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountServiceTransferAcceptInput is the input contract for
@@ -103,17 +111,20 @@ message AccountServiceTransferAcceptInput {
     method: "POST"
     path: "/account/service-transfers/{token}/accept"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferActionResponse";
+  option (linode.mcp.v1.confirm_message) = "This accepts an account service transfer. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Service transfer token to accept (required).
-  string token = 2;
+  string token = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm service transfer acceptance. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountServiceTransferCreateInput is the input contract for
@@ -126,16 +137,27 @@ message AccountServiceTransferCreateInput {
     method: "POST"
     path: "/account/service-transfers"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountServiceTransferWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates an account service transfer. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account service transfer created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Linode IDs to include in the service transfer. Required at runtime,
   // though the generated schema cannot mark a repeated field required.
-  repeated int32 linode_ids = 2;
+  repeated int32 linode_ids = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm creating a service transfer. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The entities to transfer, keyed by entity type, for example
+  // {"linodes": [123, 456]} (optional). The API requires an entities object
+  // and both clients always send one, so this stays optional in the schema:
+  // linode_ids above is the convenience form that fills entities.linodes when
+  // this is omitted. Supply it directly to reach entity types linode_ids
+  // cannot express.
+  map<string, google.protobuf.Value> entities = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }

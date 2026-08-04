@@ -39,13 +39,15 @@ message LKENodeGetInput {
     method: "GET"
     path: "/lke/clusters/{cluster_id}/nodes/{node_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENode";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster (required).
-  string cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the node to retrieve (required).
-  string node_id = 3;
+  string node_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // LKENodeDeleteInput is the input contract for linode_lke_node_delete.
@@ -55,24 +57,29 @@ message LKENodeDeleteInput {
     method: "DELETE"
     path: "/lke/clusters/{cluster_id}/nodes/{node_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodeDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes the specified node. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Node {node_id} deleted from cluster {cluster_id} successfully";
+  option (linode.mcp.v1.resource_type) = "LKENode";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster.
-  int32 cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the node to delete (string format).
-  string node_id = 3;
+  string node_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm node deletion. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6; // system param
+  optional string mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7; // system param
+  optional string plan_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // LKENodeRecycleInput is the input contract for linode_lke_node_recycle.
@@ -82,16 +89,20 @@ message LKENodeRecycleInput {
     method: "POST"
     path: "/lke/clusters/{cluster_id}/nodes/{node_id}/recycle"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodeRecycleResponse";
+  option (linode.mcp.v1.confirm_message) = "This recycles the specified node, replacing it with a new one. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Node {node_id} in cluster {cluster_id} recycle initiated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster.
-  int32 cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the node to recycle (string format).
-  string node_id = 3;
+  string node_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm node recycling. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

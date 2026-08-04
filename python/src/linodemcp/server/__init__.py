@@ -15,12 +15,15 @@ from mcp.server import Server as MCPServer
 from mcp.server.stdio import stdio_server
 from mcp.types import CallToolResult, ListToolsResult, TextContent, Tool
 
+import linodemcp.gentools as gentools_module
 import linodemcp.tools as tools_module
 from linodemcp.audit import Capability as AuditCapability
 from linodemcp.audit import Mode, NoopSink, Sink, Status, new_event
 from linodemcp.config import get_config_path
 from linodemcp.linode import RetryableClient
 from linodemcp.linode.metrics import reset_api_recorder, set_api_recorder
+from linodemcp.linode.routes import validate as validate_tool_contract
+from linodemcp.linode.routes import validate_registered
 from linodemcp.profiles import (
     Capability,
     Profile,
@@ -53,6 +56,8 @@ from linodemcp.twostage.store import PlanStore
 from linodemcp.version import VERSION as LINODEMCP_VERSION
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     from mcp.server import ServerRequestContext
     from mcp.types import CallToolRequestParams, PaginatedRequestParams
 
@@ -62,9 +67,8 @@ __all__ = ["Server", "ToolEntry", "get_tool_registry"]
 
 logger = logging.getLogger(__name__)
 
-# Each tool factory now returns (Tool, Capability). We invoke every factory
-# once at module import time and store the resolved Tool plus its capability,
-# matching the Go side's "factory called once at registration" semantics.
+# Factories run once at module import, matching the Go side's
+# "factory called once at registration" semantics.
 ToolFactory = Callable[[], tuple[Tool, Capability]]
 
 
@@ -72,54 +76,36 @@ ToolFactory = Callable[[], tuple[Tool, Capability]]
 class ToolEntry:
     """A registered tool's name, MCP definition, capability tag, and handler.
 
-    The ``tool`` field holds the already-materialized ``Tool`` instance;
-    factories are not re-invoked per request. The ``capability`` field is
-    ``Capability.Unknown`` for any tool still on the Phase 1 untagged
-    allowlist; category PRs replace those with real capabilities.
+    ``tool`` is already materialized; factories are not re-invoked per request.
+    ``capability`` is ``Capability.Unknown`` for tools still on the untagged
+    allowlist.
     """
 
     name: str
     tool: Tool
     capability: Capability
     handle_fn: Callable[..., Awaitable[list[Any]]]
-    # takes_config is True when the handler's signature accepts the Config
-    # second argument. API tools take ``(arguments, cfg)``; CapMeta tools
-    # that never touch the Linode API take ``(arguments,)`` only. Dispatch
-    # reads this so it calls each handler with the right arity (computed
-    # once at registry build, not per request).
+    # API tools take ``(arguments, cfg)``; CapMeta tools that never touch the
+    # Linode API take ``(arguments,)``. Dispatch reads this for the right
+    # arity, computed once at registry build rather than per request.
     takes_config: bool
 
 
 def _build_tool_registry() -> list[ToolEntry]:
     """Discover and instantiate every registered tool at import time.
 
-    Scans ``linodemcp.tools.__all__`` for ``create_*_tool`` / ``handle_*``
-    pairs, invokes each factory once to materialize the ``(Tool, Capability)``
-    tuple, and stores it alongside the matching handler. New route tools are
-    registered by exporting the matching create/handle pair from that module;
-    there is intentionally no per-route server registry table to update.
+    A tool is registered by exporting its ``create_*_tool`` / ``handle_*`` pair
+    from a registration module; there is intentionally no per-route table here.
+    Two modules are scanned because a tool is either hand-written in
+    ``linodemcp.tools`` or emitted into ``linodemcp.gentools`` by
+    scripts/toolgen_py.py from the proto contract. Reading both the same way is
+    what lets a tool move between them without this module changing.
     """
-    # ``linodemcp.tools.__all__`` is the production registration surface:
-    # exported create/handle pairs below become MCP tools without a per-route
-    # table in this module.
-    all_names = getattr(tools_module, "__all__", [])
-
     create_fns: dict[str, ToolFactory] = {}
     handle_fns: dict[str, Callable[..., Awaitable[list[Any]]]] = {}
 
-    for name in all_names:
-        if name.startswith("create_") and name.endswith("_tool"):
-            # create_linode_instance_list_tool -> linode_instance_list
-            tool_name = name[len("create_") : -len("_tool")]
-            fn = getattr(tools_module, name, None)
-            if fn is not None:
-                create_fns[tool_name] = cast("ToolFactory", fn)
-        elif name.startswith("handle_"):
-            # handle_linode_instance_list -> linode_instance_list
-            tool_name = name[len("handle_") :]
-            fn = getattr(tools_module, name, None)
-            if fn is not None:
-                handle_fns[tool_name] = fn
+    for module in (tools_module, gentools_module):
+        _collect_registrations(module, create_fns, handle_fns)
 
     entries: list[ToolEntry] = []
     for tool_name in sorted(create_fns.keys()):
@@ -142,15 +128,36 @@ def _build_tool_registry() -> list[ToolEntry]:
     return entries
 
 
+def _collect_registrations(
+    module: ModuleType,
+    create_fns: dict[str, ToolFactory],
+    handle_fns: dict[str, Callable[..., Awaitable[list[Any]]]],
+) -> None:
+    """Read one registration module's exported create/handle pairs.
+
+    A name the module exports but does not define is skipped rather than
+    raising; the caller's create/handle pairing is what reports a
+    half-registered tool.
+    """
+    for name in getattr(module, "__all__", []):
+        fn = getattr(module, name, None)
+        if fn is None:
+            continue
+        if name.startswith("create_") and name.endswith("_tool"):
+            # create_linode_instance_list_tool -> linode_instance_list
+            create_fns[name[len("create_") : -len("_tool")]] = cast("ToolFactory", fn)
+        elif name.startswith("handle_"):
+            # handle_linode_instance_list -> linode_instance_list
+            handle_fns[name[len("handle_") :]] = fn
+
+
 def _handler_takes_config(handle_fn: Callable[..., Awaitable[list[Any]]]) -> bool:
     """Report whether a tool handler accepts the Config second positional arg.
 
-    API handlers are ``async def handle_x(arguments, cfg)``; CapMeta handlers
-    that never touch the Linode API are ``async def handle_x(arguments)``.
-    Dispatch uses this to call each handler with the correct arity instead of
-    assuming every handler takes config (which crashed CapMeta tools).
+    API handlers are ``handle_x(arguments, cfg)``; CapMeta handlers that never
+    touch the Linode API are ``handle_x(arguments)``. Assuming every handler
+    takes config crashed the CapMeta tools.
     """
-    # arguments + cfg; a handler with both positional params takes config.
     arity_with_config = 2
     positional = [
         param
@@ -164,8 +171,8 @@ def _handler_takes_config(handle_fn: Callable[..., Awaitable[list[Any]]]) -> boo
 
 def _destroy_bypass_message(tool_name: str) -> str:
     """The error a CapDestroy tool returns when confirm:true arrives without a
-    prior dry-run assertion or an explicit bypass. Tells the model the three
-    ways forward. Mirrors the Go destroyBypassMessage exactly."""
+    prior dry-run assertion or an explicit bypass. Mirrors the Go
+    destroyBypassMessage exactly."""
     return (
         f"{tool_name} is destructive. Either:\n"
         "  1. Call with dry_run: true first to preview, then call again with\n"
@@ -176,12 +183,12 @@ def _destroy_bypass_message(tool_name: str) -> str:
 
 
 def _destroy_bypass_error(tool_name: str, arguments: dict[str, Any]) -> str | None:
-    """Enforce the Phase 3 bypass-dry-run gate for a CapDestroy tool.
+    """Enforce the bypass-dry-run gate for a CapDestroy tool.
 
-    Returns an error message to short-circuit dispatch, or None to let the
-    call proceed to the handler. Returns None for the no-confirm/no-bypass
-    case so the handler's own (tool-specific) confirm message still fires.
-    Mirrors the Go requireDestroyConfirmation logic.
+    Returns an error message to short-circuit dispatch, or None to let the call
+    reach the handler. The no-confirm/no-bypass case returns None so the
+    handler's own confirm message still fires. Mirrors the Go
+    requireDestroyConfirmation logic.
     """
     confirm = arguments.get("confirm") is True
     confirmed = arguments.get("confirmed_dry_run") is True
@@ -215,9 +222,8 @@ def _elapsed_ms(start_ns: int) -> int:
 def _audit_capability(capability: Capability) -> AuditCapability:
     """Translate the profiles capability tag into the audit-wire form.
 
-    Mirrors the Go ``profilesCapabilityToAudit`` helper. Kept in the
-    server module rather than the audit package so the audit package
-    stays dependency-free of profiles.
+    Mirrors the Go ``profilesCapabilityToAudit``. It lives here rather than in
+    the audit package so audit keeps no dependency on profiles.
     """
     match capability:
         case Capability.Read:
@@ -237,10 +243,8 @@ def _audit_capability(capability: Capability) -> AuditCapability:
 def get_tool_registry() -> list[ToolEntry]:
     """Return the eagerly-built registry for tests and introspection.
 
-    Each ``ToolEntry`` carries the materialized ``Tool``, its
-    ``Capability`` tag, and the request handler. Callers must not mutate
-    the returned list; treat it as a snapshot of the registry built once
-    at module import.
+    Callers must not mutate the returned list; it is the registry built once at
+    module import, not a copy.
     """
     return _TOOL_REGISTRY
 
@@ -248,9 +252,8 @@ def get_tool_registry() -> list[ToolEntry]:
 class MetricsRecorder(Protocol):
     """Records metrics for tool dispatch and the Linode API calls a tool makes.
 
-    Observability satisfies it. The Server depends on this narrow protocol
-    rather than the concrete type so the package stays decoupled from
-    observability and tests can inject a fake recorder.
+    Server depends on this narrow protocol rather than the concrete
+    Observability type so tests can inject a fake recorder.
     """
 
     def record_tool_call(self, tool: str, duration_seconds: float, error: bool) -> None:
@@ -293,83 +296,67 @@ class Server:
             on_call_tool=self._on_call_tool,
         )
         self._inflight = 0
-        # Phase 1b: audit sink defaults to NoopSink so dispatch logs
-        # nothing yet. Phase 2 swaps in the JSONL writer; tests inject
-        # CapturingSink via set_audit_sink before exercising dispatch.
+        # Both default to no-ops so a Server built outside main (tests)
+        # dispatches unchanged; main wires the JSONL sink and the real
+        # Observability at startup.
         self._audit_sink: Sink = NoopSink()
-        # Metrics recorder defaults to a no-op so a Server built without
-        # observability (tests) dispatches unchanged; the serve path injects
-        # the real Observability via set_metrics_recorder so each tool call
-        # records on the meter exposed at /metrics.
         self._metrics: MetricsRecorder = NoopMetricsRecorder()
-        # Phase 4c: PII redaction tier flag. Default False so tests
-        # that build a Server without going through main keep
-        # credential-only redaction. main flips it to
-        # cfg.audit.redact_pii at startup (default True unless the
-        # operator opts out).
+        # False keeps credential-only redaction for Servers built outside main;
+        # main flips it to cfg.audit.redact_pii, which defaults to True.
         self._audit_redact_pii: bool = False
         self._plan_store = PlanStore()
         self._idle = asyncio.Event()
         self._idle.set()
 
-        # Phase 5 hot-reload uses this lock so a config-watcher firing in one
-        # task can't race a tools/list arriving from the transport task. The
-        # mutation block is small (frozenset rebuild + dict swap); contention
-        # is incidental.
+        # Hot-reload takes this so a config-watcher firing in one task can't
+        # race a tools/list arriving from the transport task.
         self._reload_lock = asyncio.Lock()
 
-        # Phase 4: resolve the active profile against the full registry so
-        # _register_tools can skip everything outside the allow list. The
-        # resolver raises ActiveProfileUnknownError or
-        # ActiveProfileDisabledError on a bad config; let those propagate.
+        # The active profile resolves against the full registry so registration
+        # skips everything outside the allow list. A bad config raises out of
+        # the resolver; let that propagate.
         self._descriptors = [
             ToolDescriptor(name=entry.name, capability=entry.capability)
             for entry in _TOOL_REGISTRY
         ]
-        # Phase 8.2: wire the builder catalog bridge before profile
-        # resolution so handlers fired during startup (none today, but
-        # cheap insurance) see the live catalog. The descriptor list is
-        # immutable after construction; the closure captures the same
-        # list every handler call reads.
+        # The proto contract names the whole tool surface, so checking the
+        # registry against it here fails construction on drift instead of
+        # letting the gap surface as an unfilterable tool or an uncalled route.
+        # Both raise RouteError.
+        validate_tool_contract()
+        validate_registered(entry.name for entry in _TOOL_REGISTRY)
+        # Wired before profile resolution so any handler fired during startup
+        # sees the live catalog. The descriptor list is immutable after
+        # construction, so the closure and every handler read the same list.
         set_tool_catalog_provider(lambda: self._descriptors)
-        # Phase 8.3: wire the draft registry and clone-source resolver
-        # so the _draft_new/_show/_discard handlers see the same
-        # registry instance and can resolve clone_from against the
-        # live config + descriptor list. One Registry per server
-        # process; drafts do not persist across restarts.
+        # One Registry per server process, shared by the _draft_new/_show/
+        # _discard handlers. Drafts do not persist across restarts.
         self._draft_registry = DraftRegistry()
         set_draft_registry(self._draft_registry)
         set_profile_resolver(
             lambda name: lookup_profile(name, config, self._descriptors)
         )
-        # Phase 8.4: wire the mutator catalog bridge. _draft_add_tools
-        # expands wildcards against the live catalog at call time.
+        # _draft_add_tools expands wildcards against the live catalog at call
+        # time.
         set_mutator_catalog_provider(lambda: self._descriptors)
-        # Phase 8.5: wire the save tool to the config path. Save reads
-        # fresh from disk on every call to avoid stomping concurrent
-        # edits, then writes back via write_atomic. The provider is a
-        # lambda over get_config_path so LINODEMCP_CONFIG_PATH env
-        # overrides apply at call time.
+        # Save re-reads from disk on every call so it does not stomp concurrent
+        # edits. The provider is a lambda so LINODEMCP_CONFIG_PATH overrides
+        # apply at call time.
         set_save_config_path_provider(lambda: str(get_config_path()))
-        # Phase 3 (dry-run spec): wire the pre-check tool's catalog and
-        # active-profile bridges. The active-profile lambda reads
-        # self._active_profile at call time, so it reflects reload_profile.
+        # The active-profile lambda reads self._active_profile at call time, so
+        # the pre-check tool reflects reload_profile.
         set_can_run_catalog_provider(lambda: self._descriptors)
         set_can_run_active_profile_provider(lambda: self._active_profile)
         self._active_profile = resolve_active_profile(config, self._descriptors)
         self._allowed_tool_names = frozenset(self._active_profile.allowed_tools)
-        # _allowed_entries and _config_handlers are declared+initialized
-        # inside _apply_active_profile so the type annotations live in one
-        # place. Reload reuses the same helper to swap state.
+        # _allowed_entries and _config_handlers are declared inside
+        # _apply_active_profile so their annotations live in one place; reload
+        # reuses the same helper.
         self._apply_active_profile(emit_filter_log=True)
 
     @property
     def active_profile(self) -> Profile:
-        """Resolved profile the server is running under.
-
-        Used by tests today; Phase 5 hot-reload and the future audit
-        middleware will read this too.
-        """
+        """Resolved profile the server is running under."""
         return self._active_profile
 
     @property
@@ -378,9 +365,9 @@ class Server:
         return self._allowed_tool_names
 
     def _yolo_active(self, arguments: dict[str, Any]) -> bool:
-        """Report whether this call is a permitted yolo execution: yolo:true
-        AND the active profile's allow_yolo. yolo:true alone (profile disallows)
-        is NOT a permitted yolo and falls through to the normal gate."""
+        """Report whether this call is a permitted yolo execution: yolo:true and
+        the profile's allow_yolo. yolo:true alone falls through to the normal
+        gate."""
         return arguments.get("yolo") is True and self._active_profile.allow_yolo
 
     def _execution_mode(self, arguments: dict[str, Any]) -> Mode:
@@ -402,14 +389,11 @@ class Server:
     async def dispatch(self, name: str, arguments: dict[str, Any]) -> list[Any]:
         """Invoke a registered tool handler with in-flight tracking.
 
-        Wraps the handler call so shutdown() can drain active requests
-        before the process exits. Public so tests can drive the dispatch
-        path without going through the stdio MCP transport.
-
-        Phase 1b adds audit-event capture around the inner dispatch:
-        every reaching tool call builds an Event at entry and writes
-        it to ``_audit_sink`` at exit, with status reflecting the
-        outcome (success / error / refused).
+        The in-flight count is what lets shutdown() drain active requests before
+        the process exits. Public so tests can drive dispatch without the stdio
+        MCP transport. Every call that gets this far builds an audit Event at
+        entry and writes it to ``_audit_sink`` at exit, with the status
+        reflecting the outcome.
         """
         self._inflight += 1
         self._idle.clear()
@@ -433,8 +417,8 @@ class Server:
         event.set_mode(self._execution_mode(arguments), "")
 
         plan_store_token = set_plan_store(self._plan_store)
-        # Bind the API recorder for this dispatch so the client records each
-        # Linode API round trip it makes (mirrors the Go WithAPIRecorder ctx).
+        # Bound per dispatch so the client records each Linode API round trip
+        # it makes. Mirrors the Go WithAPIRecorder context value.
         api_recorder_token = set_api_recorder(self._metrics)
         try:
             result = await self._dispatch_inner(name, arguments)
@@ -444,9 +428,9 @@ class Server:
             self._metrics.record_tool_call(name, elapsed_ms / 1000.0, error=False)
             return result
         except ValueError as exc:
-            # _dispatch_inner raises ValueError for unknown / filtered
-            # tool names. Audit as refused, not error: the handler
-            # never ran, so no tool-call metric is recorded.
+            # _dispatch_inner raises ValueError for unknown or filtered tool
+            # names. The handler never ran, so this audits as refused and
+            # records no tool-call metric.
             event.finalize(Status.REFUSED, _elapsed_ms(start_ns), str(exc), "")
             self._audit_sink.write(event)
             raise
@@ -466,37 +450,31 @@ class Server:
     def set_audit_sink(self, sink: Sink | None) -> None:
         """Swap the audit sink.
 
-        Phase 2 main wires this to the JSONL writer at startup; tests
-        inject a CapturingSink before exercising the dispatch path.
-        Passing None restores the NoopSink default rather than
-        producing a None-deref on the next call.
+        Passing None restores the NoopSink default rather than producing a
+        None-deref on the next call.
         """
         self._audit_sink = sink if sink is not None else NoopSink()
 
     def set_metrics_recorder(self, recorder: MetricsRecorder | None) -> None:
-        """Wire the recorder used to record tool-dispatch and API metrics.
+        """Wire the recorder used for tool-dispatch and API metrics.
 
-        The serve path passes the real Observability so each call records on
-        the meter exposed at /metrics; the recording is otherwise a no-op.
-        Passing None restores the no-op default rather than producing a
-        None-deref on the next dispatch.
+        The serve path passes the real Observability so each call lands on the
+        meter exposed at /metrics. Passing None restores the no-op default
+        rather than producing a None-deref on the next dispatch.
         """
         self._metrics = recorder if recorder is not None else NoopMetricsRecorder()
 
     def set_audit_redact_pii(self, redact_pii: bool) -> None:
-        """Select the redaction tier the capture middleware applies to
-        event args (Phase 4c). Main wires this to
-        ``cfg.audit.redact_pii`` at startup; tests use it to opt into
-        PII redaction when asserting the combined-redaction path.
+        """Select the redaction tier the capture middleware applies to event
+        args. Main wires this to ``cfg.audit.redact_pii`` at startup.
         """
         self._audit_redact_pii = redact_pii
 
     def _capability_for(self, name: str) -> AuditCapability:
         """Translate the registered tool's capability into the audit wire form.
 
-        Returns ``CapabilityRead`` for unknown / filtered tools as a
-        defensive default; those calls also get marked refused, so
-        the capability value isn't load-bearing in the refusal path.
+        Unknown or filtered tools fall back to READ; those calls are marked
+        refused anyway, so the value is not load-bearing there.
         """
         for entry in self._allowed_entries:
             if entry.name == name:
@@ -504,19 +482,14 @@ class Server:
         return AuditCapability.READ
 
     async def validate_scopes(self) -> ScopeValidationResult:
-        """Phase 6.4c: validate the active token's scopes.
+        """Validate the active token's scopes.
 
-        Builds a Linode client from the default environment in the
-        current config and delegates to ``profiles.validate_scopes``
-        for the PAT-vs-OAuth dispatch.
-
-        Raises ``TokenNotConfiguredError`` (no API call made) when the
-        active environment has no token set; the caller (main) decides
-        whether to fail load (elevated profile) or warn-and-continue
-        (read-only) per the missing-token policy.
-
-        Other exceptions (``ProfileFetchError`` / ``GrantsFetchError``)
-        come from the underlying API calls.
+        Builds a client from the default environment and delegates to
+        ``profiles.validate_scopes`` for the PAT-vs-OAuth dispatch. Raises
+        ``TokenNotConfiguredError`` without making an API call when the
+        environment has no token; main decides whether that fails load
+        (elevated profile) or only warns (read-only). ``ProfileFetchError`` /
+        ``GrantsFetchError`` come from the API calls themselves.
         """
         cfg = self.config
         env = cfg.environments.get("default")
@@ -596,14 +569,12 @@ class Server:
 
     def _apply_active_profile(self, *, emit_filter_log: bool) -> None:
         """Rebuild ``_allowed_entries`` and ``_config_handlers`` from the
-        registry filtered by the current active profile.
+        registry filtered by the active profile.
 
-        Called once at startup (with logging) and again on each successful
-        ``reload_profile`` (without re-logging the filter rationale, which
-        would spam logs on every config edit). The two derived dicts/lists
-        feed ``_list_tools`` and ``_dispatch_inner``, both of which read
-        mutable instance state so the swap takes effect on the next request
-        without re-registering decorators.
+        Startup logs the filtered-out tools; ``reload_profile`` does not, since
+        that would spam the log on every config edit. The derived list and dicts
+        are read from mutable instance state on each request, so the swap takes
+        effect without re-registering anything.
         """
         allowed_entries: list[ToolEntry] = []
 
@@ -654,11 +625,10 @@ class Server:
     ) -> CallToolResult:
         """Dispatch via the tracked path so shutdown can drain it.
 
-        The SDK stopped turning handler exceptions into ``isError`` results in
-        2.0 and raises them as JSON-RPC errors instead. Catching here keeps the
-        wire shape the Go server produces: a failed call comes back as a normal
-        result carrying the message with ``is_error`` set, so the model can read
-        the text and self-correct rather than seeing a transport-level failure.
+        SDK 2.0 raises handler exceptions as JSON-RPC errors instead of turning
+        them into ``isError`` results. Catching here keeps the wire shape the Go
+        server produces: a normal result carrying the message with ``is_error``
+        set, which the model can read and self-correct from.
         """
         del ctx
         try:
@@ -673,19 +643,11 @@ class Server:
     async def reload_profile(self, config: Config) -> None:
         """Swap the running server to the profile resolved from ``config``.
 
-        On success, the active profile, allow list, allowed entries, and
-        dispatch handler map are all updated atomically under
-        ``_reload_lock``. The next ``tools/list`` request returns the new
-        set; subsequent ``call_tool`` invocations check the new allow list.
-
-        On error, no state is mutated. The caller sees the original
-        resolver exception (``ActiveProfileUnknownError``,
-        ``ActiveProfileDisabledError``, etc.); the running server keeps its
-        current profile.
-
-        In-flight tool handlers that already passed the dispatch gate
-        continue to run unaffected; the lock only serializes reload steps
-        and tools/list requests.
+        Profile, allow list, allowed entries, and handler map all swap together
+        under ``_reload_lock``, so the next ``tools/list`` and ``call_tool`` see
+        the new set. On a resolver error nothing is mutated and the server keeps
+        its current profile. Handlers already past the dispatch gate keep
+        running; the lock only serializes reload against tools/list.
         """
         async with self._reload_lock:
             new_profile = resolve_active_profile(config, self._descriptors)

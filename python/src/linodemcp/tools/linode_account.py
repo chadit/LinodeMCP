@@ -283,7 +283,7 @@ async def handle_linode_account_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
-            await client.get_raw("/account"), account_pb2.Account()
+            await client.route_raw("linode_account_get"), account_pb2.Account()
         )
 
     return await execute_tool(cfg, arguments, "retrieve Linode account", _call)
@@ -1049,15 +1049,33 @@ def _account_service_transfer_linode_ids(
     return linode_ids, None
 
 
+def _account_service_transfer_entities(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Read the optional entities object, with Go's exact message."""
+    entities: Any = arguments.get("entities")
+    if entities is None:
+        return None, None
+    if not isinstance(entities, dict):
+        return None, "entities must be an object"
+    return cast("dict[str, Any]", entities), None
+
+
 async def handle_linode_account_service_transfer_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_account_service_transfer_create tool request."""
-    linode_ids, validation_error = _account_service_transfer_linode_ids(arguments)
-    if validation_error is not None or linode_ids is None:
-        return error_response(validation_error or "linode_ids are required")
+    entities, entities_error = _account_service_transfer_entities(arguments)
+    if entities_error is not None:
+        return error_response(entities_error)
 
-    request_body = {"entities": {"linodes": linode_ids}}
+    linode_ids: list[int] | None = []
+    if not entities:
+        linode_ids, validation_error = _account_service_transfer_linode_ids(arguments)
+        if validation_error is not None or linode_ids is None:
+            return error_response(validation_error or "linode_ids are required")
+
+    request_body = {"entities": entities or {"linodes": linode_ids}}
     if is_dry_run(arguments):
         return build_dry_run_response(
             "linode_account_service_transfer_create",
@@ -1077,7 +1095,9 @@ async def handle_linode_account_service_transfer_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        transfer = await client.create_account_service_transfer(linode_ids)
+        transfer = await client.create_account_service_transfer(
+            linode_ids or [], entities
+        )
         return serialize_api_response(
             {
                 "message": "Account service transfer created successfully",
@@ -1566,7 +1586,11 @@ async def handle_linode_account_oauth_client_create(
             "POST",
             "/account/oauth-clients",
             None,
-            request_body={"label": label, "redirect_uri": redirect_uri},
+            request_body={
+                "label": label,
+                "redirect_uri": redirect_uri,
+                "public": bool(arguments.get("public", False)),
+            },
             side_effects=[
                 (
                     "A new account OAuth client is created. The returned client "
@@ -1582,7 +1606,9 @@ async def handle_linode_account_oauth_client_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        oauth_client = await client.create_account_oauth_client(label, redirect_uri)
+        oauth_client = await client.create_account_oauth_client(
+            label, redirect_uri, bool(arguments.get("public", False))
+        )
         return serialize_api_response(
             {
                 "message": "OAuth client created successfully",
@@ -2035,7 +2061,7 @@ async def handle_linode_account_update(
         return error_response("At least one account field is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        account = await client.put_raw("/account", update_fields)
+        account = await client.route_raw("linode_account_update", body=update_fields)
         return serialize_api_response(
             {
                 "message": "Account updated successfully",
@@ -3131,6 +3157,24 @@ def create_linode_tag_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _optional_string_list_argument(
+    arguments: dict[str, Any], name: str
+) -> list[str] | None:
+    """Read an optional string-array argument, with Go's exact message.
+
+    Wording matches Go's stringSliceFromToolArg so the shared behavior fixtures
+    assert one byte-identical message in both languages.
+    """
+    value = arguments.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) for item in cast("list[object]", value)
+    ):
+        raise TypeError(f"{name} must be an array of strings")
+    return cast("list[str]", value)
+
+
 def _optional_int_list_argument(
     arguments: dict[str, Any], name: str
 ) -> list[int] | None:
@@ -3175,10 +3219,13 @@ async def handle_linode_tag_create(
         return error_response("label is required")
 
     try:
-        resource_ids = {
+        resource_ids: dict[str, Any] = {
             name: _optional_int_list_argument(arguments, name)
             for name in ("domains", "linodes", "nodebalancers", "volumes")
         }
+        resource_ids["reserved_ipv4_addresses"] = _optional_string_list_argument(
+            arguments, "reserved_ipv4_addresses"
+        )
     except (TypeError, ValueError) as exc:
         return error_response(str(exc))
 

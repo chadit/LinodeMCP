@@ -2,8 +2,6 @@ package linode
 
 import (
 	"context"
-	"net/http"
-	"net/url"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
@@ -13,9 +11,9 @@ func (c *Client) httpGetLongviewPlan(ctx context.Context) (*LongviewSubscription
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLongviewPlan, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_plan_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetLongviewPlan", Err: err}
+		return nil, wrapRequestError("GetLongviewPlan", err)
 	}
 
 	defer drainClose(resp)
@@ -35,9 +33,9 @@ func (c *Client) httpGetLongviewPlanProto(ctx context.Context) (*linodev1.Longvi
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointLongviewPlan, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_plan_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetLongviewPlan", Err: err}
+		return nil, wrapRequestError("GetLongviewPlan", err)
 	}
 
 	defer drainClose(resp)
@@ -54,7 +52,8 @@ func (c *Client) httpGetLongviewPlanProto(ctx context.Context) (*linodev1.Longvi
 // as proto messages for the proto-backed list path. The /longview/types endpoint
 // returns a {data,page,...} page envelope, so listProtoElements reads data.
 func (c *Client) httpListLongviewTypesProto(ctx context.Context) ([]*linodev1.LongviewType, error) {
-	return listProtoElements(ctx, c, "ListLongviewTypes", endpointLongviewTypes,
+	return listProtoElementsRouted(ctx, c, "ListLongviewTypes",
+		"linode_longview_type_list", "", nil,
 		func() *linodev1.LongviewType { return &linodev1.LongviewType{} })
 }
 
@@ -63,7 +62,8 @@ func (c *Client) httpListLongviewTypesProto(ctx context.Context) ([]*linodev1.Lo
 // pair flows through withPaginationQuery, so the request matches
 // httpListLongviewSubscriptions.
 func (c *Client) httpListLongviewSubscriptionsProto(ctx context.Context, page, pageSize int) ([]*linodev1.LongviewSubscription, error) {
-	return listProtoElementsPaginated(ctx, c, "ListLongviewSubscriptions", endpointLongviewSubscriptions, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListLongviewSubscriptions",
+		"linode_longview_subscription_list", "", nil, page, pageSize,
 		func() *linodev1.LongviewSubscription { return &linodev1.LongviewSubscription{} })
 }
 
@@ -79,9 +79,9 @@ func (c *Client) httpCreateLongviewClientProto(ctx context.Context, req *CreateL
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointLongviewClients, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_client_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateLongviewClient", Err: err}
+		return nil, wrapRequestError("CreateLongviewClient", err)
 	}
 
 	defer drainClose(resp)
@@ -99,11 +99,9 @@ func (c *Client) httpGetLongviewClient(ctx context.Context, clientID string) (*L
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointLongviewClients + "/" + url.PathEscape(clientID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_client_get", nil, clientID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetLongviewClient", Err: err}
+		return nil, wrapRequestError("GetLongviewClient", err)
 	}
 
 	defer drainClose(resp)
@@ -121,11 +119,9 @@ func (c *Client) httpGetLongviewClientProto(ctx context.Context, clientID string
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointLongviewClients + "/" + url.PathEscape(clientID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_client_get", nil, clientID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetLongviewClient", Err: err}
+		return nil, wrapRequestError("GetLongviewClient", err)
 	}
 
 	defer drainClose(resp)
@@ -144,11 +140,9 @@ func (c *Client) httpGetLongviewSubscriptionProto(ctx context.Context, subscript
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointLongviewSubscriptions + "/" + url.PathEscape(subscriptionID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_subscription_get", nil, subscriptionID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetLongviewSubscription", Err: err}
+		return nil, wrapRequestError("GetLongviewSubscription", err)
 	}
 
 	defer drainClose(resp)
@@ -173,9 +167,9 @@ func (c *Client) httpUpdateLongviewPlanProto(ctx context.Context, req *UpdateLon
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpointLongviewPlan, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_plan_update", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateLongviewPlan", Err: err}
+		return nil, wrapRequestError("UpdateLongviewPlan", err)
 	}
 
 	defer drainClose(resp)

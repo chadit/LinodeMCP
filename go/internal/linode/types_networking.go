@@ -144,8 +144,11 @@ type AllocateNetworkingIPRequest struct {
 }
 
 // UpdateNetworkingIPRequest represents the request body for updating account-level IP reverse DNS.
+// Reserved is a pointer because an absent flag leaves the reservation alone,
+// while an explicit false unreserves the address.
 type UpdateNetworkingIPRequest struct {
-	RDNS string `json:"rdns"`
+	Reserved *bool  `json:"reserved,omitempty"`
+	RDNS     string `json:"rdns"`
 }
 
 // IPAssignment represents one IP-to-Linode assignment.
@@ -231,6 +234,25 @@ type CreateNodeBalancerConfigRequest struct {
 	UDPCheckPort  int                             `json:"udp_check_port,omitempty"`
 }
 
+// RebuildNodeBalancerConfigRequest represents the request body for rebuilding a
+// NodeBalancer config. Nodes carries no omitempty because rebuild replaces the
+// whole backend set: an empty list means drop every node, not leave them alone.
+// The rebuild endpoint documents no ssl, cipher, proxy, or check_passive options.
+type RebuildNodeBalancerConfigRequest struct {
+	CheckPath     string                          `json:"check_path,omitempty"`
+	Stickiness    string                          `json:"stickiness,omitempty"`
+	Check         string                          `json:"check,omitempty"`
+	Algorithm     string                          `json:"algorithm,omitempty"`
+	Protocol      string                          `json:"protocol,omitempty"`
+	CheckBody     string                          `json:"check_body,omitempty"`
+	Nodes         []CreateNodeBalancerNodeRequest `json:"nodes"`
+	CheckAttempts int                             `json:"check_attempts,omitempty"`
+	Port          int                             `json:"port,omitempty"`
+	CheckTimeout  int                             `json:"check_timeout,omitempty"`
+	CheckInterval int                             `json:"check_interval,omitempty"`
+	UDPCheckPort  int                             `json:"udp_check_port,omitempty"`
+}
+
 // NodeBalancerNode represents a backend node on a NodeBalancer config.
 type NodeBalancerNode struct {
 	Label          string `json:"label"`
@@ -306,68 +328,37 @@ type Transfer struct {
 	Total float64 `json:"total"`
 }
 
-// CreateFirewallRequest represents the request body for creating a firewall.
+// CreateFirewallRequest is the wire form of a firewall-create request. Rules and
+// Devices stay raw maps for the reason FirewallRulesReplaceRequest documents, so
+// a create with only default policies sends a rules object holding just
+// inbound_policy and outbound_policy.
 type CreateFirewallRequest struct {
+	Rules   map[string]any `json:"rules,omitempty"`
+	Devices map[string]any `json:"devices,omitempty"`
 	Label   string         `json:"label"`
-	Rules   *FirewallRules `json:"rules,omitempty"`
 	Tags    []string       `json:"tags,omitempty"`
-	Devices []Device       `json:"devices,omitempty"`
 }
 
-// firewallCreateBody is the wire form of a firewall-create request. Unlike the
-// shared FirewallRules struct (which doubles as a response type and so tags every
-// field), its rules sub-object omits the inbound/outbound rule lists when they are
-// empty, so a create with only default policies sends no null rule arrays. This
-// matches the Python client, which sends only inbound_policy/outbound_policy.
-type firewallCreateBody struct {
-	Label   string               `json:"label"`
-	Rules   *firewallCreateRules `json:"rules,omitempty"`
-	Tags    []string             `json:"tags,omitempty"`
-	Devices []Device             `json:"devices,omitempty"`
-}
-
-type firewallCreateRules struct {
-	InboundPolicy  string         `json:"inbound_policy,omitempty"`
-	OutboundPolicy string         `json:"outbound_policy,omitempty"`
-	Inbound        []FirewallRule `json:"inbound,omitempty"`
-	Outbound       []FirewallRule `json:"outbound,omitempty"`
-}
-
-func firewallCreateBodyFromRequest(req CreateFirewallRequest) firewallCreateBody {
-	body := firewallCreateBody{Label: req.Label, Tags: req.Tags, Devices: req.Devices}
-	if req.Rules != nil {
-		body.Rules = &firewallCreateRules{
-			Inbound:        req.Rules.Inbound,
-			InboundPolicy:  req.Rules.InboundPolicy,
-			Outbound:       req.Rules.Outbound,
-			OutboundPolicy: req.Rules.OutboundPolicy,
-		}
-	}
-
-	return body
-}
-
-// FirewallRulesReplaceRequest carries caller-supplied inbound and outbound
-// firewall rule objects verbatim for a PUT /networking/firewalls/{id}/rules
-// call. Rules stay as raw maps rather than the typed FirewallRule because
-// FirewallRule is a response-decode type whose json tags carry no omitempty:
-// re-marshaling a caller's rule through it pads every rule with empty
-// action/protocol/ports/label/description and a null ipv6 the caller never
-// sent, which drifts from the Python client and breaks the wire-defaults ruling
-// (send only what the caller sent; the API owns rule field defaults). Handlers
-// build this from validated tool input.
+// FirewallRulesReplaceRequest carries caller-supplied rule objects verbatim for a
+// PUT /networking/firewalls/{id}/rules call. Rules stay raw maps because
+// FirewallRule is a response-decode type with no omitempty tags: re-marshaling
+// through it pads every rule with empty action/protocol/ports/label/description
+// and a null ipv6 the caller never sent. The API owns rule field defaults.
 type FirewallRulesReplaceRequest struct {
-	Inbound  []map[string]any
-	Outbound []map[string]any
+	InboundPolicy  string
+	OutboundPolicy string
+	Inbound        []map[string]any
+	Outbound       []map[string]any
 }
 
-// firewallRulesRawReplaceBody is the wire form of a PUT
-// /networking/firewalls/{id}/rules request built from a FirewallRulesReplaceRequest.
-// Both lists are always present (an empty array clears that direction), and each
-// rule is emitted with exactly the keys the caller provided.
+// firewallRulesRawReplaceBody is the wire form built from a
+// FirewallRulesReplaceRequest. Both lists carry no omitempty because an empty
+// array clears that direction.
 type firewallRulesRawReplaceBody struct {
-	Inbound  []map[string]any `json:"inbound"`
-	Outbound []map[string]any `json:"outbound"`
+	InboundPolicy  string           `json:"inbound_policy,omitempty"`
+	OutboundPolicy string           `json:"outbound_policy,omitempty"`
+	Inbound        []map[string]any `json:"inbound"`
+	Outbound       []map[string]any `json:"outbound"`
 }
 
 // Device represents a device attached to a firewall.
@@ -404,11 +395,14 @@ type UpdateNodeBalancerFirewallsRequest struct {
 
 // CreateNodeBalancerRequest represents the request body for creating a NodeBalancer.
 type CreateNodeBalancerRequest struct {
-	IPv4               *string  `json:"ipv4,omitempty"`
-	Region             string   `json:"region"`
-	Label              string   `json:"label,omitempty"`
-	Tags               []string `json:"tags,omitempty"`
-	ClientConnThrottle int      `json:"client_conn_throttle,omitempty"`
+	IPv4               *string          `json:"ipv4,omitempty"`
+	Region             string           `json:"region"`
+	Label              string           `json:"label,omitempty"`
+	Tags               []string         `json:"tags,omitempty"`
+	Configs            []map[string]any `json:"configs,omitempty"`
+	VPCs               []map[string]any `json:"vpcs,omitempty"`
+	ClientConnThrottle int              `json:"client_conn_throttle,omitempty"`
+	FirewallID         int              `json:"firewall_id,omitempty"`
 }
 
 // UpdateNodeBalancerRequest represents the request body for updating a NodeBalancer.

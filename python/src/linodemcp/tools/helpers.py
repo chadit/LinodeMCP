@@ -307,8 +307,17 @@ async def execute_tool(
     arguments: dict[str, Any],
     error_action: str,
     callback: Callable[[RetryableClient], Awaitable[dict[str, Any]]],
+    *,
+    failure: str = "",
 ) -> list[TextContent]:
-    """Run a tool handler with standard environment/client/error boilerplate."""
+    """Run a tool handler with standard environment/client/error boilerplate.
+
+    failure is the whole sentence a failed Linode call answers with, already
+    rendered except for the failure itself, for the tools whose proto contract
+    declares one under error_message. Passing the sentence rather than a verb
+    is what lets a declared message name the ids it was called with, which
+    "Failed to {error_action}" cannot reach.
+    """
     environment = arguments.get("environment", "")
     try:
         selected_env = _select_environment(cfg, environment)
@@ -323,10 +332,13 @@ async def execute_tool(
     except Exception as e:
         if isinstance(e, (EnvironmentNotFoundError, ValueError)):
             return [TextContent(type="text", text=f"Error: {e}")]
+        reported = (
+            failure.format(error=e) if failure else f"Failed to {error_action}: {e}"
+        )
         if isinstance(e, (APIError, NetworkError, httpx.HTTPError)):
-            return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
+            return [TextContent(type="text", text=reported)]
         logger.exception("Unexpected error in tool handler")
-        return [TextContent(type="text", text=f"Failed to {error_action}: {e}")]
+        return [TextContent(type="text", text=reported)]
 
 
 async def with_client[T](
@@ -484,6 +496,57 @@ def valid_ipv6_prefix(value: str) -> bool:
     return isinstance(network, ipaddress.IPv6Network)
 
 
+# Tag-validation messages, held identical to Go's ErrTagsMustBeJSONStringArray
+# and ErrTagsEntriesNonEmpty so both clients reject the same input the same way.
+TAGS_MUST_BE_JSON_STRING_ARRAY = "tags must be a JSON string array"
+TAGS_ENTRIES_NON_EMPTY = "tags entries must be non-empty strings"
+
+
+def _tag_element_list(raw: object) -> list[object] | None:
+    """Unwrap a tags argument to its element list, or None when it is not one.
+
+    A JSON-encoded string is accepted the way Go's tagsValueFromToolArg accepts
+    one, so a client that cannot send a native array still reaches the same
+    request body.
+    """
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw.strip())
+        except ValueError:
+            return None
+    if not isinstance(raw, list):
+        return None
+    return cast("list[object]", raw)
+
+
+def optional_tags_argument(
+    arguments: dict[str, Any],
+) -> tuple[list[str] | None, str]:
+    """Read the optional ``tags`` body array, mirroring Go's optionalTagsField.
+
+    Returns ``(tags, "")`` when the argument is absent (tags is None) or valid,
+    and ``(None, message)`` otherwise. Entries are trimmed and an entry that is
+    empty after trimming is rejected, matching Go, so the two clients never
+    disagree on which tag set the API sees.
+    """
+    if "tags" not in arguments:
+        return None, ""
+
+    values = _tag_element_list(arguments["tags"])
+    if values is None:
+        return None, TAGS_MUST_BE_JSON_STRING_ARRAY
+
+    tags: list[str] = []
+    for value in values:
+        if not isinstance(value, str):
+            return None, TAGS_MUST_BE_JSON_STRING_ARRAY
+        trimmed = value.strip()
+        if not trimmed:
+            return None, TAGS_ENTRIES_NON_EMPTY
+        tags.append(trimmed)
+    return tags, ""
+
+
 # Standard Linode collection pagination bounds, shared by every family that has
 # no bounds of its own. Mirrors the Go standardPageSizeMin/Max pair.
 STANDARD_PAGE_SIZE_MIN = 25
@@ -505,12 +568,13 @@ def standard_pagination_arguments(
     return page, page_size
 
 
-def paginated_path(path: str, page: int | None, page_size: int | None) -> str:
-    """Append page/page_size to a raw request path, omitting unset values.
+def pagination_query(page: int | None, page_size: int | None) -> str:
+    """Encode page/page_size as a query string, omitting unset values.
 
     Mirrors Go's withPaginationQuery: an unset value stays off the query string
     so the API's own default applies, which keeps the two languages issuing
-    byte-identical requests for the same arguments.
+    byte-identical requests for the same arguments. Empty when neither is set,
+    which the route primitive reads as "no query" rather than a bare "?".
     """
     params: dict[str, int] = {}
     if page is not None:
@@ -518,8 +582,16 @@ def paginated_path(path: str, page: int | None, page_size: int | None) -> str:
     if page_size is not None:
         params["page_size"] = page_size
     if not params:
+        return ""
+    return urlencode(params)
+
+
+def paginated_path(path: str, page: int | None, page_size: int | None) -> str:
+    """Append page/page_size to a raw request path, omitting unset values."""
+    query = pagination_query(page, page_size)
+    if not query:
         return path
-    return path + "?" + urlencode(params)
+    return path + "?" + query
 
 
 def pagination_int_argument(

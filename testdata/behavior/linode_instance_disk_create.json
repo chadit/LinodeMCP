@@ -4,28 +4,113 @@
   "cases": [
     {
       "name": "rejects missing linode_id",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "linode_id is required"
     },
     {
       "name": "rejects missing label",
-      "args": { "linode_id": 123, "size": 1024, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "size": 1024,
+        "confirm": true
+      },
       "expect_error": "label is required"
     },
     {
       "name": "creates a disk",
-      "args": { "linode_id": 123, "label": "boot", "size": 1024, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/linode/instances/123/disks",
-        "body": { "label": "boot", "size": 1024 }
+        "body": {
+          "label": "boot",
+          "size": 1024
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 123, "label": "boot", "size": 1024},
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024
+      },
       "expect_error": "This creates a new disk on the instance. Set confirm=true to proceed."
+    },
+    {
+      "name": "carries the StackScript fields into the body",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "confirm": true,
+        "image": "linode/ubuntu22.04",
+        "stackscript_id": 55,
+        "stackscript_data": {
+          "username": "admin"
+        }
+      },
+      "api_response": {
+        "id": 1,
+        "label": "boot",
+        "size": 1024
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/disks",
+        "body": {
+          "label": "boot",
+          "size": 1024,
+          "image": "linode/ubuntu22.04",
+          "stackscript_id": 55,
+          "stackscript_data": {
+            "username": "admin"
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects a stackscript_data value that is not an object",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "confirm": true,
+        "stackscript_data": 5
+      },
+      "expect_error": "stackscript_data must be an object"
+    },
+    {
+      "name": "rejects a non-string stackscript_data value",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "confirm": true,
+        "stackscript_data": {
+          "username": 5
+        }
+      },
+      "expect_error": "stackscript_data values must be strings"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": {
+        "linode_id": 123,
+        "label": "boot",
+        "size": 1024,
+        "confirm": true
+      },
+      "api_response": 7,
+      "expect_api_error": "disk"
     }
   ]
 }

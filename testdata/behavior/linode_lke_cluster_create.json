@@ -9,12 +9,17 @@
     },
     {
       "name": "rejects missing region",
-      "args": { "label": "prod" },
+      "args": {
+        "label": "prod"
+      },
       "expect_error": "region is required"
     },
     {
       "name": "rejects missing k8s_version",
-      "args": { "label": "prod", "region": "us-east" },
+      "args": {
+        "label": "prod",
+        "region": "us-east"
+      },
       "expect_error": "k8s_version is required"
     },
     {
@@ -23,10 +28,20 @@
         "label": "prod",
         "region": "us-east",
         "k8s_version": "1.31",
-        "node_pools": [ { "type": "g6-standard-1", "count": 3 } ],
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
         "confirm": true
       },
-      "api_response": { "id": 12345, "label": "prod", "region": "us-east", "k8s_version": "1.31" },
+      "api_response": {
+        "id": 12345,
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/lke/clusters",
@@ -34,13 +49,28 @@
           "label": "prod",
           "region": "us-east",
           "k8s_version": "1.31",
-          "node_pools": [ { "type": "g6-standard-1", "count": 3 } ]
+          "node_pools": [
+            {
+              "type": "g6-standard-1",
+              "count": 3
+            }
+          ]
         }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"label": "prod", "region": "us-east", "k8s_version": "1.31", "node_pools": [{"type": "g6-standard-1", "count": 3}]},
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ]
+      },
       "expect_error": "This creates billable Kubernetes resources. Set confirm=true to proceed."
     },
     {
@@ -49,7 +79,12 @@
         "label": "prod",
         "region": "us-east",
         "k8s_version": "1.31",
-        "node_pools": [ { "type": "g6-standard-1", "count": 3 } ],
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
         "confirm": true
       },
       "api_response": [],
@@ -61,11 +96,130 @@
         "label": "prod",
         "region": "us-east",
         "k8s_version": "1.31",
-        "node_pools": [ { "type": "g6-standard-1", "count": 3 } ],
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
         "confirm": true
       },
       "api_response": 7,
       "expect_api_error": "Failed to create LKE cluster"
+    },
+    {
+      "name": "carries tier, apl_enabled, stack_type, and the VPC placement",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
+        "confirm": true,
+        "tier": "enterprise",
+        "apl_enabled": true,
+        "stack_type": "ipv4-ipv6",
+        "vpc_id": 42,
+        "subnet_id": 7
+      },
+      "api_response": {
+        "id": 1,
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/lke/clusters",
+        "body": {
+          "label": "prod",
+          "region": "us-east",
+          "k8s_version": "1.31",
+          "node_pools": [
+            {
+              "type": "g6-standard-1",
+              "count": 3
+            }
+          ],
+          "tier": "enterprise",
+          "apl_enabled": true,
+          "stack_type": "ipv4-ipv6",
+          "vpc_id": 42,
+          "subnet_id": 7
+        }
+      }
+    },
+    {
+      "name": "rejects an unknown tier",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
+        "confirm": true,
+        "tier": "platinum"
+      },
+      "expect_error": "tier must be one of: standard, enterprise"
+    },
+    {
+      "name": "rejects a non-boolean apl_enabled",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
+        "confirm": true,
+        "apl_enabled": "yes"
+      },
+      "expect_error": "apl_enabled must be a boolean"
+    },
+    {
+      "name": "rejects a non-positive vpc_id",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
+        "confirm": true,
+        "vpc_id": 0
+      },
+      "expect_error": "vpc_id must be an integer greater than or equal to 1"
+    },
+    {
+      "name": "rejects a non-positive subnet_id",
+      "args": {
+        "label": "prod",
+        "region": "us-east",
+        "k8s_version": "1.31",
+        "node_pools": [
+          {
+            "type": "g6-standard-1",
+            "count": 3
+          }
+        ],
+        "confirm": true,
+        "subnet_id": 0
+      },
+      "expect_error": "subnet_id must be an integer greater than or equal to 1"
     }
   ]
 }

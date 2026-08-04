@@ -17,13 +17,23 @@ import (
 )
 
 const (
-	paramClusterID  = "cluster_id"
-	lkeClustersPath = "/lke/clusters"
+	paramClusterID             = "cluster_id"
+	lkeClustersPath            = "/lke/clusters"
+	paramLKEPoolLabels         = "labels"
+	paramLKEPoolTaints         = "taints"
+	paramLKEPoolFirewallID     = "firewall_id"
+	paramLKEPoolK8sVersion     = "k8s_version"
+	paramLKEPoolDiskEncryption = "disk_encryption"
+	paramLKEPoolUpdateStrategy = "update_strategy"
+	paramLKETier               = "tier"
+	paramLKEStackType          = "stack_type"
+	paramLKEAPLEnabled         = "apl_enabled"
+	paramLKEVPCID              = "vpc_id"
+	paramLKESubnetID           = "subnet_id"
 )
 
-// handleLKESubResourceAction handles confirmed actions on LKE sub-resources
-// (node pools with int IDs, individual nodes with string IDs) using generics
-// to avoid code duplication across the delete/recycle handler variants.
+// handleLKESubResourceAction handles confirmed actions on LKE sub-resources,
+// generic over the sub-ID type (int for pools, string for nodes).
 func handleLKESubResourceAction[ID int | string](
 	ctx context.Context,
 	request *mcp.CallToolRequest,
@@ -36,8 +46,7 @@ func handleLKESubResourceAction[ID int | string](
 	errFmt string,
 	successProto func(clusterID int, subID ID) proto.Message,
 ) (*mcp.CallToolResult, error) {
-	// Recycles destroy the running nodes, so they carry the full destroy
-	// gate, not just a confirm check.
+	// Recycles destroy the running nodes, so they take the full destroy gate.
 	if result := requireDestroyConfirmation(ctx, request, toolName, confirmMsg); result != nil {
 		return result, nil
 	}
@@ -81,8 +90,7 @@ func NewLinodeLKEClusterCreateTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	return tool, profiles.CapWrite, handler
 }
 
-// validateLKEClusterCreateArgs validates required args and builds the
-// create request, shared by the dry-run and real-execution paths.
+// validateLKEClusterCreateArgs builds the create request for both the dry-run and execute paths.
 func validateLKEClusterCreateArgs(request *mcp.CallToolRequest) (*linode.CreateLKEClusterRequest, *mcp.CallToolResult) {
 	label := request.GetString("label", "")
 	if label == "" {
@@ -118,6 +126,32 @@ func validateLKEClusterCreateArgs(request *mcp.CallToolRequest) (*linode.CreateL
 		Region:     region,
 		K8sVersion: k8sVersion,
 		NodePools:  nodePools,
+		StackType:  request.GetString(paramLKEStackType, ""),
+	}
+
+	tier, validationMessage := optionalEnumChoice(request, paramLKETier, linodev1.LKEClusterTier_Value_value)
+	if validationMessage != "" {
+		return nil, mcp.NewToolResultError(validationMessage)
+	}
+
+	req.Tier = tier
+
+	args := request.GetArguments()
+	if raw, present := args[paramLKEAPLEnabled]; present {
+		enabled, isBool := raw.(bool)
+		if !isBool {
+			return nil, mcp.NewToolResultError("apl_enabled must be a boolean")
+		}
+
+		req.APLEnabled = &enabled
+	}
+
+	if req.VPCID, validationMessage = optionalPaginationInt(args, paramLKEVPCID, 1, 0); validationMessage != "" {
+		return nil, mcp.NewToolResultError(validationMessage)
+	}
+
+	if req.SubnetID, validationMessage = optionalPaginationInt(args, paramLKESubnetID, 1, 0); validationMessage != "" {
+		return nil, mcp.NewToolResultError(validationMessage)
 	}
 
 	if result := applyOptionalTags(request, &req.Tags); result != nil {
@@ -271,9 +305,10 @@ func NewLinodeLKEClusterDeleteTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 	return tool, profiles.CapDestroy, handler
 }
 
-// lkeClusterDeleteProto builds the proto-canonical id-echo body for a
-// successful LKE cluster delete, keeping the proto literal off the handler's
-// struct literal so the delete handlers stay below the dupl threshold.
+// The *DeleteProto helpers in this file keep each proto literal out of its
+// handler's struct literal so the delete handlers stay below the dupl threshold.
+
+// lkeClusterDeleteProto builds the id-echo body for a successful cluster delete.
 func lkeClusterDeleteProto(id int) proto.Message {
 	return &linodev1.LKEClusterDeleteResponse{
 		Message:   fmt.Sprintf("LKE cluster %d removed successfully", id),
@@ -402,13 +437,18 @@ func NewLinodeLKEClusterRegenerateTool(cfg *config.Config) (mcp.Tool, profiles.C
 }
 
 func handleLKEClusterRegenerateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
+	req := linode.RegenerateLKEClusterRequest{
+		Kubeconfig:   request.GetBool("kubeconfig", false),
+		ServiceToken: request.GetBool("servicetoken", false),
+	}
+
 	return runLKEClusterAction(ctx, request, cfg, &lkeClusterActionSpec{
 		ToolName:       "linode_lke_cluster_regenerate",
 		Verb:           "regenerate",
 		ConfirmMessage: "This regenerates the cluster service token. Existing tokens will stop working. Set confirm=true to proceed.",
 		FailureFormat:  "Failed to regenerate service token for LKE cluster %d: %v",
 		Execute: func(ctx context.Context, c *linode.Client, clusterID int) error {
-			return c.RegenerateLKECluster(ctx, clusterID)
+			return c.RegenerateLKECluster(ctx, clusterID, req)
 		},
 		SuccessProto: func(clusterID int) proto.Message {
 			return &linodev1.LKEClusterActionResponse{
@@ -463,9 +503,34 @@ func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolReques
 		return result, nil
 	}
 
+	shared, validationMessage := lkePoolSharedBodyFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	req := linode.CreateLKENodePoolRequest{
-		Type:  nodeType,
-		Count: count,
+		Type:       nodeType,
+		Count:      count,
+		Label:      request.GetString("label", ""),
+		K8sVersion: request.GetString(paramLKEPoolK8sVersion, ""),
+		Labels:     shared.Labels,
+		Taints:     shared.Taints,
+		FirewallID: shared.FirewallID,
+	}
+
+	disks, validationMessage := objectSliceFromToolArg[linode.LKENodePoolDisk](request.GetArguments()["disks"], "disks")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req.Disks = disks
+
+	if req.DiskEncryption, validationMessage = optionalEnumChoice(request, paramLKEPoolDiskEncryption, linodev1.DiskEncryption_Value_value); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if req.UpdateStrategy, validationMessage = optionalEnumChoice(request, paramLKEPoolUpdateStrategy, linodev1.LKENodePoolUpdateStrategy_Value_value); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	if raw, ok := request.GetArguments()["autoscaler"]; ok {
@@ -500,6 +565,37 @@ func handleLKEPoolCreateRequest(ctx context.Context, request *mcp.CallToolReques
 	}
 
 	return MarshalProtoToolResponse(response)
+}
+
+// lkePoolSharedBody holds the node-pool fields create and update both accept,
+// parsed once so the two handlers cannot drift on validation or error text.
+type lkePoolSharedBody struct {
+	Labels     map[string]string
+	Taints     []map[string]any
+	FirewallID int
+}
+
+// lkePoolSharedBodyFromTool reads the labels, taints, and firewall_id arguments
+// shared by node-pool create and update.
+func lkePoolSharedBodyFromTool(request *mcp.CallToolRequest) (lkePoolSharedBody, string) {
+	args := request.GetArguments()
+
+	labels, validationMessage := stringMapFromToolArg(args[paramLKEPoolLabels], paramLKEPoolLabels)
+	if validationMessage != "" {
+		return lkePoolSharedBody{}, validationMessage
+	}
+
+	taints, validationMessage := objectSliceFromToolArg[map[string]any](args[paramLKEPoolTaints], paramLKEPoolTaints)
+	if validationMessage != "" {
+		return lkePoolSharedBody{}, validationMessage
+	}
+
+	firewallID, validationMessage := optionalPaginationInt(args, paramLKEPoolFirewallID, 1, 0)
+	if validationMessage != "" {
+		return lkePoolSharedBody{}, validationMessage
+	}
+
+	return lkePoolSharedBody{Labels: labels, Taints: taints, FirewallID: firewallID}, ""
 }
 
 // NewLinodeLKEPoolUpdateTool creates a tool for updating an LKE node pool.
@@ -548,7 +644,16 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 		return result, nil
 	}
 
-	req := linode.UpdateLKENodePoolRequest{}
+	shared, validationMessage := lkePoolSharedBodyFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req := linode.UpdateLKENodePoolRequest{
+		Labels:     shared.Labels,
+		Taints:     shared.Taints,
+		FirewallID: shared.FirewallID,
+	}
 
 	if _, ok := request.GetArguments()["count"]; ok {
 		count := request.GetInt("count", 0)
@@ -576,7 +681,7 @@ func handleLKEPoolUpdateRequest(ctx context.Context, request *mcp.CallToolReques
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	pool, err := client.UpdateLKENodePoolProto(ctx, clusterID, poolID, req)
+	pool, err := client.UpdateLKENodePoolProto(ctx, clusterID, poolID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to modify node pool %d in cluster %d: %v", poolID, clusterID, err)), nil
 	}

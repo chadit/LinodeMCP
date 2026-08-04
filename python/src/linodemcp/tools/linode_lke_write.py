@@ -8,6 +8,7 @@ import httpx
 from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import (
+    common_pb2,
     lke_kubeconfig_pb2,
     lke_node_pb2,
     lke_pb2,
@@ -23,7 +24,9 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_int_argument,
 )
+from linodemcp.tools.proto_enum import optional_enum_error
 from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -44,11 +47,7 @@ def create_linode_lke_cluster_create_tool() -> tuple[Tool, Capability]:
 
 
 def _lke_cluster_create_error(arguments: dict[str, Any]) -> list[TextContent] | None:
-    """Validate cluster_create args; return an error response or None.
-
-    Extracted to keep handle_linode_lke_cluster_create under PLR0911's
-    return-count threshold once the dry-run branch is added.
-    """
+    """Validate cluster_create args; split out for PLR0911's return-count limit."""
     if not arguments.get("label", ""):
         return error_response("label is required")
     if not arguments.get("region", ""):
@@ -58,6 +57,42 @@ def _lke_cluster_create_error(arguments: dict[str, Any]) -> list[TextContent] | 
     if not arguments.get("node_pools", []):
         return error_response("node_pools is required")
     return None
+
+
+def _lke_cluster_create_fields(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any], str | None]:
+    """Parse the optional cluster_create body fields. Check order and message text
+    match Go's validateLKEClusterCreateArgs so both report the same first error.
+    """
+    fields: dict[str, Any] = {}
+
+    stack_type = arguments.get("stack_type")
+    if stack_type is not None:
+        fields["stack_type"] = stack_type
+
+    tier_error = optional_enum_error(arguments, "tier", lke_pb2.LKEClusterTier.Value)
+    if tier_error is not None:
+        return {}, tier_error
+    tier = arguments.get("tier")
+    if tier is not None:
+        fields["tier"] = tier
+
+    apl_enabled: Any = arguments.get("apl_enabled")
+    if apl_enabled is not None:
+        if not isinstance(apl_enabled, bool):
+            return {}, "apl_enabled must be a boolean"
+        fields["apl_enabled"] = apl_enabled
+
+    for key in ("vpc_id", "subnet_id"):
+        try:
+            value = pagination_int_argument(arguments, key, 1)
+        except (TypeError, ValueError) as exc:
+            return {}, str(exc)
+        if value is not None:
+            fields[key] = value
+
+    return fields, None
 
 
 async def handle_linode_lke_cluster_create(
@@ -100,6 +135,10 @@ async def handle_linode_lke_cluster_create(
     tags = arguments.get("tags")
     control_plane = arguments.get("control_plane")
 
+    fields, body_error = _lke_cluster_create_fields(arguments)
+    if body_error is not None:
+        return error_response(body_error)
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         cluster = await client.create_lke_cluster(
             label=label,
@@ -108,6 +147,7 @@ async def handle_linode_lke_cluster_create(
             node_pools=node_pools,
             tags=tags,
             control_plane=control_plane,
+            fields=fields,
         )
         return serialize_api_response(
             {
@@ -468,7 +508,11 @@ async def handle_linode_lke_cluster_regenerate(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        await client.regenerate_lke_cluster(cluster_id)
+        await client.regenerate_lke_cluster(
+            cluster_id,
+            kubeconfig=bool(arguments.get("kubeconfig", False)),
+            servicetoken=bool(arguments.get("servicetoken", False)),
+        )
         return serialize_api_response(
             {
                 "message": (
@@ -519,6 +563,90 @@ def _parse_pool_create(
     return cluster_id, str(node_type), int(count)
 
 
+def _lke_pool_string_map(
+    arguments: dict[str, Any], name: str
+) -> tuple[dict[str, str] | None, str | None]:
+    """Read a string-to-string object argument, with Go's exact messages."""
+    value: Any = arguments.get(name)
+    if value is None:
+        return None, None
+    if not isinstance(value, dict):
+        return None, f"{name} must be an object"
+    entries = cast("dict[str, object]", value)
+    if not all(isinstance(entry, str) for entry in entries.values()):
+        return None, f"{name} values must be strings"
+    return cast("dict[str, str]", value), None
+
+
+def _lke_pool_shared_fields(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any], str | None]:
+    """Parse the labels, taints, and firewall_id arguments create and update share.
+
+    Check order and message text match Go's lkePoolSharedBodyFromTool so both
+    languages report the same first problem for the same input.
+    """
+    fields: dict[str, Any] = {}
+
+    labels, labels_error = _lke_pool_string_map(arguments, "labels")
+    if labels_error is not None:
+        return {}, labels_error
+    if labels is not None:
+        fields["labels"] = labels
+
+    taints: Any = arguments.get("taints")
+    if taints is not None:
+        if not isinstance(taints, list) or not all(
+            isinstance(taint, dict) for taint in cast("list[object]", taints)
+        ):
+            return {}, "taints must be an array of objects"
+        fields["taints"] = taints
+
+    try:
+        firewall_id = pagination_int_argument(arguments, "firewall_id", 1)
+    except (TypeError, ValueError) as exc:
+        return {}, str(exc)
+    if firewall_id is not None:
+        fields["firewall_id"] = firewall_id
+
+    return fields, None
+
+
+def _lke_pool_create_fields(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any], str | None]:
+    """Parse the create-only pool body fields on top of the shared ones."""
+    fields, shared_error = _lke_pool_shared_fields(arguments)
+    if shared_error is not None:
+        return {}, shared_error
+
+    disks: Any = arguments.get("disks")
+    if disks is not None:
+        if not isinstance(disks, list) or not all(
+            isinstance(disk, dict) for disk in cast("list[object]", disks)
+        ):
+            return {}, "disks must be an array of objects"
+        fields["disks"] = disks
+
+    for key, enum in (
+        ("disk_encryption", common_pb2.DiskEncryption.Value),
+        ("update_strategy", lke_pool_pb2.LKENodePoolUpdateStrategy.Value),
+    ):
+        enum_error = optional_enum_error(arguments, key, enum)
+        if enum_error is not None:
+            return {}, enum_error
+        value = arguments.get(key)
+        if value is not None:
+            fields[key] = value
+
+    for key in ("label", "k8s_version"):
+        value = arguments.get(key)
+        if value is not None:
+            fields[key] = value
+
+    return fields, None
+
+
 async def handle_linode_lke_pool_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -548,6 +676,12 @@ async def handle_linode_lke_pool_create(
             "This creates billable compute resources. Set confirm=true to proceed."
         )
 
+    # Body validation runs after the confirm gate so both languages report the
+    # same first problem: Go parses the pool body in the same position.
+    fields, fields_error = _lke_pool_create_fields(arguments)
+    if fields_error is not None:
+        return error_response(fields_error)
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         pool = await client.create_lke_node_pool(
             cluster_id=cluster_id,
@@ -555,6 +689,7 @@ async def handle_linode_lke_pool_create(
             count=count,
             autoscaler=arguments.get("autoscaler"),
             tags=arguments.get("tags"),
+            fields=fields,
         )
         return serialize_api_response(
             {
@@ -636,6 +771,12 @@ async def handle_linode_lke_pool_update(
             "This modifies the node pool configuration. Set confirm=true to proceed."
         )
 
+    # Body validation runs after the confirm gate so both languages report the
+    # same first problem: Go parses the pool body in the same position.
+    fields, fields_error = _lke_pool_shared_fields(arguments)
+    if fields_error is not None:
+        return error_response(fields_error)
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
         pool = await client.update_lke_node_pool(
             cluster_id=cluster_id,
@@ -643,6 +784,7 @@ async def handle_linode_lke_pool_update(
             count=arguments.get("count"),
             autoscaler=arguments.get("autoscaler"),
             tags=arguments.get("tags"),
+            fields=fields,
         )
         return serialize_api_response(
             {

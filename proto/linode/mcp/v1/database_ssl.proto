@@ -17,13 +17,15 @@ message DatabaseMySQLInstanceSSLGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_ssl_get"
     method: "GET"
-    path: "/databases/mysql/instances/{mysql_instance_id}/ssl"
+    path: "/databases/mysql/instances/{instance_id}/ssl"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseSSL";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID (required).
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // DatabasePostgreSQLInstanceSSLGetInput is the input contract for
@@ -32,11 +34,13 @@ message DatabasePostgreSQLInstanceSSLGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_ssl_get"
     method: "GET"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}/ssl"
+    path: "/databases/postgresql/instances/{instance_id}/ssl"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseSSL";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID (required).
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }

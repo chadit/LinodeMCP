@@ -64,11 +64,13 @@ message ImageGetInput {
     method: "GET"
     path: "/images/{image_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Image";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The image ID to retrieve (required), such as linode/debian11 or private/123.
-  string image_id = 2;
+  string image_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ImageListInput is the input contract for linode_image_list. The three
@@ -80,19 +82,21 @@ message ImageListInput {
     method: "GET"
     path: "/images"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter images by type (manual, automatic).
-  optional string type = 2;
+  optional string type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Filter by public status (true, false).
-  optional string is_public = 3;
+  optional string is_public = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Filter by deprecated status (true, false).
-  optional string deprecated = 4;
+  optional string deprecated = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 5;
+  optional int32 page = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 6;
+  optional int32 page_size = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ImageCreateInput is the input contract for linode_image_create. disk_id and
@@ -103,24 +107,28 @@ message ImageCreateInput {
     method: "POST"
     path: "/images"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a private image from a Linode disk. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Image '{label}' ({id}) created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode disk to image.
-  int32 disk_id = 2;
+  int32 disk_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Short label for the new image (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Detailed description for the new image (optional).
-  optional string description = 4;
+  optional string description = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the image supports cloud-init (optional).
-  optional bool cloud_init = 5;
+  optional bool cloud_init = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Tag strings to apply to the image (optional).
-  repeated string tags = 6;
+  repeated string tags = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm image creation. Ignored when dry_run=true.
-  bool confirm = 7; // system param
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8; // system param
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageUploadInput is the input contract for linode_image_upload. label,
@@ -131,24 +139,28 @@ message ImageUploadInput {
     method: "POST"
     path: "/images/upload"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageUploadWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates an image upload. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Image upload '{label}' ({id}) created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The custom image label.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The region for the image upload.
-  string region = 3;
+  string region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Detailed description for the image (optional).
-  optional string description = 4;
+  optional string description = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the image supports cloud-init (optional).
-  optional bool cloud_init = 5;
+  optional bool cloud_init = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Tag strings to apply to the image (optional).
-  repeated string tags = 6;
+  repeated string tags = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm the image upload. Ignored when dry_run=true.
-  bool confirm = 7; // system param
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8; // system param
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageUpdateInput is the input contract for linode_image_update. image_id and
@@ -159,22 +171,26 @@ message ImageUpdateInput {
     method: "PUT"
     path: "/images/{image_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates image metadata. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Image '{id}' updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The editable image ID, for example private/12345 or shared/123.
-  string image_id = 2;
+  string image_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New image label (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New image description (optional).
-  optional string description = 4;
+  optional string description = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Tag strings to apply to the image (optional).
-  repeated string tags = 5;
+  repeated string tags = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm the image update. Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageDeleteInput is the input contract for linode_image_delete, a two-stage
@@ -185,23 +201,28 @@ message ImageDeleteInput {
     method: "DELETE"
     path: "/images/{image_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the image";
+  option (linode.mcp.v1.success_message) = "Image {image_id} deleted successfully";
+  option (linode.mcp.v1.resource_type) = "Image";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The image ID to delete, for example private/12345.
-  string image_id = 2;
+  string image_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageReplicateInput is the input contract for linode_image_replicate.
@@ -214,16 +235,20 @@ message ImageReplicateInput {
     method: "POST"
     path: "/images/{image_id}/regions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This replicates an image to the requested regions. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Image '{id}' replicated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Image ID to replicate, such as private/123.
-  string image_id = 2;
+  string image_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Region slug strings to keep or replicate the image to. Required at runtime.
-  repeated string regions = 3;
+  repeated string regions = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm image replication. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

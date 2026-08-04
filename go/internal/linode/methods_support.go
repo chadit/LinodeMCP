@@ -5,26 +5,20 @@ import (
 	"context"
 	"fmt"
 	"mime/multipart"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const endpointSupportTickets = "/support/tickets"
-
-// httpCreateSupportTicketProto opens a support ticket and decodes the created
-// ticket into a proto message for the proto-backed write path.
+// httpCreateSupportTicketProto opens a support ticket.
 func (c *Client) httpCreateSupportTicketProto(ctx context.Context, request *CreateSupportTicketRequest) (*linodev1.SupportTicket, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointSupportTickets, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_support_ticket_create", request)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateSupportTicket", Err: err}
+		return nil, wrapRequestError("CreateSupportTicket", err)
 	}
 
 	defer drainClose(resp)
@@ -42,11 +36,9 @@ func (c *Client) httpGetSupportTicketProto(ctx context.Context, ticketID int) (*
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_support_ticket_get", nil, ticketID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetSupportTicket", Err: err}
+		return nil, wrapRequestError("GetSupportTicket", err)
 	}
 
 	defer drainClose(resp)
@@ -59,10 +51,9 @@ func (c *Client) httpGetSupportTicketProto(ctx context.Context, ticketID int) (*
 	return ticket, nil
 }
 
-// httpCreateSupportTicketAttachment uploads a local file as an attachment for a
-// support ticket. The endpoint consumes multipart/form-data (not JSON), so the
-// file is read from request.File and sent under the "file" form field, mirroring
-// Python's make_file_request.
+// httpCreateSupportTicketAttachment uploads a local file as a ticket attachment.
+// This endpoint consumes multipart/form-data, not JSON, so the file goes under the
+// "file" form field to match Python's make_file_request.
 func (c *Client) httpCreateSupportTicketAttachment(ctx context.Context, ticketID int, request *CreateSupportTicketAttachmentRequest) (*SupportTicketAttachment, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -72,11 +63,9 @@ func (c *Client) httpCreateSupportTicketAttachment(ctx context.Context, ticketID
 		return nil, &NetworkError{Operation: "CreateSupportTicketAttachment", Err: err}
 	}
 
-	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/attachments"
-
-	resp, err := c.makeRequestWithContentType(ctx, http.MethodPost, endpoint, body, contentType)
+	resp, err := c.makeRouteRequestContentType(ctx, "linode_support_ticket_attachment_create", contentType, body, ticketID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateSupportTicketAttachment", Err: err}
+		return nil, wrapRequestError("CreateSupportTicketAttachment", err)
 	}
 
 	defer drainClose(resp)
@@ -89,10 +78,10 @@ func (c *Client) httpCreateSupportTicketAttachment(ctx context.Context, ticketID
 	return &attachment, nil
 }
 
-// supportTicketAttachmentBody reads the file at path into a multipart/form-data
-// body under the "file" field and returns the body plus the content type that
-// carries the boundary. The filename is the base name, matching Python's
-// make_file_request (files={"file": (path.name, handle)}).
+// supportTicketAttachmentBody builds a multipart body holding the file at path
+// under the "file" field, returning it with the content type that carries the
+// boundary. The form filename is the base name, matching Python's
+// make_file_request.
 func supportTicketAttachmentBody(path string) (*bytes.Buffer, string, error) {
 	content, err := os.ReadFile(path) // #nosec G304 -- path is the user-selected local file to upload; reading it is the tool's purpose (mirrors Python make_file_request)
 	if err != nil {
@@ -118,17 +107,14 @@ func supportTicketAttachmentBody(path string) (*bytes.Buffer, string, error) {
 	return body, writer.FormDataContentType(), nil
 }
 
-// httpCreateSupportTicketReplyProto creates a reply for a support ticket and
-// decodes the created reply into a proto message for the proto-backed write path.
+// httpCreateSupportTicketReplyProto creates a reply on a support ticket.
 func (c *Client) httpCreateSupportTicketReplyProto(ctx context.Context, ticketID int, request *CreateSupportTicketReplyRequest) (*linodev1.SupportTicketReply, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/replies"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_support_ticket_reply_create", request, ticketID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateSupportTicketReply", Err: err}
+		return nil, wrapRequestError("CreateSupportTicketReply", err)
 	}
 
 	defer drainClose(resp)
@@ -145,7 +131,8 @@ func (c *Client) httpCreateSupportTicketReplyProto(ctx context.Context, ticketID
 // proto-backed list path. page/page_size flow through withPaginationQuery, so the
 // request matches httpListSupportTickets.
 func (c *Client) httpListSupportTicketsProto(ctx context.Context, page, pageSize int) ([]*linodev1.SupportTicket, error) {
-	return listProtoElementsPaginated(ctx, c, "ListSupportTickets", endpointSupportTickets, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListSupportTickets",
+		"linode_support_ticket_list", "", nil, page, pageSize,
 		func() *linodev1.SupportTicket { return &linodev1.SupportTicket{} })
 }
 
@@ -154,9 +141,9 @@ func (c *Client) httpCloseSupportTicket(ctx context.Context, ticketID int) error
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointSupportTickets+"/"+url.PathEscape(strconv.Itoa(ticketID))+"/close", nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_support_ticket_close", nil, ticketID)
 	if err != nil {
-		return &NetworkError{Operation: "CloseSupportTicket", Err: err}
+		return wrapRequestError("CloseSupportTicket", err)
 	}
 
 	defer drainClose(resp)
@@ -165,12 +152,11 @@ func (c *Client) httpCloseSupportTicket(ctx context.Context, ticketID int) error
 }
 
 // httpListSupportTicketRepliesProto retrieves a support ticket's replies as proto
-// messages for the proto-backed list path. The endpoint formats the ticket id
-// exactly like httpListSupportTicketReplies, then page/page_size flow through
-// withPaginationQuery, so the request matches.
+// messages for the proto-backed list path. It names the same tool as
+// httpListSupportTicketReplies, so both resolve one declared route, then
+// page/page_size flow through withPaginationQuery and the request matches.
 func (c *Client) httpListSupportTicketRepliesProto(ctx context.Context, ticketID, page, pageSize int) ([]*linodev1.SupportTicketReply, error) {
-	endpoint := endpointSupportTickets + "/" + url.PathEscape(strconv.Itoa(ticketID)) + "/replies"
-
-	return listProtoElementsPaginated(ctx, c, "ListSupportTicketReplies", endpoint, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListSupportTicketReplies",
+		"linode_support_ticket_reply_list", "", []any{ticketID}, page, pageSize,
 		func() *linodev1.SupportTicketReply { return &linodev1.SupportTicketReply{} })
 }

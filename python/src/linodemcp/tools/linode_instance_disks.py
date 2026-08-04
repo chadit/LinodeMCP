@@ -507,6 +507,30 @@ def create_linode_instance_disk_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _disk_create_fields_error(arguments: dict[str, Any]) -> str | None:
+    """Validate the disk-create body beyond the required label and size.
+
+    Message text matches Go's stringMapFromToolArg so both languages reject the
+    same malformed stackscript_data.
+    """
+    label = arguments.get("label")
+    if not label:
+        return "label is required"
+    if not arguments.get("size"):
+        return "size is required"
+
+    data: Any = arguments.get("stackscript_data")
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        return "stackscript_data must be an object"
+    if not all(
+        isinstance(value, str) for value in cast("dict[str, object]", data).values()
+    ):
+        return "stackscript_data values must be strings"
+    return None
+
+
 async def handle_linode_instance_disk_create(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -515,13 +539,12 @@ async def handle_linode_instance_disk_create(
     if isinstance(iid, list):
         return iid
 
-    label = arguments.get("label", "")
-    if not label:
-        return _error_response("label is required")
+    fields_error = _disk_create_fields_error(arguments)
+    if fields_error is not None:
+        return _error_response(fields_error)
 
-    size = arguments.get("size")
-    if not size:
-        return _error_response("size is required")
+    label = arguments.get("label", "")
+    size = cast("int", arguments.get("size"))
 
     if is_dry_run(arguments):
 
@@ -562,6 +585,8 @@ async def handle_linode_instance_disk_create(
             root_pass=arguments.get("root_pass"),
             authorized_keys=_split_comma_separated(arguments.get("authorized_keys")),
             authorized_users=_split_comma_separated(arguments.get("authorized_users")),
+            stackscript_id=arguments.get("stackscript_id"),
+            stackscript_data=arguments.get("stackscript_data"),
         )
         return serialize_api_response(
             {

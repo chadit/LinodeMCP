@@ -57,9 +57,11 @@ message AccountGetInput {
     method: "GET"
     path: "/account"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Account";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountAgreements mirrors the account agreement acknowledgment status: one
@@ -81,9 +83,11 @@ message AccountAgreementsListInput {
     method: "GET"
     path: "/account/agreements"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountAgreements";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountSettings mirrors the account settings object. longview_subscription and
@@ -105,9 +109,11 @@ message AccountSettingsGetInput {
     method: "GET"
     path: "/account/settings"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountSettings";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountSettingsWriteResponse is the {message, settings} envelope the account
@@ -142,9 +148,11 @@ message AccountTransferGetInput {
     method: "GET"
     path: "/account/transfer"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountTransfer";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountInvoice mirrors one Linode account invoice.
@@ -162,11 +170,13 @@ message AccountInvoiceGetInput {
     method: "GET"
     path: "/account/invoices/{invoice_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoice";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the invoice to retrieve (required).
-  int32 invoice_id = 2;
+  int32 invoice_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountInvoiceListResponse is the envelope linode_account_invoice_list
@@ -195,11 +205,13 @@ message AccountLoginGetInput {
     method: "GET"
     path: "/account/logins/{login_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLogin";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the login to retrieve (required).
-  int32 login_id = 2;
+  int32 login_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountLoginListResponse is the envelope linode_account_login_list returns: a
@@ -218,11 +230,13 @@ message ProfileLoginGetInput {
     method: "GET"
     path: "/profile/logins/{login_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLogin";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the login to retrieve (required).
-  int32 login_id = 2;
+  int32 login_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ProfileLoginListResponse is the envelope linode_profile_login_list returns: a
@@ -241,13 +255,15 @@ message ProfileLoginListInput {
     method: "GET"
     path: "/profile/logins"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileLoginListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountPayment mirrors one payment made on the account.
@@ -264,11 +280,13 @@ message AccountPaymentGetInput {
     method: "GET"
     path: "/account/payments/{payment_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPayment";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the payment to retrieve (required).
-  int32 payment_id = 2;
+  int32 payment_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountPaymentListResponse is the envelope linode_account_payment_list
@@ -340,11 +358,13 @@ message AccountOAuthClientGetInput {
     method: "GET"
     path: "/account/oauth-clients/{client_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClient";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the OAuth client to retrieve (required).
-  string client_id = 2;
+  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // OAuthClientWriteResponse is the {message, client} envelope the OAuth client
@@ -486,13 +506,15 @@ message MaintenancePolicyListInput {
     method: "GET"
     path: "/maintenance/policies"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MaintenancePolicyListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountPaymentMethod mirrors one payment method from
@@ -651,23 +673,27 @@ message AccountAgreementsAcknowledgeInput {
     method: "POST"
     path: "/account/agreements"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "This acknowledges account agreements. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account agreements acknowledged successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Acknowledge the billing agreement (optional).
-  optional bool billing_agreement = 2;
+  optional bool billing_agreement = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Acknowledge the EU model agreement (optional).
-  optional bool eu_model = 3;
+  optional bool eu_model = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Acknowledge the master service agreement (optional).
-  optional bool master_service_agreement = 4;
+  optional bool master_service_agreement = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Acknowledge the privacy policy (optional).
-  optional bool privacy_policy = 5;
+  optional bool privacy_policy = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm account agreement acknowledgement. Ignored when
   // dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountCancelInput is the input contract for linode_account_cancel. Only
@@ -678,69 +704,90 @@ message AccountCancelInput {
     method: "POST"
     path: "/account/cancel"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountCancelWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This cancels the active account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account canceled successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Reason for canceling the account or other feedback (optional).
-  optional string comments = 2;
+  optional string comments = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm account cancellation. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountChildAccountGetInput is the input contract for
-// linode_account_child_account_get.
+// linode_account_child_account_get. Linode deprecated this route in favor of
+// GET /iam/delegation/profile/child-accounts/{euuid}; the replacement is not
+// yet implemented in this repo, so the deprecated route is what this tool
+// still calls.
 message AccountChildAccountGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_child_account_get"
     method: "GET"
-    path: "/account/child-accounts/{euu_id}"
+    path: "/account/child-accounts/{euuid}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ChildAccount";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // External unique identifier for the child account (required).
-  string euuid = 2;
+  string euuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountChildAccountListInput is the input contract for
-// linode_account_child_account_list.
+// linode_account_child_account_list. Linode deprecated this route in favor of
+// GET /iam/delegation/child-accounts; the replacement is not yet implemented
+// in this repo, so the deprecated route is what this tool still calls.
 message AccountChildAccountListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_child_account_list"
     method: "GET"
     path: "/account/child-accounts"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ChildAccountListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountChildAccountTokenCreateInput is the input contract for
 // linode_account_child_account_token_create. euuid and confirm are required.
+// Linode deprecated this route in favor of
+// POST /iam/delegation/profile/child-accounts/{euuid}/token; the replacement
+// is not yet implemented in this repo, so the deprecated route is what this
+// tool still calls.
 message AccountChildAccountTokenCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_child_account_token_create"
     method: "POST"
-    path: "/account/child-accounts/{euu_id}/token"
+    path: "/account/child-accounts/{euuid}/token"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountChildAccountTokenWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a proxy user token for a child account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Child account proxy token created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // External unique identifier for the child account (required).
-  string euuid = 2;
+  string euuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm proxy user token creation. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountInvoiceItemListInput is the input contract for
@@ -751,15 +798,17 @@ message AccountInvoiceItemListInput {
     method: "GET"
     path: "/account/invoices/{invoice_id}/items"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoiceItemListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Invoice ID whose items should be listed (required).
-  int32 invoice_id = 2;
+  int32 invoice_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountInvoiceListInput is the input contract for
@@ -770,13 +819,15 @@ message AccountInvoiceListInput {
     method: "GET"
     path: "/account/invoices"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountInvoiceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountLoginListInput is the input contract for linode_account_login_list.
@@ -786,13 +837,15 @@ message AccountLoginListInput {
     method: "GET"
     path: "/account/logins"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountLoginListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountMaintenanceListInput is the input contract for
@@ -803,13 +856,15 @@ message AccountMaintenanceListInput {
     method: "GET"
     path: "/account/maintenance"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountMaintenanceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountNotificationListInput is the input contract for
@@ -820,13 +875,15 @@ message AccountNotificationListInput {
     method: "GET"
     path: "/account/notifications"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountNotificationListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountOAuthClientCreateInput is the input contract for
@@ -838,19 +895,28 @@ message AccountOAuthClientCreateInput {
     method: "POST"
     path: "/account/oauth-clients"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientCreateWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates an OAuth client. The secret is only shown once. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "OAuth client created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the OAuth client (required).
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Redirect URI for the OAuth client (required).
-  string redirect_uri = 3;
+  string redirect_uri = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm OAuth client creation. The secret is only shown
   // once. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Whether the client is public, meaning it skips the OAuth consent screen
+  // for users on this account (required, defaults to false). It is a plain
+  // bool for the same reason IPAddressAllocateInput.public is: the API
+  // documents it as required, so it belongs in the generated required set.
+  bool public = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // AccountOAuthClientDeleteInput is the input contract for
@@ -862,16 +928,20 @@ message AccountOAuthClientDeleteInput {
     method: "DELETE"
     path: "/account/oauth-clients/{client_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes an OAuth client. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "OAuth client deleted successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // OAuth client ID (required).
-  string client_id = 2;
+  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm OAuth client deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountOAuthClientListInput is the input contract for
@@ -882,13 +952,15 @@ message AccountOAuthClientListInput {
     method: "GET"
     path: "/account/oauth-clients"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountOAuthClientSecretResetInput is the input contract for
@@ -899,17 +971,21 @@ message AccountOAuthClientSecretResetInput {
     method: "POST"
     path: "/account/oauth-clients/{client_id}/reset-secret"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientSecretResetWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This resets an OAuth client secret. The new secret is only shown once. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "OAuth client secret reset successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // OAuth client ID (required).
-  string client_id = 2;
+  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm OAuth client secret reset. The new secret is only
   // shown once. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountOAuthClientUpdateInput is the input contract for
@@ -921,22 +997,26 @@ message AccountOAuthClientUpdateInput {
     method: "PUT"
     path: "/account/oauth-clients/{client_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.OAuthClientWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates an OAuth client. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "OAuth client updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // OAuth client ID (required).
-  string client_id = 2;
+  string client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New label for the OAuth client (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New redirect URI for the OAuth client (optional).
-  optional string redirect_uri = 4;
+  optional string redirect_uri = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether this OAuth client is public (optional).
-  optional bool public = 5;
+  optional bool public = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm OAuth client update. Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountPaymentCreateInput is the input contract for
@@ -948,19 +1028,23 @@ message AccountPaymentCreateInput {
     method: "POST"
     path: "/account/payments"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This makes an account payment. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account payment created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Payment method ID to charge (optional).
-  optional int32 payment_method_id = 2;
+  optional int32 payment_method_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Payment amount in USD, as a decimal string (e.g. "25.50") (required).
-  string usd = 3;
+  string usd = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm making an account payment. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountPaymentListInput is the input contract for
@@ -971,13 +1055,15 @@ message AccountPaymentListInput {
     method: "GET"
     path: "/account/payments"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountPaymentMethodDeleteInput is the input contract for
@@ -989,17 +1075,21 @@ message AccountPaymentMethodDeleteInput {
     method: "DELETE"
     path: "/account/payment-methods/{payment_method_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes a payment method. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Payment method deleted successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Payment method ID (required).
-  int32 payment_method_id = 2;
+  int32 payment_method_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm payment method deletion. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountPaymentMethodCreateInput is the input contract for
@@ -1014,21 +1104,25 @@ message AccountPaymentMethodCreateInput {
     method: "POST"
     path: "/account/payment-methods"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a payment method. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Payment method created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Payment method details. The shape varies by payment method type. Required at
   // runtime, though the generated schema cannot mark a map field required.
-  map<string, google.protobuf.Value> data = 2;
+  map<string, google.protobuf.Value> data = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to set this as the default payment method (required).
-  bool is_default = 3;
+  bool is_default = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Payment method type (e.g. "credit_card", "google_pay", "paypal") (required).
-  string type = 4;
+  string type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm adding a payment method. Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountPaymentMethodGetInput is the input contract for
@@ -1039,11 +1133,13 @@ message AccountPaymentMethodGetInput {
     method: "GET"
     path: "/account/payment-methods/{payment_method_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethod";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Payment method ID (required).
-  int32 payment_method_id = 2;
+  int32 payment_method_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountPaymentMethodListInput is the input contract for
@@ -1054,13 +1150,15 @@ message AccountPaymentMethodListInput {
     method: "GET"
     path: "/account/payment-methods"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountPaymentMethodMakeDefaultInput is the input contract for
@@ -1071,17 +1169,21 @@ message AccountPaymentMethodMakeDefaultInput {
     method: "POST"
     path: "/account/payment-methods/{payment_method_id}/make-default"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPaymentMethodIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This changes the default payment method. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Payment method set as default successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Payment method ID (required).
-  int32 payment_method_id = 2;
+  int32 payment_method_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm changing the default payment method. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountPromoCreditAddInput is the input contract for
@@ -1092,17 +1194,21 @@ message AccountPromoCreditAddInput {
     method: "POST"
     path: "/account/promo-codes"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountPromoResponse";
+  option (linode.mcp.v1.confirm_message) = "This applies a promo credit to the account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account promo credit applied successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Promo code to apply to the account (required).
-  string promo_code = 2;
+  string promo_code = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm applying a promo credit. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountSettingsManagedEnableInput is the input contract for
@@ -1113,15 +1219,19 @@ message AccountSettingsManagedEnableInput {
     method: "POST"
     path: "/account/settings/managed-enable"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "This enables Linode Managed for the account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Linode Managed enabled successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Must be true to confirm enabling Linode Managed. Ignored when
   // dry_run=true.
-  bool confirm = 2; // system param
+  bool confirm = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 3; // system param
+  optional bool dry_run = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountSettingsUpdateInput is the input contract for
@@ -1133,29 +1243,33 @@ message AccountSettingsUpdateInput {
     method: "PUT"
     path: "/account/settings"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountSettingsWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates account-wide settings. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account settings updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Whether backups are enabled by default for new Linodes (optional).
-  optional bool backups_enabled = 2;
+  optional bool backups_enabled = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Default interface generation mode for new Linodes (optional).
-  optional string interfaces_for_new_linodes = 3;
+  optional string interfaces_for_new_linodes = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Longview subscription tier, or an empty string to disable it (optional).
-  optional string longview_subscription = 4;
+  optional string longview_subscription = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Default maintenance policy for the account (optional).
-  optional string maintenance_policy = 5;
+  optional string maintenance_policy = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether managed services are enabled for the account (optional).
-  optional bool managed = 6;
+  optional bool managed = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether Network Helper is enabled by default (optional).
-  optional bool network_helper = 7;
+  optional bool network_helper = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object Storage subscription status or tier (optional).
-  optional string object_storage = 8;
+  optional string object_storage = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm account settings update. Ignored when
   // dry_run=true.
-  bool confirm = 9; // system param
+  bool confirm = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 10; // system param
+  optional bool dry_run = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountUpdateInput is the input contract for linode_account_update. Only
@@ -1166,37 +1280,41 @@ message AccountUpdateInput {
     method: "PUT"
     path: "/account"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates account billing/contact information. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // First line of the account billing address (optional).
-  optional string address_1 = 2;
+  optional string address_1 = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Second line of the account billing address (optional).
-  optional string address_2 = 3;
+  optional string address_2 = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // City for the account address (optional).
-  optional string city = 4;
+  optional string city = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Company name assigned to the account (optional).
-  optional string company = 5;
+  optional string company = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Two-letter ISO 3166 country code (optional).
-  optional string country = 6;
+  optional string country = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Email address assigned to the account (optional).
-  optional string email = 7;
+  optional string email = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // First name assigned to the account (optional).
-  optional string first_name = 8;
+  optional string first_name = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Last name assigned to the account (optional).
-  optional string last_name = 9;
+  optional string last_name = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Phone number assigned to the account (optional).
-  optional string phone = 10;
+  optional string phone = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // State, province, or territory for the account address (optional).
-  optional string state = 11;
+  optional string state = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Tax identification number, or an empty string if not applicable
   // (optional).
-  optional string tax_id = 12;
+  optional string tax_id = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Zip or postal code for the account address (optional).
-  optional string zip = 13;
+  optional string zip = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm account update. Ignored when dry_run=true.
-  bool confirm = 14; // system param
+  bool confirm = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 15; // system param
+  optional bool dry_run = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

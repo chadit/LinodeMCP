@@ -1,27 +1,20 @@
 """Python route resolution for the route-evidence gate.
 
-This sits beside the gate rather than inside it because the two jobs are
-separate: the gate owns the contract, the baseline, and the language registry,
-while this owns reading one Python source tree and saying which routes it can
-build. go/cmd/route-dump is the same job for Go, written in Go because Go source
-needs a Go parser.
+The gate owns the contract and the baseline; this reads one Python source tree
+and says which routes it can build. go/cmd/route-dump is the same job for Go,
+and resolution mirrors it so both languages are judged alike: start at the
+functions that build a request out of a method and an endpoint, then work
+outward to their callers until nothing new resolves, rather than keeping a
+wrapper list that goes stale the first time someone adds one. A helper that only
+decorates an endpoint resolves through its return values, which is how
+paginated_path resolves to the path it was handed.
 
-Resolution mirrors that dumper so both languages are judged the same way. Find
-the functions that build a request out of a method and an endpoint, then work
-outward to their callers until nothing new resolves, rather than carrying a list
-of wrappers that goes stale the first time someone adds one. A helper that only
-decorates an endpoint is resolved through its own return values, which is how
-paginated_path resolves to the path it was handed: the query string it appends
-is not part of the route.
-
-Names are what tie a call site to a declaration, and a name declared more than
-once contributes the union of what its declarations issue. That union is what
-makes the retry twin resolve: RetryableClient.get_raw forwards through a
-callable it is handed rather than calling anything by name, so only the shared
-name connects it to the plain get_raw the tool layer reaches the API through.
-Resolution itself is stricter than issuing: two declarations of one name that
-resolve to different paths resolve to nothing, so a coincidental name collision
-costs evidence rather than inventing it.
+A name declared more than once issues the union of what its declarations issue,
+which is what makes RetryableClient.get_raw resolve: it forwards through a
+callable it is handed rather than calling anything by name. Resolution is
+stricter than issuing, though. Two declarations of one name that resolve to
+different paths resolve to nothing, so a name collision costs evidence rather
+than inventing it.
 """
 
 from __future__ import annotations
@@ -35,20 +28,45 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-# What a path parameter collapses to. Nothing here can do better: the source
-# being read builds a path out of variables, so the segment has no name in it.
-# A declared route does name its parameters, and _toolroutes.norm_template
-# collapses them to this same placeholder before any comparison, which is what
-# lets the name stay free of the cross-language agreement problem.
+# What a path parameter collapses to. The source being read builds a path out
+# of variables, so the segment has no name in it; _toolroutes.norm_template
+# collapses a declared route's named parameters to this same placeholder before
+# any comparison.
 PATH_PARAM = "{p}"
 
 # The HTTP library call that puts a request on the wire, taking the method
 # first and the URL second.
 _REQUEST_BUILDER = "request"
 
-# The attribute holding the API root the client was configured with. It is the
-# server, not the route, so it contributes nothing to a path and resolving it
-# away is what lets a URL built as base + endpoint be read as its endpoint.
+# The client methods that resolve their route from the proto contract, taking
+# the tool name first. Their call sites write no path, so the route is whatever
+# the tool declares, and their own bodies are skipped for the same reason.
+# route_raw exists on both the plain client and the retrying one under the one
+# name.
+_ROUTE_BUILDERS = frozenset({"make_route_request", "route_raw"})
+
+# The tool drivers, which are route builders one level up: their bodies name no
+# tool either, so the tool is named at the call site. It arrives as a `tool=`
+# keyword rather than the leading argument, because a driver takes the config
+# and the call's arguments first.
+_TOOL_DRIVERS = frozenset(
+    {"run_get_tool", "run_list_tool", "run_write_tool", "run_destructive_tool"}
+)
+
+# The keyword a driver call names its tool with.
+_TOOL_KEYWORD = "tool"
+
+# The driver-module helpers that carry a tool down to a route builder. They
+# name no tool either, so they are skipped rather than reported. Renaming one
+# without updating this list fails the gate by name, the safe direction.
+_DRIVER_INTERNALS = frozenset({"_route_write", "_routed_write"})
+
+# Every function whose body is read for routes it does not name.
+_SKIPPED_BODIES = _ROUTE_BUILDERS | _TOOL_DRIVERS | _DRIVER_INTERNALS
+
+# The attribute holding the configured API root. It is the server, not the
+# route, so resolving it away to nothing is what lets a URL built as
+# base + endpoint be read as its endpoint.
 _BASE_URL_ATTR = "base_url"
 
 # A resolved argument holds its value; an unknown one is a call site the scanner
@@ -70,11 +88,11 @@ _UNKNOWN: ArgSource = ("", _ARG_UNKNOWN)
 
 _FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
 
-# A parameter resolves to a marker rather than to a value, so an endpoint that
-# reaches the wire unchanged can be recognized however many locals and helpers
-# it passed through on the way. The marker is uppercase because method
-# resolution upper-cases what it resolves, and one that changed shape in
-# transit would never match. NUL cannot occur in source text.
+# A parameter resolves to a marker rather than a value, so an endpoint that
+# reaches the wire unchanged stays recognizable however many locals and helpers
+# it crossed. Uppercase because method resolution upper-cases what it resolves,
+# and a marker that changed shape in transit would never match. NUL cannot
+# occur in source text.
 _MARKER_PREFIX = "\x00PARAM"
 _MARKER_SUFFIX = "\x00"
 _MARKER_PATTERN = re.compile(rf"^{re.escape(_MARKER_PREFIX)}(\d+){_MARKER_SUFFIX}$")
@@ -97,9 +115,9 @@ def _marker_index(value: str) -> int | None:
 class Evidence:
     """The routes one language can build, and the call sites it could not follow.
 
-    Both halves are reported because both hide the same thing. A route with no
-    evidence is either unimplemented or built in a shape the scanner cannot
-    read, and an unresolved call site is where that shape lives.
+    Both are reported: a route with no evidence is either unimplemented or built
+    in a shape the scanner cannot read, and an unresolved call site is where
+    that shape lives.
     """
 
     routes: set[str]
@@ -109,21 +127,29 @@ class Evidence:
 class ScannerError(RuntimeError):
     """The scanner could not start: no function builds a request at all.
 
-    That is always a broken scanner, never a client with no routes, and it must
-    not reach the gate as an empty result that reads like a contract break.
+    That is a broken scanner, never a client with no routes, so it must not
+    reach the gate as an empty result that reads like a contract break.
     """
 
 
-def scan_python(root: Path, repo_root: Path) -> Evidence:
-    """Resolve every route the Python tree under root can build."""
-    return _Scan(root, repo_root).run()
+def scan_python(
+    root: Path, repo_root: Path, declared: dict[str, str] | None = None
+) -> Evidence:
+    """Resolve every route the Python tree under root can build.
+
+    declared is the gate's contract, {tool: "<METHOD> <path>"}, and only
+    route-builder call sites consult it: they name a tool instead of a path.
+    Left out, a call site that names a tool reports as unresolved rather than
+    quietly contributing nothing.
+    """
+    return _Scan(root, repo_root, declared or {}).run()
 
 
 def _display_path(path: Path, root: Path, repo_root: Path) -> str:
     """Repo-relative when the tree sits in the repo, root-relative otherwise.
 
-    The fallback keeps the scanner usable against any tree (a test fixture, a
-    checkout mounted elsewhere) instead of raising.
+    The fallback keeps the scanner usable against a tree outside the repo, such
+    as a test fixture, instead of raising.
     """
     try:
         return path.relative_to(repo_root).as_posix()
@@ -134,8 +160,8 @@ def _display_path(path: Path, root: Path, repo_root: Path) -> str:
 def _is_test_path(relative: Path) -> bool:
     """Whether a file is test code, which never counts as route evidence.
 
-    The Go dumper skips _test.go for the same reason: a fixture endpoint in a
-    test would otherwise stand in as proof the client builds that route.
+    The Go dumper skips _test.go for the same reason: a fixture endpoint would
+    otherwise stand in as proof the client builds that route.
     """
     if any(part in {"tests", "test"} for part in relative.parts):
         return True
@@ -146,8 +172,8 @@ def _is_test_path(relative: Path) -> bool:
 def _param_names(func: FunctionDef) -> list[str]:
     """A function's parameters in call-argument order.
 
-    The bound receiver is dropped because it never appears in the arguments at a
-    call site, so a method's first argument is its second parameter.
+    The bound receiver is dropped because it never appears at a call site, so a
+    method's first argument is its second parameter.
     """
     names = [arg.arg for arg in (*func.args.posonlyargs, *func.args.args)]
     if names and names[0] in {"self", "cls"}:
@@ -166,11 +192,24 @@ def _callee_name(func: ast.expr) -> str | None:
     return None
 
 
+def _driver_tool(call: ast.Call) -> ast.expr | None:
+    """The tool expression a driver call site names, or None when it names none.
+
+    A driver takes the config and the call's arguments positionally, so the tool
+    is a keyword rather than the leading argument a route builder takes it as.
+    """
+    for keyword in call.keywords:
+        if keyword.arg == _TOOL_KEYWORD:
+            return keyword.value
+
+    return None
+
+
 def _calls_request(func: FunctionDef) -> bool:
     """Whether a body puts a request on the wire.
 
     Only the tripwire uses this: a tree where nothing reaches the HTTP library
-    is a scanner that has stopped working, not a client with no routes.
+    is a broken scanner, not a client with no routes.
     """
     return any(
         isinstance(node, ast.Call) and _callee_name(node.func) == _REQUEST_BUILDER
@@ -182,7 +221,7 @@ def _strip_query(endpoint: str) -> str:
     """Drop the query string.
 
     A route is its method and path. page and page_size ride in the query and
-    belong to the pagination gate, not this one.
+    belong to the pagination gate.
     """
     return endpoint.split("?", 1)[0]
 
@@ -199,11 +238,11 @@ def _returned(func: FunctionDef) -> list[ast.expr]:
 def _ordered_nodes(node: ast.AST) -> Iterator[ast.AST]:
     """Every node below one, depth first in source order.
 
-    Source order is what lets a local be read with the value it held at that
-    point rather than its last value anywhere in the function. Nested functions
-    are descended into on purpose: a handler builds its endpoint in the outer
-    body and calls the client from an inner closure, so the two share a scope
-    here as they do at runtime.
+    Source order lets a local be read with the value it held at that point
+    rather than its last value anywhere in the function. Nested functions are
+    descended into on purpose: a handler can build its endpoint in the outer
+    body and call the client from an inner closure, sharing a scope here as they
+    do at runtime.
     """
     for child in ast.iter_child_nodes(node):
         yield child
@@ -246,8 +285,7 @@ class _Expressions:
         """Resolve a conditional expression.
 
         Both branches have to name the same route once the query string is
-        dropped, which is what "the path with a query when there is one"
-        amounts to.
+        dropped.
         """
         body = self.root(node.body, known)
         other = self.root(node.orelse, known)
@@ -261,10 +299,9 @@ class _Expressions:
 
         A value computed per request (quote(str(id)), a local holding an encoded
         id) is a path parameter by construction, so it collapses to the
-        placeholder rather than failing the endpoint around it. A helper
-        returning a multi-segment subpath would collapse the same way and yield
-        a route matching nothing in the contract, which fails the gate out loud.
-        That is the direction to be wrong in.
+        placeholder. A helper returning a multi-segment subpath collapses the
+        same way and yields a route matching nothing in the contract, which
+        fails the gate out loud rather than quietly.
         """
         resolved = self.root(node, known)
         if resolved is not None:
@@ -282,9 +319,7 @@ class _Expressions:
         return resolved.upper() if resolved is not None else None
 
     def _concat(self, node: ast.BinOp, known: dict[str, str]) -> str | None:
-        """Resolve a + chain: the left side carries the endpoint built so far,
-        the right side is one segment appended to it.
-        """
+        """Resolve a + chain, the left side carrying the endpoint built so far."""
         left = self.root(node.left, known)
         right = self.segment(node.right, known)
         if left is None or right is None:
@@ -293,9 +328,7 @@ class _Expressions:
         return left + right
 
     def _fstring(self, node: ast.JoinedStr, known: dict[str, str]) -> str | None:
-        """Resolve an f-string: literal parts as themselves, interpolations as
-        whatever they hold.
-        """
+        """Resolve an f-string, its interpolations as path segments."""
         parts: list[str] = []
         for value in node.values:
             if isinstance(value, ast.FormattedValue):
@@ -325,9 +358,7 @@ class _Expressions:
     def _declared_result(
         self, name: str, node: ast.Call, known: dict[str, str]
     ) -> str | None:
-        """What every declaration of a name returns for this call site, when
-        they agree.
-        """
+        """What every declaration of a name returns here, when they agree."""
         results = {
             self._result(func, node.args, known)
             for _, func in self.declarations.get(name, ())
@@ -340,12 +371,11 @@ class _Expressions:
     def _result(
         self, func: FunctionDef, args: list[ast.expr], known: dict[str, str]
     ) -> str | None:
-        """What one helper returns for one call site, with its parameters bound
-        to the resolved arguments.
+        """What one helper returns for one call site.
 
         Every return has to agree once the query string is dropped, which is
-        what lets paginated_path resolve: it returns the path with a query on
-        one branch and without one on the other, and both are the same route.
+        what lets paginated_path resolve: one branch returns the path with a
+        query and the other without, and both are the same route.
         """
         bound = self._bind(func, args, known)
 
@@ -383,12 +413,13 @@ class _Expressions:
 
 
 class _Scan:
-    """One structural pass over a Python tree, resolving outward from the
-    request primitives until no new issuer appears.
+    """One pass over a Python tree, resolving outward from the request
+    primitives until no new issuer appears.
     """
 
-    def __init__(self, root: Path, repo_root: Path) -> None:
+    def __init__(self, root: Path, repo_root: Path, declared: dict[str, str]) -> None:
         self.declarations = self._index(root, repo_root)
+        self.declared = declared
         self.expressions = _Expressions(self.declarations)
         self.issuers = self._seed()
         self.routes: set[str] = set()
@@ -408,8 +439,8 @@ class _Scan:
         """Every named declaration by name, with the file it came from.
 
         Only module-level and class-level functions are indexed. A nested
-        function is walked as part of the body that encloses it, both because it
-        shares that scope and because nothing calls it by name.
+        function is walked as part of the body that encloses it, whose scope it
+        shares, and nothing calls it by name anyway.
         """
         found: Declarations = {}
         for path in sorted(root.rglob("*.py")):
@@ -430,13 +461,10 @@ class _Scan:
         """The starting point: the HTTP library call itself, method first and
         URL second.
 
-        Python seeds one hop closer to the wire than the Go dumper does. Go
-        stops at the function that constructs an http.Request, because the URL
-        arriving there has been through url.Parse; here the client joins its
-        base URL to the endpoint with a plain concatenation that resolution
-        reads straight through. Seeding at the call is what covers the two
-        thumbnail methods, which send raw PNG bytes and skip the shared
-        make_request path the way Go's second primitive does.
+        Python seeds one hop closer to the wire than the Go dumper, which has to
+        stop at http.Request construction because url.Parse has already run by
+        then. Seeding at the call also covers the two thumbnail methods, which
+        send raw PNG bytes and skip the shared make_request path.
         """
         if not any(
             _calls_request(func)
@@ -450,12 +478,15 @@ class _Scan:
 
     def _expand(self) -> None:
         for name, declarations in self.declarations.items():
+            if name in _SKIPPED_BODIES:
+                continue
+
             for display, func in declarations:
                 self._walk_calls(name, display, func)
 
     def _walk_calls(self, name: str, display: str, func: FunctionDef) -> None:
         """Resolve one function's request call sites, tracking its string locals
-        in source order as the walk reaches them.
+        in source order.
         """
         # Parameters start bound to markers so an endpoint the function was
         # handed stays recognizable wherever it surfaces later.
@@ -480,10 +511,42 @@ class _Scan:
         if callee is None:
             return
 
+        if callee in _ROUTE_BUILDERS or callee in _TOOL_DRIVERS:
+            self._resolve_declared(
+                call, caller, display, driver=callee in _TOOL_DRIVERS
+            )
+
+            return
+
         # Copied before iterating: resolving a self-recursive call can add to
         # the same set.
         for req in list(self.issuers.get(callee, ())):
             self._resolve_request(req, call, caller, display, known)
+
+    def _resolve_declared(
+        self, call: ast.Call, caller: str, display: str, *, driver: bool = False
+    ) -> None:
+        """Record the route the tool named at a route-builder call site declares.
+
+        A tool the contract does not list is reported rather than skipped: a
+        typo is a call that raises the first time it runs, and this is the
+        offline read that catches it.
+        """
+        tool = _driver_tool(call) if driver else (call.args[0] if call.args else None)
+        if not isinstance(tool, ast.Constant) or not isinstance(tool.value, str):
+            self.unresolved.add(f"{display}:{call.lineno} {caller}: unnamed tool")
+
+            return
+
+        route = self.declared.get(tool.value)
+        if route is None:
+            self.unresolved.add(
+                f"{display}:{call.lineno} {caller}: undeclared tool {tool.value!r}"
+            )
+
+            return
+
+        self.routes.add(route)
 
     def _resolve_request(
         self,
@@ -513,11 +576,9 @@ class _Scan:
     ) -> None:
         """File a fully resolved request as a route.
 
-        A parameter interpolated into a path is a path parameter by
-        construction, so a marker left in the value collapses to the placeholder
-        here. A marker left in the method is a method the caller derives rather
-        than names, which resolution cannot carry forward.
-
+        A marker left in the path is a parameter interpolated into it, so it
+        collapses to the placeholder. A marker left in the method is one the
+        caller derives rather than names, which resolution cannot carry forward.
         A path that does not start with a slash is a resolution that went wrong
         rather than a route, so it is reported instead of recorded.
         """
@@ -545,11 +606,11 @@ class _Scan:
     ) -> ArgSource:
         """Restate one argument of the callee's request in the caller's terms.
 
-        The caller's own parameters resolve to markers, so an argument that
-        arrives as nothing but a marker is one the caller passes through, however
-        many locals and helpers it crossed on the way. A value that merely
-        contains a marker is left for _record, which knows whether an
-        interpolated parameter is a path segment or a method it cannot follow.
+        The caller's own parameters resolve to markers, so an argument that is
+        nothing but a marker is one the caller passes through, however many
+        locals and helpers it crossed. A value that merely contains a marker is
+        left for _record, which knows whether an interpolated parameter is a
+        path segment or a method it cannot follow.
         """
         if arg[1] == _ARG_RESOLVED:
             return arg
@@ -571,9 +632,8 @@ class _Scan:
         """Record string locals as the walk reaches them.
 
         A compound assignment extends the value the local already holds, which
-        is how a handler appends a query string to an endpoint it already built.
-        A local that stops resolving is dropped rather than left holding an
-        earlier value that no longer applies.
+        is how a handler appends a query string to an endpoint it built. A local
+        that stops resolving is dropped rather than left holding a stale value.
         """
         target, value = self._assigned(node, known)
         if target is None:

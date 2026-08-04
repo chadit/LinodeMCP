@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
 )
 
@@ -88,7 +89,7 @@ func TestToolHandlersAPIErrorResponsesGetInstance(t *testing.T) {
 			cfg := newTestConfig(srv.URL)
 			_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
 
-			req := createRequestWithArgs(t, map[string]any{keyInstanceID: "123"})
+			req := createRequestWithArgs(t, map[string]any{keyInstanceID: 123})
 
 			result, err := handler(t.Context(), req)
 			if err != nil {
@@ -190,7 +191,7 @@ func TestToolHandlersAPIErrorResponsesListDomainRecords(t *testing.T) {
 			defer srv.Close()
 
 			cfg := newTestConfig(srv.URL)
-			_, _, handler := tools.NewLinodeDomainRecordListTool(cfg)
+			_, _, handler := gentools.NewLinodeDomainRecordListTool(cfg)
 
 			req := createRequestWithArgs(t, map[string]any{keyDomainID: "123"})
 

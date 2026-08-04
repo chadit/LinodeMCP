@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/common.proto";
 import "linode/mcp/v1/options.proto";
 
 // Volume mirrors the Linode block storage volume object. Field order and JSON
@@ -73,11 +74,13 @@ message VolumeGetInput {
     method: "GET"
     path: "/volumes/{volume_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeGetResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the volume to retrieve (required).
-  int32 volume_id = 2;
+  int32 volume_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // VolumeListInput is the input contract for linode_volume_list. region and
@@ -88,13 +91,19 @@ message VolumeListInput {
     method: "GET"
     path: "/volumes"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter volumes by region (e.g., 'us-east', 'eu-west').
-  optional string region = 2;
+  optional string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Filter volumes where label contains this string (case-insensitive).
-  optional string label_contains = 3;
+  optional string label_contains = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // VolumeTypeListInput is the input contract for linode_volume_type_list.
@@ -104,9 +113,11 @@ message VolumeTypeListInput {
     method: "GET"
     path: "/volumes/types"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeTypeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // VolumeCreateInput is the input contract for linode_volume_create. A plain
@@ -118,23 +129,36 @@ message VolumeCreateInput {
     method: "POST"
     path: "/volumes"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Volume '{label}' (ID: {id}) created successfully in {region}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // A label for the volume (must be unique within your account).
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Region where the volume will be created. Required unless attaching to a Linode.
-  optional string region = 3;
+  optional string region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Size in GB (10-10240). Default is 20GB.
-  optional int32 size = 4;
+  optional int32 size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Linode ID to attach the volume to (optional). If provided, region is inferred.
-  optional int32 linode_id = 5;
+  optional int32 linode_id = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm volume creation. This operation incurs
   // billing charges. Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Tags to apply to the new volume (optional).
+  repeated string tags = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // ID of the Linode config the volume should be attached to (optional,
+  // requires linode_id).
+  optional int32 config_id = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the volume is encrypted at rest: disabled or enabled (optional,
+  // defaults to enabled).
+  optional DiskEncryption.Value encryption = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // VolumeCloneInput is the input contract for linode_volume_clone. volume_id,
@@ -145,19 +169,23 @@ message VolumeCloneInput {
     method: "POST"
     path: "/volumes/{volume_id}/clone"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation creates a billable cloned volume. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Volume {volume_id} cloned successfully as {label}";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the source volume to clone.
-  int32 volume_id = 2;
+  int32 volume_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // A label for the cloned volume.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm volume cloning. This operation incurs
   // billing charges. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // VolumeAttachInput is the input contract for linode_volume_attach. volume_id,
@@ -168,22 +196,26 @@ message VolumeAttachInput {
     method: "POST"
     path: "/volumes/{volume_id}/attach"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This attaches a block storage volume to an instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Volume {volume_id} attached to Linode {linode_id} successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the volume to attach.
-  int32 volume_id = 2;
+  int32 volume_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the Linode instance to attach the volume to.
-  int32 linode_id = 3;
+  int32 linode_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The Linode config ID to attach to (optional).
-  optional int32 config_id = 4;
+  optional int32 config_id = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the volume should remain attached across instance reboots (optional).
-  optional bool persist_across_boots = 5;
+  optional bool persist_across_boots = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm attaching the volume. Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // VolumeDetachInput is the input contract for linode_volume_detach. volume_id
@@ -194,16 +226,20 @@ message VolumeDetachInput {
     method: "POST"
     path: "/volumes/{volume_id}/detach"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeDetachResponse";
+  option (linode.mcp.v1.confirm_message) = "This detaches a block storage volume from an instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Volume {volume_id} detached successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the volume to detach.
-  int32 volume_id = 2;
+  int32 volume_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm detaching the volume. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // VolumeResizeInput is the input contract for linode_volume_resize. volume_id,
@@ -214,19 +250,23 @@ message VolumeResizeInput {
     method: "POST"
     path: "/volumes/{volume_id}/resize"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation may increase billing. Volumes cannot be downsized. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Volume {volume_id} resize to {size} GB initiated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the volume to resize.
-  int32 volume_id = 2;
+  int32 volume_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New size in GB (must be larger than current size).
-  int32 size = 3;
+  int32 size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm resize. Volumes cannot be downsized. Ignored
   // when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // VolumeUpdateInput is the input contract for linode_volume_update. volume_id
@@ -238,20 +278,24 @@ message VolumeUpdateInput {
     method: "PUT"
     path: "/volumes/{volume_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a block storage volume. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Volume {volume_id} updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the volume to update.
-  int32 volume_id = 2;
+  int32 volume_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New label for the volume (1-32 chars, alphanumeric, hyphens, underscores).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Replacement tags for the volume (optional).
-  repeated string tags = 4;
+  repeated string tags = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm the update. Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // VolumeDeleteInput is the input contract for linode_volume_delete, an opted-in
@@ -263,23 +307,27 @@ message VolumeDeleteInput {
     method: "DELETE"
     path: "/volumes/{volume_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "Volume";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the volume to delete.
-  int32 volume_id = 2;
+  int32 volume_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceVolumeListInput is the input contract for
@@ -290,13 +338,15 @@ message InstanceVolumeListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/volumes"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VolumeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }

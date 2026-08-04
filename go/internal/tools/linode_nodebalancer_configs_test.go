@@ -2,6 +2,7 @@ package tools_test
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -30,9 +31,12 @@ const (
 	caseTraversalNodeID         = "traversal node id"
 	keyWeight                   = "weight"
 	invalidNodeBalancerNodeMode = "invalid"
+	keyNodes                    = "nodes"
+	nodeBalancerNodeLabel       = "backend-1"
+	invalidNodeBalancerCheck    = "ping"
+	errPortRange                = "port must be an integer from 1 through 65535"
+	errCheckTimeoutMin          = "check_timeout must be an integer greater than or equal to 1"
 )
-
-// expect* helpers are fatal package-local checks from linode_assertions_test.go; check* helpers are nonfatal.
 
 func TestLinodeNodeBalancerFirewallListToolDefinition(t *testing.T) {
 	cfg := &config.Config{
@@ -906,15 +910,15 @@ func TestLinodeNodeBalancerConfigCreateToolValidation(t *testing.T) {
 		{name: caseTraversalNodeBalancerID, args: map[string]any{keyNodeBalancerID: pathTraversalValue, keyConfirm: true}, wantContains: errNodeBalancerIDInteger},
 		{name: caseNegativeNodeBalancerID, args: map[string]any{keyNodeBalancerID: float64(-1), keyPort: float64(80), keyConfirm: true}, wantContains: errNodeBalancerIDMin},
 		{name: "missing port", args: map[string]any{keyNodeBalancerID: float64(123), keyConfirm: true}, wantContains: "port is required"},
-		{name: "invalid port", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(0), keyConfirm: true}, wantContains: "port must be an integer from 1 through 65535"},
+		{name: "invalid port", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(0), keyConfirm: true}, wantContains: errPortRange},
 		{name: "invalid protocol", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyProtocol: protocolInvalid, keyConfirm: true}, wantContains: "protocol must be one of"},
 		{name: "invalid algorithm", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyAlgorithm: "random", keyConfirm: true}, wantContains: "algorithm must be one of"},
 		{name: "invalid stickiness", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyStickiness: "cookie", keyConfirm: true}, wantContains: "stickiness must be one of"},
-		{name: "invalid check", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheck: "ping", keyConfirm: true}, wantContains: "check must be one of"},
+		{name: "invalid check", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheck: invalidNodeBalancerCheck, keyConfirm: true}, wantContains: "check must be one of"},
 		{name: "invalid cipher suite", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCipherSuite: "custom", keyConfirm: true}, wantContains: "cipher_suite must be one of"},
 		{name: "missing https tls", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(443), keyProtocol: protocolHTTPS, keyConfirm: true}, wantContains: "ssl_cert and ssl_key are required"},
 		{name: "invalid check interval", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheckInterval: "ten", keyConfirm: true}, wantContains: "check_interval must be an integer"},
-		{name: "negative check timeout", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheckTimeout: float64(-1), keyConfirm: true}, wantContains: "check_timeout must be an integer greater than or equal to 1"},
+		{name: "negative check timeout", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheckTimeout: float64(-1), keyConfirm: true}, wantContains: errCheckTimeoutMin},
 		{name: "invalid check attempts", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheckAttempts: "three", keyConfirm: true}, wantContains: "check_attempts must be an integer"},
 		{name: "invalid check passive", args: map[string]any{keyNodeBalancerID: float64(123), keyPort: float64(80), keyCheckPassive: boolStringTrue, keyConfirm: true}, wantContains: "check_passive must be a boolean"},
 	}
@@ -1083,8 +1087,6 @@ func TestLinodeNodeBalancerConfigCreateToolEmitsProtoConfig(t *testing.T) {
 func TestLinodeNodeBalancerConfigCreateToolNodesReachRequestBody(t *testing.T) {
 	t.Parallel()
 
-	const keyNodes = "nodes"
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != tcNodebalancers123Configs {
 			t.Errorf("r.URL.Path = %v, want %v", r.URL.Path, tcNodebalancers123Configs)
@@ -1110,7 +1112,7 @@ func TestLinodeNodeBalancerConfigCreateToolNodesReachRequestBody(t *testing.T) {
 		}
 
 		for key, want := range map[string]any{
-			keyLabel:    "backend-1",
+			keyLabel:    nodeBalancerNodeLabel,
 			keyAddress:  nodeBalancerNodeAddress,
 			keyWeight:   float64(50),
 			keyMode:     nodeBalancerNodeModeAccept,
@@ -1142,7 +1144,7 @@ func TestLinodeNodeBalancerConfigCreateToolNodesReachRequestBody(t *testing.T) {
 		keyConfirm:        true,
 		keyNodes: []any{
 			map[string]any{
-				keyLabel:    "backend-1",
+				keyLabel:    nodeBalancerNodeLabel,
 				keyAddress:  nodeBalancerNodeAddress,
 				keyWeight:   float64(50),
 				keyMode:     nodeBalancerNodeModeAccept,
@@ -1167,8 +1169,6 @@ func TestLinodeNodeBalancerConfigCreateToolNodesReachRequestBody(t *testing.T) {
 
 func TestLinodeNodeBalancerConfigCreateToolNodesInvalidProducesError(t *testing.T) {
 	t.Parallel()
-
-	const keyNodes = "nodes"
 
 	var calls atomic.Int32
 
@@ -2597,6 +2597,179 @@ func TestLinodeNodeBalancerConfigRebuildToolDryRun(t *testing.T) {
 	}
 }
 
+// rebuildArgs returns a valid rebuild argument set, overlaid with extra. The
+// rebuild tool requires nodes, so every case needs the list even when the case
+// is about some other field.
+func rebuildArgs(extra map[string]any) map[string]any {
+	args := map[string]any{
+		keyNodeBalancerID:  float64(123),
+		keyConfigID:        float64(456),
+		keyConfirm:         true,
+		keyConfirmedDryRun: true,
+		keyNodes: []any{
+			map[string]any{keyLabel: nodeBalancerNodeLabel, keyAddress: nodeBalancerNodeAddress},
+		},
+	}
+
+	maps.Copy(args, extra)
+
+	return args
+}
+
+func TestLinodeNodeBalancerConfigRebuildToolBodyReachesWire(t *testing.T) {
+	t.Parallel()
+
+	var captured map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(map[string]any{keyID: 456, keyPort: 443, keyNodeBalancerID: 123}); err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	srvCfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: srv.URL, Token: tokenTest}},
+		},
+	}
+	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigRebuildTool(srvCfg)
+
+	args := rebuildArgs(map[string]any{
+		keyPort:          float64(443),
+		keyProtocol:      protocolHTTP,
+		keyAlgorithm:     "leastconn",
+		keyStickiness:    "none",
+		keyCheck:         "connection",
+		keyCheckInterval: float64(5),
+		keyCheckTimeout:  float64(3),
+		keyCheckAttempts: float64(2),
+		keyCheckPath:     "/healthz",
+		keyCheckBody:     statusOK,
+		keyUDPCheckPort:  float64(8080),
+	})
+
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, args))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.IsError {
+		t.Fatalf("result.IsError = true, want false")
+	}
+
+	for key, want := range map[string]any{
+		keyPort:          float64(443),
+		keyProtocol:      protocolHTTP,
+		keyAlgorithm:     "leastconn",
+		keyStickiness:    "none",
+		keyCheck:         "connection",
+		keyCheckInterval: float64(5),
+		keyCheckTimeout:  float64(3),
+		keyCheckAttempts: float64(2),
+		keyCheckPath:     "/healthz",
+		keyCheckBody:     statusOK,
+		keyUDPCheckPort:  float64(8080),
+	} {
+		if !reflect.DeepEqual(captured[key], want) {
+			t.Errorf("body[%v] = %v, want %v", key, captured[key], want)
+		}
+	}
+
+	nodes, isArray := captured[keyNodes].([]any)
+	if !isArray || len(nodes) != 1 {
+		t.Fatalf("body[nodes] = %v, want a one-element array", captured[keyNodes])
+	}
+}
+
+func TestLinodeNodeBalancerConfigRebuildToolRejectsBadBody(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Environments: map[string]config.EnvironmentConfig{
+			envKeyDefault: {Label: envLabelDefault, Linode: config.LinodeConfig{APIURL: apiURLRejectLocalhost, Token: tokenTest}},
+		},
+	}
+	_, _, handler := tools.NewLinodeNodeBalancerConfigRebuildTool(cfg)
+
+	for name, testCase := range map[string]struct {
+		args map[string]any
+		want string
+	}{
+		"missing nodes": {
+			args: map[string]any{
+				keyNodeBalancerID: float64(123), keyConfigID: float64(456),
+				keyConfirm: true, keyConfirmedDryRun: true,
+			},
+			want: "nodes is required",
+		},
+		"nodes not an array": {
+			args: rebuildArgs(map[string]any{keyNodes: float64(7)}),
+			want: "nodes must be an array of objects",
+		},
+		"unknown algorithm": {
+			args: rebuildArgs(map[string]any{keyAlgorithm: "fastest"}),
+			want: "algorithm must be one of: roundrobin, leastconn, source, ring_hash",
+		},
+		"unknown protocol": {
+			args: rebuildArgs(map[string]any{keyProtocol: "gopher"}),
+			want: "protocol must be one of: http, https, tcp, udp",
+		},
+		"unknown stickiness": {
+			args: rebuildArgs(map[string]any{keyStickiness: "sticky"}),
+			want: "stickiness must be one of: none, table, http_cookie, session, source_ip",
+		},
+		"unknown check": {
+			args: rebuildArgs(map[string]any{keyCheck: invalidNodeBalancerCheck}),
+			want: "check must be one of: none, connection, http, http_body",
+		},
+		"port out of range": {
+			args: rebuildArgs(map[string]any{keyPort: float64(70000)}),
+			want: errPortRange,
+		},
+		"check_interval below minimum": {
+			args: rebuildArgs(map[string]any{keyCheckInterval: float64(0)}),
+			want: "check_interval must be an integer greater than or equal to 1",
+		},
+		"check_timeout below minimum": {
+			args: rebuildArgs(map[string]any{keyCheckTimeout: float64(0)}),
+			want: errCheckTimeoutMin,
+		},
+		"check_attempts below minimum": {
+			args: rebuildArgs(map[string]any{keyCheckAttempts: float64(0)}),
+			want: "check_attempts must be an integer greater than or equal to 1",
+		},
+		"udp_check_port below minimum": {
+			args: rebuildArgs(map[string]any{keyUDPCheckPort: float64(0)}),
+			want: "udp_check_port must be an integer greater than or equal to 1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			result, err := handler(t.Context(), createRequestWithArgs(t, testCase.args))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !result.IsError {
+				t.Fatalf("result.IsError = false, want true")
+			}
+
+			text, isText := result.Content[0].(mcp.TextContent)
+			if !isText || text.Text != testCase.want {
+				t.Errorf("error text = %q, want %q", text.Text, testCase.want)
+			}
+		})
+	}
+}
+
 func TestLinodeNodeBalancerConfigRebuildToolSuccess(t *testing.T) {
 	t.Parallel()
 
@@ -2632,7 +2805,7 @@ func TestLinodeNodeBalancerConfigRebuildToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigRebuildTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, rebuildArgs(nil)))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -2679,7 +2852,7 @@ func TestLinodeNodeBalancerConfigRebuildToolClientError(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeNodeBalancerConfigRebuildTool(srvCfg)
 
-	result, err := srvHandler(t.Context(), createRequestWithArgs(t, map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyConfirm: true, keyConfirmedDryRun: true}))
+	result, err := srvHandler(t.Context(), createRequestWithArgs(t, rebuildArgs(nil)))
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -2803,14 +2976,14 @@ func TestLinodeNodeBalancerConfigUpdateToolValidation(t *testing.T) {
 		{name: caseQueryConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: configIDQueryValue, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseTraversalConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: pathTraversalValue, keyConfirm: true}, wantContains: errConfigIDInteger},
 		{name: caseZeroConfigID, args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(0), keyConfirm: true}, wantContains: errConfigIDMin},
-		{name: "invalid port", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(0), keyConfirm: true}, wantContains: "port must be an integer from 1 through 65535"},
+		{name: "invalid port", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(0), keyConfirm: true}, wantContains: errPortRange},
 		{name: "invalid protocol", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyProtocol: protocolInvalid, keyConfirm: true}, wantContains: "protocol must be one of"},
 		{name: "invalid algorithm", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyAlgorithm: "random", keyConfirm: true}, wantContains: "algorithm must be one of"},
 		{name: "invalid stickiness", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyStickiness: "cookie", keyConfirm: true}, wantContains: "stickiness must be one of"},
-		{name: "invalid check", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCheck: "ping", keyConfirm: true}, wantContains: "check must be one of"},
+		{name: "invalid check", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCheck: invalidNodeBalancerCheck, keyConfirm: true}, wantContains: "check must be one of"},
 		{name: "invalid cipher suite", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCipherSuite: "custom", keyConfirm: true}, wantContains: "cipher_suite must be one of"},
 		{name: "invalid check interval", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCheckInterval: "ten", keyConfirm: true}, wantContains: "check_interval must be an integer"},
-		{name: "negative check timeout", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCheckTimeout: float64(-1), keyConfirm: true}, wantContains: "check_timeout must be an integer greater than or equal to 1"},
+		{name: "negative check timeout", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCheckTimeout: float64(-1), keyConfirm: true}, wantContains: errCheckTimeoutMin},
 		{name: "invalid check attempts", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCheckAttempts: "three", keyConfirm: true}, wantContains: "check_attempts must be an integer"},
 		{name: "missing https tls", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyProtocol: protocolHTTPS, keyConfirm: true}, wantContains: "ssl_cert and ssl_key are required"},
 		{name: "invalid check passive", args: map[string]any{keyNodeBalancerID: float64(123), keyConfigID: float64(456), keyPort: float64(443), keyCheckPassive: boolStringTrue, keyConfirm: true}, wantContains: "check_passive must be a boolean"},

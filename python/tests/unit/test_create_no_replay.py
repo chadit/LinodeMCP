@@ -1,9 +1,9 @@
-"""No-replay coverage for the non-idempotent creates that reach ``post_raw``.
+"""No-replay coverage for the non-idempotent creates that reach ``route_raw``.
 
 Each route here answers a POST by assigning a new ID, so replaying it after a
 transient failure leaves a duplicate resource the caller never learns about.
-The Go twins live in ``go/internal/linode/create_no_replay_test.go`` and the two
-tables are meant to stay in step.
+The Go twins live in ``go/internal/linode/create_no_replay_test.go``; the two
+tables stay in step.
 """
 
 from collections.abc import Awaitable, Callable
@@ -21,6 +21,7 @@ from linodemcp.linode import (
     Domain,
     RetryableClient,
 )
+from linodemcp.linode.routes import route_for
 from linodemcp.tools.linode_domain_records import handle_linode_domain_record_create
 from linodemcp.tools.linode_domains_write import (
     handle_linode_domain_clone,
@@ -37,10 +38,8 @@ T = TypeVar("T")
 
 Handler = Callable[[dict[str, Any], Config], Awaitable[list[TextContent]]]
 
-# A 500 rather than a 429 because Python's _should_retry replays both through a
-# POST. Go's isRetryable declines a 5xx on a non-idempotent method, so the two
-# languages were not equally exposed before the guard landed: Python replayed
-# every retryable class, Go only the rate limit.
+# A 500 rather than a 429: Python's _should_retry replays both through a POST,
+# while Go's isRetryable declines a 5xx on a non-idempotent method.
 _TRANSIENT = APIError(500, "upstream failure")
 
 
@@ -59,7 +58,9 @@ class _FailingRetryableClient(RetryableClient):
         raise AssertionError("non-idempotent create must not use replay retry")
 
 
-_CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
+_CREATES: list[
+    tuple[str, Handler, dict[str, Any], str, tuple[object, ...], str, dict[str, Any]]
+] = [
     (
         "domain_create",
         handle_linode_domain_create,
@@ -69,6 +70,8 @@ _CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
             "soa_email": "admin@example.com",
             "confirm": True,
         },
+        "linode_domain_create",
+        (),
         "/domains",
         {"domain": "example.com", "type": "master", "soa_email": "admin@example.com"},
     ),
@@ -80,6 +83,8 @@ _CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
             "remote_nameserver": "ns1.example.net",
             "confirm": True,
         },
+        "linode_domain_import",
+        (),
         "/domains/import",
         {"domain": "example.com", "remote_nameserver": "ns1.example.net"},
     ),
@@ -87,6 +92,8 @@ _CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
         "domain_clone",
         handle_linode_domain_clone,
         {"domain_id": 12345, "domain": "clone.example.com", "confirm": True},
+        "linode_domain_clone",
+        (12345,),
         "/domains/12345/clone",
         {"domain": "clone.example.com"},
     ),
@@ -100,6 +107,8 @@ _CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
             "target": "8.8.8.8",
             "confirm": True,
         },
+        "linode_domain_record_create",
+        (12345,),
         "/domains/12345/records",
         {"type": "A", "name": "www", "target": "8.8.8.8"},
     ),
@@ -107,6 +116,8 @@ _CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
         "volume_create",
         handle_linode_volume_create,
         {"label": "my-volume", "region": "us-east", "confirm": True},
+        "linode_volume_create",
+        (),
         "/volumes",
         {"label": "my-volume", "region": "us-east"},
     ),
@@ -114,6 +125,8 @@ _CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
         "volume_clone",
         handle_linode_volume_clone,
         {"volume_id": 12345, "label": "my-volume-clone", "confirm": True},
+        "linode_volume_clone",
+        (12345,),
         "/volumes/12345/clone",
         {"label": "my-volume-clone"},
     ),
@@ -126,6 +139,8 @@ _CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
             "script": "#!/bin/bash",
             "confirm": True,
         },
+        "linode_stackscript_create",
+        (),
         "/linode/stackscripts",
         {
             "label": "my-script",
@@ -137,7 +152,7 @@ _CREATES: list[tuple[str, Handler, dict[str, Any], str, dict[str, Any]]] = [
 
 
 @pytest.mark.parametrize(
-    ("name", "handler", "arguments", "endpoint", "body"),
+    ("name", "handler", "arguments", "tool", "values", "endpoint", "body"),
     _CREATES,
     ids=[case[0] for case in _CREATES],
 )
@@ -146,14 +161,16 @@ async def test_create_does_not_replay_transient_failure(
     name: str,
     handler: Handler,
     arguments: dict[str, Any],
+    tool: str,
+    values: tuple[object, ...],
     endpoint: str,
     body: dict[str, Any],
 ) -> None:
     """One attempt reaches the API and the transient failure reaches the caller."""
     del name
     client = _FailingRetryableClient()
-    post_raw = AsyncMock(side_effect=_TRANSIENT)
-    cast("Any", client.client).post_raw = post_raw
+    route_raw = AsyncMock(side_effect=_TRANSIENT)
+    cast("Any", client.client).route_raw = route_raw
 
     try:
         with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
@@ -162,7 +179,10 @@ async def test_create_does_not_replay_transient_failure(
         await client.close()
 
     assert client.retry_calls == 0
-    post_raw.assert_awaited_once_with(endpoint, body)
+    route_raw.assert_awaited_once_with(tool, *values, body=body, query=None)
+    # Pin the wire path through the contract that owns it, so a route edit that
+    # moves one of these endpoints fails here rather than passing silently.
+    assert route_for(tool).endpoint(*values) == endpoint
     assert "upstream failure" in result[0].text
     assert result[0].text.startswith("Failed to ")
 
@@ -170,8 +190,7 @@ async def test_create_does_not_replay_transient_failure(
 class _OpenCircuitRetryableClient(RetryableClient):
     """Retryable client double whose breaker is already open.
 
-    The breaker is installed in __init__ so the assignment stays inside the
-    class hierarchy that declares it.
+    Set in __init__ so the private assignment stays inside the declaring class.
     """
 
     def __init__(self) -> None:
@@ -196,16 +215,11 @@ class _RetryPathRetryableClient(RetryableClient):
         raise _TRANSIENT
 
 
-# The typed RetryableClient wrappers, which the tools reach instead of post_raw.
-# Argument tuples are the required positionals only; the wrapper fills in its
-# own defaults on the way to the inner client. The clone and add entries belong
-# here because they allocate a new server-assigned resource exactly the way the
-# create entries do.
-#
-# Entries whose wrapper delegates straight to the inner client, with no
-# _execute_* call at all, are protected too and belong here: that bypass is the
-# other no-replay idiom in the client, and a table that only recognized
-# _execute_without_retry would read those as unprotected.
+# The typed RetryableClient wrappers. Argument tuples are the required
+# positionals only; the wrapper fills in its own defaults. Clone and add entries
+# belong here because they allocate a new server-assigned resource the same way
+# the creates do, and so do wrappers that delegate straight to the inner client:
+# that bypass is the other no-replay idiom, not an unprotected path.
 _TYPED_NO_REPLAY: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = [
     ("create_ssh_key", ("my-key", "ssh-rsa AAAA"), {}),
     ("create_instance_raw", ("us-east", "g6-nanode-1", 42), {}),
@@ -264,10 +278,9 @@ _TYPED_NO_REPLAY: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = [
     ("import_domain", ("example.com", "ns1.example.net"), {}),
 ]
 
-# The two creates that still replay. Neither can leave a second resource
-# behind: the bucket is identified by the region and label the caller chose,
-# and the presigned URL is a signature the API computes rather than an object
-# it stores.
+# The two creates that still replay. Neither can leave a second resource behind:
+# the bucket is keyed by the region and label the caller chose, and the
+# presigned URL is a signature the API computes rather than an object it stores.
 _TYPED_RETRY_SAFE: list[tuple[str, tuple[Any, ...]]] = [
     ("create_object_storage_bucket", ("my-bucket", "us-east")),
     ("create_presigned_url", ("us-east", "my-bucket", "object.txt", "GET")),
@@ -307,10 +320,10 @@ async def test_typed_create_is_circuit_protected(
 ) -> None:
     """An open breaker rejects the create before it reaches the network.
 
-    Avoiding replay is not enough on its own. A wrapper that delegates straight
-    to the inner client also avoids replay, but it skips the breaker, the rate
-    limiter and the concurrency semaphore, so it can keep hammering an upstream
-    that is already failing. This is the test that tells those two apart.
+    A wrapper that delegates straight to the inner client also avoids replay,
+    but it skips the breaker, the rate limiter and the concurrency semaphore, so
+    it keeps hammering an upstream that is already failing. This test tells the
+    two apart.
     """
     client = _OpenCircuitRetryableClient()
     inner = AsyncMock()
@@ -360,10 +373,9 @@ def _domain_fixture(domain: str) -> Domain:
     )
 
 
-# The two domain wrappers whose no-replay conversion also had to keep handing
-# the created Domain back. Both allocate a new server-assigned zone, and both
-# return a value the tool renders, so a conversion that dropped the return would
-# report success with an empty domain rather than the one the API just made.
+# The two domain wrappers that also have to hand the created Domain back: a
+# conversion that dropped the return would report success with an empty domain
+# rather than the zone the API just made.
 _TYPED_NO_REPLAY_RETURNING_DOMAIN: list[tuple[str, tuple[Any, ...], str]] = [
     ("clone_domain", (123, "clone.example.com"), "clone.example.com"),
     ("import_domain", ("example.com", "ns1.example.net"), "example.com"),

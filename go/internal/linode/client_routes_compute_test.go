@@ -577,7 +577,7 @@ func TestClientRoutesComputePart4(t *testing.T) {
 			response: clientRouteProtoPageUsername,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListStackScriptsProto(ctx)
+				got, err := client.ListStackScriptsProto(ctx, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.StackScript).GetUsername) })
 			},

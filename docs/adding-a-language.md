@@ -14,7 +14,7 @@ from the proto contract and its generated artifacts. You do not hand-write any o
 you find yourself typing a JSON schema, a field list, or an enum by hand in the new
 language, stop: that is the drift this project exists to prevent.
 
-Two generated trees feed every language:
+Three generated trees feed every language:
 
 - **`genpb`**: the message types (`buf generate` produces protobuf runtime types per
   language).
@@ -22,6 +22,16 @@ Two generated trees feed every language:
   emitted by the same `buf generate`. A tool advertises its input by loading its strict
   schema, so every language advertises an identical input contract without agreeing on
   anything by hand.
+- **`gentools`**: the per-tool factory and handler code, emitted by each language's
+  tool emitter (`go/cmd/toolgen` for Go, the Python toolgen script) from the compiled
+  descriptors. A tool listed in `docs/contracts/generated-tools.txt` has NO hand-written
+  per-tool code in any language: its route, capability tier, description, confirm and
+  success and error prose, response binding, argument extraction, filters, and list
+  envelope all come off the proto options (`tool_route`, `field_location`,
+  `tool_capability`, `tool_response`, `confirm_message`, `success_message`,
+  `resource_type`, `retry_disabled`, `tool_description`, `error_message`). The
+  `generated-tools` gate ratchets the hand-written remainder downward and fails a
+  cohort tool that grows hand-written code back.
 
 Run `make proto` first; the generated trees are gitignored and nothing builds without them.
 
@@ -83,10 +93,46 @@ Each item lists the gate that enforces it, so you know what "done" is checked by
    rejects an invalid input with a different message, or renders a different preview for
    the same faked state, this gate catches it.
 
-5. **Match confirm-text.** Enforced by **`messages`** (cross-language confirm-message
+5. **Implement the contract runtime, once.** This is the layer every generated tool
+   calls, and it is the whole per-language cost of the surface:
+   - a route builder reading `tool_route` from the descriptors (the shape of
+     `go/internal/linoderoute` and `python/src/linodemcp/linode/routes.py`), with the
+     shared path-escaping contract: RFC 3986 unreserved plus a literal colon, uppercase
+     hex, all-dots values percent-encoded. Both existing languages pin an identical
+     escaping vector table in their route tests; port that table verbatim, it IS the
+     contract.
+   - readers for the tool options (`contract_for` in Python, the contract reader in
+     `go/cmd/toolgen`): capability, response binding, confirm/success/error prose,
+     resource type, retry policy, description.
+   - the driver tier: list, write, and destructive drivers the generated code
+     configures (Go's list factories and destroy drivers; Python's
+     `linodemcp.tools.drivers`). Drivers own pagination, dry-run ordering (dry-run
+     validates before confirm; live gates confirm before validating), the confirm and
+     destroy gates, retry policy, and response serialization.
+   - a hooks module bound to `docs/contracts/tool-hooks.txt`: per-tool bespoke logic
+     (custom validators today) referenced by generated code so a missing hook fails the
+     build or import, never a runtime call.
+
+6. **Write the tool emitter.** A program that reads the compiled descriptors and emits
+   your language's per-tool code into a gitignored `gentools` tree, run inside
+   `make proto` after `buf generate`. Read the two existing emitters first; their
+   derivation rules are contract: response binding comes from `tool_response` only
+   (never derived from names), tier from the response shape, list envelope from the
+   response's single repeated field, filters from QUERY fields matched against element
+   fields, and every prose string from its option. The emitter must refuse, by tool
+   name, anything under-declared. Enforced by **`generated-tools`**.
+
+7. **Enroll in the route-evidence scanners.** `make route-source` and
+   `make route-evidence` need a scanner arm for your language (the job
+   `scripts/_routescan.py` does for Python and `go/cmd/route-dump` does for Go): which
+   call sites build requests, which primitives resolve routes from the contract, and
+   which routes therefore have evidence. A registered language with no scanner arm
+   fails by name.
+
+8. **Match confirm-text.** Enforced by **`messages`** (cross-language confirm-message
    parity).
 
-6. **Wire it into `make check` and CI** so all of the above run on every change.
+9. **Wire it into `make check` and CI** so all of the above run on every change.
 
 ## The one thing that is NOT auto-generated: the hand-lists
 
@@ -144,8 +190,11 @@ There is no sync-gate enrollment step here: the scheduled `sync-scopes` gate com
 Python's mapping against the live spec's per-operation security blocks (routed through
 the proto contract's `tool_route` options), and `tool-parity` pins every other language
 equal to Python, so the docs comparison covers the new language transitively. New tools
-DO need a `tool_route` option on their proto input message, whatever language adds them;
-`make tool-routes` fails loudly when one is missing.
+DO need two options on their proto input message, whatever language adds them: a
+`tool_capability` naming the tier, and either a `tool_route` or, for a tool that reaches
+no Linode API at all, a `tool_meta` naming the tool. `make tool-routes` and
+`make tool-capability` fail loudly when one is missing, and the capability gate also
+fails a tool whose proto tier and `tools-capabilities.txt` tier disagree.
 
 ## The endgame (so you know these hand-lists are temporary)
 
@@ -168,6 +217,7 @@ and runs on a cron, not on every change.
 | `tool-parity`, `input-proto`, `read-proto`, `write-proto`, `meta-proto` | per-commit | schema/surface/output-shape drift between languages (tool-parity reads every language in `docs/contracts/languages.txt`; the four proto classifiers are pairwise today and grow with the language) |
 | `behavior` | per-commit | per-input validation, error-message text, request bodies, confirm gates, and dry-run preview content: the cross-language contract |
 | `messages` | per-commit | confirm-text parity |
+| `generated-tools` | per-commit | a tool in `docs/contracts/generated-tools.txt` that a language does not generate, a hand-written factory left behind for one (both registries scan, so a leftover stages the tool twice), and the count of tools each language still serves by hand, which only falls |
 | baseline guard | per-change (CI only) | baseline growth without an `accepted YYYY-MM-DD` annotation; `make check` reads committed state and cannot see direction, so this one check is diff-aware |
 | `sync-enums` / `sync-defaults` | scheduled | proto enums plus hand-list value **sets** plus defaults vs the live Linode API, and every language's set vs every other |
 | `sync-scopes` | scheduled | the per-tool OAuth scope mapping vs the live spec's per-operation security blocks; catches all languages drifting from the docs together, which `tool-parity` cannot see |
@@ -190,3 +240,8 @@ in the scheduled `sync-enums` hand-list map.
   parity dumper emits `scopes`, and its scope completeness test passes.
 - Tool surface, capabilities, and manifest match; no hand-written input schemas or output
   shapes anywhere in the new language.
+- The contract runtime exists (route builder with the shared escaping vector table,
+  option readers, the three drivers, the hooks module), the language's tool emitter runs
+  inside `make proto`, every tool in `docs/contracts/generated-tools.txt` is generated
+  with zero hand-written per-tool code, and the language has a scanner arm in the
+  route-source and route-evidence gates.

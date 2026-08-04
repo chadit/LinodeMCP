@@ -83,11 +83,13 @@ message LongviewClientGetInput {
     method: "GET"
     path: "/longview/clients/{client_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClient";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Longview client ID to retrieve (required).
-  int32 client_id = 2;
+  int32 client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // LongviewClientListInput is the input contract for
@@ -98,13 +100,15 @@ message LongviewClientListInput {
     method: "GET"
     path: "/longview/clients"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // LongviewClientCreateInput is the input contract for
@@ -115,17 +119,21 @@ message LongviewClientCreateInput {
     method: "POST"
     path: "/longview/clients"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientCreateWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a Longview client and returns setup credentials. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Longview client created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the Longview client.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm Longview client creation. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // LongviewClientUpdateInput is the input contract for
@@ -136,20 +144,24 @@ message LongviewClientUpdateInput {
     method: "PUT"
     path: "/longview/clients/{client_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a Longview client. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Longview client updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Longview client ID to update.
-  int32 client_id = 2;
+  int32 client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New Longview client label. Must be 3-32 letters, digits, hyphens, or
   // underscores.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm Longview client update. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // LongviewClientDeleteInput is the input contract for
@@ -161,17 +173,21 @@ message LongviewClientDeleteInput {
     method: "DELETE"
     path: "/longview/clients/{client_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewClientIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes a Longview client. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Longview client deleted successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Longview client ID to delete.
-  int32 client_id = 2;
+  int32 client_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm Longview client deletion. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // Price is the hourly/monthly price summary attached to billable resources.
@@ -205,11 +221,13 @@ message LongviewSubscriptionGetInput {
     method: "GET"
     path: "/longview/subscriptions/{subscription_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscription";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Longview subscription ID to retrieve (required).
-  string subscription_id = 2;
+  string subscription_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // LongviewType mirrors a Linode Longview subscription type (/longview/types). It
@@ -238,9 +256,11 @@ message LongviewPlanGetInput {
     method: "GET"
     path: "/longview/plan"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscription";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // LongviewPlanUpdateInput is the input contract for
@@ -251,17 +271,21 @@ message LongviewPlanUpdateInput {
     method: "PUT"
     path: "/longview/plan"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscriptionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates the Longview subscription plan. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Longview plan updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Longview subscription plan slug to apply.
-  string longview_subscription = 2;
+  string longview_subscription = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm the Longview plan update. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // LongviewSubscriptionListInput is the input contract for
@@ -272,13 +296,15 @@ message LongviewSubscriptionListInput {
     method: "GET"
     path: "/longview/subscriptions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewSubscriptionListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // LongviewTypeListInput is the input contract for linode_longview_type_list.
@@ -288,7 +314,9 @@ message LongviewTypeListInput {
     method: "GET"
     path: "/longview/types"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LongviewTypeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

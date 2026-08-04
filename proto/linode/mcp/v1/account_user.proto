@@ -59,11 +59,13 @@ message AccountUserGetInput {
     method: "GET"
     path: "/account/users/{username}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUser";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The account username to retrieve (required).
-  string username = 2;
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountUserWriteResponse is the {message, user} envelope the account user
@@ -146,28 +148,35 @@ message AccountUserListInput {
     method: "GET"
     path: "/account/users"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountUserGrantsGetInput is the input contract for
-// linode_account_user_grants_get.
+// linode_account_user_grants_get. Linode deprecated this route in favor of
+// GET /iam/users/{username}/role-permissions; the replacement is not yet
+// implemented in this repo, so the deprecated route is what this tool still
+// calls.
 message AccountUserGrantsGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_account_user_grants_get"
     method: "GET"
     path: "/account/users/{username}/grants"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserGrants";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Account username whose grants should be retrieved (required).
-  string username = 2;
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountUserCreateInput is the input contract for linode_account_user_create.
@@ -178,20 +187,24 @@ message AccountUserCreateInput {
     method: "POST"
     path: "/account/users"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates an account user. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account user created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Username for the new account user (required).
-  string username = 2;
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Email address for the new account user (required).
-  string email = 3;
+  string email = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the new account user is restricted (optional, defaults to false).
-  optional bool restricted = 4;
+  optional bool restricted = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm account user creation. Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountUserUpdateInput is the input contract for linode_account_user_update.
@@ -205,24 +218,28 @@ message AccountUserUpdateInput {
     method: "PUT"
     path: "/account/users/{username}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates an account user. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account user updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Account username to update (required).
-  string username = 2;
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New email address for the account user (optional).
-  optional string email = 3;
+  optional string email = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the account user is restricted (optional).
-  optional bool restricted = 4;
+  optional bool restricted = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // SSH public keys for the account user (optional).
-  repeated string ssh_keys = 5;
+  repeated string ssh_keys = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New username for the account user (optional).
-  optional string new_username = 6;
+  optional string new_username = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm account user update. Ignored when dry_run=true.
-  bool confirm = 7; // system param
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8; // system param
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountUserDeleteInput is the input contract for linode_account_user_delete.
@@ -233,20 +250,27 @@ message AccountUserDeleteInput {
     method: "DELETE"
     path: "/account/users/{username}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes an account user. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account user deleted successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Account username to delete (required).
-  string username = 2;
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm account user deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // AccountUserGrantsUpdateInput is the input contract for
-// linode_account_user_grants_update. username and confirm are the only required
+// linode_account_user_grants_update. Linode deprecated this route in favor of
+// PUT /iam/users/{username}/role-permissions; the replacement is not yet
+// implemented in this repo, so the deprecated route is what this tool still
+// calls. username and confirm are the only required
 // fields. global is a free-form grants object (map -> JSON-schema type
 // "object"); the 12 resource fields are free-form grant arrays (repeated Struct
 // -> JSON-schema type "array"). Neither a map nor a repeated field can land in
@@ -258,39 +282,43 @@ message AccountUserGrantsUpdateInput {
     method: "PUT"
     path: "/account/users/{username}/grants"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserGrantsWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates account user grants. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account user grants updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Account username whose grants should be updated (required).
-  string username = 2;
+  string username = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Optional global grants object.
-  map<string, google.protobuf.Value> global = 3;
+  map<string, google.protobuf.Value> global = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional Linode resource grants.
-  repeated google.protobuf.Struct linode = 4;
+  repeated google.protobuf.Struct linode = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional domain resource grants.
-  repeated google.protobuf.Struct domain = 5;
+  repeated google.protobuf.Struct domain = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional NodeBalancer resource grants.
-  repeated google.protobuf.Struct nodebalancer = 6;
+  repeated google.protobuf.Struct nodebalancer = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional image resource grants.
-  repeated google.protobuf.Struct image = 7;
+  repeated google.protobuf.Struct image = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional Longview resource grants.
-  repeated google.protobuf.Struct longview = 8;
+  repeated google.protobuf.Struct longview = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional StackScript resource grants.
-  repeated google.protobuf.Struct stackscript = 9;
+  repeated google.protobuf.Struct stackscript = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional volume resource grants.
-  repeated google.protobuf.Struct volume = 10;
+  repeated google.protobuf.Struct volume = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional database resource grants.
-  repeated google.protobuf.Struct database = 11;
+  repeated google.protobuf.Struct database = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional firewall resource grants.
-  repeated google.protobuf.Struct firewall = 12;
+  repeated google.protobuf.Struct firewall = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional VPC resource grants.
-  repeated google.protobuf.Struct vpc = 13;
+  repeated google.protobuf.Struct vpc = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional LKE cluster resource grants.
-  repeated google.protobuf.Struct lkecluster = 14;
+  repeated google.protobuf.Struct lkecluster = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm account user grants update. Ignored when
   // dry_run=true.
-  bool confirm = 15; // system param
+  bool confirm = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 16; // system param
+  optional bool dry_run = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

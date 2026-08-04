@@ -74,8 +74,8 @@ func TestClientGetObjectStorageQuotaProtoEscapesQuotaID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.EscapedPath() != "/object-storage/quotas/quota%2F..%2F%3Fx=1" {
-			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/object-storage/quotas/quota%2F..%2F%3Fx=1")
+		if r.URL.EscapedPath() != "/object-storage/quotas/quota%2F..%2F%3Fx%3D1" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/object-storage/quotas/quota%2F..%2F%3Fx%3D1")
 		}
 
 		if r.URL.RawQuery != "" {

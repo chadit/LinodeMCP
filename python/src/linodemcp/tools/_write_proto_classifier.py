@@ -44,6 +44,13 @@ from pathlib import Path
 
 _TOOLS_DIR = Path(__file__).resolve().parent
 
+# Emitted factories and handlers that scripts/toolgen_py.py writes from the proto
+# contract, indexed alongside the hand-written tree because a generated handler
+# reaches the proto serializers through the same drivers. Absent before
+# `make proto` has run, which is not an error: a checkout with no generated code
+# has no generated tools to classify.
+_GENTOOLS_DIR = _TOOLS_DIR.parent / "gentools"
+
 _CAPABILITIES_PATH = (
     _TOOLS_DIR.parents[3] / "docs" / "contracts" / "tools-capabilities.txt"
 )
@@ -67,9 +74,8 @@ _SURFACE_CAPS: dict[str, frozenset[str]] = {
 # The input surface is capability-blind: it classifies every tool's factory.
 _INPUT_SURFACE = "input"
 
-# The proto-schema loader call name. A create_<tool>_tool factory that sets
-# input_schema=schema(...) builds its schema from the proto contract (generated);
-# a dict-literal input_schema is hand-built.
+# The proto-schema loader call name: an input_schema=schema(...) factory is
+# generated from the proto contract, a dict-literal input_schema is hand-built.
 _SCHEMA_LOADER = "schema"
 
 # A capabilities file line has exactly two tab-separated fields.
@@ -121,11 +127,10 @@ def _is_schema_loader_call(value: ast.expr) -> bool:
 def _input_status(create_node: ast.AST) -> str:
     """Classify a create_<tool>_tool factory as "generated" or "hand".
 
-    "generated" means the ``Tool(...)`` constructor sets its ``input_schema`` from
-    the proto-schema loader (``input_schema=schema(...)``); "hand" means the
-    schema is a dict literal or any other non-loader expression. As a fallback
-    for a factory that builds the schema in a local variable first, a call to
-    the loader anywhere in the factory also counts as generated.
+    ``Tool(input_schema=schema(...))`` is generated; a dict literal or any other
+    non-loader expression is hand. A loader call anywhere in the factory also
+    counts as generated, covering a factory that builds the schema in a local
+    variable first.
     """
     for node in ast.walk(create_node):
         if not isinstance(node, ast.Call):
@@ -149,9 +154,8 @@ def _input_status(create_node: ast.AST) -> str:
 def _collect_direct_calls(node: ast.AST) -> set[str]:
     """Return called names reachable inside *node*.
 
-    Walks the entire subtree so nested defs, lambdas, comprehensions, and
-    ``async for`` bodies are all included.  Only the final name component is
-    recorded (e.g. ``foo.bar()`` records ``"bar"``; ``baz()`` records ``"baz"``).
+    Walks the whole subtree so nested defs, lambdas, and comprehensions count.
+    Only the final name component is recorded: ``foo.bar()`` records ``"bar"``.
     """
     called: set[str] = set()
     for child in ast.walk(node):
@@ -165,6 +169,14 @@ def _collect_direct_calls(node: ast.AST) -> set[str]:
     return called
 
 
+def _tool_files(tools_dir: Path) -> list[Path]:
+    """Every source file the classifier reads, hand-written then generated."""
+    files = sorted(tools_dir.glob("*.py"))
+    if _GENTOOLS_DIR.is_dir():
+        files.extend(sorted(_GENTOOLS_DIR.glob("*.py")))
+    return files
+
+
 def _build_package_index(
     tools_dir: Path,
 ) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
@@ -174,7 +186,7 @@ def _build_package_index(
     in practice tool handler names are unique across the package.
     """
     index: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
-    for py_file in sorted(tools_dir.glob("*.py")):
+    for py_file in _tool_files(tools_dir):
         try:
             source = py_file.read_text(encoding="utf-8")
         except OSError:

@@ -5,8 +5,21 @@ package linode.mcp.v1;
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 import "google/protobuf/struct.proto";
+import "linode/mcp/v1/common.proto";
 import "linode/mcp/v1/lke_node.proto";
 import "linode/mcp/v1/options.proto";
+
+// LKENodePoolUpdateStrategy is how the API rolls a node pool's nodes when the
+// pool's Kubernetes version changes: on_recycle waits for an explicit recycle,
+// rolling_update replaces nodes automatically. See the enum wrapper convention
+// in nodebalancer_config.proto.
+message LKENodePoolUpdateStrategy {
+  enum Value {
+    unspecified = 0;
+    on_recycle = 1;
+    rolling_update = 2;
+  }
+}
 
 // LKENodePoolDisk is one ephemeral disk attached to a node pool.
 message LKENodePoolDisk {
@@ -56,13 +69,15 @@ message LKENodePoolGetInput {
     method: "GET"
     path: "/lke/clusters/{cluster_id}/pools/{pool_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePool";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster (required).
-  string cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the node pool to retrieve (required).
-  string pool_id = 3;
+  int32 pool_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // LKENodePoolListInput is the input contract for linode_lke_pool_list.
@@ -73,11 +88,13 @@ message LKENodePoolListInput {
     method: "GET"
     path: "/lke/clusters/{cluster_id}/pools"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePoolListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster (required).
-  string cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // LKENodePoolCreateInput is the input contract for linode_lke_pool_create.
@@ -91,26 +108,54 @@ message LKENodePoolCreateInput {
     method: "POST"
     path: "/lke/clusters/{cluster_id}/pools"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePoolWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates billable compute resources. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Node pool (ID: {id}) created in cluster {cluster_id} with {count} {type} node(s)";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster.
-  int32 cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Linode type for pool nodes (e.g. g6-standard-2). Use linode_lke_type_list
   // to find valid types.
-  string type = 3;
+  string type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Number of nodes in the pool (minimum 1).
-  int32 count = 4;
+  int32 count = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm pool creation. This creates billable resources.
   // Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Autoscaler settings, e.g. {"enabled": true, "min": 1, "max": 5} (optional).
-  map<string, google.protobuf.Value> autoscaler = 7;
+  map<string, google.protobuf.Value> autoscaler = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Tags to apply to the node pool (optional).
-  repeated string tags = 8;
+  repeated string tags = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // A name for the node pool (optional).
+  optional string label = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Kubernetes version for the pool's nodes (optional, enterprise tier only).
+  // Omitting it uses the cluster's version.
+  optional string k8s_version = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Ephemeral disks to attach to each node, each an object with size (in MB)
+  // and type (optional).
+  repeated LKENodePoolDisk disks = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Kubernetes labels to apply to every node in the pool, as a string-to-string
+  // object (optional).
+  map<string, string> labels = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Kubernetes taints to apply to every node in the pool, each an object with
+  // key, value, and effect (optional). The item shape is free-form because the
+  // API documents it only as an object.
+  repeated google.protobuf.Struct taints = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // ID of the Cloud Firewall to assign to the pool's nodes (optional).
+  optional int32 firewall_id = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Whether the pool's node disks are encrypted at rest: disabled or enabled
+  // (optional, defaults to disabled).
+  optional DiskEncryption.Value disk_encryption = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // How the API rolls nodes when the pool's Kubernetes version changes:
+  // on_recycle or rolling_update (optional, enterprise tier only).
+  optional LKENodePoolUpdateStrategy.Value update_strategy = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // LKENodePoolUpdateInput is the input contract for linode_lke_pool_update.
@@ -123,24 +168,37 @@ message LKENodePoolUpdateInput {
     method: "PUT"
     path: "/lke/clusters/{cluster_id}/pools/{pool_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePoolWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This modifies the node pool configuration. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Node pool {pool_id} in cluster {cluster_id} modified successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster.
-  int32 cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the node pool to update.
-  int32 pool_id = 3;
+  int32 pool_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm pool update. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // New number of nodes in the pool (optional).
-  optional int32 count = 5;
+  optional int32 count = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Autoscaler settings, e.g. {"enabled": true, "min": 1, "max": 5} (optional).
-  map<string, google.protobuf.Value> autoscaler = 7;
+  map<string, google.protobuf.Value> autoscaler = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Tags to apply to the node pool (optional, replaces existing tags).
-  repeated string tags = 8;
+  repeated string tags = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // ID of the Cloud Firewall to assign to the pool's nodes (optional).
+  optional int32 firewall_id = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Kubernetes labels to apply to every node in the pool, as a string-to-string
+  // object (optional, replaces the existing labels).
+  map<string, string> labels = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Kubernetes taints to apply to every node in the pool, each an object with
+  // key, value, and effect (optional, replaces the existing taints). The item
+  // shape is free-form because the API documents it only as an object.
+  repeated google.protobuf.Struct taints = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // LKENodePoolDeleteResponse is the id-echo envelope linode_lke_pool_delete
@@ -161,24 +219,28 @@ message LKENodePoolDeleteInput {
     method: "DELETE"
     path: "/lke/clusters/{cluster_id}/pools/{pool_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKENodePoolDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes the node pool and all its nodes. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "LKENodePool";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster.
-  int32 cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the node pool to delete.
-  int32 pool_id = 3;
+  int32 pool_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm pool deletion. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6; // system param
+  optional string mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7; // system param
+  optional string plan_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // LKEPoolRecycleResponse is the id-echo envelope linode_lke_pool_recycle
@@ -199,16 +261,20 @@ message LKEPoolRecycleInput {
     method: "POST"
     path: "/lke/clusters/{cluster_id}/pools/{pool_id}/recycle"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEPoolRecycleResponse";
+  option (linode.mcp.v1.confirm_message) = "This recycles all nodes in the pool, causing temporary disruption. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Node pool {pool_id} in cluster {cluster_id} recycle initiated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the LKE cluster.
-  int32 cluster_id = 2;
+  int32 cluster_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the node pool to recycle.
-  int32 pool_id = 3;
+  int32 pool_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm pool recycling. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

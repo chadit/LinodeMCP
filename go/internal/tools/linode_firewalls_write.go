@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/protobuf/proto"
@@ -37,21 +38,54 @@ func validateFirewallCreateArgs(label, inboundPolicy, outboundPolicy string) str
 		return errLabelRequired
 	}
 
-	if msg := enumChoiceError(inboundPolicy, "inbound_policy", linodev1.FirewallPolicy_Value_value); msg != "" {
+	if msg := enumChoiceError(inboundPolicy, paramInboundPolicy, linodev1.FirewallPolicy_Value_value); msg != "" {
 		return msg
 	}
 
-	if msg := enumChoiceError(outboundPolicy, "outbound_policy", linodev1.FirewallPolicy_Value_value); msg != "" {
+	if msg := enumChoiceError(outboundPolicy, paramOutboundPolicy, linodev1.FirewallPolicy_Value_value); msg != "" {
 		return msg
 	}
 
 	return ""
 }
 
+// firewallCreateRulesBody merges the flat inbound_policy and outbound_policy
+// arguments into the caller's rules object. The API requires a rules object on
+// create, so one is always produced; a key already in rules wins.
+func firewallCreateRulesBody(rules map[string]any, inboundPolicy, outboundPolicy string) map[string]any {
+	body := make(map[string]any, len(rules)+2)
+	maps.Copy(body, rules)
+
+	if _, set := body[paramInboundPolicy]; !set {
+		body[paramInboundPolicy] = inboundPolicy
+	}
+
+	if _, set := body[paramOutboundPolicy]; !set {
+		body[paramOutboundPolicy] = outboundPolicy
+	}
+
+	return body
+}
+
 func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	label := request.GetString("label", "")
-	inboundPolicy := request.GetString("inbound_policy", "ACCEPT")
-	outboundPolicy := request.GetString("outbound_policy", "ACCEPT")
+	inboundPolicy := request.GetString(paramInboundPolicy, "ACCEPT")
+	outboundPolicy := request.GetString(paramOutboundPolicy, "ACCEPT")
+
+	tags, _, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	rules, validationMessage := objectMapFromToolArg(request.GetArguments()[paramFirewallRules], paramFirewallRules)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	devices, validationMessage := objectMapFromToolArg(request.GetArguments()[paramFirewallDevices], paramFirewallDevices)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
 
 	if IsDryRun(request) {
 		if msg := validateFirewallCreateArgs(label, inboundPolicy, outboundPolicy); msg != "" {
@@ -78,11 +112,10 @@ func handleLinodeFirewallCreateRequest(ctx context.Context, request *mcp.CallToo
 	}
 
 	req := linode.CreateFirewallRequest{
-		Label: label,
-		Rules: &linode.FirewallRules{
-			InboundPolicy:  inboundPolicy,
-			OutboundPolicy: outboundPolicy,
-		},
+		Label:   label,
+		Rules:   firewallCreateRulesBody(rules, inboundPolicy, outboundPolicy),
+		Devices: devices,
+		Tags:    tags,
 	}
 
 	firewall, err := client.CreateFirewallProto(ctx, req)
@@ -120,11 +153,11 @@ func validateFirewallUpdateArgs(firewallID int, inboundPolicy, outboundPolicy st
 		return "firewall_id is required"
 	}
 
-	if msg := enumChoiceError(inboundPolicy, "inbound_policy", linodev1.FirewallPolicy_Value_value); msg != "" {
+	if msg := enumChoiceError(inboundPolicy, paramInboundPolicy, linodev1.FirewallPolicy_Value_value); msg != "" {
 		return msg
 	}
 
-	if msg := enumChoiceError(outboundPolicy, "outbound_policy", linodev1.FirewallPolicy_Value_value); msg != "" {
+	if msg := enumChoiceError(outboundPolicy, paramOutboundPolicy, linodev1.FirewallPolicy_Value_value); msg != "" {
 		return msg
 	}
 
@@ -135,8 +168,13 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 	firewallID := request.GetInt("firewall_id", 0)
 	label := request.GetString("label", "")
 	status := request.GetString("status", "")
-	inboundPolicy := request.GetString("inbound_policy", "")
-	outboundPolicy := request.GetString("outbound_policy", "")
+	inboundPolicy := request.GetString(paramInboundPolicy, "")
+	outboundPolicy := request.GetString(paramOutboundPolicy, "")
+
+	tags, _, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
 
 	if IsDryRun(request) {
 		if msg := validateFirewallUpdateArgs(firewallID, inboundPolicy, outboundPolicy); msg != "" {
@@ -167,6 +205,7 @@ func handleLinodeFirewallUpdateRequest(ctx context.Context, request *mcp.CallToo
 	req := linode.UpdateFirewallRequest{
 		Label:  label,
 		Status: status,
+		Tags:   tags,
 	}
 
 	if inboundPolicy != "" || outboundPolicy != "" {

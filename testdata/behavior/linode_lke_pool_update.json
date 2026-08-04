@@ -9,29 +9,123 @@
     },
     {
       "name": "rejects missing pool_id",
-      "args": { "cluster_id": 12345 },
+      "args": {
+        "cluster_id": 12345
+      },
       "expect_error": "pool_id is required"
     },
     {
       "name": "updates a node pool count",
-      "args": { "cluster_id": 12345, "pool_id": 7, "count": 5, "confirm": true },
-      "api_response": { "id": 7, "count": 5 },
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "count": 5,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 7,
+        "count": 5
+      },
       "expect_request": {
         "method": "PUT",
         "path": "/lke/clusters/12345/pools/7",
-        "body": { "count": 5 }
+        "body": {
+          "count": 5
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"cluster_id": 12345, "pool_id": 7, "count": 5},
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "count": 5
+      },
       "expect_error": "This modifies the node pool configuration. Set confirm=true to proceed."
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "cluster_id": 12345, "pool_id": 7, "count": 5, "confirm": true },
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "count": 5,
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "node pool"
+    },
+    {
+      "name": "carries firewall_id, labels, and taints into the body",
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "confirm": true,
+        "count": 5,
+        "firewall_id": 88,
+        "labels": {
+          "tier": "app"
+        },
+        "taints": [
+          {
+            "key": "dedicated",
+            "value": "app",
+            "effect": "NoSchedule"
+          }
+        ]
+      },
+      "api_response": {
+        "id": 7,
+        "cluster_id": 12345,
+        "count": 5
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/lke/clusters/12345/pools/7",
+        "body": {
+          "count": 5,
+          "firewall_id": 88,
+          "labels": {
+            "tier": "app"
+          },
+          "taints": [
+            {
+              "key": "dedicated",
+              "value": "app",
+              "effect": "NoSchedule"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects a labels value that is not an object",
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "confirm": true,
+        "labels": 5
+      },
+      "expect_error": "labels must be an object"
+    },
+    {
+      "name": "rejects a taints value that is not an array of objects",
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "confirm": true,
+        "taints": "none"
+      },
+      "expect_error": "taints must be an array of objects"
+    },
+    {
+      "name": "rejects a non-positive firewall_id",
+      "args": {
+        "cluster_id": 12345,
+        "pool_id": 7,
+        "confirm": true,
+        "firewall_id": 0
+      },
+      "expect_error": "firewall_id must be an integer greater than or equal to 1"
     }
   ]
 }

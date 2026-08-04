@@ -143,11 +143,13 @@ message FirewallGetInput {
     method: "GET"
     path: "/networking/firewalls/{firewall_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Firewall";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall to retrieve (required).
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // FirewallRulesGetInput is the input contract for linode_firewall_rules_get.
@@ -157,11 +159,13 @@ message FirewallRulesGetInput {
     method: "GET"
     path: "/networking/firewalls/{firewall_id}/rules"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRules";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose rules to retrieve (required).
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // FirewallListInput is the input contract for linode_firewall_list.
@@ -171,13 +175,19 @@ message FirewallListInput {
     method: "GET"
     path: "/networking/firewalls"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter by firewall status (enabled, disabled, deleted).
-  optional string status = 2;
+  optional string status = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Filter firewalls by label containing this string (case-insensitive).
-  optional string label_contains = 3;
+  optional string label_contains = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // FirewallCreateInput is the input contract for linode_firewall_create.
@@ -187,23 +197,44 @@ message FirewallCreateInput {
     method: "POST"
     path: "/networking/firewalls"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a Cloud Firewall. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Firewall '{label}' (ID: {id}) created successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // A label for the firewall (must be unique).
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional,
   // default: 'ACCEPT').
-  optional FirewallPolicy.Value inbound_policy = 3;
+  optional FirewallPolicy.Value inbound_policy = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional,
   // default: 'ACCEPT').
-  optional FirewallPolicy.Value outbound_policy = 4;
+  optional FirewallPolicy.Value outbound_policy = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm firewall creation. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Tags to apply to the new firewall (optional).
+  repeated string tags = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // The ruleset the new firewall starts with: an object with inbound and
+  // outbound arrays of rule objects plus optional inbound_policy and
+  // outbound_policy. The API requires a rules object on create, and the tool
+  // always sends one, so this stays optional in the schema: keys omitted here
+  // fall back to the flat inbound_policy and outbound_policy fields above.
+  // Without it a created firewall carries no rules at all, only default
+  // policies. The item shape is free-form for the same reason
+  // FirewallRulesUpdateInput keeps free-form rules: decoding through the
+  // FirewallRule response type would pad every rule with fields the caller
+  // never sent.
+  optional google.protobuf.Struct rules = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Resources the new firewall is applied to: an object with linodes and
+  // nodebalancers arrays of IDs (optional).
+  optional google.protobuf.Struct devices = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // FirewallUpdateInput is the input contract for linode_firewall_update.
@@ -213,24 +244,31 @@ message FirewallUpdateInput {
     method: "PUT"
     path: "/networking/firewalls/{firewall_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a Cloud Firewall. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Firewall {firewall_id} modified successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall to update.
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New label for the firewall (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New status: 'enabled' or 'disabled' (optional).
-  optional string status = 4;
+  optional string status = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Default policy for inbound traffic: 'ACCEPT' or 'DROP' (optional).
-  optional FirewallPolicy.Value inbound_policy = 5;
+  optional FirewallPolicy.Value inbound_policy = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Default policy for outbound traffic: 'ACCEPT' or 'DROP' (optional).
-  optional FirewallPolicy.Value outbound_policy = 6;
+  optional FirewallPolicy.Value outbound_policy = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm firewall update. Ignored when dry_run=true.
-  bool confirm = 7; // system param
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8; // system param
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Complete replacement set of tags (optional). Omitting it leaves the
+  // firewall's tags unchanged; an empty list removes all of them.
+  repeated string tags = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // FirewallDeleteInput is the input contract for linode_firewall_delete.
@@ -240,22 +278,26 @@ message FirewallDeleteInput {
     method: "DELETE"
     path: "/networking/firewalls/{firewall_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "Firewall";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall to delete.
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // FirewallSettingsGetInput is the input contract for
@@ -266,13 +308,15 @@ message FirewallSettingsGetInput {
     method: "GET"
     path: "/networking/firewalls/settings"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallSettings";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // FirewallRuleVersionListInput is the input contract for
@@ -283,11 +327,13 @@ message FirewallRuleVersionListInput {
     method: "GET"
     path: "/networking/firewalls/{firewall_id}/history"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRuleVersionListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose rule versions should be listed.
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // FirewallRuleVersionGetInput is the input contract for
@@ -298,13 +344,15 @@ message FirewallRuleVersionGetInput {
     method: "GET"
     path: "/networking/firewalls/{firewall_id}/history/rules/{version}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRuleVersion";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose rule version should be retrieved.
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The firewall rule version number to retrieve.
-  int32 version = 3;
+  int32 version = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // FirewallTemplateListInput is the input contract for
@@ -315,13 +363,15 @@ message FirewallTemplateListInput {
     method: "GET"
     path: "/networking/firewalls/templates"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallTemplateListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // FirewallTemplateGetInput is the input contract for
@@ -332,15 +382,17 @@ message FirewallTemplateGetInput {
     method: "GET"
     path: "/networking/firewalls/templates/{slug}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallTemplate";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Firewall template slug to retrieve. Must be public or vpc.
-  FirewallTemplateSlug.Value slug = 2;
+  FirewallTemplateSlug.Value slug = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // FirewallRulesUpdateInput is the input contract for
@@ -355,21 +407,33 @@ message FirewallRulesUpdateInput {
     method: "PUT"
     path: "/networking/firewalls/{firewall_id}/rules"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallRulesWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This replaces Cloud Firewall rules. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Firewall {firewall_id} rules updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose rules should be replaced.
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Array of inbound firewall rule objects.
-  repeated google.protobuf.Struct inbound = 3;
+  repeated google.protobuf.Struct inbound = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Array of outbound firewall rule objects.
-  repeated google.protobuf.Struct outbound = 4;
+  repeated google.protobuf.Struct outbound = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm replacing firewall rules. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Default policy for traffic no inbound rule matches: 'ACCEPT' or 'DROP'
+  // (optional). Omitting it leaves the firewall's current inbound policy alone.
+  optional FirewallPolicy.Value inbound_policy = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Default policy for traffic no outbound rule matches: 'ACCEPT' or 'DROP'
+  // (optional). Omitting it leaves the firewall's current outbound policy
+  // alone.
+  optional FirewallPolicy.Value outbound_policy = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // FirewallSettingsUpdateInput is the input contract for
@@ -384,18 +448,23 @@ message FirewallSettingsUpdateInput {
     method: "PUT"
     path: "/networking/firewalls/settings"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallSettingsWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates default Cloud Firewall assignments. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Default firewall settings updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Object of positive firewall IDs keyed by linode, nodebalancer,
   // public_interface, or vpc_interface.
-  map<string, google.protobuf.Value> default_firewall_ids = 2;
+  map<string, google.protobuf.Value> default_firewall_ids = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm default firewall settings update. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceFirewallListInput is the input contract for
@@ -406,15 +475,17 @@ message InstanceFirewallListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/firewalls"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // InstanceInterfaceFirewallListInput is the input contract for
@@ -425,13 +496,15 @@ message InstanceInterfaceFirewallListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/interfaces/{interface_id}/firewalls"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the Linode interface (required).
-  int32 interface_id = 3;
+  int32 interface_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceFirewallUpdateInput is the input contract for
@@ -446,24 +519,28 @@ message InstanceFirewallUpdateInput {
     method: "PUT"
     path: "/linode/instances/{linode_id}/firewalls"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
+  option (linode.mcp.v1.confirm_message) = "This replaces firewall assignments for a Linode instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Complete list of firewall IDs to assign to the Linode. Use an empty list
   // to remove all firewall assignments.
-  repeated int32 firewall_ids = 3;
+  repeated int32 firewall_ids = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 4;
+  optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 5;
+  optional int32 page_size = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Must be set to true to confirm firewall assignment changes. Ignored when
   // dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // FirewallDefaultIDs holds the default firewall assignments by resource type:

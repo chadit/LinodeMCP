@@ -27,15 +27,17 @@ message ObjectStorageBucketAccessGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_bucket_access_get"
     method: "GET"
-    path: "/object-storage/buckets/{region_id}/{bucket}/access"
+    path: "/object-storage/buckets/{region}/{label}/access"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketAccess";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (required).
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (required).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ObjectStorageBucketAccessAllowInput is the input contract for
@@ -45,25 +47,29 @@ message ObjectStorageBucketAccessAllowInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_bucket_access_allow"
     method: "POST"
-    path: "/object-storage/buckets/{region_id}/{bucket}/access"
+    path: "/object-storage/buckets/{region}/{label}/access"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketAccessWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation changes bucket access controls. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Access settings for bucket '{label}' in {region} applied successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region of the bucket.
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Label of the bucket.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Access control: private, public-read, authenticated-read, or
   // public-read-write.
-  optional string acl = 4;
+  optional string acl = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to enable CORS on the bucket.
-  optional bool cors_enabled = 5;
+  optional bool cors_enabled = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm access changes. Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageBucketAccessUpdateInput is the input contract for
@@ -73,23 +79,27 @@ message ObjectStorageBucketAccessUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_bucket_access_update"
     method: "PUT"
-    path: "/object-storage/buckets/{region_id}/{bucket}/access"
+    path: "/object-storage/buckets/{region}/{label}/access"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketAccessWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation changes bucket access controls. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Access settings for bucket '{label}' in {region} modified successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region of the bucket.
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Label of the bucket.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New access control: private, public-read, authenticated-read, or
   // public-read-write.
-  optional string acl = 4;
+  optional string acl = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to enable CORS on the bucket.
-  optional bool cors_enabled = 5;
+  optional bool cors_enabled = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm access update. Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

@@ -3,39 +3,30 @@ package linode
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"net/http"
 	"net/url"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const (
-	endpointObjBuckets   = "/object-storage/buckets"
-	endpointObjEndpoints = "/object-storage/endpoints"
-	endpointObjTypes     = "/object-storage/types"
-	endpointObjKeys      = "/object-storage/keys"
-	endpointObjQuotas    = "/object-storage/quotas"
-	endpointObjTransfer  = "/object-storage/transfer"
-	endpointObjCancel    = "/object-storage/cancel"
-)
+// Facts shared by the endpoints below, so the per-method docs do not repeat them:
+// list endpoints return the standard {data, page, ...} envelope that the
+// listProtoElements helpers read; only key create returns secret material, so
+// secret_key decodes to its empty default everywhere else; byte counts are int64,
+// which protojson serializes as JSON strings.
 
 // httpListObjectStorageBucketsProto retrieves all Object Storage buckets as
-// proto messages for the proto-backed list path. The endpoint returns a
-// {data, page, ...} page envelope, so listProtoElements reads the data field.
+// proto messages.
 func (c *Client) httpListObjectStorageBucketsProto(ctx context.Context) ([]*linodev1.ObjectStorageBucket, error) {
-	return listProtoElements(ctx, c, "ListObjectStorageBuckets", endpointObjBuckets,
+	return listProtoElementsRouted(ctx, c, "ListObjectStorageBuckets",
+		"linode_object_storage_bucket_list", "", nil,
 		func() *linodev1.ObjectStorageBucket { return &linodev1.ObjectStorageBucket{} })
 }
 
 // httpListObjectStorageBucketsByRegionProto retrieves Object Storage buckets in
-// a region as proto messages for the proto-backed read path. The region is
-// path-escaped into the endpoint before the call, matching the non-region list;
-// the endpoint returns the {data,page,...} page envelope listProtoElements reads.
+// one region as proto messages.
 func (c *Client) httpListObjectStorageBucketsByRegionProto(ctx context.Context, region string) ([]*linodev1.ObjectStorageBucket, error) {
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s", url.PathEscape(region))
-
-	return listProtoElements(ctx, c, "ListObjectStorageBucketsByRegion", endpoint,
+	return listProtoElementsRouted(ctx, c, "ListObjectStorageBucketsByRegion",
+		"linode_object_storage_bucket_by_region_list", "", []any{region},
 		func() *linodev1.ObjectStorageBucket { return &linodev1.ObjectStorageBucket{} })
 }
 
@@ -44,11 +35,9 @@ func (c *Client) httpGetObjectStorageBucket(ctx context.Context, region, label s
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_bucket_get", nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageBucket", Err: err}
+		return nil, wrapRequestError("GetObjectStorageBucket", err)
 	}
 
 	defer drainClose(resp)
@@ -67,11 +56,9 @@ func (c *Client) httpGetObjectStorageBucketProto(ctx context.Context, region, la
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_bucket_get", nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageBucket", Err: err}
+		return nil, wrapRequestError("GetObjectStorageBucket", err)
 	}
 
 	defer drainClose(resp)
@@ -85,9 +72,8 @@ func (c *Client) httpGetObjectStorageBucketProto(ctx context.Context, region, la
 }
 
 // ObjectStorageBucketContentsPage is the decoded body of the S3-style
-// object-list endpoint: the proto object elements plus the S3 pagination
-// metadata (is_truncated and next_marker) the standard {data,page,...} envelope
-// does not carry.
+// object-list endpoint: the object elements plus the marker pagination metadata
+// the standard page envelope does not carry.
 type ObjectStorageBucketContentsPage struct {
 	NextMarker  string
 	Objects     []*linodev1.ObjectStorageObject
@@ -95,15 +81,14 @@ type ObjectStorageBucketContentsPage struct {
 }
 
 // httpListObjectStorageBucketContentsProto lists objects in a bucket as proto
-// messages for the proto-backed list path. The endpoint returns a bespoke
-// {data:[...], is_truncated, next_marker} body (not the standard page envelope),
-// so this decodes the data[] elements with protojson and returns the truncation
-// metadata alongside them.
+// messages. This endpoint pages by marker, not by page number: the body is a
+// bespoke {data, is_truncated, next_marker} shape, so the elements are decoded
+// here and the truncation metadata is returned alongside them.
 func (c *Client) httpListObjectStorageBucketContentsProto(ctx context.Context, region, label string, params map[string]string) (*ObjectStorageBucketContentsPage, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-list", url.PathEscape(region), url.PathEscape(label))
+	var rawQuery string
 
 	if len(params) > 0 {
 		vals := url.Values{}
@@ -111,12 +96,12 @@ func (c *Client) httpListObjectStorageBucketContentsProto(ctx context.Context, r
 			vals.Set(k, v)
 		}
 
-		endpoint += "?" + vals.Encode()
+		rawQuery = vals.Encode()
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequestQuery(ctx, "linode_object_storage_bucket_object_list", rawQuery, nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ListObjectStorageBucketContents", Err: err}
+		return nil, wrapRequestError("ListObjectStorageBucketContents", err)
 	}
 
 	defer drainClose(resp)
@@ -144,36 +129,36 @@ func (c *Client) httpListObjectStorageBucketContentsProto(ctx context.Context, r
 	}, nil
 }
 
-// httpListObjectStorageEndpointsProto retrieves Object Storage endpoints as proto
-// ObjectStorageEndpoint messages for the proto-backed list path.
+// httpListObjectStorageEndpointsProto retrieves Object Storage endpoints as
+// proto messages. This is the one Object Storage list that takes page numbers.
 func (c *Client) httpListObjectStorageEndpointsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ObjectStorageEndpoint, error) {
-	return listProtoElementsPaginated(ctx, c, "ListObjectStorageEndpoints", endpointObjEndpoints, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListObjectStorageEndpoints",
+		"linode_object_storage_endpoint_list", "", nil, page, pageSize,
 		func() *linodev1.ObjectStorageEndpoint { return &linodev1.ObjectStorageEndpoint{} })
 }
 
-// httpListObjectStorageTypesProto retrieves Object Storage types and pricing as
-// proto LinodeType messages for the proto-backed list path. The element shares
-// the LinodeType shape (id, label, price, region_prices[], transfer), so
-// region_prices decodes as a repeated message, not a string.
+// httpListObjectStorageTypesProto retrieves Object Storage types and pricing.
+// The elements share the LinodeType shape, so region_prices decodes as a
+// repeated message, not a string.
 func (c *Client) httpListObjectStorageTypesProto(ctx context.Context) ([]*linodev1.LinodeType, error) {
-	return listProtoElements(ctx, c, "ListObjectStorageTypes", endpointObjTypes,
+	return listProtoElementsRouted(ctx, c, "ListObjectStorageTypes",
+		"linode_object_storage_type_list", "", nil,
 		func() *linodev1.LinodeType { return &linodev1.LinodeType{} })
 }
 
 // httpListObjectStorageQuotasProto retrieves Object Storage quotas as proto
-// ObjectStorageQuota messages for the proto-backed list path.
+// messages.
 func (c *Client) httpListObjectStorageQuotasProto(ctx context.Context) ([]*linodev1.ObjectStorageQuota, error) {
-	return listProtoElements(ctx, c, "ListObjectStorageQuotas", endpointObjQuotas,
+	return listProtoElementsRouted(ctx, c, "ListObjectStorageQuotas",
+		"linode_object_storage_quota_list", "", nil,
 		func() *linodev1.ObjectStorageQuota { return &linodev1.ObjectStorageQuota{} })
 }
 
-// httpListObjectStorageKeysProto retrieves Object Storage keys as proto messages
-// for the proto-backed list path. The endpoint returns a {data, page, ...} page
-// envelope, so listProtoElements reads the data field. The list endpoint returns
-// keys without secret material, so each element's secret_key decodes to its empty
-// default.
+// httpListObjectStorageKeysProto retrieves Object Storage keys as proto
+// messages.
 func (c *Client) httpListObjectStorageKeysProto(ctx context.Context) ([]*linodev1.ObjectStorageKey, error) {
-	return listProtoElements(ctx, c, "ListObjectStorageKeys", endpointObjKeys,
+	return listProtoElementsRouted(ctx, c, "ListObjectStorageKeys",
+		"linode_object_storage_key_list", "", nil,
 		func() *linodev1.ObjectStorageKey { return &linodev1.ObjectStorageKey{} })
 }
 
@@ -182,11 +167,9 @@ func (c *Client) httpGetObjectStorageKey(ctx context.Context, keyID int) (*Objec
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_key_get", nil, keyID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageKey", Err: err}
+		return nil, wrapRequestError("GetObjectStorageKey", err)
 	}
 
 	defer drainClose(resp)
@@ -204,11 +187,9 @@ func (c *Client) httpGetObjectStorageKeyProto(ctx context.Context, keyID int) (*
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_key_get", nil, keyID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageKey", Err: err}
+		return nil, wrapRequestError("GetObjectStorageKey", err)
 	}
 
 	defer drainClose(resp)
@@ -221,19 +202,16 @@ func (c *Client) httpGetObjectStorageKeyProto(ctx context.Context, keyID int) (*
 	return key, nil
 }
 
-// httpGetObjectStorageQuotaUsageProto retrieves usage data for a specific Object
-// Storage quota and decodes it into the ObjectStorageQuotaUsage proto element. The
-// byte counts are int64, so protojson serializes them as JSON strings; usage is
-// optional and omitted when the API returns null (before any usage is recorded).
+// httpGetObjectStorageQuotaUsageProto retrieves usage for one Object Storage
+// quota. Usage is optional and omitted when the API returns null, which it does
+// until the first usage is recorded.
 func (c *Client) httpGetObjectStorageQuotaUsageProto(ctx context.Context, quotaID string) (*linodev1.ObjectStorageQuotaUsage, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjQuotas+"/%s/usage", url.PathEscape(quotaID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_quota_usage_get", nil, quotaID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageQuotaUsage", Err: err}
+		return nil, wrapRequestError("GetObjectStorageQuotaUsage", err)
 	}
 
 	defer drainClose(resp)
@@ -246,16 +224,14 @@ func (c *Client) httpGetObjectStorageQuotaUsageProto(ctx context.Context, quotaI
 	return usage, nil
 }
 
-// httpGetObjectStorageTransferProto retrieves Object Storage outbound data
-// transfer usage and decodes it into the ObjectStorageTransfer proto element. The
-// used byte count is int64, so protojson serializes it as a JSON string.
+// httpGetObjectStorageTransferProto retrieves outbound data transfer usage.
 func (c *Client) httpGetObjectStorageTransferProto(ctx context.Context) (*linodev1.ObjectStorageTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointObjTransfer, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_transfer_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageTransfer", Err: err}
+		return nil, wrapRequestError("GetObjectStorageTransfer", err)
 	}
 
 	defer drainClose(resp)
@@ -268,19 +244,15 @@ func (c *Client) httpGetObjectStorageTransferProto(ctx context.Context) (*linode
 	return transfer, nil
 }
 
-// httpGetObjectStorageQuotaProto retrieves a single Object Storage quota and
-// decodes it into the ObjectStorageQuota proto element for the proto-backed read
-// path. The quota GET returns the bare quota object (quota usage is a separate
-// endpoint), so the body decodes straight into the element with DiscardUnknown.
+// httpGetObjectStorageQuotaProto retrieves a single Object Storage quota. The
+// body carries the bare quota, since usage lives behind its own endpoint.
 func (c *Client) httpGetObjectStorageQuotaProto(ctx context.Context, objQuotaID string) (*linodev1.ObjectStorageQuota, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjQuotas+"/%s", url.PathEscape(objQuotaID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_quota_get", nil, objQuotaID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageQuota", Err: err}
+		return nil, wrapRequestError("GetObjectStorageQuota", err)
 	}
 
 	defer drainClose(resp)
@@ -298,9 +270,9 @@ func (c *Client) httpCancelObjectStorage(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointObjCancel, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_cancel", nil)
 	if err != nil {
-		return &NetworkError{Operation: "CancelObjectStorage", Err: err}
+		return wrapRequestError("CancelObjectStorage", err)
 	}
 
 	defer drainClose(resp)
@@ -313,11 +285,9 @@ func (c *Client) httpGetObjectStorageBucketAccess(ctx context.Context, region, l
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/access", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_bucket_access_get", nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageBucketAccess", Err: err}
+		return nil, wrapRequestError("GetObjectStorageBucketAccess", err)
 	}
 
 	defer drainClose(resp)
@@ -336,11 +306,9 @@ func (c *Client) httpGetObjectStorageBucketAccessProto(ctx context.Context, regi
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/access", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_bucket_access_get", nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectStorageBucketAccess", Err: err}
+		return nil, wrapRequestError("GetObjectStorageBucketAccess", err)
 	}
 
 	defer drainClose(resp)
@@ -355,13 +323,13 @@ func (c *Client) httpGetObjectStorageBucketAccessProto(ctx context.Context, regi
 
 // httpCreateObjectStorageBucketProto creates an Object Storage bucket as a proto
 // message.
-func (c *Client) httpCreateObjectStorageBucketProto(ctx context.Context, req CreateObjectStorageBucketRequest) (*linodev1.ObjectStorageBucket, error) {
+func (c *Client) httpCreateObjectStorageBucketProto(ctx context.Context, req *CreateObjectStorageBucketRequest) (*linodev1.ObjectStorageBucket, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointObjBuckets, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_bucket_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateObjectStorageBucket", Err: err}
+		return nil, wrapRequestError("CreateObjectStorageBucket", err)
 	}
 
 	defer drainClose(resp)
@@ -379,11 +347,9 @@ func (c *Client) httpDeleteObjectStorageBucket(ctx context.Context, region, labe
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_bucket_delete", nil, region, label)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteObjectStorageBucket", Err: err}
+		return wrapRequestError("DeleteObjectStorageBucket", err)
 	}
 
 	defer drainClose(resp)
@@ -396,11 +362,9 @@ func (c *Client) httpUpdateObjectStorageBucketAccess(ctx context.Context, region
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/access", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_bucket_access_update", req, region, label)
 	if err != nil {
-		return &NetworkError{Operation: "UpdateObjectStorageBucketAccess", Err: err}
+		return wrapRequestError("UpdateObjectStorageBucketAccess", err)
 	}
 
 	defer drainClose(resp)
@@ -413,11 +377,9 @@ func (c *Client) httpAllowObjectStorageBucketAccess(ctx context.Context, region,
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/access", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_bucket_access_allow", req, region, label)
 	if err != nil {
-		return &NetworkError{Operation: "AllowObjectStorageBucketAccess", Err: err}
+		return wrapRequestError("AllowObjectStorageBucketAccess", err)
 	}
 
 	defer drainClose(resp)
@@ -430,9 +392,9 @@ func (c *Client) httpCreateObjectStorageKeyProto(ctx context.Context, req Create
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointObjKeys, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_key_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateObjectStorageKey", Err: err}
+		return nil, wrapRequestError("CreateObjectStorageKey", err)
 	}
 
 	defer drainClose(resp)
@@ -452,11 +414,9 @@ func (c *Client) httpUpdateObjectStorageKeyProto(ctx context.Context, keyID int,
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_key_update", req, keyID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateObjectStorageKey", Err: err}
+		return nil, wrapRequestError("UpdateObjectStorageKey", err)
 	}
 
 	defer drainClose(resp)
@@ -474,11 +434,9 @@ func (c *Client) httpDeleteObjectStorageKey(ctx context.Context, keyID int) erro
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjKeys+"/%d", keyID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_key_delete", nil, keyID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteObjectStorageKey", Err: err}
+		return wrapRequestError("DeleteObjectStorageKey", err)
 	}
 
 	defer drainClose(resp)
@@ -492,11 +450,9 @@ func (c *Client) httpCreatePresignedURLProto(ctx context.Context, region, label 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-url", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_presigned_url_create", req, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreatePresignedURL", Err: err}
+		return nil, wrapRequestError("CreatePresignedURL", err)
 	}
 
 	defer drainClose(resp)
@@ -509,16 +465,24 @@ func (c *Client) httpCreatePresignedURLProto(ctx context.Context, region, label 
 	return result, nil
 }
 
+// objectACLNameQuery renders the object-acl name filter.
+//
+// The object name is a query parameter rather than a path slot, so it stays
+// here: the route contract declares the bucket path, and both readers of it
+// send the same encoded bytes url.QueryEscape produced before the route moved.
+func objectACLNameQuery(name string) string {
+	return "name=" + url.QueryEscape(name)
+}
+
 // GetObjectACL retrieves the ACL of an object in Object Storage.
 func (c *Client) httpGetObjectACL(ctx context.Context, region, label, name string) (*ObjectACL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-acl?name=%s", url.PathEscape(region), url.PathEscape(label), url.QueryEscape(name))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequestQuery(ctx, "linode_object_storage_object_acl_get",
+		objectACLNameQuery(name), nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectACL", Err: err}
+		return nil, wrapRequestError("GetObjectACL", err)
 	}
 
 	defer drainClose(resp)
@@ -536,11 +500,10 @@ func (c *Client) httpGetObjectACLProto(ctx context.Context, region, label, name 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-acl?name=%s", url.PathEscape(region), url.PathEscape(label), url.QueryEscape(name))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequestQuery(ctx, "linode_object_storage_object_acl_get",
+		objectACLNameQuery(name), nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetObjectACL", Err: err}
+		return nil, wrapRequestError("GetObjectACL", err)
 	}
 
 	defer drainClose(resp)
@@ -559,11 +522,9 @@ func (c *Client) httpUpdateObjectACLProto(ctx context.Context, region, label str
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/object-acl", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_object_acl_update", req, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateObjectACL", Err: err}
+		return nil, wrapRequestError("UpdateObjectACL", err)
 	}
 
 	defer drainClose(resp)
@@ -581,11 +542,9 @@ func (c *Client) httpGetBucketSSL(ctx context.Context, region, label string) (*B
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_ssl_get", nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetBucketSSL", Err: err}
+		return nil, wrapRequestError("GetBucketSSL", err)
 	}
 
 	defer drainClose(resp)
@@ -603,11 +562,9 @@ func (c *Client) httpGetBucketSSLProto(ctx context.Context, region, label string
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_ssl_get", nil, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetBucketSSL", Err: err}
+		return nil, wrapRequestError("GetBucketSSL", err)
 	}
 
 	defer drainClose(resp)
@@ -625,11 +582,9 @@ func (c *Client) httpDeleteBucketSSL(ctx context.Context, region, label string) 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_ssl_delete", nil, region, label)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteBucketSSL", Err: err}
+		return wrapRequestError("DeleteBucketSSL", err)
 	}
 
 	defer drainClose(resp)
@@ -643,11 +598,9 @@ func (c *Client) httpUploadBucketSSLProto(ctx context.Context, region, label str
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointObjBuckets+"/%s/%s/ssl", url.PathEscape(region), url.PathEscape(label))
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_object_storage_ssl_upload", req, region, label)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UploadBucketSSL", Err: err}
+		return nil, wrapRequestError("UploadBucketSSL", err)
 	}
 
 	defer drainClose(resp)

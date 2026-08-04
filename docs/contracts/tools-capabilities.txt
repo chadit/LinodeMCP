@@ -365,6 +365,9 @@ linode_object_storage_bucket_list	Read
 linode_object_storage_bucket_object_list	Read
 linode_object_storage_cancel	Write
 linode_object_storage_endpoint_list	Read
+linode_object_storage_global_quota_get	Read
+linode_object_storage_global_quota_list	Read
+linode_object_storage_global_quota_usage_get	Read
 linode_object_storage_key_create	Write
 linode_object_storage_key_delete	Destroy
 linode_object_storage_key_get	Read
@@ -403,6 +406,7 @@ linode_profile_draft_save	Meta
 linode_profile_draft_set	Meta
 linode_profile_draft_show	Meta
 linode_profile_get	Read
+linode_profile_grants_get	Read
 linode_profile_list_categories	Meta
 linode_profile_list_tools	Meta
 linode_profile_login_get	Read

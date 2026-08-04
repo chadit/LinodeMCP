@@ -3,49 +3,35 @@ package linode
 import (
 	"context"
 	"net/http"
-	"net/url"
-	"strconv"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const (
-	endpointDatabaseEngines             = "/databases/engines"
-	endpointDatabaseTypes               = "/databases/types"
-	endpointDatabaseAllInstances        = "/databases/instances"
-	endpointDatabaseInstances           = "/databases/mysql/instances"
-	endpointDatabasePostgreSQLInstances = "/databases/postgresql/instances"
-	endpointDatabaseMySQLConfig         = "/databases/mysql/config"
-	endpointDatabasePostgreSQLConfig    = "/databases/postgresql/config"
-)
+// Managed Databases split by engine: MySQL and PostgreSQL each own a route
+// family, and only the instance list has a cross-engine variant.
 
-// httpListDatabaseEnginesProto retrieves available Managed Database engines as
-// proto messages for the proto-backed list path. page/page_size flow through
-// withPaginationQuery, so the request matches httpListDatabaseEngines.
+// httpListDatabaseEnginesProto lists available Managed Database engines.
 func (c *Client) httpListDatabaseEnginesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseEngine, error) {
-	return listProtoElementsPaginated(ctx, c, "ListDatabaseEngines", endpointDatabaseEngines, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListDatabaseEngines",
+		"linode_database_engine_list", "", nil, page, pageSize,
 		func() *linodev1.DatabaseEngine { return &linodev1.DatabaseEngine{} })
 }
 
-// httpListDatabaseTypesProto retrieves available Managed Database node types as
-// proto messages for the proto-backed list path. page/page_size flow through
-// withPaginationQuery, so the request matches httpListDatabaseTypes.
+// httpListDatabaseTypesProto lists available Managed Database node types.
 func (c *Client) httpListDatabaseTypesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseType, error) {
-	return listProtoElementsPaginated(ctx, c, "ListDatabaseTypes", endpointDatabaseTypes, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListDatabaseTypes",
+		"linode_database_type_list", "", nil, page, pageSize,
 		func() *linodev1.DatabaseType { return &linodev1.DatabaseType{} })
 }
 
-// httpGetDatabaseTypeProto retrieves one Managed Database type as a proto message.
+// httpGetDatabaseTypeProto retrieves one Managed Database node type.
 func (c *Client) httpGetDatabaseTypeProto(ctx context.Context, typeID string, page, pageSize int) (*linodev1.DatabaseType, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseTypes + "/" + url.PathEscape(typeID)
-	endpoint = withPaginationQuery(endpoint, page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequestQuery(ctx, "linode_database_type_get", pageQuery(page, pageSize), nil, typeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabaseType", Err: err}
+		return nil, wrapRequestError("GetDatabaseType", err)
 	}
 
 	defer drainClose(resp)
@@ -58,29 +44,24 @@ func (c *Client) httpGetDatabaseTypeProto(ctx context.Context, typeID string, pa
 	return databaseType, nil
 }
 
-// httpListAllDatabaseInstancesProto retrieves cross-engine Managed Database
-// instances as proto messages for the proto-backed list path. page/page_size
-// flow through withPaginationQuery, so the request matches
-// httpListAllDatabaseInstances.
+// httpListAllDatabaseInstancesProto lists Managed Database instances across engines.
 func (c *Client) httpListAllDatabaseInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAllDatabaseInstances", endpointDatabaseAllInstances, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAllDatabaseInstances",
+		"linode_database_instance_list", "", nil, page, pageSize,
 		func() *linodev1.DatabaseInstance { return &linodev1.DatabaseInstance{} })
 }
 
-// httpListDatabaseInstancesProto retrieves MySQL Managed Database instances as
-// proto messages for the proto-backed list path. page/page_size flow through
-// withPaginationQuery, so the request matches httpListDatabaseInstances.
+// httpListDatabaseInstancesProto lists MySQL Managed Database instances.
 func (c *Client) httpListDatabaseInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
-	return listProtoElementsPaginated(ctx, c, "ListDatabaseInstances", endpointDatabaseInstances, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListDatabaseInstances",
+		"linode_database_mysql_instance_list", "", nil, page, pageSize,
 		func() *linodev1.DatabaseInstance { return &linodev1.DatabaseInstance{} })
 }
 
-// httpListDatabasePostgreSQLInstancesProto retrieves PostgreSQL Managed Database
-// instances as proto messages for the proto-backed list path. page/page_size
-// flow through withPaginationQuery, so the request matches
-// httpListDatabasePostgreSQLInstances.
+// httpListDatabasePostgreSQLInstancesProto lists PostgreSQL Managed Database instances.
 func (c *Client) httpListDatabasePostgreSQLInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.DatabaseInstance, error) {
-	return listProtoElementsPaginated(ctx, c, "ListDatabasePostgreSQLInstances", endpointDatabasePostgreSQLInstances, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListDatabasePostgreSQLInstances",
+		"linode_database_postgresql_instance_list", "", nil, page, pageSize,
 		func() *linodev1.DatabaseInstance { return &linodev1.DatabaseInstance{} })
 }
 
@@ -89,11 +70,9 @@ func (c *Client) httpGetDatabaseInstance(ctx context.Context, instanceID int) (*
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabaseInstance", Err: err}
+		return nil, wrapRequestError("GetDatabaseInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -111,11 +90,9 @@ func (c *Client) httpGetDatabasePostgreSQLInstance(ctx context.Context, instance
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLInstance", Err: err}
+		return nil, wrapRequestError("GetDatabasePostgreSQLInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -128,19 +105,15 @@ func (c *Client) httpGetDatabasePostgreSQLInstance(ctx context.Context, instance
 	return &instance, nil
 }
 
-// httpGetDatabaseInstanceProto retrieves one MySQL Managed Database instance and
-// decodes it into the DatabaseInstance proto element for the proto-backed read
-// path. The GET returns the bare instance object, so the body decodes straight
-// into the element with DiscardUnknown, matching the list decode.
+// httpGetDatabaseInstanceProto retrieves one MySQL Managed Database instance.
+// The GET returns a bare instance object, so it decodes straight into the element.
 func (c *Client) httpGetDatabaseInstanceProto(ctx context.Context, instanceID int) (*linodev1.DatabaseInstance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabaseInstance", Err: err}
+		return nil, wrapRequestError("GetDatabaseInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -153,18 +126,14 @@ func (c *Client) httpGetDatabaseInstanceProto(ctx context.Context, instanceID in
 	return instance, nil
 }
 
-// httpGetDatabasePostgreSQLInstanceProto retrieves one PostgreSQL Managed
-// Database instance and decodes it into the DatabaseInstance proto element for
-// the proto-backed read path.
+// httpGetDatabasePostgreSQLInstanceProto retrieves one PostgreSQL Managed Database instance.
 func (c *Client) httpGetDatabasePostgreSQLInstanceProto(ctx context.Context, instanceID int) (*linodev1.DatabaseInstance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLInstance", Err: err}
+		return nil, wrapRequestError("GetDatabasePostgreSQLInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -177,17 +146,14 @@ func (c *Client) httpGetDatabasePostgreSQLInstanceProto(ctx context.Context, ins
 	return instance, nil
 }
 
-// httpGetDatabaseInstanceSSLProto retrieves a MySQL database SSL certificate as a
-// proto message.
+// httpGetDatabaseInstanceSSLProto retrieves a MySQL database SSL certificate.
 func (c *Client) httpGetDatabaseInstanceSSLProto(ctx context.Context, instanceID int) (*linodev1.DatabaseSSL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/ssl"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_ssl_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabaseInstanceSSL", Err: err}
+		return nil, wrapRequestError("GetDatabaseInstanceSSL", err)
 	}
 
 	defer drainClose(resp)
@@ -200,17 +166,14 @@ func (c *Client) httpGetDatabaseInstanceSSLProto(ctx context.Context, instanceID
 	return ssl, nil
 }
 
-// httpGetDatabasePostgreSQLInstanceSSLProto retrieves a PostgreSQL database SSL
-// certificate as a proto message.
+// httpGetDatabasePostgreSQLInstanceSSLProto retrieves a PostgreSQL database SSL certificate.
 func (c *Client) httpGetDatabasePostgreSQLInstanceSSLProto(ctx context.Context, instanceID int) (*linodev1.DatabaseSSL, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/ssl"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_ssl_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLInstanceSSL", Err: err}
+		return nil, wrapRequestError("GetDatabasePostgreSQLInstanceSSL", err)
 	}
 
 	defer drainClose(resp)
@@ -228,11 +191,9 @@ func (c *Client) httpGetDatabaseInstanceCredentials(ctx context.Context, instanc
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/credentials"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_credentials_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabaseInstanceCredentials", Err: err}
+		return nil, wrapRequestError("GetDatabaseInstanceCredentials", err)
 	}
 
 	defer drainClose(resp)
@@ -250,11 +211,9 @@ func (c *Client) httpGetDatabasePostgreSQLInstanceCredentials(ctx context.Contex
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/credentials"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_credentials_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLInstanceCredentials", Err: err}
+		return nil, wrapRequestError("GetDatabasePostgreSQLInstanceCredentials", err)
 	}
 
 	defer drainClose(resp)
@@ -272,11 +231,9 @@ func (c *Client) httpResetDatabaseInstanceCredentials(ctx context.Context, insta
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/credentials/reset"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_credentials_reset", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ResetDatabaseInstanceCredentials", Err: err}
+		return nil, wrapRequestError("ResetDatabaseInstanceCredentials", err)
 	}
 
 	defer drainClose(resp)
@@ -294,11 +251,9 @@ func (c *Client) httpResetDatabasePostgreSQLInstanceCredentials(ctx context.Cont
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/credentials/reset"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_credentials_reset", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "ResetDatabasePostgreSQLInstanceCredentials", Err: err}
+		return wrapRequestError("ResetDatabasePostgreSQLInstanceCredentials", err)
 	}
 
 	defer drainClose(resp)
@@ -306,21 +261,10 @@ func (c *Client) httpResetDatabasePostgreSQLInstanceCredentials(ctx context.Cont
 	return c.handleResponse(resp, nil)
 }
 
-// writeDatabaseInstanceProto issues a create/update request and decodes the API
-// body into the proto DatabaseInstance element. The PostgreSQL create and both
-// update paths only differ by method, endpoint, and operation label, so they
-// route through this one helper to keep dupl happy.
-func (c *Client) writeDatabaseInstanceProto(ctx context.Context, operation, method, endpoint string, body any) (*linodev1.DatabaseInstance, error) {
-	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
-	defer cancel()
-
-	resp, err := c.makeRequest(ctx, method, endpoint, body)
-	if err != nil {
-		return nil, &NetworkError{Operation: operation, Err: err}
-	}
-
-	defer drainClose(resp)
-
+// decodeDatabaseInstanceProto reads a create or update response body into the
+// proto DatabaseInstance element. Each write path keeps its own request call:
+// the offline route gate only reads tool names passed as literals.
+func (c *Client) decodeDatabaseInstanceProto(resp *http.Response) (*linodev1.DatabaseInstance, error) {
 	instance := &linodev1.DatabaseInstance{}
 	if err := c.handleProtoResponse(resp, instance); err != nil {
 		return nil, err
@@ -329,47 +273,64 @@ func (c *Client) writeDatabaseInstanceProto(ctx context.Context, operation, meth
 	return instance, nil
 }
 
-// httpCreateDatabaseInstanceProto creates a MySQL Managed Database instance and
-// decodes the response into the proto element.
+// httpCreateDatabaseInstanceProto creates a MySQL Managed Database instance.
 func (c *Client) httpCreateDatabaseInstanceProto(ctx context.Context, req *CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointDatabaseInstances, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateDatabaseInstance", Err: err}
+		return nil, wrapRequestError("CreateDatabaseInstance", err)
 	}
 
 	defer drainClose(resp)
 
-	instance := &linodev1.DatabaseInstance{}
-	if err := c.handleProtoResponse(resp, instance); err != nil {
-		return nil, err
+	return c.decodeDatabaseInstanceProto(resp)
+}
+
+// httpCreateDatabasePostgreSQLInstanceProto creates a PostgreSQL Managed Database instance.
+func (c *Client) httpCreateDatabasePostgreSQLInstanceProto(ctx context.Context, req *CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
+
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_create", req)
+	if err != nil {
+		return nil, wrapRequestError("CreateDatabasePostgreSQLInstance", err)
 	}
 
-	return instance, nil
+	defer drainClose(resp)
+
+	return c.decodeDatabaseInstanceProto(resp)
 }
 
-// httpCreateDatabasePostgreSQLInstanceProto creates a PostgreSQL Managed Database
-// instance and decodes the response into the proto element.
-func (c *Client) httpCreateDatabasePostgreSQLInstanceProto(ctx context.Context, req *CreateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
-	return c.writeDatabaseInstanceProto(ctx, "CreateDatabasePostgreSQLInstance", http.MethodPost, endpointDatabasePostgreSQLInstances, req)
-}
-
-// httpUpdateDatabaseInstanceProto updates a MySQL Managed Database instance and
-// decodes the response into the proto element.
+// httpUpdateDatabaseInstanceProto updates a MySQL Managed Database instance.
 func (c *Client) httpUpdateDatabaseInstanceProto(ctx context.Context, instanceID int, req *UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
 
-	return c.writeDatabaseInstanceProto(ctx, "UpdateDatabaseInstance", http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_update", req, instanceID)
+	if err != nil {
+		return nil, wrapRequestError("UpdateDatabaseInstance", err)
+	}
+
+	defer drainClose(resp)
+
+	return c.decodeDatabaseInstanceProto(resp)
 }
 
-// httpUpdateDatabasePostgreSQLInstanceProto updates a PostgreSQL Managed Database
-// instance and decodes the response into the proto element.
+// httpUpdateDatabasePostgreSQLInstanceProto updates a PostgreSQL Managed Database instance.
 func (c *Client) httpUpdateDatabasePostgreSQLInstanceProto(ctx context.Context, instanceID int, req *UpdateDatabaseInstanceRequest) (*linodev1.DatabaseInstance, error) {
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
+	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+	defer cancel()
 
-	return c.writeDatabaseInstanceProto(ctx, "UpdateDatabasePostgreSQLInstance", http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_update", req, instanceID)
+	if err != nil {
+		return nil, wrapRequestError("UpdateDatabasePostgreSQLInstance", err)
+	}
+
+	defer drainClose(resp)
+
+	return c.decodeDatabaseInstanceProto(resp)
 }
 
 // DeleteDatabaseInstance deletes one MySQL Managed Database instance.
@@ -377,11 +338,9 @@ func (c *Client) httpDeleteDatabaseInstance(ctx context.Context, instanceID int)
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_delete", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteDatabaseInstance", Err: err}
+		return wrapRequestError("DeleteDatabaseInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -394,11 +353,9 @@ func (c *Client) httpDeleteDatabasePostgreSQLInstance(ctx context.Context, insta
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_delete", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteDatabasePostgreSQLInstance", Err: err}
+		return wrapRequestError("DeleteDatabasePostgreSQLInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -411,11 +368,9 @@ func (c *Client) httpPatchDatabaseInstance(ctx context.Context, instanceID int) 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/patch"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_patch", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "PatchDatabaseInstance", Err: err}
+		return wrapRequestError("PatchDatabaseInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -428,11 +383,9 @@ func (c *Client) httpPatchDatabasePostgreSQLInstance(ctx context.Context, instan
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/patch"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_patch", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "PatchDatabasePostgreSQLInstance", Err: err}
+		return wrapRequestError("PatchDatabasePostgreSQLInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -445,11 +398,9 @@ func (c *Client) httpSuspendDatabaseInstance(ctx context.Context, instanceID int
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/suspend"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_suspend", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "SuspendDatabaseInstance", Err: err}
+		return wrapRequestError("SuspendDatabaseInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -462,11 +413,9 @@ func (c *Client) httpSuspendDatabasePostgreSQLInstance(ctx context.Context, inst
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/suspend"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_suspend", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "SuspendDatabasePostgreSQLInstance", Err: err}
+		return wrapRequestError("SuspendDatabasePostgreSQLInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -479,11 +428,9 @@ func (c *Client) httpResumeDatabaseInstance(ctx context.Context, instanceID int)
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/resume"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_instance_resume", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "ResumeDatabaseInstance", Err: err}
+		return wrapRequestError("ResumeDatabaseInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -496,11 +443,9 @@ func (c *Client) httpResumeDatabasePostgreSQLInstance(ctx context.Context, insta
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabasePostgreSQLInstances + "/" + url.PathEscape(strconv.Itoa(instanceID)) + "/resume"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_instance_resume", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "ResumeDatabasePostgreSQLInstance", Err: err}
+		return wrapRequestError("ResumeDatabasePostgreSQLInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -513,9 +458,9 @@ func (c *Client) httpGetDatabaseMySQLConfig(ctx context.Context) (map[string]any
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointDatabaseMySQLConfig, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_mysql_config_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabaseMySQLConfig", Err: err}
+		return nil, wrapRequestError("GetDatabaseMySQLConfig", err)
 	}
 
 	defer drainClose(resp)
@@ -533,9 +478,9 @@ func (c *Client) httpGetDatabasePostgreSQLConfig(ctx context.Context) (map[strin
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointDatabasePostgreSQLConfig, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_postgresql_config_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabasePostgreSQLConfig", Err: err}
+		return nil, wrapRequestError("GetDatabasePostgreSQLConfig", err)
 	}
 
 	defer drainClose(resp)
@@ -548,17 +493,14 @@ func (c *Client) httpGetDatabasePostgreSQLConfig(ctx context.Context) (map[strin
 	return config, nil
 }
 
-// httpGetDatabaseEngineProto retrieves one Managed Database engine as a proto
-// message.
+// httpGetDatabaseEngineProto retrieves one Managed Database engine.
 func (c *Client) httpGetDatabaseEngineProto(ctx context.Context, engineID string) (*linodev1.DatabaseEngine, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointDatabaseEngines + "/" + url.PathEscape(engineID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_database_engine_get", nil, engineID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetDatabaseEngine", Err: err}
+		return nil, wrapRequestError("GetDatabaseEngine", err)
 	}
 
 	defer drainClose(resp)

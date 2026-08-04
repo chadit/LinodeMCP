@@ -193,7 +193,7 @@ async def test_config_handler_profile_dispatch(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = sample_profile_data
+        mock_client.route_raw.return_value = sample_profile_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -203,7 +203,7 @@ async def test_config_handler_profile_dispatch(
         assert len(result) == 1
         assert "testuser" in result[0].text
         assert "test@example.com" in result[0].text
-        mock_client.get_raw.assert_awaited_once_with("/profile")
+        mock_client.route_raw.assert_awaited_once_with("linode_profile_get")
 
 
 async def test_all_listed_tools_have_handlers(
@@ -701,11 +701,17 @@ async def test_domain_clone_tool_is_exported_and_registered(
 async def test_domain_record_get_tool_is_exported_and_registered(
     sample_config: Config,
 ) -> None:
-    """Domain record get tool should be exported and registered."""
-    from linodemcp import tools as tools_mod
+    """Domain record get tool should be exported and registered.
 
-    assert "create_linode_domain_record_get_tool" in tools_mod.__all__
-    assert "handle_linode_domain_record_get" in tools_mod.__all__
+    Its pair is exported from the generated package rather than the
+    hand-written one, since scripts/toolgen_py.py emits this tool from the
+    proto contract. The registry reads both, so where the pair comes from is
+    what this pins and the registration is what it proves.
+    """
+    from linodemcp import gentools as gentools_mod
+
+    assert "create_linode_domain_record_get_tool" in gentools_mod.__all__
+    assert "handle_linode_domain_record_get" in gentools_mod.__all__
 
     srv = Server(sample_config)
     assert "linode_domain_record_get" in srv.registered_tool_names
@@ -730,7 +736,7 @@ async def test_domain_zone_file_get_handler_returns_client_response(
     """Domain zone file handler returns the client response."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "zone_file": ["$ORIGIN example.com."],
             "not_in_proto": "dropped",
         }
@@ -741,7 +747,7 @@ async def test_domain_zone_file_get_handler_returns_client_response(
         srv = Server(sample_config)
         result = await srv.dispatch("linode_domain_zone_file_get", {"domain_id": 1})
 
-    mock_client.get_raw.assert_awaited_once_with("/domains/1/zone-file")
+    mock_client.route_raw.assert_awaited_once_with("linode_domain_zone_file_get", 1)
     # The exact equality proves the unknown not_in_proto field was dropped.
     assert json.loads(result[0].text) == {"zone_file": ["$ORIGIN example.com."]}
 
@@ -13595,7 +13601,7 @@ async def test_account_oauth_client_create_dispatches_from_registry(
     assert payload["client"]["label"] == "demo-client"
     assert payload["client"]["secret"] == "shown-once"
     mock_client.create_account_oauth_client.assert_awaited_once_with(
-        "demo-client", "https://example.com/cb"
+        "demo-client", "https://example.com/cb", False
     )
 
 
@@ -13689,6 +13695,7 @@ async def test_account_oauth_client_create_dry_run_skips_client_call(
         "body": {
             "label": "demo-client",
             "redirect_uri": "https://example.com/cb",
+            "public": False,
         },
     }
     mock_client.create_account_oauth_client.assert_not_called()
@@ -13968,7 +13975,9 @@ async def test_account_service_transfer_create_dispatches_from_registry(
     assert payload["transfer"]["token"] == "service-transfer-token"
     assert payload["transfer"]["entities"]["linodes"] == [123, 456]
     assert payload["transfer"]["status"] == "pending"
-    mock_client.create_account_service_transfer.assert_awaited_once_with([123, 456])
+    mock_client.create_account_service_transfer.assert_awaited_once_with(
+        [123, 456], None
+    )
 
 
 @pytest.mark.parametrize("confirm_value", [None, False, "true", 1])
@@ -16960,6 +16969,7 @@ async def test_monitor_service_alert_definition_create_dispatches_from_registry(
                 "rule_criteria": {"rules": [{"metric": "cpu_usage"}]},
                 "trigger_conditions": {"criteria_condition": "ALL"},
                 "channel_ids": [10000],
+                "scope": "account",
                 "confirm": True,
             },
         )
@@ -16986,6 +16996,8 @@ async def test_monitor_service_alert_definition_create_dispatches_from_registry(
         channel_ids=[10000],
         description=None,
         entity_ids=None,
+        scope="account",
+        group_by=None,
     )
 
 

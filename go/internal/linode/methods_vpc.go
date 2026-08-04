@@ -2,20 +2,14 @@ package linode
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const (
-	endpointVPCs = "/vpcs"
-)
-
-// httpListVPCsProto retrieves all VPCs as proto messages, decoded directly from
-// the API JSON for the proto-backed list path.
-func (c *Client) httpListVPCsProto(ctx context.Context) ([]*linodev1.Vpc, error) {
-	return listProtoElements(ctx, c, "ListVPCs", endpointVPCs,
+// httpListVPCsProto retrieves one page of VPCs.
+func (c *Client) httpListVPCsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Vpc, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListVPCs",
+		"linode_vpc_list", "", nil, page, pageSize,
 		func() *linodev1.Vpc { return &linodev1.Vpc{} })
 }
 
@@ -24,11 +18,9 @@ func (c *Client) httpGetVPC(ctx context.Context, vpcID int) (*VPC, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d", vpcID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_get", nil, vpcID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetVPC", Err: err}
+		return nil, wrapRequestError("GetVPC", err)
 	}
 
 	defer drainClose(resp)
@@ -46,11 +38,9 @@ func (c *Client) httpGetVPCProto(ctx context.Context, vpcID int) (*linodev1.Vpc,
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d", vpcID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_get", nil, vpcID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetVPC", Err: err}
+		return nil, wrapRequestError("GetVPC", err)
 	}
 
 	defer drainClose(resp)
@@ -68,9 +58,9 @@ func (c *Client) httpCreateVPCProto(ctx context.Context, req CreateVPCRequest) (
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointVPCs, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateVPC", Err: err}
+		return nil, wrapRequestError("CreateVPC", err)
 	}
 
 	defer drainClose(resp)
@@ -88,11 +78,9 @@ func (c *Client) httpUpdateVPCProto(ctx context.Context, vpcID int, req UpdateVP
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d", vpcID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_update", req, vpcID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateVPC", Err: err}
+		return nil, wrapRequestError("UpdateVPC", err)
 	}
 
 	defer drainClose(resp)
@@ -110,11 +98,9 @@ func (c *Client) httpDeleteVPC(ctx context.Context, vpcID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d", vpcID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_delete", nil, vpcID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteVPC", Err: err}
+		return wrapRequestError("DeleteVPC", err)
 	}
 
 	defer drainClose(resp)
@@ -122,20 +108,18 @@ func (c *Client) httpDeleteVPC(ctx context.Context, vpcID int) error {
 	return c.handleResponse(resp, nil)
 }
 
-// httpListVPCIPsProto retrieves all VPC IP addresses as proto messages for the
-// proto-backed list path. The endpoint matches httpListVPCIPs.
-func (c *Client) httpListVPCIPsProto(ctx context.Context) ([]*linodev1.VPCIP, error) {
-	return listProtoElements(ctx, c, "ListVPCIPs", endpointVPCs+"/ips",
+// httpListVPCIPsProto retrieves one page of IP addresses across every VPC,
+// unlike httpListVPCIPAddressesProto, which scopes to a single VPC.
+func (c *Client) httpListVPCIPsProto(ctx context.Context, page, pageSize int) ([]*linodev1.VPCIP, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListVPCIPs",
+		"linode_vpc_ip_all_list", "", nil, page, pageSize,
 		func() *linodev1.VPCIP { return &linodev1.VPCIP{} })
 }
 
-// httpListVPCIPAddressesProto retrieves a VPC's IP addresses as proto messages
-// for the proto-backed list path. The endpoint formats vpcID exactly like
-// httpListVPCIPAddresses.
-func (c *Client) httpListVPCIPAddressesProto(ctx context.Context, vpcID int) ([]*linodev1.VPCIP, error) {
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/ips", vpcID)
-
-	return listProtoElements(ctx, c, "ListVPCIPAddresses", endpoint,
+// httpListVPCIPAddressesProto retrieves one page of a single VPC's IP addresses.
+func (c *Client) httpListVPCIPAddressesProto(ctx context.Context, vpcID, page, pageSize int) ([]*linodev1.VPCIP, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListVPCIPAddresses",
+		"linode_vpc_ip_list", "", []any{vpcID}, page, pageSize,
 		func() *linodev1.VPCIP { return &linodev1.VPCIP{} })
 }
 
@@ -144,11 +128,9 @@ func (c *Client) httpListVPCSubnets(ctx context.Context, vpcID int) ([]VPCSubnet
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets", vpcID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_subnet_list", nil, vpcID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ListVPCSubnets", Err: err}
+		return nil, wrapRequestError("ListVPCSubnets", err)
 	}
 
 	defer drainClose(resp)
@@ -162,14 +144,11 @@ func (c *Client) httpListVPCSubnets(ctx context.Context, vpcID int) ([]VPCSubnet
 	return response.Data, nil
 }
 
-// httpListVPCSubnetsProto retrieves a VPC's subnets as proto messages for the
-// proto-backed list path. The endpoint is formatted with the same
-// fmt.Sprintf(endpointVPCs+"/%d/subnets", vpcID) pattern httpListVPCSubnets uses,
-// so the runtime path matches exactly.
-func (c *Client) httpListVPCSubnetsProto(ctx context.Context, vpcID int) ([]*linodev1.VpcSubnet, error) {
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets", vpcID)
-
-	return listProtoElements(ctx, c, "ListVPCSubnets", endpoint,
+// httpListVPCSubnetsProto retrieves one page of a VPC's subnets. It names the
+// same tool as httpListVPCSubnets, so both resolve the one declared route.
+func (c *Client) httpListVPCSubnetsProto(ctx context.Context, vpcID, page, pageSize int) ([]*linodev1.VpcSubnet, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListVPCSubnets",
+		"linode_vpc_subnet_list", "", []any{vpcID}, page, pageSize,
 		func() *linodev1.VpcSubnet { return &linodev1.VpcSubnet{} })
 }
 
@@ -178,11 +157,9 @@ func (c *Client) httpGetVPCSubnet(ctx context.Context, vpcID, subnetID int) (*VP
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets/%d", vpcID, subnetID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_subnet_get", nil, vpcID, subnetID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetVPCSubnet", Err: err}
+		return nil, wrapRequestError("GetVPCSubnet", err)
 	}
 
 	defer drainClose(resp)
@@ -200,11 +177,9 @@ func (c *Client) httpGetVPCSubnetProto(ctx context.Context, vpcID, subnetID int)
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets/%d", vpcID, subnetID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_subnet_get", nil, vpcID, subnetID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetVPCSubnet", Err: err}
+		return nil, wrapRequestError("GetVPCSubnet", err)
 	}
 
 	defer drainClose(resp)
@@ -222,11 +197,9 @@ func (c *Client) httpCreateVPCSubnetProto(ctx context.Context, vpcID int, req Cr
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets", vpcID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_subnet_create", req, vpcID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateVPCSubnet", Err: err}
+		return nil, wrapRequestError("CreateVPCSubnet", err)
 	}
 
 	defer drainClose(resp)
@@ -244,11 +217,9 @@ func (c *Client) httpUpdateVPCSubnetProto(ctx context.Context, vpcID, subnetID i
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets/%d", vpcID, subnetID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_subnet_update", req, vpcID, subnetID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateVPCSubnet", Err: err}
+		return nil, wrapRequestError("UpdateVPCSubnet", err)
 	}
 
 	defer drainClose(resp)
@@ -266,11 +237,9 @@ func (c *Client) httpDeleteVPCSubnet(ctx context.Context, vpcID, subnetID int) e
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVPCs+"/%d/subnets/%d", vpcID, subnetID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_vpc_subnet_delete", nil, vpcID, subnetID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteVPCSubnet", Err: err}
+		return wrapRequestError("DeleteVPCSubnet", err)
 	}
 
 	defer drainClose(resp)

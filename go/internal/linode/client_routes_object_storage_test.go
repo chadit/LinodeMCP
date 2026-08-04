@@ -40,7 +40,7 @@ func TestClientRoutesObjectStoragePart1(t *testing.T) {
 			response: clientRouteProtoObjLabel,
 			want:     clientRouteProbeValue,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.CreateObjectStorageBucketProto(ctx, linode.CreateObjectStorageBucketRequest{})
+				got, err := client.CreateObjectStorageBucketProto(ctx, &linode.CreateObjectStorageBucketRequest{})
 
 				return clientRouteProbe(err, func() any { return got.GetLabel() })
 			},

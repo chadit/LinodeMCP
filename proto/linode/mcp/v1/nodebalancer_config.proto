@@ -138,15 +138,17 @@ message NodeBalancerConfigGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_config_get"
     method: "GET"
-    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}"
+    path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfig";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer (required).
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the NodeBalancer config to retrieve (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // NodeBalancerConfigDeleteResponse is the id-echo envelope
@@ -165,17 +167,19 @@ message NodeBalancerConfigListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_config_list"
     method: "GET"
-    path: "/nodebalancers/{node_balancer_id}/configs"
+    path: "/nodebalancers/{nodebalancer_id}/configs"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose configs should be listed.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page number to retrieve.
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page, from 25 through 500.
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // NodeBalancerConfigNodeItem is one backend node in the optional nodes array of
@@ -201,55 +205,60 @@ message NodeBalancerConfigCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_config_create"
     method: "POST"
-    path: "/nodebalancers/{node_balancer_id}/configs"
+    path: "/nodebalancers/{nodebalancer_id}/configs"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a NodeBalancer config. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "NodeBalancer config {id} created successfully for NodeBalancer {nodebalancer_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer that should receive a new config.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The TCP port this config listens on, from 1 through 65535.
-  int32 port = 3;
+  int32 port = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional protocol: http, https, tcp, or udp.
-  optional NodeBalancerProtocol.Value protocol = 4;
+  optional NodeBalancerProtocol.Value protocol = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional balancing algorithm: roundrobin, leastconn, source, or ring_hash.
-  optional NodeBalancerAlgorithm.Value algorithm = 5;
+  optional NodeBalancerAlgorithm.Value algorithm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional session stickiness: none, table, http_cookie, session, or
   // source_ip (valid set depends on protocol).
-  optional NodeBalancerStickiness.Value stickiness = 6;
+  optional NodeBalancerStickiness.Value stickiness = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check mode: none, connection, http, or http_body.
-  optional NodeBalancerCheck.Value check = 7;
+  optional NodeBalancerCheck.Value check = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check interval in seconds.
-  optional int32 check_interval = 8;
+  optional int32 check_interval = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check timeout in seconds.
-  optional int32 check_timeout = 9;
+  optional int32 check_timeout = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check attempt count.
-  optional int32 check_attempts = 10;
+  optional int32 check_attempts = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTP health check path.
-  optional string check_path = 11;
+  optional string check_path = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional expected HTTP health check body.
-  optional string check_body = 12;
+  optional string check_body = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optionally enable passive health checks.
-  optional bool check_passive = 13;
+  optional bool check_passive = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTPS cipher suite: recommended or legacy.
-  optional NodeBalancerCipherSuite.Value cipher_suite = 14;
+  optional NodeBalancerCipherSuite.Value cipher_suite = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTPS certificate PEM.
-  optional string ssl_cert = 15;
+  optional string ssl_cert = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTPS private key PEM.
-  optional string ssl_key = 16;
+  optional string ssl_key = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional proxy protocol version for TCP configs: none, v1, or v2.
-  optional NodeBalancerProxyProtocol.Value proxy_protocol = 17;
+  optional NodeBalancerProxyProtocol.Value proxy_protocol = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check port for UDP configs, from 1 through 65535.
-  optional int32 udp_check_port = 18;
+  optional int32 udp_check_port = 18 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional backend nodes to attach to this config, each an object with label,
   // address, and optional weight, mode, and subnet_id.
-  repeated NodeBalancerConfigNodeItem nodes = 19;
+  repeated NodeBalancerConfigNodeItem nodes = 19 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm NodeBalancer config creation. Ignored when
   // dry_run=true.
-  bool confirm = 20; // system param
+  bool confirm = 20 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 21; // system param
+  optional bool dry_run = 21 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NodeBalancerConfigUpdateInput is the input contract for
@@ -258,54 +267,59 @@ message NodeBalancerConfigUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_config_update"
     method: "PUT"
-    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}"
+    path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a NodeBalancer config. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "NodeBalancer config {id} updated successfully for NodeBalancer {nodebalancer_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose config should be updated.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the NodeBalancer config to update.
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Optional TCP port this config listens on, from 1 through 65535.
-  optional int32 port = 4;
+  optional int32 port = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional protocol: http, https, tcp, or udp.
-  optional NodeBalancerProtocol.Value protocol = 5;
+  optional NodeBalancerProtocol.Value protocol = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional balancing algorithm: roundrobin, leastconn, source, or ring_hash.
-  optional NodeBalancerAlgorithm.Value algorithm = 6;
+  optional NodeBalancerAlgorithm.Value algorithm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional session stickiness: none, table, http_cookie, session, or
   // source_ip (valid set depends on protocol).
-  optional NodeBalancerStickiness.Value stickiness = 7;
+  optional NodeBalancerStickiness.Value stickiness = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check mode: none, connection, http, or http_body.
-  optional NodeBalancerCheck.Value check = 8;
+  optional NodeBalancerCheck.Value check = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check interval in seconds.
-  optional int32 check_interval = 9;
+  optional int32 check_interval = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check timeout in seconds.
-  optional int32 check_timeout = 10;
+  optional int32 check_timeout = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check attempt count.
-  optional int32 check_attempts = 11;
+  optional int32 check_attempts = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTP health check path.
-  optional string check_path = 12;
+  optional string check_path = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional expected HTTP health check body.
-  optional string check_body = 13;
+  optional string check_body = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optionally enable passive health checks.
-  optional bool check_passive = 14;
+  optional bool check_passive = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTPS cipher suite: recommended or legacy.
-  optional NodeBalancerCipherSuite.Value cipher_suite = 15;
+  optional NodeBalancerCipherSuite.Value cipher_suite = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTPS certificate PEM.
-  optional string ssl_cert = 16;
+  optional string ssl_cert = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional HTTPS private key PEM.
-  optional string ssl_key = 17;
+  optional string ssl_key = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional proxy protocol version for TCP configs: none, v1, or v2.
-  optional NodeBalancerProxyProtocol.Value proxy_protocol = 18;
+  optional NodeBalancerProxyProtocol.Value proxy_protocol = 18 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional health check port for UDP configs, from 1 through 65535.
-  optional int32 udp_check_port = 19;
+  optional int32 udp_check_port = 19 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm NodeBalancer config update. Ignored when
   // dry_run=true.
-  bool confirm = 20; // system param
+  bool confirm = 20 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 21; // system param
+  optional bool dry_run = 21 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NodeBalancerConfigDeleteInput is the input contract for
@@ -315,41 +329,83 @@ message NodeBalancerConfigDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_config_delete"
     method: "DELETE"
-    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}"
+    path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose config should be deleted.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the NodeBalancer config to delete.
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm config deletion. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NodeBalancerConfigRebuildInput is the input contract for
-// linode_nodebalancer_config_rebuild.
+// linode_nodebalancer_config_rebuild. Rebuild replaces the config and its whole
+// backend node set in one call, so it takes the same body as config create
+// rather than only the two path IDs: whatever the body omits is reset to the
+// API default rather than preserved. nodes is required by the API, but a
+// repeated field is never emitted into the generated required set, so its
+// required flag is dropped from the advertised schema (both handlers still
+// enforce presence at runtime).
 message NodeBalancerConfigRebuildInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_config_rebuild"
     method: "POST"
-    path: "/nodebalancers/{node_balancer_id}/configs/{config_id}/rebuild"
+    path: "/nodebalancers/{nodebalancer_id}/configs/{config_id}/rebuild"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerConfigWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This rebuilds a NodeBalancer config. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Rebuilt config {config_id} for NodeBalancer {nodebalancer_id} successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose config should be rebuilt.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the NodeBalancer config to rebuild.
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm NodeBalancer config rebuild. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Optional TCP port this config listens on, from 1 through 65535.
+  optional int32 port = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional protocol: http, https, tcp, or udp.
+  optional NodeBalancerProtocol.Value protocol = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional balancing algorithm: roundrobin, leastconn, source, or ring_hash.
+  optional NodeBalancerAlgorithm.Value algorithm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional session stickiness: none, table, http_cookie, session, or
+  // source_ip (valid set depends on protocol).
+  optional NodeBalancerStickiness.Value stickiness = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional health check mode: none, connection, http, or http_body.
+  optional NodeBalancerCheck.Value check = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional health check interval in seconds.
+  optional int32 check_interval = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional health check timeout in seconds.
+  optional int32 check_timeout = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional health check attempt count.
+  optional int32 check_attempts = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional HTTP health check path.
+  optional string check_path = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional expected HTTP health check body.
+  optional string check_body = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional health check port for UDP configs, from 1 through 65535.
+  optional int32 udp_check_port = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // The complete backend node set the rebuilt config should have (required),
+  // each an object with label, address, and optional weight, mode, and
+  // subnet_id. Nodes absent from this list are removed from the config.
+  repeated NodeBalancerConfigNodeItem nodes = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }

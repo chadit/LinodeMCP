@@ -4,51 +4,135 @@
   "cases": [
     {
       "name": "rejects non-positive entity ids",
-      "args": { "service_type": "dbaas", "entity_ids": [0], "confirm": true },
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          0
+        ],
+        "confirm": true
+      },
       "expect_error": "entity_ids must be a non-empty array of positive integers"
     },
     {
       "name": "rejects missing entity ids",
-      "args": { "service_type": "dbaas", "confirm": true },
+      "args": {
+        "service_type": "dbaas",
+        "confirm": true
+      },
       "expect_error": "entity_ids must be a non-empty array of positive integers"
     },
     {
       "name": "rejects string entity ids",
-      "args": { "service_type": "dbaas", "entity_ids": ["10"], "confirm": true },
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          "10"
+        ],
+        "confirm": true
+      },
       "expect_error": "entity_ids must be a non-empty array of positive integers"
     },
     {
       "name": "posts the token create body",
-      "args": { "service_type": "dbaas", "entity_ids": [10, 20], "confirm": true },
-      "api_response": { "token": "tok_value", "expiry": "2026-08-01T00:00:00" },
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          10,
+          20
+        ],
+        "confirm": true
+      },
+      "api_response": {
+        "token": "tok_value",
+        "expiry": "2026-08-01T00:00:00"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/monitor/services/dbaas/token",
-        "body": { "entity_ids": [10, 20] }
+        "body": {
+          "entity_ids": [
+            10,
+            20
+          ]
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": { "service_type": "dbaas", "entity_ids": [10, 20] },
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          10,
+          20
+        ]
+      },
       "expect_error": "This creates a monitor service token. Set confirm=true to proceed."
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "service_type": "dbaas", "entity_ids": [10, 20], "confirm": true },
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          10,
+          20
+        ],
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "monitor"
     },
     {
       "name": "rejects malformed success body",
-      "args": { "service_type": "dbaas", "entity_ids": [10, 20], "confirm": true },
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          10,
+          20
+        ],
+        "confirm": true
+      },
       "api_response_raw": "not json",
       "expect_api_error": "line 1"
     },
     {
       "name": "rejects empty success body",
-      "args": { "service_type": "dbaas", "entity_ids": [10, 20], "confirm": true },
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          10,
+          20
+        ],
+        "confirm": true
+      },
       "api_response_raw": "",
       "expect_api_error": "line 1"
+    },
+    {
+      "name": "carries add into the body",
+      "args": {
+        "service_type": "dbaas",
+        "entity_ids": [
+          10,
+          20
+        ],
+        "confirm": true,
+        "add": "extra"
+      },
+      "api_response": {
+        "token": "t",
+        "expiry": "2026-01-01T00:00:00"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/monitor/services/dbaas/token",
+        "body": {
+          "entity_ids": [
+            10,
+            20
+          ],
+          "add": "extra"
+        }
+      }
     }
   ]
 }

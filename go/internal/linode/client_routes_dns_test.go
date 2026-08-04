@@ -150,7 +150,7 @@ func TestClientRoutesDNSPart1(t *testing.T) {
 			response: clientRouteProtoPageType,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListDomainRecordsProto(ctx, 4242)
+				got, err := client.ListDomainRecordsProto(ctx, 4242, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.DomainRecord).GetType) })
 			},
@@ -171,7 +171,7 @@ func TestClientRoutesDNSPart2(t *testing.T) {
 			response: clientRouteProtoPageDomain,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListDomainsProto(ctx)
+				got, err := client.ListDomainsProto(ctx, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.Domain).GetDomain) })
 			},

@@ -1,0 +1,233 @@
+package linoderoute
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
+	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
+)
+
+// unspecified is the capability enum's zero value, which is what a message
+// declaring no tier reads back as.
+const unspecified = linodev1.ToolCapability_TOOL_CAPABILITY_UNSPECIFIED
+
+// meta is the tier of a tool that reaches no Linode route, working on local
+// config or session state instead.
+const meta = linodev1.ToolCapability_TOOL_CAPABILITY_META
+
+// Tool is one tool the proto contract declares.
+type Tool struct {
+	Name       string
+	Capability linodev1.ToolCapability
+	Routed     bool
+}
+
+// Declaration is what one message's options say about a tool, kept as read so a
+// message whose options contradict each other is reported rather than silently
+// resolved to one of the readings. An absent marker and one naming nothing both
+// leave the name empty: neither says which tool the message belongs to.
+type Declaration struct {
+	Message    string
+	RouteTool  string
+	MetaTool   string
+	Capability linodev1.ToolCapability
+}
+
+// Name is the tool a declaration belongs to. A well-formed declaration carries
+// the name in exactly one of its two markers, so a routed tool's name is
+// written once.
+func (d Declaration) Name() string {
+	if d.RouteTool != "" {
+		return d.RouteTool
+	}
+
+	return d.MetaTool
+}
+
+// wellFormed reports whether a declaration names one tool at one tier, the
+// condition for it to resolve to a Tool at all.
+func (d Declaration) wellFormed() bool {
+	return len(d.defects()) == 0 && d.Name() != ""
+}
+
+// defects lists every way one message's options fail to describe exactly one
+// tool at exactly one tier. A message naming no tool and declaring no tier is
+// clean, which is how every response and nested type falls out here.
+func (d Declaration) defects() []string {
+	if d.RouteTool == "" && d.MetaTool == "" && d.Capability == unspecified {
+		return nil
+	}
+
+	found := make([]string, 0)
+
+	if d.RouteTool != "" && d.MetaTool != "" {
+		found = append(found, fmt.Sprintf(
+			"%s: names %s as a routed tool and %s as a meta tool, and a tool is one or the other",
+			d.Message, d.RouteTool, d.MetaTool))
+	}
+
+	if d.RouteTool == "" && d.MetaTool == "" {
+		found = append(found, fmt.Sprintf(
+			"%s: declares %s but no marker names its tool", d.Message, d.Capability))
+	}
+
+	return append(found, d.tierDefects()...)
+}
+
+// tierDefects lists the ways a declared tier disagrees with the marker beside
+// it. A meta marker and the meta tier say one fact twice, so letting them
+// differ would put two answers to "is this tool routed" in the contract itself.
+func (d Declaration) tierDefects() []string {
+	if d.Capability == unspecified {
+		return []string{fmt.Sprintf(
+			"%s: names %s but declares no capability", d.Message, d.Name())}
+	}
+
+	if d.MetaTool != "" && d.Capability != meta {
+		return []string{fmt.Sprintf(
+			"%s: %s carries a meta marker but declares %s",
+			d.Message, d.MetaTool, d.Capability)}
+	}
+
+	if d.RouteTool != "" && d.Capability == meta {
+		return []string{fmt.Sprintf(
+			"%s: %s declares a route and %s, and a meta tool reaches no route",
+			d.Message, d.RouteTool, d.Capability)}
+	}
+
+	return nil
+}
+
+// Tools returns every tool the contract declares, name-sorted. A message whose
+// options contradict each other names no tool here; Validate is what reports it.
+func Tools() []Tool {
+	found := make([]Tool, 0)
+
+	for _, declared := range declarations() {
+		if !declared.wellFormed() {
+			continue
+		}
+
+		found = append(found, Tool{
+			Name:       declared.Name(),
+			Capability: declared.Capability,
+			Routed:     declared.RouteTool != "",
+		})
+	}
+
+	slices.SortFunc(found, func(left, right Tool) int {
+		return strings.Compare(left.Name, right.Name)
+	})
+
+	return found
+}
+
+// validateDeclarations reports every message that does not name exactly one
+// tool at exactly one tier, including two messages that name the same tool.
+func validateDeclarations(declared []Declaration) error {
+	defects := make([]string, 0)
+	claimed := make(map[string]string, len(declared))
+
+	for _, entry := range declared {
+		defects = append(defects, entry.defects()...)
+
+		name := entry.Name()
+		if first, taken := claimed[name]; name != "" && taken {
+			defects = append(defects, fmt.Sprintf(
+				"%s: names %s, which %s already declares", entry.Message, name, first))
+		}
+
+		claimed[name] = entry.Message
+	}
+
+	if len(defects) == 0 {
+		return nil
+	}
+
+	slices.Sort(defects)
+
+	return fmt.Errorf("%w: %s", ErrDeclaration, strings.Join(defects, "; "))
+}
+
+// ValidateRegistered reports the tools a server staged that the contract does
+// not declare and the tools it declares that the server did not stage. Both
+// directions fail: a staged tool with no declaration has no tier to filter it
+// by, and a declared tool nothing staged is a dropped or renamed handler.
+func ValidateRegistered(registered []string) error {
+	declared := Tools()
+
+	names := make([]string, 0, len(declared))
+	for _, tool := range declared {
+		names = append(names, tool.Name)
+	}
+
+	report := make([]string, 0)
+
+	if extra := difference(registered, names); len(extra) > 0 {
+		report = append(report,
+			"staged but not declared: "+strings.Join(extra, ", "))
+	}
+
+	if missing := difference(names, registered); len(missing) > 0 {
+		report = append(report,
+			"declared but not staged: "+strings.Join(missing, ", "))
+	}
+
+	if len(report) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("%w: %s", ErrRegistered, strings.Join(report, "; "))
+}
+
+// difference returns the sorted entries of left that right does not carry.
+func difference(left, right []string) []string {
+	held := make(map[string]struct{}, len(right))
+	for _, entry := range right {
+		held[entry] = struct{}{}
+	}
+
+	missing := make([]string, 0)
+
+	for _, entry := range left {
+		if _, ok := held[entry]; !ok {
+			missing = append(missing, entry)
+		}
+	}
+
+	slices.Sort(missing)
+
+	return slices.Compact(missing)
+}
+
+// declarations reads what every message in the contract declares about a tool.
+// Each option goes through the comma-ok form and then its getter, so an absent
+// option and one holding another type both land on a nil marker whose getter
+// answers with the empty name, avoiding a branch no descriptor could reach.
+func declarations() []Declaration {
+	found := make([]Declaration, 0)
+
+	walkMessages(func(message protoreflect.MessageDescriptor) bool {
+		options := message.Options()
+		route, _ := proto.GetExtension(options, linodev1.E_ToolRoute).(*linodev1.ToolRoute)
+		meta, _ := proto.GetExtension(options, linodev1.E_ToolMeta).(*linodev1.ToolMeta)
+		capability, _ := proto.GetExtension(
+			options, linodev1.E_ToolCapability,
+		).(linodev1.ToolCapability)
+
+		found = append(found, Declaration{
+			Message:    string(message.FullName()),
+			RouteTool:  route.GetTool(),
+			MetaTool:   meta.GetTool(),
+			Capability: capability,
+		})
+
+		return true
+	})
+
+	return found
+}

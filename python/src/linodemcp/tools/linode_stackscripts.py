@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
@@ -14,7 +13,9 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    pagination_query,
     required_int_id,
+    standard_pagination_arguments,
 )
 from linodemcp.tools.proto_response import (
     raw_int,
@@ -71,8 +72,15 @@ async def handle_linode_stackscript_list(
     if label_contains:
         filters.append(f"label_contains={label_contains}")
 
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/linode/stackscripts")
+        raw = await client.route_raw(
+            "linode_stackscript_list", query=pagination_query(page, page_size)
+        )
         return serialize_list_response(
             raw,
             "stackscripts",
@@ -101,11 +109,9 @@ async def handle_linode_stackscript_get(
     if stackscript_id is None:
         return error_response(error)
 
-    encoded_stackscript_id = quote(str(stackscript_id), safe="")
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
-            await client.get_raw(f"/linode/stackscripts/{encoded_stackscript_id}"),
+            await client.route_raw("linode_stackscript_get", stackscript_id),
             stackscript_pb2.StackScript(),
         )
 
@@ -269,7 +275,9 @@ async def handle_linode_stackscript_create(
         # retry=False because POST /linode/stackscripts is not idempotent: the
         # API assigns the ID, so replaying after a transient failure leaves a
         # second StackScript the caller never learns about.
-        raw = await client.post_raw("/linode/stackscripts", body, retry=False)
+        raw = await client.route_raw(
+            "linode_stackscript_create", body=body, retry=False
+        )
         return serialize_api_response(
             {
                 "message": (
@@ -366,7 +374,9 @@ async def handle_linode_stackscript_update(
     body = _stackscript_update_body(arguments)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.put_raw(f"/linode/stackscripts/{stackscript_id}", body)
+        raw = await client.route_raw(
+            "linode_stackscript_update", stackscript_id, body=body
+        )
         return serialize_api_response(
             {
                 "message": (

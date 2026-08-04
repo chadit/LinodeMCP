@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
 
 var (
@@ -20,11 +22,9 @@ var (
 var ErrFirewallHistoryNotObject = errors.New("firewall history response is not a firewall object")
 
 // ErrReservedIPListNotObject reports a reserved IP list body that is not the
-// documented {data:[...]} object. Decoding straight into the envelope struct
-// rejects such a body too, but the text it produces names a Go type, so the
-// two clients end up failing the same response with sentences that share
-// nothing for a behavior fixture to match on. This wording is the one the
-// Python client already emits.
+// documented {data:[...]} object. The wording matches what the Python client
+// emits so one behavior fixture covers both clients; decoding straight into
+// the envelope struct would reject the body too, but name a Go type instead.
 var ErrReservedIPListNotObject = errors.New("list response must be an object")
 
 // ErrCircuitOpen is returned when the circuit breaker is open and rejecting
@@ -124,6 +124,9 @@ var ErrUpdateNodeBalancerNodeRequestRequired = errors.New("update nodebalancer n
 // ErrUpdateConfigRequestRequired is returned when UpdateInstanceConfig is called without a request body.
 var ErrUpdateConfigRequestRequired = errors.New("update config request is required")
 
+// ErrRebuildConfigRequestRequired is returned when RebuildNodeBalancerConfig is called without a request body.
+var ErrRebuildConfigRequestRequired = errors.New("rebuild config request is required")
+
 // ErrAddConfigInterfaceRequestRequired is returned when AddInstanceConfigInterface is called without a request body.
 var ErrAddConfigInterfaceRequestRequired = errors.New("add config interface request is required")
 
@@ -175,10 +178,9 @@ var ErrFirewallRuleVersionPositive = errors.New("version must be a positive inte
 type APIError struct {
 	Message string `json:"message"`
 	Field   string `json:"field,omitempty"`
-	// Method is the HTTP method of the request that produced this error. It
-	// drives retry safety for 5xx responses: a server error on a
-	// non-idempotent request (POST) may have been applied before the error
-	// surfaced, so it must not be replayed. Not part of the API payload.
+	// Method is the HTTP method of the request that produced this error, not
+	// part of the API payload. It gates 5xx retry: a server error on a POST may
+	// have been applied before the error surfaced, so it must not be replayed.
 	Method     string        `json:"-"`
 	StatusCode int           `json:"status_code"`
 	RetryAfter time.Duration `json:"retry_after,omitempty"`
@@ -218,9 +220,39 @@ func (e *NetworkError) Error() string {
 
 func (e *NetworkError) Unwrap() error { return e.Err }
 
+// ArgumentError reports a request that could not be built: a tool the proto
+// contract declares no route for, or path values that do not fill its
+// template. Separate from NetworkError because nothing was sent, so a retry
+// cannot help.
+type ArgumentError struct {
+	Err       error
+	Operation string
+}
+
+func (e *ArgumentError) Error() string {
+	return fmt.Sprintf("invalid arguments for %s: %v", e.Operation, e.Err)
+}
+
+func (e *ArgumentError) Unwrap() error { return e.Err }
+
+// wrapRequestError classifies a client method's failure. A route the contract
+// could not resolve or fill never reached the network; everything else keeps
+// the network class the retry layer already reads. Call sites that resolve a
+// route through the contract use this instead of building a NetworkError.
+func wrapRequestError(operation string, err error) error {
+	if linoderoute.IsContractError(err) {
+		return &ArgumentError{Operation: operation, Err: err}
+	}
+
+	return &NetworkError{Operation: operation, Err: err}
+}
+
 func isNetworkError(err error) bool {
 	if _, ok := errors.AsType[*NetworkError](err); ok {
-		return true
+		// A route or argument failure describes a request that was never sent,
+		// so the retry loop must not read it as a replayable transport failure
+		// even when a call site put it in this class.
+		return !linoderoute.IsContractError(err)
 	}
 
 	if _, ok := errors.AsType[net.Error](err); ok {
@@ -264,9 +296,9 @@ func (e *RetryableError) Unwrap() error { return e.Err }
 
 // requestError wraps a transport-level failure (timeout, connection reset,
 // DNS, refused) with the HTTP method of the request that produced it. The
-// method drives retry safety: a transport failure on a non-idempotent request
-// (POST) may have reached and been processed by the server before the error
-// surfaced locally, so replaying it could duplicate the side effect.
+// method gates retry: a transport failure on a POST may have reached and been
+// processed by the server before the error surfaced locally, so replaying it
+// could duplicate the side effect.
 type requestError struct {
 	Err    error
 	Method string
@@ -277,11 +309,8 @@ func (e *requestError) Error() string { return "request failed: " + e.Err.Error(
 func (e *requestError) Unwrap() error { return e.Err }
 
 // isIdempotentMethod reports whether replaying a failed request of this HTTP
-// method is safe. GET, HEAD, PUT, DELETE, and OPTIONS are idempotent by HTTP
-// semantics: a retry converges to the same end state. POST (and PATCH) are
-// not, so a failure that might already have been applied must not be retried.
-// An unknown or empty method is treated as non-idempotent to stay on the safe
-// side.
+// method is safe. POST, PATCH, and any unknown or empty method count as unsafe
+// because the failed request may already have been applied.
 func isIdempotentMethod(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
@@ -291,11 +320,10 @@ func isIdempotentMethod(method string) bool {
 	}
 }
 
-// isRetryable reports whether err is a transient failure worth retrying.
-// A rate-limit (429) is always safe to replay because the request was rejected
-// before processing. A 5xx or a transport failure may have been applied
-// server-side, so those are retried only when the underlying request was
-// idempotent.
+// isRetryable reports whether err is a transient failure worth retrying. A 429
+// was rejected before processing, so it is always safe to replay; a 5xx or a
+// transport failure may have been applied server-side, so those are retried
+// only when the underlying request was idempotent.
 func isRetryable(err error) bool {
 	if _, ok := errors.AsType[*RetryableError](err); ok {
 		return true

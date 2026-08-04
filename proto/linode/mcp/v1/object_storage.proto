@@ -20,6 +20,21 @@ message ObjectStorageKeyPermission {
   }
 }
 
+// ObjectStorageEndpointType is the Object Storage endpoint generation a bucket
+// is created on. E0 is the legacy endpoint; E1 through E3 are the newer
+// generations with different performance and feature sets. Values are the exact
+// Linode API wire strings. See the enum-wrapper convention in
+// nodebalancer_config.proto.
+message ObjectStorageEndpointType {
+  enum Value {
+    unspecified = 0;
+    E0 = 1;
+    E1 = 2;
+    E2 = 3;
+    E3 = 4;
+  }
+}
+
 // PresignedURLMethod is the HTTP method the presigned-URL create tool signs for:
 // GET produces a download URL, PUT an upload URL. This is a tool-level S3
 // presign choice (not a Linode API field), so the value set is authored here.
@@ -93,11 +108,13 @@ message ObjectStorageKeyGetInput {
     method: "GET"
     path: "/object-storage/keys/{key_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKey";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Object Storage key to retrieve (required).
-  int32 key_id = 2;
+  int32 key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ObjectStorageKeyListInput is the input contract for
@@ -108,9 +125,11 @@ message ObjectStorageKeyListInput {
     method: "GET"
     path: "/object-storage/keys"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageKeyCreateInput is the input contract for
@@ -123,21 +142,26 @@ message ObjectStorageKeyCreateInput {
     method: "POST"
     path: "/object-storage/keys"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates an access key. The secret_key is only shown ONCE in the response. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Access key '{label}' created successfully (ID: {id})";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the access key (max 50 characters).
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // JSON array of bucket permissions: [{"bucket_name": "name", "region":
   // "region", "permissions": "read_only|read_write"}]. Omit for unrestricted
   // access.
-  optional string bucket_access = 3;
+  optional string bucket_access = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true. The secret_key is only shown ONCE in the response.
   // Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageKeyUpdateInput is the input contract for
@@ -148,21 +172,27 @@ message ObjectStorageKeyUpdateInput {
     method: "PUT"
     path: "/object-storage/keys/{key_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This modifies access key permissions. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Access key {key_id} modified successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // ID of the access key to update.
-  int32 key_id = 2;
+  int32 key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New label for the access key (max 50 characters).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // JSON array of bucket permissions: [{"bucket_name": "name", "region":
   // "region", "permissions": "read_only|read_write"}].
-  optional string bucket_access = 4;
+  optional string bucket_access = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm key update. Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Complete replacement set of regions the key is valid in (optional).
+  repeated string regions = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // ObjectStorageKeyDeleteInput is the input contract for
@@ -173,23 +203,27 @@ message ObjectStorageKeyDeleteInput {
     method: "DELETE"
     path: "/object-storage/keys/{key_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageKeyDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This revokes the access key permanently. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "ObjectStorageKey";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // ID of the access key to revoke.
-  int32 key_id = 2;
+  int32 key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm key revocation. This action is permanent.
   // Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageBucket mirrors a Linode Object Storage bucket.
@@ -235,15 +269,17 @@ message ObjectStorageBucketGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_bucket_get"
     method: "GET"
-    path: "/object-storage/buckets/{region_id}/{bucket}"
+    path: "/object-storage/buckets/{region}/{label}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucket";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (required).
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (required).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ObjectStorageBucketListInput is the input contract for
@@ -254,9 +290,11 @@ message ObjectStorageBucketListInput {
     method: "GET"
     path: "/object-storage/buckets"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageBucketByRegionListInput is the input contract for
@@ -265,13 +303,15 @@ message ObjectStorageBucketByRegionListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_bucket_by_region_list"
     method: "GET"
-    path: "/object-storage/buckets/{region_id}"
+    path: "/object-storage/buckets/{region}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where buckets are located (e.g., 'us-east-1', 'us-southeast-1').
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ObjectStorageBucketObjectListInput is the input contract for
@@ -282,24 +322,26 @@ message ObjectStorageBucketObjectListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_bucket_object_list"
     method: "GET"
-    path: "/object-storage/buckets/{region_id}/{bucket}/object-list"
+    path: "/object-storage/buckets/{region}/{label}/object-list"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (name).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Filter objects by key prefix (e.g., 'images/' to list only objects in the
   // images folder).
-  optional string prefix = 4;
+  optional string prefix = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Delimiter for grouping keys (typically '/' for folder-like listing).
-  optional string delimiter = 5;
+  optional string delimiter = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Pagination marker from a previous truncated response.
-  optional string marker = 6;
+  optional string marker = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of objects to return per page (default 100, max 500).
-  optional string page_size = 7;
+  optional string page_size = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ObjectStorageBucketCreateInput is the input contract for
@@ -310,25 +352,34 @@ message ObjectStorageBucketCreateInput {
     method: "POST"
     path: "/object-storage/buckets"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Bucket '{label}' created successfully in {region}";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Bucket label (3-63 chars, lowercase alphanumeric and hyphens, must
   // start/end with alphanumeric).
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object Storage region for the bucket (e.g. us-east-1).
-  string region = 3;
+  string region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Access control: private, public-read, authenticated-read, or
   // public-read-write (default: private).
-  optional string acl = 4;
+  optional string acl = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to enable CORS on the bucket (default: true).
-  optional bool cors_enabled = 5;
+  optional bool cors_enabled = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm bucket creation. This operation incurs
   // billing charges. Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Endpoint generation to place the bucket on: E0, E1, E2, or E3 (optional).
+  // Omitting it lets the API pick the region's default generation.
+  optional ObjectStorageEndpointType.Value endpoint_type = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // A specific S3 endpoint hostname to place the bucket on (optional).
+  optional string s3_endpoint = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // ObjectStorageBucketDeleteInput is the input contract for
@@ -337,27 +388,32 @@ message ObjectStorageBucketDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_bucket_delete"
     method: "DELETE"
-    path: "/object-storage/buckets/{region_id}/{bucket}"
+    path: "/object-storage/buckets/{region}/{label}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageBucketDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. All objects must be removed first. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Bucket '{label}' in {region} removed successfully";
+  option (linode.mcp.v1.resource_type) = "ObjectStorageBucket";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region of the bucket to delete.
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Label of the bucket to delete.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6; // system param
+  optional string mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7; // system param
+  optional string plan_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageCancelInput is the input contract for
@@ -368,15 +424,19 @@ message ObjectStorageCancelInput {
     method: "POST"
     path: "/object-storage/cancel"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation cancels Object Storage service for the account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Object Storage cancellation requested successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Must be set to true to confirm Object Storage cancellation. Ignored when
   // dry_run=true.
-  bool confirm = 2; // system param
+  bool confirm = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 3; // system param
+  optional bool dry_run = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageEndpoint mirrors a Linode Object Storage endpoint. s3_endpoint is
@@ -405,13 +465,15 @@ message ObjectStorageEndpointListInput {
     method: "GET"
     path: "/object-storage/endpoints"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageEndpointListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ObjectStorageQuota mirrors a Linode Object Storage quota. quota_limit is the
@@ -443,9 +505,11 @@ message ObjectStorageQuotaListInput {
     method: "GET"
     path: "/object-storage/quotas"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuotaListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageQuotaGetInput is the input contract for
@@ -457,11 +521,13 @@ message ObjectStorageQuotaGetInput {
     method: "GET"
     path: "/object-storage/quotas/{obj_quota_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuota";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Object Storage quota ID to retrieve.
-  string obj_quota_id = 2;
+  string obj_quota_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ObjectStorageQuotaUsage is the linode_object_storage_quota_usage_get response.
@@ -483,11 +549,82 @@ message ObjectStorageQuotaUsageGetInput {
     method: "GET"
     path: "/object-storage/quotas/{obj_quota_id}/usage"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuotaUsage";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Object Storage quota ID to retrieve usage for.
-  string obj_quota_id = 2;
+  string obj_quota_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// ObjectStorageGlobalQuotaListResponse is the
+// linode_object_storage_global_quota_list envelope. A global quota is the same
+// resource the per-endpoint quota tools return, scoped to the account rather
+// than to one S3 endpoint, so the elements are ObjectStorageQuota. The tool has
+// no filter params, so filter is never set; it stays declared because the list
+// envelope carries the same three members everywhere.
+message ObjectStorageGlobalQuotaListResponse {
+  int32 count = 1;
+  optional string filter = 2;
+  repeated ObjectStorageQuota global_quotas = 3;
+}
+
+// ObjectStorageGlobalQuotaListInput is the input contract for
+// linode_object_storage_global_quota_list. The route publishes no page controls
+// in the reviewed spec snapshot, so no page/page_size travels here.
+message ObjectStorageGlobalQuotaListInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_global_quota_list"
+    method: "GET"
+    path: "/object-storage/global-quotas"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageGlobalQuotaListResponse";
+  option (linode.mcp.v1.tool_description) = "Lists Object Storage global quotas on the account.";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// ObjectStorageGlobalQuotaGetInput is the input contract for
+// linode_object_storage_global_quota_get. obj_global_quota_id is a slug-style
+// string id, not an integer, the same way obj_quota_id is.
+message ObjectStorageGlobalQuotaGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_global_quota_get"
+    method: "GET"
+    path: "/object-storage/global-quotas/{obj_global_quota_id}"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuota";
+  option (linode.mcp.v1.tool_description) = "Gets a single Object Storage global quota by quota ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage global quota {obj_global_quota_id}: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Object Storage global quota ID to retrieve.
+  string obj_global_quota_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
+}
+
+// ObjectStorageGlobalQuotaUsageGetInput is the input contract for
+// linode_object_storage_global_quota_usage_get. The usage shape is the one the
+// per-endpoint quota reports, so it answers with ObjectStorageQuotaUsage.
+message ObjectStorageGlobalQuotaUsageGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_object_storage_global_quota_usage_get"
+    method: "GET"
+    path: "/object-storage/global-quotas/{obj_global_quota_id}/usage"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageQuotaUsage";
+  option (linode.mcp.v1.tool_description) = "Gets usage for a single Object Storage global quota by quota ID.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve Object Storage global quota usage {obj_global_quota_id}: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The Object Storage global quota ID to retrieve usage for.
+  string obj_global_quota_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ObjectStorageTransfer is the linode_object_storage_transfer_get response: the
@@ -505,9 +642,11 @@ message ObjectStorageTransferGetInput {
     method: "GET"
     path: "/object-storage/transfer"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageTransfer";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // PresignedURLResponse is the linode_object_storage_presigned_url_create response:
@@ -524,21 +663,27 @@ message PresignedURLCreateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_presigned_url_create"
     method: "POST"
-    path: "/object-storage/buckets/{region_id}/{bucket}/object-url"
+    path: "/object-storage/buckets/{region}/{label}/object-url"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PresignedURLResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (name).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The object key (path/filename within the bucket).
-  string name = 4;
+  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // HTTP method: 'GET' for download URL, 'PUT' for upload URL.
-  PresignedURLMethod.Value method = 5;
+  PresignedURLMethod.Value method = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // URL expiration in seconds (1-604800, default 3600 = 1 hour).
-  optional int32 expires_in = 6;
+  optional int32 expires_in = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Content-Type the signed request must carry, for a PUT upload URL
+  // (optional). The signature covers it, so an upload that sends a different
+  // Content-Type is rejected.
+  optional string content_type = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // ObjectStorageObject is one object (or common prefix) inside a bucket, as

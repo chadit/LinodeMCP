@@ -9,47 +9,116 @@
     },
     {
       "name": "requires name",
-      "args": { "region": "us-east", "label": "my-bucket", "method": "GET" },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "method": "GET"
+      },
       "expect_error": "name (object key) is required"
     },
     {
       "name": "rejects an invalid method",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "DELETE" },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "method": "DELETE"
+      },
       "expect_error": "method must be one of: GET, PUT"
     },
     {
       "name": "rejects an out-of-range expires_in",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "GET", "expires_in": 700000 },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "method": "GET",
+        "expires_in": 700000
+      },
       "expect_error": "expires_in must be between 1 and 604800 seconds (7 days), got 700000"
     },
     {
       "name": "generates a presigned url with the API default expiry",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "GET" },
-      "api_response": { "url": "https://example.test/signed" },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "method": "GET"
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/object-storage/buckets/us-east/my-bucket/object-url",
-        "body": { "method": "GET", "name": "my-object.txt" }
+        "body": {
+          "method": "GET",
+          "name": "my-object.txt"
+        }
       }
     },
     {
       "name": "sends an explicit expires_in",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "GET", "expires_in": 60 },
-      "api_response": { "url": "https://example.test/signed" },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "method": "GET",
+        "expires_in": 60
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/object-storage/buckets/us-east/my-bucket/object-url",
-        "body": { "method": "GET", "name": "my-object.txt", "expires_in": 60 }
+        "body": {
+          "method": "GET",
+          "name": "my-object.txt",
+          "expires_in": 60
+        }
       }
     },
     {
       "name": "accepts a lowercase method and sends the uppercased verb",
-      "args": { "region": "us-east", "label": "my-bucket", "name": "my-object.txt", "method": "get" },
-      "api_response": { "url": "https://example.test/signed" },
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "method": "get"
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/object-storage/buckets/us-east/my-bucket/object-url",
-        "body": { "method": "GET", "name": "my-object.txt" }
+        "body": {
+          "method": "GET",
+          "name": "my-object.txt"
+        }
+      }
+    },
+    {
+      "name": "pins the content type into the signed request",
+      "args": {
+        "region": "us-east",
+        "label": "my-bucket",
+        "name": "my-object.txt",
+        "method": "PUT",
+        "content_type": "text/plain"
+      },
+      "api_response": {
+        "url": "https://example.test/signed"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/object-storage/buckets/us-east/my-bucket/object-url",
+        "body": {
+          "method": "PUT",
+          "name": "my-object.txt",
+          "content_type": "text/plain"
+        }
       }
     }
   ]

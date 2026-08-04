@@ -2,19 +2,20 @@ package linode
 
 import (
 	"context"
-	"net/http"
-	"net/url"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const endpointTags = "/tags"
+// Each method below calls one Linode tag endpoint through its tool's declared
+// proto route, so paths live in the proto rather than here, and the *Proto
+// variants decode into generated proto elements. Tag labels reach the route
+// builder raw: it escapes each value into a single path segment, so a label
+// containing a slash cannot address a different route.
 
-// httpListTagsProto retrieves tags as proto messages for the proto-backed list
-// path. The page/page_size pair flows through withPaginationQuery, so the
-// request matches httpListTags.
+// httpListTagsProto retrieves the account's tags.
 func (c *Client) httpListTagsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Tag, error) {
-	return listProtoElementsPaginated(ctx, c, "ListTags", endpointTags, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListTags",
+		"linode_tag_list", "", nil, page, pageSize,
 		func() *linodev1.Tag { return &linodev1.Tag{} })
 }
 
@@ -23,11 +24,9 @@ func (c *Client) httpListTaggedObjects(ctx context.Context, tagLabel string, pag
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := withPaginationQuery(endpointTags+"/"+url.PathEscape(tagLabel), page, pageSize)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequestQuery(ctx, "linode_tag_object_list", pageQuery(page, pageSize), nil, tagLabel)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ListTaggedObjects", Err: err}
+		return nil, wrapRequestError("ListTaggedObjects", err)
 	}
 
 	defer drainClose(resp)
@@ -40,23 +39,21 @@ func (c *Client) httpListTaggedObjects(ctx context.Context, tagLabel string, pag
 	return &taggedObjects, nil
 }
 
-// httpListTaggedObjectsProto retrieves tagged objects as proto messages for the
-// proto-backed list path. The tag label is path-escaped and the page/page_size
-// pair flows through withPaginationQuery, so the request matches
-// httpListTaggedObjects.
+// httpListTaggedObjectsProto is httpListTaggedObjects for the proto path.
 func (c *Client) httpListTaggedObjectsProto(ctx context.Context, tagLabel string, page, pageSize int) ([]*linodev1.TaggedObject, error) {
-	return listProtoElementsPaginated(ctx, c, "ListTaggedObjects", endpointTags+"/"+url.PathEscape(tagLabel), page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListTaggedObjects",
+		"linode_tag_object_list", "", []any{tagLabel}, page, pageSize,
 		func() *linodev1.TaggedObject { return &linodev1.TaggedObject{} })
 }
 
-// httpCreateTagProto creates a tag and decodes the response as a proto message.
+// httpCreateTagProto creates a tag and applies it to the objects named in req.
 func (c *Client) httpCreateTagProto(ctx context.Context, req *CreateTagRequest) (*linodev1.Tag, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointTags, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_tag_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateTag", Err: err}
+		return nil, wrapRequestError("CreateTag", err)
 	}
 
 	defer drainClose(resp)
@@ -70,15 +67,18 @@ func (c *Client) httpCreateTagProto(ctx context.Context, req *CreateTagRequest) 
 }
 
 // httpDeleteTag deletes the supplied tag label from all objects on the account.
+//
+// The route comes from the proto contract rather than from a path and a verb
+// written here, and the label goes to the builder raw: it escapes each value
+// into one path segment, so a tag containing a slash cannot address a different
+// route and neither client has to remember to encode.
 func (c *Client) httpDeleteTag(ctx context.Context, tagLabel string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointTags + "/" + url.PathEscape(tagLabel)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_tag_delete", nil, tagLabel)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteTag", Err: err}
+		return wrapRequestError("DeleteTag", err)
 	}
 
 	defer drainClose(resp)

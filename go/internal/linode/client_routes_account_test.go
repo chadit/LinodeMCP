@@ -1123,7 +1123,7 @@ func TestClientRoutesAccountPart8(t *testing.T) {
 			},
 		},
 		{
-			name:     "UpdateOAuthClientThumbnail",
+			name:     labelUpdateOAuthClientThumbnail,
 			wantVerb: http.MethodPut,
 			wantPath: "/account/oauth-clients/alpha/thumbnail",
 			response: clientRouteEmptyObject,

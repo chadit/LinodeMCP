@@ -11,3 +11,17 @@ option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1
 message MessageResponse {
   string message = 1;
 }
+
+// DiskEncryption is the at-rest encryption toggle the API documents with the
+// same enabled/disabled set on every resource that offers it: the
+// disk_encryption field of LKE node pools and Linode instances, and the
+// encryption field of Block Storage volumes. It lives here rather than in one
+// resource's file because more than one file needs it, following the enum
+// wrapper convention documented in nodebalancer_config.proto.
+message DiskEncryption {
+  enum Value {
+    unspecified = 0;
+    disabled = 1;
+    enabled = 2;
+  }
+}

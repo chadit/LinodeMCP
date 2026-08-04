@@ -100,13 +100,15 @@ message DatabaseInstanceListInput {
     method: "GET"
     path: "/databases/instances"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // DatabaseMySQLInstanceListInput is the input contract for
@@ -117,13 +119,15 @@ message DatabaseMySQLInstanceListInput {
     method: "GET"
     path: "/databases/mysql/instances"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseMySQLInstanceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // DatabasePostgreSQLInstanceListInput is the input contract for
@@ -134,13 +138,15 @@ message DatabasePostgreSQLInstanceListInput {
     method: "GET"
     path: "/databases/postgresql/instances"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabasePostgreSQLInstanceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // DatabaseMySQLInstanceGetInput is the input contract for
@@ -149,13 +155,15 @@ message DatabaseMySQLInstanceGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_get"
     method: "GET"
-    path: "/databases/mysql/instances/{mysql_instance_id}"
+    path: "/databases/mysql/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID to retrieve.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // DatabasePostgreSQLInstanceGetInput is the input contract for
@@ -164,13 +172,15 @@ message DatabasePostgreSQLInstanceGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_get"
     method: "GET"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}"
+    path: "/databases/postgresql/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID to retrieve.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // DatabaseMySQLInstanceCredentialsGetInput is the input contract for
@@ -179,19 +189,22 @@ message DatabaseMySQLInstanceCredentialsGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_credentials_get"
     method: "GET"
-    path: "/databases/mysql/instances/{mysql_instance_id}/credentials"
+    path: "/databases/mysql/instances/{instance_id}/credentials"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseCredentials";
+  option (linode.mcp.v1.confirm_message) = "This retrieves Managed Database credentials. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID whose credentials to retrieve.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm retrieving the database credentials. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLInstanceCredentialsGetInput is the input contract for
@@ -200,19 +213,22 @@ message DatabasePostgreSQLInstanceCredentialsGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_credentials_get"
     method: "GET"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}/credentials"
+    path: "/databases/postgresql/instances/{instance_id}/credentials"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseCredentials";
+  option (linode.mcp.v1.confirm_message) = "This retrieves Managed Database credentials. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID whose credentials to retrieve.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm retrieving the database credentials. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabaseMySQLInstanceCredentialsResetInput is the input contract for
@@ -221,19 +237,23 @@ message DatabaseMySQLInstanceCredentialsResetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_credentials_reset"
     method: "POST"
-    path: "/databases/mysql/instances/{mysql_instance_id}/credentials/reset"
+    path: "/databases/mysql/instances/{instance_id}/credentials/reset"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This resets Managed Database credentials. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "MySQL Managed Database credentials reset";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID whose credentials to reset.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm resetting database credentials. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLInstanceCredentialsResetInput is the input contract for
@@ -242,19 +262,23 @@ message DatabasePostgreSQLInstanceCredentialsResetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_credentials_reset"
     method: "POST"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}/credentials/reset"
+    path: "/databases/postgresql/instances/{instance_id}/credentials/reset"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This resets PostgreSQL Managed Database credentials. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "PostgreSQL Managed Database credentials reset";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID whose credentials to reset.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm resetting PostgreSQL database credentials. Ignored
   // when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabaseMySQLInstanceDeleteInput is the input contract for
@@ -263,25 +287,29 @@ message DatabaseMySQLInstanceDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_delete"
     method: "DELETE"
-    path: "/databases/mysql/instances/{mysql_instance_id}"
+    path: "/databases/mysql/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes a Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "DatabaseInstance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID to delete.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm database deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLInstanceDeleteInput is the input contract for
@@ -290,25 +318,29 @@ message DatabasePostgreSQLInstanceDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_delete"
     method: "DELETE"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}"
+    path: "/databases/postgresql/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "DatabaseInstance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID to delete.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm PostgreSQL database deletion. This action is
   // irreversible. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabaseMySQLInstancePatchInput is the input contract for
@@ -317,19 +349,22 @@ message DatabaseMySQLInstancePatchInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_patch"
     method: "POST"
-    path: "/databases/mysql/instances/{mysql_instance_id}/patch"
+    path: "/databases/mysql/instances/{instance_id}/patch"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This patches a Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID to patch.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm database patching. This may cause maintenance
   // downtime for single-node clusters. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLInstancePatchInput is the input contract for
@@ -338,19 +373,22 @@ message DatabasePostgreSQLInstancePatchInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_patch"
     method: "POST"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}/patch"
+    path: "/databases/postgresql/instances/{instance_id}/patch"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This patches a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID to patch.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm PostgreSQL database patching. This may cause
   // maintenance downtime for single-node clusters. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabaseMySQLInstanceSuspendInput is the input contract for
@@ -359,19 +397,22 @@ message DatabaseMySQLInstanceSuspendInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_suspend"
     method: "POST"
-    path: "/databases/mysql/instances/{mysql_instance_id}/suspend"
+    path: "/databases/mysql/instances/{instance_id}/suspend"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This suspends a Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID to suspend.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm suspending the database instance. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLInstanceSuspendInput is the input contract for
@@ -380,19 +421,22 @@ message DatabasePostgreSQLInstanceSuspendInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_suspend"
     method: "POST"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}/suspend"
+    path: "/databases/postgresql/instances/{instance_id}/suspend"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This suspends a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID to suspend.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm suspending the PostgreSQL database instance.
   // Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabaseMySQLInstanceResumeInput is the input contract for
@@ -401,19 +445,22 @@ message DatabaseMySQLInstanceResumeInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_resume"
     method: "POST"
-    path: "/databases/mysql/instances/{mysql_instance_id}/resume"
+    path: "/databases/mysql/instances/{instance_id}/resume"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This resumes a Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID to resume.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm resuming the database instance. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLInstanceResumeInput is the input contract for
@@ -422,19 +469,22 @@ message DatabasePostgreSQLInstanceResumeInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_resume"
     method: "POST"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}/resume"
+    path: "/databases/postgresql/instances/{instance_id}/resume"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This resumes a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID to resume.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm resuming the PostgreSQL database instance. Ignored
   // when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabaseMySQLInstanceCreateInput is the input contract for
@@ -448,36 +498,39 @@ message DatabaseMySQLInstanceCreateInput {
     method: "POST"
     path: "/databases/mysql/instances"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a billable Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the database instance.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Linode type for the database instance.
-  string type = 3;
+  string type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Database engine ID, for example mysql/8.0.26.
-  string engine = 4;
+  string engine = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Region for the database instance.
-  string region = 5;
+  string region = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
-  repeated string allow_list = 6;
+  repeated string allow_list = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Number of nodes in the cluster (optional).
-  optional int32 cluster_size = 7;
+  optional int32 cluster_size = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // JSON object of MySQL engine configuration values (optional).
-  map<string, google.protobuf.Value> engine_config = 8;
+  map<string, google.protobuf.Value> engine_config = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object describing source database fork/restore settings (optional).
-  map<string, google.protobuf.Value> fork = 9;
+  map<string, google.protobuf.Value> fork = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
   // Omit for no private networking (optional).
-  map<string, google.protobuf.Value> private_network = 10;
+  map<string, google.protobuf.Value> private_network = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to require SSL connections (optional).
-  optional bool ssl_connection = 11;
+  optional bool ssl_connection = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm database creation. This creates a billable
   // resource. Ignored when dry_run=true.
-  bool confirm = 12; // system param
+  bool confirm = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 13; // system param
+  optional bool dry_run = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLInstanceCreateInput is the input contract for
@@ -491,36 +544,39 @@ message DatabasePostgreSQLInstanceCreateInput {
     method: "POST"
     path: "/databases/postgresql/instances"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a billable PostgreSQL Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the database instance.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Linode type for the database instance.
-  string type = 3;
+  string type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // PostgreSQL database engine ID, for example postgresql/16.
-  string engine = 4;
+  string engine = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Region for the database instance.
-  string region = 5;
+  string region = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
-  repeated string allow_list = 6;
+  repeated string allow_list = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Number of nodes in the cluster (optional).
-  optional int32 cluster_size = 7;
+  optional int32 cluster_size = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // JSON object of PostgreSQL engine configuration values (optional).
-  map<string, google.protobuf.Value> engine_config = 8;
+  map<string, google.protobuf.Value> engine_config = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object describing source database fork/restore settings (optional).
-  map<string, google.protobuf.Value> fork = 9;
+  map<string, google.protobuf.Value> fork = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
   // Omit for no private networking (optional).
-  map<string, google.protobuf.Value> private_network = 10;
+  map<string, google.protobuf.Value> private_network = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to require SSL connections (optional).
-  optional bool ssl_connection = 11;
+  optional bool ssl_connection = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm database creation. This creates a billable
   // resource. Ignored when dry_run=true.
-  bool confirm = 12; // system param
+  bool confirm = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 13; // system param
+  optional bool dry_run = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabaseMySQLInstanceUpdateInput is the input contract for
@@ -533,33 +589,36 @@ message DatabaseMySQLInstanceUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_mysql_instance_update"
     method: "PUT"
-    path: "/databases/mysql/instances/{mysql_instance_id}"
+    path: "/databases/mysql/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The MySQL Managed Database instance ID to update.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
-  repeated string allow_list = 3;
+  repeated string allow_list = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // JSON object of MySQL engine configuration values (optional).
-  map<string, google.protobuf.Value> engine_config = 4;
+  map<string, google.protobuf.Value> engine_config = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New label for the database instance (optional).
-  optional string label = 5;
+  optional string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
   // Pass null to detach (optional).
-  map<string, google.protobuf.Value> private_network = 6;
+  map<string, google.protobuf.Value> private_network = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New Linode type for the database instance (optional).
-  optional string type = 7;
+  optional string type = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object of maintenance update settings (optional).
-  map<string, google.protobuf.Value> updates = 8;
+  map<string, google.protobuf.Value> updates = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New MySQL version for the database instance (optional).
-  optional string version = 9;
+  optional string version = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm database update. Ignored when dry_run=true.
-  bool confirm = 10; // system param
+  bool confirm = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 11; // system param
+  optional bool dry_run = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // DatabasePostgreSQLInstanceUpdateInput is the input contract for
@@ -572,31 +631,34 @@ message DatabasePostgreSQLInstanceUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_database_postgresql_instance_update"
     method: "PUT"
-    path: "/databases/postgresql/instances/{postgresql_instance_id}"
+    path: "/databases/postgresql/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.DatabaseInstanceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a PostgreSQL Managed Database instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The PostgreSQL Managed Database instance ID to update.
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // CIDR strings (IPv4/IPv6 addresses or ranges) allowed to connect (optional).
-  repeated string allow_list = 3;
+  repeated string allow_list = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // JSON object of PostgreSQL engine configuration values (optional).
-  map<string, google.protobuf.Value> engine_config = 4;
+  map<string, google.protobuf.Value> engine_config = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New label for the database instance (optional).
-  optional string label = 5;
+  optional string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object placing the database in a VPC (vpc_id, subnet_id, public_access).
   // Pass null to detach (optional).
-  map<string, google.protobuf.Value> private_network = 6;
+  map<string, google.protobuf.Value> private_network = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New Linode type for the database instance (optional).
-  optional string type = 7;
+  optional string type = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object of maintenance update settings (optional).
-  map<string, google.protobuf.Value> updates = 8;
+  map<string, google.protobuf.Value> updates = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New PostgreSQL version for the database instance (optional).
-  optional string version = 9;
+  optional string version = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm database update. Ignored when dry_run=true.
-  bool confirm = 10; // system param
+  bool confirm = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 11; // system param
+  optional bool dry_run = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

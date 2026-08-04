@@ -17,10 +17,9 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/twostage"
 )
 
-// firewallDeviceDeleteProto builds the proto-canonical id-echo body for a
-// successful firewall-device removal, keeping the proto literal off the
-// handler's struct literal so the delete handlers stay below the dupl
-// threshold.
+// firewallDeviceDeleteProto builds the id-echo body for a successful
+// firewall-device removal. Kept out of the handler's struct literal so the
+// delete handlers stay below the dupl threshold.
 func firewallDeviceDeleteProto(firewallID, deviceID int) proto.Message {
 	return &linodev1.FirewallDeviceDeleteResponse{
 		Message:    "Firewall device removed successfully",
@@ -40,18 +39,23 @@ const (
 	paramFirewallRuleOutbound = "outbound"
 	paramFirewallRuleVersion  = "version"
 	paramSlug                 = "slug"
+	paramFirewallRules        = "rules"
+	paramFirewallDevices      = "devices"
+	paramInboundPolicy        = "inbound_policy"
+	paramOutboundPolicy       = "outbound_policy"
 )
 
 // NewLinodeFirewallListTool creates a tool for listing firewalls.
 func NewLinodeFirewallListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolRawSchema(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_firewall_list",
 		"Lists all Cloud Firewalls on your account. Can filter by status or label.",
 		"linode.mcp.v1.FirewallListInput",
-		func(ctx context.Context, client *linode.Client) ([]*linodev1.Firewall, error) {
-			return client.ListFirewallsProto(ctx)
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Firewall, error) {
+			return client.ListFirewallsProto(ctx, page, pageSize)
 		},
+		standardPaginationFromTool,
 		[]listFilterParam[*linodev1.Firewall]{
 			fieldFilter("status", "Filter by firewall status (enabled, disabled, deleted)",
 				func(f *linodev1.Firewall) string { return f.GetStatus() }),
@@ -155,10 +159,6 @@ func handleLinodeVLANDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 		Method:         httpMethodDelete,
 		Path:           "/networking/vlans/" + regionID + "/" + label,
 		ConfirmMessage: "This deletes a VLAN. Set confirm=true to proceed.",
-		// VLANs have no single-GET endpoint, only a paginated list.
-		// The dry-run fetch lists and filters to the matching
-		// region+label. A VLAN paged out beyond the first 500 results
-		// (extreme edge case) would read as "not found".
 		FetchState: func(ctx context.Context, c *linode.Client) (any, error) {
 			return findVLAN(ctx, c, regionID, label)
 		},
@@ -178,10 +178,9 @@ func handleLinodeVLANDeleteRequest(ctx context.Context, request *mcp.CallToolReq
 	})
 }
 
-// findVLAN resolves a single VLAN by region+label for the dry-run
-// preview. VLANs expose only a paginated list endpoint, so this filters
-// the first page (max page size) rather than issuing a single-resource
-// GET. Returns ErrVLANNotFound when no VLAN matches.
+// findVLAN resolves a single VLAN by region+label for the dry-run preview.
+// VLANs expose no single-resource GET, only a paginated list, so a VLAN paged
+// out past the first 500 results reads as ErrVLANNotFound.
 func findVLAN(ctx context.Context, client *linode.Client, regionID, label string) (any, error) {
 	const maxVLANPageSize = 500
 
@@ -299,12 +298,22 @@ func handleLinodeFirewallRulesUpdateRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(validationMessage), nil
 	}
 
+	inboundPolicy, outboundPolicy, validationMessage := firewallRulePoliciesFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	req := linode.FirewallRulesReplaceRequest{Inbound: inbound, Outbound: outbound}
+	req := linode.FirewallRulesReplaceRequest{
+		InboundPolicy:  inboundPolicy,
+		OutboundPolicy: outboundPolicy,
+		Inbound:        inbound,
+		Outbound:       outbound,
+	}
 
 	rules, err := client.UpdateFirewallRulesProto(ctx, firewallID, &req)
 	if err != nil {
@@ -339,9 +348,31 @@ func handleLinodeFirewallRulesUpdateDryRun(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(msg), nil
 	}
 
+	if _, _, msg := firewallRulePoliciesFromTool(request); msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
+
 	return RunDryRunPreview(ctx, request, cfg, "linode_firewall_rules_update", "PUT",
 		fmt.Sprintf("/networking/firewalls/%d/rules", firewallID),
 		func(ctx context.Context, c *linode.Client) (any, error) { return c.ListFirewallRules(ctx, firewallID) })
+}
+
+// firewallRulePoliciesFromTool reads the optional default-policy arguments of a
+// rules replace. Omitting one leaves that direction's current policy alone, so
+// an absent value stays empty rather than defaulting to ACCEPT the way create
+// does.
+func firewallRulePoliciesFromTool(request *mcp.CallToolRequest) (string, string, string) {
+	inboundPolicy, msg := optionalEnumChoice(request, paramInboundPolicy, linodev1.FirewallPolicy_Value_value)
+	if msg != "" {
+		return "", "", msg
+	}
+
+	outboundPolicy, msg := optionalEnumChoice(request, paramOutboundPolicy, linodev1.FirewallPolicy_Value_value)
+	if msg != "" {
+		return "", "", msg
+	}
+
+	return inboundPolicy, outboundPolicy, ""
 }
 
 func formatFirewallRulesUpdateError(err error) string {

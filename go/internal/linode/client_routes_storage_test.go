@@ -145,7 +145,7 @@ func TestClientRoutesStoragePart1(t *testing.T) {
 			response: clientRouteProtoPageLabel,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListSSHKeysProto(ctx)
+				got, err := client.ListSSHKeysProto(ctx, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.SSHKey).GetLabel) })
 			},
@@ -178,7 +178,7 @@ func TestClientRoutesStoragePart2(t *testing.T) {
 			response: clientRouteProtoPageLabel,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListVolumesProto(ctx)
+				got, err := client.ListVolumesProto(ctx, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.Volume).GetLabel) })
 			},

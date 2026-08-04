@@ -22,6 +22,7 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    optional_tags_argument,
     pagination_int_argument,
     required_int_id,
     walk_page_items,
@@ -296,16 +297,21 @@ async def handle_linode_nodebalancer_config_rebuild(
             "This rebuilds a NodeBalancer config. Set confirm=true to proceed."
         )
 
-    nodebalancer_id, error = required_int_id(arguments, "nodebalancer_id")
-    if nodebalancer_id is None:
-        return error_response(error)
+    ids = _nb_config_ids(arguments)
+    if isinstance(ids, list):
+        return ids
+    nodebalancer_id, config_id = ids
 
-    config_id, error = required_int_id(arguments, "config_id")
-    if config_id is None:
-        return error_response(error)
+    body_error = _config_rebuild_body_error(arguments)
+    if body_error is not None:
+        return error_response(body_error)
+
+    fields = _config_rebuild_fields(arguments)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        result = await client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
+        result = await client.rebuild_nodebalancer_config(
+            nodebalancer_id, config_id, fields
+        )
         return serialize_api_response(
             {
                 "message": (
@@ -336,10 +342,10 @@ def create_linode_nodebalancer_config_delete_tool() -> tuple[Tool, Capability]:
 async def _nodebalancer_config_delete_dependency_walk(
     client: RetryableClient, nodebalancer_id: int, config_id: int
 ) -> DryRunDetails:
-    """Phase 2 Tier A walk for NodeBalancer config delete. Deleting a config
-    destroys its backend node list, so each node is a cascade-deleted
-    dependency. Best-effort: a failed node list becomes a warning, not an
-    error. Mirrors the Go nodebalancerConfigDeleteDependencyWalk.
+    """Tier A dry-run walk for NodeBalancer config delete. Deleting a config
+    destroys its backend nodes, so each is a cascade_deleted dependency. A
+    failed node list degrades to a warning, not an error. Mirrors Go's
+    nodebalancerConfigDeleteDependencyWalk.
     """
     try:
         page = await client.list_nodebalancer_config_nodes(
@@ -375,8 +381,8 @@ async def handle_linode_nodebalancer_config_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_nodebalancer_config_delete tool request."""
-    # Both branches need valid positive IDs, and the spec says dry-run
-    # errors on missing required args the same way the real call would.
+    # Checked ahead of the dry-run split: dry-run must reject missing required
+    # args the same way the real call does.
     nodebalancer_id, error = required_int_id(arguments, "nodebalancer_id")
     if nodebalancer_id is None:
         return error_response(error)
@@ -441,6 +447,30 @@ def create_linode_nodebalancer_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
+def _nodebalancer_create_extras(
+    arguments: dict[str, Any],
+) -> tuple[dict[str, Any], str | None]:
+    """Parse the configs, vpcs, and firewall_id body fields.
+
+    Message text matches Go's objectSliceFromToolArg so both languages reject
+    the same shapes.
+    """
+    extras: dict[str, Any] = {}
+    for field in ("configs", "vpcs"):
+        value: Any = arguments.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, list) or not all(
+            isinstance(item, dict) for item in cast("list[object]", value)
+        ):
+            return {}, f"{field} must be an array of objects"
+        if value:
+            extras[field] = value
+    if arguments.get("firewall_id"):
+        extras["firewall_id"] = arguments["firewall_id"]
+    return extras, None
+
+
 def _nodebalancer_create_request_body(
     arguments: dict[str, Any],
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -448,13 +478,23 @@ def _nodebalancer_create_request_body(
     if not isinstance(region, str) or not region:
         return None, "region is required"
 
+    tags, tags_error = optional_tags_argument(arguments)
+    if tags_error:
+        return None, tags_error
+
     body: dict[str, Any] = {"region": region}
+    extras, extras_error = _nodebalancer_create_extras(arguments)
+    if extras_error is not None:
+        return None, extras_error
+    body.update(extras)
     label = arguments.get("label")
     if label:
         body["label"] = label
     client_conn_throttle = arguments.get("client_conn_throttle", 0)
     if client_conn_throttle:
         body["client_conn_throttle"] = client_conn_throttle
+    if tags:
+        body["tags"] = tags
 
     if "ipv4" not in arguments:
         return body, None
@@ -513,6 +553,12 @@ async def handle_linode_nodebalancer_create(
             label=cast("str | None", body.get("label")),
             client_conn_throttle=cast("int", body.get("client_conn_throttle", 0)),
             ipv4=cast("str | None", body.get("ipv4")),
+            tags=cast("list[str] | None", body.get("tags")),
+            fields={
+                key: body[key]
+                for key in ("configs", "vpcs", "firewall_id")
+                if key in body
+            },
         )
         return serialize_api_response(
             {
@@ -541,9 +587,7 @@ def create_linode_nodebalancer_update_tool() -> tuple[Tool, Capability]:
 def _nodebalancer_update_side_effects(
     state: Any, new_label: Any, new_throttle: Any
 ) -> DryRunDetails:
-    """Phase 2 Tier B walk for NodeBalancer update. Reports the label change
-    and a connection-throttle change against the fetched state.
-    """
+    """Tier B dry-run walk for NodeBalancer update, diffed against fetched state."""
     side_effects: list[str] = []
     if new_label:
         from_label = getattr(state, "label", "")
@@ -567,6 +611,10 @@ async def handle_linode_nodebalancer_update(
 
     if not nodebalancer_id:
         return error_response("nodebalancer_id is required")
+
+    tags, tags_error = optional_tags_argument(arguments)
+    if tags_error:
+        return error_response(tags_error)
 
     if is_dry_run(arguments):
 
@@ -598,6 +646,7 @@ async def handle_linode_nodebalancer_update(
             nodebalancer_id=int(nodebalancer_id),
             label=arguments.get("label"),
             client_conn_throttle=arguments.get("client_conn_throttle"),
+            tags=tags,
         )
         return serialize_api_response(
             {
@@ -627,10 +676,9 @@ def create_linode_nodebalancer_delete_tool() -> tuple[Tool, Capability]:
 async def _nodebalancer_delete_dependency_walk(
     client: RetryableClient, nodebalancer_id: int
 ) -> DryRunDetails:
-    """Phase 2 Tier A walk for NodeBalancer delete. Each config (and its
-    backend node list) is destroyed with the NodeBalancer, so configs are
-    surfaced as cascade_deleted dependencies. Best-effort: a failed config
-    list becomes a warning, not a hard error.
+    """Tier A dry-run walk for NodeBalancer delete. Configs and their backend
+    nodes die with the NodeBalancer, so configs surface as cascade_deleted
+    dependencies. A failed config list degrades to a warning, not an error.
     """
     details: DryRunDetails = {}
     try:
@@ -705,9 +753,8 @@ async def handle_linode_nodebalancer_delete(
     """Handle linode_nodebalancer_delete tool request."""
     nodebalancer_id = arguments.get("nodebalancer_id", 0)
 
-    # Both branches need a non-zero nodebalancer_id, and the spec says
-    # dry-run errors on missing required args the same way the real
-    # call would.
+    # Checked ahead of the two-stage and dry-run branches: both must reject a
+    # missing nodebalancer_id the same way the real call does.
     if not nodebalancer_id:
         return error_response("nodebalancer_id is required")
 
@@ -907,9 +954,8 @@ async def handle_linode_nodebalancer_config_node_delete(
     config_id = arguments.get("config_id", 0)
     node_id = arguments.get("node_id", 0)
 
-    # All three IDs must be present in both branches; the spec says
-    # dry-run errors on missing required args the same way the real
-    # call would.
+    # Checked ahead of the dry-run split: dry-run must reject a missing ID the
+    # same way the real call does.
     if not nodebalancer_id:
         return error_response("nodebalancer_id is required")
 
@@ -1040,10 +1086,10 @@ async def handle_linode_nodebalancer_config_update(
     return await execute_tool(cfg, arguments, "update NodeBalancer config", _call)
 
 
-# The config choice enums, sourced from the generated proto enums so the value
-# sets match the live API and the Go side exactly (no hand-maintained lists).
-# Order matches Go's validation order in nodeBalancerConfig*RequestFromTool for
-# identical error messages when more than one field is invalid.
+# Proto-generated, so the value sets match the live API and Go exactly with no
+# hand-maintained allowlists. Order matches Go's validation order in
+# nodeBalancerConfig*RequestFromTool, so the same field reports first when more
+# than one is invalid.
 _CONFIG_CHOICE_ENUMS = (
     ("protocol", nodebalancer_config_pb2.NodeBalancerProtocol.Value),
     ("algorithm", nodebalancer_config_pb2.NodeBalancerAlgorithm.Value),
@@ -1109,6 +1155,77 @@ def _config_body_error(
     ):
         return "at least one update field is required"
     return None
+
+
+NODE_CONFIG_REBUILD_FIELDS = (
+    "port",
+    "protocol",
+    "algorithm",
+    "stickiness",
+    "check",
+    "check_interval",
+    "check_timeout",
+    "check_attempts",
+    "check_path",
+    "check_body",
+    "udp_check_port",
+)
+# Rebuild documents a subset of the create body, so it validates only the first
+# four choice enums: its schema carries no cipher_suite or proxy_protocol field.
+# Slicing the create tuple keeps the value sets and the check order identical to
+# Go's nodeBalancerConfigRebuildRequestFromTool.
+_REBUILD_CHOICE_ENUMS = _CONFIG_CHOICE_ENUMS[:4]
+_REBUILD_RANGED_INTS = (
+    "check_interval",
+    "check_timeout",
+    "check_attempts",
+    "udp_check_port",
+)
+
+
+def _config_rebuild_body_error(arguments: dict[str, Any]) -> str | None:
+    """Validate the rebuild body, returning Go's exact message or None.
+
+    Mirrors Go's nodeBalancerConfigRebuildRequestFromTool check by check: the
+    optional port range, the four choice enums, the lower-bounded health-check
+    integers, then the required nodes list. nodes is required because rebuild
+    replaces the whole backend node set rather than merging into it, so a
+    missing list would silently strip every node.
+    """
+    try:
+        pagination_int_argument(arguments, "port", 1, 65535)
+    except (TypeError, ValueError) as exc:
+        return str(exc)
+    for key, enum in _REBUILD_CHOICE_ENUMS:
+        enum_error = optional_enum_error(arguments, key, enum)
+        if enum_error is not None:
+            return enum_error
+    for key in _REBUILD_RANGED_INTS:
+        try:
+            pagination_int_argument(arguments, key, 1)
+        except (TypeError, ValueError) as exc:
+            return str(exc)
+
+    nodes: Any = arguments.get("nodes")
+    if nodes is None:
+        return "nodes is required"
+    # Wording matches Go's objectSliceFromToolArg so the shared behavior
+    # fixtures assert one byte-identical message in both languages.
+    if not isinstance(nodes, list) or not all(
+        isinstance(node, dict) for node in cast("list[object]", nodes)
+    ):
+        return "nodes must be an array of objects"
+    return None
+
+
+def _config_rebuild_fields(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Build the rebuild request body from validated arguments."""
+    fields: dict[str, Any] = {"nodes": arguments["nodes"]}
+    for key in NODE_CONFIG_REBUILD_FIELDS:
+        value = arguments.get(key)
+        if value is not None:
+            fields[key] = value
+    return fields
 
 
 def create_linode_nodebalancer_config_create_tool() -> tuple[Tool, Capability]:

@@ -1,6 +1,7 @@
 package linode_test
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -256,5 +257,35 @@ func TestClientGetFirewallTemplateProtoRejectsInvalidSlug(t *testing.T) {
 
 	if _, err := client.GetFirewallTemplateProto(t.Context(), "internal", 0, 0); err == nil {
 		t.Error("expected an error for invalid slug, got nil")
+	}
+}
+
+// TestRebuildNodeBalancerConfigProtoRejectsNilRequest pins the nil-body guard:
+// rebuild replaces the config's whole node set, so a missing body would silently
+// strip every node rather than fail.
+func TestRebuildNodeBalancerConfigProtoRejectsNilRequest(t *testing.T) {
+	t.Parallel()
+
+	client := linode.NewClient("https://127.0.0.1:1", "tok", nil, linode.WithMaxRetries(0))
+
+	_, err := client.RebuildNodeBalancerConfigProto(t.Context(), 1, 2, nil)
+	if !errors.Is(err, linode.ErrRebuildConfigRequestRequired) {
+		t.Errorf("err = %v, want %v", err, linode.ErrRebuildConfigRequestRequired)
+	}
+}
+
+// TestRegenerateLKEClusterRequestPayload pins that a regenerate selecting
+// neither credential sends no body at all, which is what the endpoint accepted
+// before the flags existed.
+func TestRegenerateLKEClusterRequestPayload(t *testing.T) {
+	t.Parallel()
+
+	if payload := (linode.RegenerateLKEClusterRequest{}).Payload(); payload != nil {
+		t.Errorf("Payload() = %v, want nil", payload)
+	}
+
+	req := linode.RegenerateLKEClusterRequest{ServiceToken: true}
+	if payload := req.Payload(); payload != req {
+		t.Errorf("Payload() = %v, want %v", payload, req)
 	}
 }

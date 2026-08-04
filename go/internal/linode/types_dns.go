@@ -83,6 +83,7 @@ type UpdateDomainRequest struct {
 	SOAEmail    string   `json:"soa_email,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Group       string   `json:"group,omitempty"`
+	Type        string   `json:"type,omitempty"` // master, slave
 	MasterIPs   []string `json:"master_ips,omitempty"`
 	AXFRIPs     []string `json:"axfr_ips,omitempty"`
 	Tags        []string `json:"tags,omitempty"`

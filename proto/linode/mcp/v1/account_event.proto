@@ -50,11 +50,13 @@ message AccountEventGetInput {
     method: "GET"
     path: "/account/events/{event_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEvent";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the account event to retrieve (required).
-  int32 event_id = 2;
+  int32 event_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // AccountEventListInput is the input contract for linode_account_event_list.
@@ -64,13 +66,15 @@ message AccountEventListInput {
     method: "GET"
     path: "/account/events"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEventListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // AccountEventSeenInput is the input contract for linode_account_event_seen.
@@ -80,15 +84,19 @@ message AccountEventSeenInput {
     method: "POST"
     path: "/account/events/{event_id}/seen"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountEventSeenResponse";
+  option (linode.mcp.v1.confirm_message) = "This marks an account event as seen. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Account event marked as seen successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Numeric account event ID to mark as seen (required).
-  int32 event_id = 2;
+  int32 event_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm marking the account event as seen. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

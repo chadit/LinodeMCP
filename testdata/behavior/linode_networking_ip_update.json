@@ -4,23 +4,98 @@
   "cases": [
     {
       "name": "rejects a malformed address once confirmed",
-      "args": { "confirm": true, "address": "not-an-ip", "rdns": "host.example.com" },
+      "args": {
+        "confirm": true,
+        "address": "not-an-ip",
+        "rdns": "host.example.com"
+      },
       "expect_error": "address must be a valid IP address"
     },
     {
       "name": "updates reverse DNS",
-      "args": { "confirm": true, "address": "203.0.113.5", "rdns": "host.example.com" },
+      "args": {
+        "confirm": true,
+        "address": "203.0.113.5",
+        "rdns": "host.example.com"
+      },
       "api_response": {},
       "expect_request": {
         "method": "PUT",
         "path": "/networking/ips/203.0.113.5",
-        "body": { "rdns": "host.example.com" }
+        "body": {
+          "rdns": "host.example.com"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"address": "203.0.113.5", "rdns": "host.example.com"},
+      "args": {
+        "address": "203.0.113.5",
+        "rdns": "host.example.com"
+      },
       "expect_error": "This updates reverse DNS for an IP address. Set confirm=true to proceed."
+    },
+    {
+      "name": "carries the reserved flag into the body",
+      "args": {
+        "confirm": true,
+        "address": "203.0.113.5",
+        "rdns": "host.example.com",
+        "reserved": true
+      },
+      "api_response": {
+        "address": "203.0.113.5",
+        "rdns": "host.example.com"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/ips/203.0.113.5",
+        "body": {
+          "rdns": "host.example.com",
+          "reserved": true
+        }
+      }
+    },
+    {
+      "name": "sends an explicit false reserved",
+      "args": {
+        "confirm": true,
+        "address": "203.0.113.5",
+        "rdns": "host.example.com",
+        "reserved": false
+      },
+      "api_response": {
+        "address": "203.0.113.5",
+        "rdns": "host.example.com"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/networking/ips/203.0.113.5",
+        "body": {
+          "rdns": "host.example.com",
+          "reserved": false
+        }
+      }
+    },
+    {
+      "name": "rejects a non-boolean reserved",
+      "args": {
+        "confirm": true,
+        "address": "203.0.113.5",
+        "rdns": "host.example.com",
+        "reserved": "yes"
+      },
+      "expect_error": "reserved must be a boolean"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": {
+        "confirm": true,
+        "address": "203.0.113.5",
+        "rdns": "host.example.com"
+      },
+      "api_response": 7,
+      "expect_api_error": "IP"
     }
   ]
 }

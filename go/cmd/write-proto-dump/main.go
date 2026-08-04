@@ -1,61 +1,51 @@
-// Command write-proto-dump AST-analyzes the tool handlers in
-// go/internal/tools and prints a JSON object on stdout mapping every mutating
-// tool name (CapWrite, CapDestroy, CapAdmin) to its success-path
-// classification: "proto", "legacy", or "review". With -surface read it
-// classifies the read surface (CapRead) instead, using the same reachability
-// analysis; the destroy-wrapper rules simply never fire for read handlers.
-//
-// The classification tells the proto-everywhere workstream which handlers
-// already emit proto-canonical output and which still use the legacy
+// Command write-proto-dump AST-analyzes the tool factories and handlers in
+// go/internal/tools and go/internal/gentools and prints a JSON object on stdout
+// mapping tool name to classification. It tells the proto-everywhere ratchet
+// gates which tools are proto-canonical and which still use the legacy
 // map[string]any / MarshalToolResponse path.
 //
-// With -surface input it classifies the INPUT (request-schema) surface for
-// every tool regardless of capability: "generated" when the tool's factory
-// builds its MCP input schema from the proto contract (it reaches
-// mcp.NewToolWithRawSchema / toolschemas.Schema), "hand" when it builds the
-// schema from mcp.With* option builders. This drives the input-proto ratchet
-// gate (scripts/verify_input_proto.py) the same way read/write drive theirs.
+// -surface write (default) classifies the mutating surface (CapWrite,
+// CapDestroy, CapAdmin) and -surface read the CapRead surface, both by success
+// path: "proto", "legacy", or "review". The same analysis serves both; the
+// destroy-wrapper rules never fire for read handlers.
+//
+// -surface input classifies the request-schema surface of every tool
+// regardless of capability: "generated" when the factory builds its MCP input
+// schema from the proto contract (it reaches mcp.NewToolWithRawSchema or
+// toolschemas.Schema), "hand" when it builds the schema from mcp.With* option
+// builders. This drives scripts/verify_input_proto.py.
 //
 // Detection strategy (identifier-name reachability, no go/types):
 //
 //  1. Build the server with a throwaway config (same as parity-dump) and call
-//     AllToolInfos() to get the authoritative mutating tool list.
+//     AllToolInfos() for the authoritative tool list.
 //
-//  2. Parse all non-test .go files in internal/tools with go/parser to build
-//     a name to handler map: every factory function (func New*Tool) declares
-//     the tool name (a "linode_"-shaped string literal or a string const, in
-//     mcp.NewTool, newToolWithHandler, or a per-family constructor like
-//     newDatabaseInstanceCreateTool) and wires a handler (a closure that
-//     delegates to a top-level handle* function, or a bare handle* identifier).
-//     String consts are resolved first, including "a" + "b" concatenations;
-//     mcp.With* option calls are skipped so a param name like "linode_id" is
-//     not mistaken for the tool name.
+//  2. Parse the non-test .go files of both packages into one name to handler
+//     map: a factory (func New*Tool) names its tool with a "linode_"-shaped
+//     string literal or a string const and wires a handle* function, either
+//     bare or through a delegating closure. Consts resolve first, including
+//     "a" + "b" concatenations; mcp.With* option calls are skipped so a param
+//     name like "linode_id" is not mistaken for the tool name.
 //
 //  3. Build a call graph for the whole package: for every top-level func decl
 //     (and its nested func-lit bodies), record all called function names.
 //
 //  4. Classify each handler by transitive reachability:
-//     - Reaching "MarshalProtoToolResponse" or "MarshalProtoJSON" on any path
-//     => proto. Passing MarshalProtoJSON into a reachable helper also counts.
-//     This covers handlers that preserve documented JSON nulls after canonical
-//     proto serialization before wrapping the MCP result.
-//     - Reaching "RunDestructiveActionWithID" with a DestructiveActionByID
-//     literal that sets SuccessProto => proto (the wrapper routes the body
-//     through the proto marshaller); without SuccessProto it builds the legacy
-//     id-echo map => legacy. A bare identifier reference is legacy.
-//     - Reaching "RunDestructiveActionByTwoIDs" with a DestructiveActionByTwoIDs
-//     literal that sets SuccessProto => proto (same routing as the by-ID
-//     wrapper); without SuccessProto it builds the legacy id-echo map => legacy.
-//     - Reaching "RunDestructiveActionByRegionLabel" with a
-//     DestructiveActionByRegionLabel literal that sets SuccessProto => proto
-//     (same routing as the by-ID wrapper); without SuccessProto it builds the
-//     legacy {message, region, <key>} map => legacy.
-//     - Reaching "RunDestructiveAction" directly with a DestructiveAction
-//     literal whose Success closure returns a &linodev1.* proto pointer =>
-//     proto; a map[string]any{} return => legacy.
-//     - Reaching "MarshalToolResponse" or "marshalDestroySuccess" without
-//     reaching a proto sink => legacy.
-//     - If none of the above is reachable => review.
+//     - "MarshalProtoToolResponse" or "MarshalProtoJSON" on any path => proto.
+//     Passing MarshalProtoJSON into a reachable helper counts too, since that
+//     is how handlers preserve documented JSON nulls after canonical proto
+//     serialization.
+//     - A "RunDestructiveActionWithID" / "RunDestructiveActionByTwoIDs" /
+//     "RunDestructiveActionByRegionLabel" call whose literal sets SuccessProto
+//     => proto, because the wrapper then routes the body through the proto
+//     marshaller. Without it the wrapper builds its legacy map => legacy, and a
+//     bare identifier reference (which cannot set the field) is legacy too.
+//     - "RunDestructiveAction" with a DestructiveAction literal => proto when
+//     its Success closure returns a &linodev1.* proto pointer, legacy when it
+//     hands back a map[string]any{}.
+//     - "MarshalToolResponse" or "marshalDestroySuccess" with no proto sink
+//     reachable => legacy.
+//     - Nothing of the above reachable => review.
 package main
 
 import (
@@ -97,9 +87,9 @@ const (
 	fieldSuccessProto = "SuccessProto"
 
 	// successProtoParam is the parameter name a shared destroy helper uses for a
-	// proto.Message it forwards from its Success closure. Returning it counts as
-	// proto-routed since marshalDestroySuccess routes any proto.Message through
-	// the proto marshaller.
+	// proto.Message it forwards from its Success closure. Returning it is
+	// proto-routed because marshalDestroySuccess routes any proto.Message
+	// through the proto marshaller.
 	successProtoParam = "successProto"
 
 	classifyProto  = "proto"
@@ -110,25 +100,30 @@ const (
 	// hand) over every tool, independent of the write/read success-path modes.
 	surfaceInput = "input"
 
-	// input-surface sinks: reaching either call marks a factory as building its
+	// input-surface sinks: reaching any of these marks a factory as building its
 	// MCP input schema from the proto contract rather than mcp.With* builders.
-	// callExprName renders mcp.NewToolWithRawSchema(...) as "mcp.NewToolWithRawSchema"
-	// and toolschemas.Schema(...) as "toolschemas.Schema".
+	// Both qualified and bare forms are listed because callExprName keeps the
+	// package qualifier only when the call site writes one.
 	sinkRawSchemaMCP = "mcp.NewToolWithRawSchema"
 	sinkRawSchema    = "NewToolWithRawSchema"
 	sinkToolschemas  = "toolschemas.Schema"
 
 	classifyGenerated = "generated"
 	classifyHand      = "hand"
+
+	// toolsQualifier is how a generated factory in internal/gentools names a
+	// driver that lives in internal/tools. Both packages share one call graph,
+	// so the qualifier has to be stripped: otherwise a generated tool's path to
+	// MarshalProtoToolResponse ends at a name nothing in the graph declares and
+	// every generated tool classifies as review.
+	toolsQualifier = "tools."
 )
 
-// callRecord records a single outgoing call from a function. For
-// RunDestructiveAction calls it also carries the result of inspecting the
-// DestructiveAction literal's Success closure.
+// callRecord records a single outgoing call from a function.
 type callRecord struct {
-	// successIsProto is non-nil only for RunDestructiveAction calls where the
-	// Success closure was successfully inspected. true = returns a proto
-	// pointer; false = returns a map.
+	// successIsProto is non-nil only for destroy-wrapper calls whose Success
+	// closure or SuccessProto field could be inspected: true for a proto
+	// pointer, false for a map.
 	successIsProto *bool
 	name           string
 }
@@ -143,7 +138,7 @@ func main() {
 
 	flag.Parse()
 
-	toolsDir, err := locateToolsDir()
+	toolDirs, err := locateToolDirs()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "locate tools dir: %v\n", err)
 		os.Exit(1)
@@ -157,7 +152,7 @@ func main() {
 
 	fset := token.NewFileSet()
 
-	files, err := parseToolsPackage(toolsDir, fset)
+	files, err := parseToolPackages(toolDirs, fset)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "parse tools package: %v\n", err)
 		os.Exit(1)
@@ -195,6 +190,31 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// locateToolDirs returns the absolute paths of the packages that declare tool
+// factories: the hand-written internal/tools and the generated
+// internal/gentools. A missing generated tree is not an error, since before
+// `make proto` has run there are no generated tools to classify and
+// buildToolSet would have failed first if the server needed them.
+func locateToolDirs() ([]string, error) {
+	toolsDir, err := locateToolsDir()
+	if err != nil {
+		return nil, err
+	}
+
+	dirs := []string{toolsDir}
+
+	generated := filepath.Join(filepath.Dir(toolsDir), generatedToolsPackage)
+	if _, statErr := os.Stat(generated); statErr == nil {
+		dirs = append(dirs, generated)
+	}
+
+	return dirs, nil
+}
+
+// generatedToolsPackage is the directory name of the emitted tool package,
+// a sibling of internal/tools.
+const generatedToolsPackage = "gentools"
 
 // locateToolsDir returns the absolute path to go/internal/tools. It tries
 // executable-relative resolution first (works for built binaries), then falls
@@ -264,11 +284,9 @@ func (e *toolsDirNotFoundError) Error() string {
 	return "cannot locate internal/tools from " + e.cwd
 }
 
-// buildToolSet builds the server with a throwaway config and returns the
-// sorted names of all tools on the requested surface: "write" selects
-// CapWrite/CapDestroy/CapAdmin, "read" selects CapRead, "meta" selects
-// CapMeta, "input" selects every tool regardless of capability (the
-// input-schema surface is capability-blind).
+// buildToolSet returns the sorted names of all tools on the requested surface.
+// "input" selects every tool regardless of capability because the input-schema
+// surface is capability-blind.
 func buildToolSet(surface string) ([]string, error) {
 	switch surface {
 	case "write":
@@ -329,6 +347,23 @@ func buildToolNames(include func(capability string) bool) ([]string, error) {
 	return names, nil
 }
 
+// parseToolPackages parses every directory's non-test .go files into one AST
+// file list, so both tool packages share a single call graph.
+func parseToolPackages(dirs []string, fset *token.FileSet) ([]*ast.File, error) {
+	files := make([]*ast.File, 0)
+
+	for _, dir := range dirs {
+		parsed, err := parseToolsPackage(dir, fset)
+		if err != nil {
+			return nil, err
+		}
+
+		files = append(files, parsed...)
+	}
+
+	return files, nil
+}
+
 // parseToolsPackage parses all non-test .go files in dir and returns the AST
 // file list.
 func parseToolsPackage(dir string, fset *token.FileSet) ([]*ast.File, error) {
@@ -359,11 +394,10 @@ func parseToolsPackage(dir string, fset *token.FileSet) ([]*ast.File, error) {
 }
 
 // buildStringConstMap collects every package-level string constant so a
-// factory that names its tool with a const identifier (for example the monitor
-// tools' monitorServiceAlertDefinitionCreateToolName) can be resolved to the
+// factory that names its tool with a const identifier can be resolved to the
 // literal tool name the const holds.
 func buildStringConstMap(files []*ast.File) map[string]string {
-	// The tools package declares a few hundred string consts; a hint per file
+	// The tools package declares a few hundred string consts; a per-file hint
 	// keeps the map from rehashing repeatedly as they are collected.
 	const constsPerFileHint = 8
 
@@ -420,8 +454,8 @@ func buildNameToHandler(files []*ast.File, consts map[string]string) map[string]
 			}
 
 			// Fully inline handler closure (raw-schema factories): the call
-			// graph credits the closure's calls to the enclosing New*Tool
-			// function, so reachability runs through the factory itself.
+			// graph credits the closure's calls to the enclosing New*Tool, so
+			// reachability can run through the factory itself.
 			if handlerName == "" {
 				handlerName = funcDecl.Name.Name
 			}
@@ -434,9 +468,7 @@ func buildNameToHandler(files []*ast.File, consts map[string]string) map[string]
 }
 
 // toolNameArg resolves an argument to a tool name: a tool-name-shaped string
-// literal, or a const identifier whose value is one. Returns "" otherwise. It
-// insists on the tool-name shape so param names in mcp.WithString("label", ...)
-// calls inside a factory body are not mistaken for the tool name.
+// literal, or a const identifier whose value is one. Returns "" otherwise.
 func toolNameArg(expr ast.Expr, consts map[string]string) string {
 	if lit := stringLiteral(expr); isToolName(lit) {
 		return lit
@@ -451,10 +483,10 @@ func toolNameArg(expr ast.Expr, consts map[string]string) string {
 	return ""
 }
 
-// isToolName reports whether s has the shape of a registered tool name. Every
-// tool name is prefixed "linode_" except the two meta tools, so the shape check
-// keys on that prefix plus those names. This keeps param-name string literals
-// (mcp.WithString("label", ...)) inside a factory from being read as the name.
+// isToolName reports whether s has the shape of a registered tool name: the
+// "linode_" prefix, plus the two meta tools that predate it. The shape check
+// keeps param-name literals inside a factory, mcp.WithString("label", ...),
+// from being read as the tool name.
 func isToolName(s string) bool {
 	return strings.HasPrefix(s, "linode_") || s == "hello" || s == "version"
 }
@@ -475,11 +507,11 @@ func handlerArg(expr ast.Expr) string {
 }
 
 // extractToolAndHandler inspects a factory function body and returns the tool
-// name and the handler function name that serves it. It matches any call in
-// the factory that carries both a tool-name argument (string literal or const
-// identifier) and a trailing handle* argument. That covers newToolWithHandler,
-// the per-family constructors like newDatabaseInstanceCreateTool, and factories
-// that assign the handler separately after an mcp.NewTool call.
+// name and the handler function name that serves it. It matches any call
+// carrying both a tool-name argument and a handle* argument, which covers
+// newToolWithHandler, the per-family constructors like
+// newDatabaseInstanceCreateTool, and factories that assign the handler
+// separately after an mcp.NewTool call.
 func extractToolAndHandler(funcDecl *ast.FuncDecl, consts map[string]string) (string, string) {
 	var foundTool string
 
@@ -506,21 +538,18 @@ func extractToolAndHandler(funcDecl *ast.FuncDecl, consts map[string]string) (st
 			return true
 		}
 
-		// Skip the mcp option builders (mcp.WithString("label", ...),
-		// mcp.WithNumber("linode_id", ...)). Their first string arg is a param
-		// name, not the tool name, and "linode_id" would otherwise be read as a
+		// Skip the mcp option builders: their first string arg is a param name,
+		// and mcp.WithNumber("linode_id", ...) would otherwise be read as a
 		// tool name because it shares the linode_ prefix.
 		if strings.HasPrefix(callee, "mcp.") {
 			return true
 		}
 
-		// Any other constructor call: look across its args for a tool name and a
-		// handler. Handles newToolWithHandler and the per-family constructors.
 		name, handler := toolAndHandlerFromArgs(callExpr.Args, consts)
 		if name != "" {
 			foundTool = name
 
-			// A package-local factory (newProtoListTool and friends) RETURNS
+			// A package-local factory (newProtoListTool and friends) returns
 			// the handler instead of taking a handle* argument. Remember the
 			// callee: if no handler surfaces any other way, reachability runs
 			// through the factory body, which hits the same marshal sinks the
@@ -719,10 +748,9 @@ func buildCallGraph(files []*ast.File) packageCallGraph {
 }
 
 // collectCalls walks a function body and collects all outgoing calls. It also
-// records MarshalProtoJSON when passed as a helper argument because the helper
-// invokes that canonical serializer indirectly. For RunDestructiveAction calls
-// it additionally inspects the DestructiveAction literal's Success closure to
-// determine proto vs. map output.
+// records MarshalProtoJSON when passed as a helper argument, since the helper
+// then invokes that canonical serializer indirectly, and inspects each destroy
+// wrapper's literal to decide proto vs. map output.
 func collectCalls(body *ast.BlockStmt) []callRecord {
 	var records []callRecord
 
@@ -735,6 +763,15 @@ func collectCalls(body *ast.BlockStmt) []callRecord {
 		name := callExprName(callExpr)
 		if name == "" {
 			return true
+		}
+
+		// A generated factory reaches the shared drivers through the tools
+		// package. Record the call as written, then continue with the bare
+		// name so the sink comparisons below see the same function a call from
+		// inside internal/tools would.
+		if bare, qualified := strings.CutPrefix(name, toolsQualifier); qualified {
+			records = append(records, callRecord{name: name})
+			name = bare
 		}
 
 		for _, arg := range callExpr.Args {
@@ -781,10 +818,9 @@ func collectCalls(body *ast.BlockStmt) []callRecord {
 }
 
 // detectByIDSuccessProto inspects a RunDestructiveActionWithID call for a
-// &DestructiveActionByID{...} literal that sets the SuccessProto field. When
-// present the tool routes its success body through the proto-canonical
-// marshaller (true); otherwise the wrapper builds the legacy id-echo map
-// (false). Returns nil when the argument is not the expected literal.
+// &DestructiveActionByID{...} literal that sets SuccessProto: true routes the
+// success body through the proto marshaller, false leaves the wrapper building
+// its legacy id-echo map. Returns nil when the argument is not that literal.
 func detectByIDSuccessProto(callExpr *ast.CallExpr) *bool {
 	protoResult := true
 
@@ -819,11 +855,8 @@ func detectByIDSuccessProto(callExpr *ast.CallExpr) *bool {
 	return nil
 }
 
-// detectByTwoIDsSuccessProto inspects a RunDestructiveActionByTwoIDs call for a
-// &DestructiveActionByTwoIDs{...} literal that sets the SuccessProto field. When
-// present the tool routes its success body through the proto-canonical
-// marshaller (true); otherwise the wrapper builds the legacy id-echo map
-// (false). Returns nil when the argument is not the expected literal.
+// detectByTwoIDsSuccessProto is detectByIDSuccessProto for
+// RunDestructiveActionByTwoIDs and its &DestructiveActionByTwoIDs{...} literal.
 func detectByTwoIDsSuccessProto(callExpr *ast.CallExpr) *bool {
 	protoResult := true
 
@@ -858,12 +891,10 @@ func detectByTwoIDsSuccessProto(callExpr *ast.CallExpr) *bool {
 	return nil
 }
 
-// detectByRegionLabelSuccessProto inspects a RunDestructiveActionByRegionLabel
-// call for a &DestructiveActionByRegionLabel{...} literal that sets the
-// SuccessProto field. When present the tool routes its success body through the
-// proto-canonical marshaller (true); otherwise the wrapper builds the legacy
-// {message, region, <key>} map (false). Returns nil when the argument is not the
-// expected literal.
+// detectByRegionLabelSuccessProto is detectByIDSuccessProto for
+// RunDestructiveActionByRegionLabel and its
+// &DestructiveActionByRegionLabel{...} literal, whose legacy shape is a
+// {message, region, <key>} map.
 func detectByRegionLabelSuccessProto(callExpr *ast.CallExpr) *bool {
 	protoResult := true
 
@@ -966,11 +997,10 @@ func compositeLitTypeName(lit *ast.CompositeLit) string {
 
 // successClosureIsProto returns true when the Success closure body's return
 // expression is a &linodev1.X{...} proto pointer, or the bare identifier
-// successProto. A shared destroy helper that takes a proto.Message argument
-// named successProto (so two callers can pass different concrete response
-// messages) returns that value from its Success closure; the runtime
-// marshalDestroySuccess routes any proto.Message through the proto marshaller,
-// so this identifier return is proto-routed just like an inline literal.
+// successProto that a shared destroy helper forwards so two callers can pass
+// different concrete response messages. The identifier counts because the
+// runtime marshalDestroySuccess routes any proto.Message through the proto
+// marshaller, same as an inline literal.
 func successClosureIsProto(funcLit *ast.FuncLit) bool {
 	var foundProto bool
 
@@ -1071,11 +1101,10 @@ func classifyInputSurface(tools []string, files []*ast.File, consts map[string]s
 	return result
 }
 
-// buildNameToFactory walks every func New*Tool declaration and records the tool
-// name to the factory function that declares it. Unlike buildNameToHandler,
-// which resolves the handler that serves the tool, the input surface needs the
-// factory itself: its constructor call (mcp.NewTool vs mcp.NewToolWithRawSchema)
-// is what decides whether the input schema is hand-built or proto-generated.
+// buildNameToFactory maps each tool name to the func New*Tool that declares it.
+// The input surface needs the factory rather than the handler buildNameToHandler
+// resolves, because the constructor call it makes (mcp.NewTool vs
+// mcp.NewToolWithRawSchema) is what decides hand-built vs proto-generated.
 func buildNameToFactory(files []*ast.File, consts map[string]string) map[string]string {
 	result := make(map[string]string, len(files))
 
@@ -1113,11 +1142,10 @@ func classifyInput(factoryName string, graph packageCallGraph) string {
 }
 
 // walkInputReachability reports whether name (or a function it transitively
-// calls) reaches a raw-schema sink: mcp.NewToolWithRawSchema or
-// toolschemas.Schema. Only tool factories and the newSimpleProtoGetTool-style
-// helpers call those, and no request handler does, so walking the whole factory
-// body (handler closure included) cannot yield a false generated verdict for a
-// hand-built factory.
+// calls) reaches a raw-schema sink. Only tool factories and the
+// newSimpleProtoGetTool-style helpers call those, never a request handler, so
+// walking the whole factory body including the handler closure cannot yield a
+// false generated verdict for a hand-built factory.
 func walkInputReachability(name string, graph packageCallGraph, visited map[string]bool) bool {
 	if visited[name] {
 		return false
@@ -1139,15 +1167,10 @@ func walkInputReachability(name string, graph packageCallGraph, visited map[stri
 	return false
 }
 
-// classify returns the success-path classification for handlerName.
-//
-// It computes two independent reachability flags over the whole transitive
-// call graph, then applies proto-wins. Proto wins because reaching
-// MarshalProtoToolResponse or MarshalProtoJSON anywhere means the success body
-// is proto; the legacy signals (MarshalToolResponse, the destroy wrappers, a map
-// Success closure) only ever sit on error or dry-run branches once proto is
-// present. The two flags are computed together so iteration order never decides
-// the result.
+// classify returns the success-path classification for handlerName. It computes
+// both reachability flags in one walk, so call-graph iteration order never
+// decides the result, then lets proto win: once a proto sink is reachable the
+// legacy signals only ever sit on error or dry-run branches.
 func classify(handlerName string, graph packageCallGraph, visited map[string]bool) string {
 	reach := &reachability{}
 	walkReachability(handlerName, graph, visited, reach)
@@ -1170,10 +1193,10 @@ type reachability struct {
 }
 
 // walkReachability sets reach.proto / reach.legacy by walking the call graph
-// from name. visited guards cycles. The destroy wrappers and inspected Success
-// closures are treated as terminal legacy/proto signals and never recursed
-// into, so a wrapper's internal MarshalProtoToolResponse branch (which never
-// fires for a map Success) cannot leak a false proto.
+// from name; visited guards cycles. The destroy wrappers and inspected Success
+// closures are terminal signals, never recursed into, so a wrapper's internal
+// MarshalProtoToolResponse branch (which never fires for a map Success) cannot
+// leak a false proto.
 func walkReachability(name string, graph packageCallGraph, visited map[string]bool, reach *reachability) {
 	if visited[name] {
 		return

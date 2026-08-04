@@ -54,7 +54,7 @@ async def handle_linode_type_list(
         return str(type_.get("class", "")).lower() == class_filter.lower()
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/linode/types")
+        raw = await client.route_raw("linode_type_list")
         return serialize_list_response(
             raw,
             "types",
@@ -87,7 +87,7 @@ async def handle_linode_type_get(
         return error_response("type_id must contain only letters, numbers, and hyphens")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(f"/linode/types/{type_id}")
+        raw = await client.route_raw("linode_type_get", type_id)
         return serialize_api_response(raw, type_pb2.InstanceType())
 
     return await execute_tool(cfg, arguments, f"retrieve Linode type {type_id}", _call)

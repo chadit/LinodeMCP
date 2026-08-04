@@ -37,7 +37,7 @@ _MASTER_ARGS = {
 
 def _client_with_response(response: Any) -> AsyncMock:
     client = AsyncMock()
-    client.post_raw.return_value = response
+    client.route_raw.return_value = response
     client.__aenter__.return_value = client
     client.__aexit__.return_value = None
     return client
@@ -218,7 +218,9 @@ async def test_domain_create_forwards_exact_full_body_and_route(
         result = await handle_linode_domain_create(arguments, sample_config)
 
     assert json.loads(result[0].text)["domain"]["id"] == 7
-    client.post_raw.assert_awaited_once_with("/domains", expected_body, retry=False)
+    client.route_raw.assert_awaited_once_with(
+        "linode_domain_create", body=expected_body, retry=False
+    )
 
 
 async def test_domain_create_omits_absent_optional_fields(
@@ -229,9 +231,9 @@ async def test_domain_create_omits_absent_optional_fields(
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         await handle_linode_domain_create(dict(_MASTER_ARGS), sample_config)
 
-    client.post_raw.assert_awaited_once_with(
-        "/domains",
-        {
+    client.route_raw.assert_awaited_once_with(
+        "linode_domain_create",
+        body={
             "domain": "example.com",
             "type": "master",
             "soa_email": "admin@example.com",
@@ -308,7 +310,7 @@ async def test_domain_create_surfaces_standard_api_error(
 ) -> None:
     """A structured API error reaches the caller with its field."""
     client = _client_with_response({})
-    client.post_raw.side_effect = APIError(400, "soa_email is required", "soa_email")
+    client.route_raw.side_effect = APIError(400, "soa_email is required", "soa_email")
     with patch("linodemcp.tools.helpers.RetryableClient", return_value=client):
         result = await handle_linode_domain_create(dict(_MASTER_ARGS), sample_config)
 

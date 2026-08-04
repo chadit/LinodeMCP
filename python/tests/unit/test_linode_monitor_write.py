@@ -375,6 +375,7 @@ async def test_alert_definition_create_emits_proto_envelope(
             "rule_criteria": {"rules": [{"metric": "cpu_usage"}]},
             "trigger_conditions": {"criteria_condition": "ALL"},
             "channel_ids": [10000],
+            "scope": "account",
             "confirm": True,
         },
         client,

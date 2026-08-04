@@ -36,15 +36,17 @@ message NodeBalancerVPCConfigGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_vpc_config_get"
     method: "GET"
-    path: "/nodebalancers/{node_balancer_id}/vpcs/{node_balancer_vpc_config_id}"
+    path: "/nodebalancers/{nodebalancer_id}/vpcs/{vpc_config_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerVPCConfig";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer (required).
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the VPC configuration to retrieve (required).
-  int32 vpc_config_id = 3;
+  int32 vpc_config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // NodeBalancerVPCConfigListInput is the input contract for
@@ -53,15 +55,17 @@ message NodeBalancerVPCConfigListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_vpc_config_list"
     method: "GET"
-    path: "/nodebalancers/{node_balancer_id}/vpcs"
+    path: "/nodebalancers/{nodebalancer_id}/vpcs"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerVPCConfigListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose VPC configurations should be listed.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page number to retrieve.
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page, from 25 through 500.
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }

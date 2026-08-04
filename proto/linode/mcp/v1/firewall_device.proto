@@ -52,13 +52,15 @@ message FirewallDeviceGetInput {
     method: "GET"
     path: "/networking/firewalls/{firewall_id}/devices/{device_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDevice";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall (required).
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the firewall device to retrieve (required).
-  int32 device_id = 3;
+  int32 device_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // FirewallDeviceListInput is the input contract for
@@ -69,15 +71,17 @@ message FirewallDeviceListInput {
     method: "GET"
     path: "/networking/firewalls/{firewall_id}/devices"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose assigned devices should be listed.
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // FirewallDeviceCreateInput is the input contract for
@@ -88,22 +92,27 @@ message FirewallDeviceCreateInput {
     method: "POST"
     path: "/networking/firewalls/{firewall_id}/devices"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This assigns a device to a Cloud Firewall. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Firewall device assigned successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall to assign the device to.
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The positive ID of the Linode, Linode interface, or NodeBalancer to
   // assign.
-  int32 id = 3;
+  int32 id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Device type. Must be linode, nodebalancer, or linode_interface.
-  FirewallDeviceType.Value type = 4;
+  FirewallDeviceType.Value type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm firewall device assignment. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // FirewallDeviceDeleteInput is the input contract for
@@ -114,25 +123,29 @@ message FirewallDeviceDeleteInput {
     method: "DELETE"
     path: "/networking/firewalls/{firewall_id}/devices/{device_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallDeviceDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This removes a device assignment from a Cloud Firewall. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "FirewallDevice";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the firewall whose device assignment should be removed.
-  int32 firewall_id = 2;
+  int32 firewall_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the firewall device assignment to remove.
-  int32 device_id = 3;
+  int32 device_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm firewall device removal. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6; // system param
+  optional string mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7; // system param
+  optional string plan_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // FirewallDeviceWriteResponse is the {message, device} envelope the

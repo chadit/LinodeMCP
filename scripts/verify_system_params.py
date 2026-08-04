@@ -1,36 +1,30 @@
 #!/usr/bin/env python3
 """Offline gate: every MCP system param carries a trailing `// system param`.
 
-A handful of proto input fields are the server's own plumbing rather than
-Linode API parameters: `environment` picks the credential profile from MCP
-config, `confirm` is the write-confirmation gate, `dry_run` is the preview
-flag, and `mode`/`plan_id` drive the two-stage plan/apply flow. Nothing in the
-proto files says so, so a reader cannot tell them apart from the API params
-sitting next to them, and a spec-parity pass has no way to skip them.
+Some proto input fields are server plumbing rather than Linode API parameters
+(`environment`, `confirm`, `dry_run`, and the two-stage `mode`/`plan_id`).
+Nothing in the proto says so, so a spec-parity pass has no way to skip them.
 
 The marker is a TRAILING comment on the field line:
 
     optional bool dry_run = 5; // system param
 
-Trailing comments do not reach the generated JSON Schema. A proto LEADING
-comment becomes the `description` an MCP client shows the model, so putting
-the marker in the leading block would rewrite 970 user-facing descriptions.
-Keep it on the field line.
+Trailing comments do not reach the generated JSON Schema, while a leading
+comment becomes the `description` an MCP client shows the model, so moving the
+marker up would rewrite 970 user-facing descriptions.
 
-docs/contracts/system-params.txt holds the name-and-type set, not this script,
-so widening the set is a contract edit plus the matching proto markers. The
-type column is part of the key: `mode` is `optional string` for the two-stage
-selector and `optional NodeBalancerNodeMode.Value` for the NodeBalancer backend
-node mode, which is a real API body param.
+docs/contracts/system-params.txt pins the name-and-type set, so widening it is
+a contract edit plus the matching proto markers. The type column is part of the
+key: `mode` is `optional string` for the two-stage selector and
+`optional NodeBalancerNodeMode.Value` for the NodeBalancer backend node mode,
+a real API body param.
 
-Both directions fail. A field matching the contract without the marker fails,
-and a field carrying the marker that the contract does not name fails. Markers
-are required only inside *Input messages, since response and nested item
-messages reuse the same names for real API values; a stray marker in one of
-those still fails.
+Both directions fail: a contracted field without the marker, and a marked field
+the contract does not name. Markers belong only in *Input messages, since
+response and nested item messages reuse the same names for real API values.
 
 Stdlib only, so no venv is needed. Run via `make system-params` (in `make
-check`, and so in the pre-push hook and the CI gate on every branch).
+check`, and so in the pre-push hook and CI).
 """
 
 from __future__ import annotations
@@ -48,11 +42,16 @@ MARKER = "// system param"
 
 _MESSAGE = re.compile(r"^message\s+([A-Za-z_]\w*)\s*\{")
 # A field line: optional cardinality, a type (map<...> counts as one token), the
-# field name, the tag number, then whatever trails the semicolon.
+# field name, the tag number, an optional field-options block, then whatever
+# trails the semicolon. The options block is load-bearing: routed input fields
+# carry `[(linode.mcp.v1.field_location) = ...]`, and a pattern stopping at the
+# tag number skipped every one of them, finding 1 marker where 970 exist while
+# still printing OK.
 _FIELD = re.compile(
     r"^\s*(?:(?:optional|repeated)\s+)?"
     r"(map<[^>]+>|[A-Za-z_][\w.]*)\s+"
-    r"([a-z_][a-z0-9_]*)\s*=\s*\d+\s*;"
+    r"([a-z_][a-z0-9_]*)\s*=\s*\d+\s*"
+    r"(?:\[[^\]]*\]\s*)?;"
     r"(.*)$"
 )
 
@@ -94,7 +93,7 @@ def parse_fields(source: str, path: str) -> list[Field]:
     """Every field of every top-level message in one proto file.
 
     Enum values inside the enum-wrapper messages carry no type token, so the
-    field pattern skips them; a `oneof` block only shifts brace depth, and its
+    field pattern skips them. A `oneof` block only shifts brace depth, so its
     arms stay attributed to the enclosing message.
     """
     fields: list[Field] = []
@@ -159,7 +158,7 @@ def violations(
 
 
 def _report(missing: list[Field], unexpected: list[Field]) -> None:
-    """Print each violation with its file:line and the fix for that direction."""
+    """Print each violation with the fix for its direction."""
     if missing:
         print("system params missing the trailing marker:", file=sys.stderr)
         for field in missing:

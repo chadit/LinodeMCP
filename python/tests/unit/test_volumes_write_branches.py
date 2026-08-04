@@ -93,8 +93,10 @@ async def test_create_threads_linode_id_into_body(sample_config: Config) -> None
             sample_config,
         )
 
-    client.post_raw.assert_awaited_once_with(
-        "/volumes", {"label": "vol", "size": 20, "linode_id": 42}, retry=False
+    client.route_raw.assert_awaited_once_with(
+        "linode_volume_create",
+        body={"label": "vol", "size": 20, "linode_id": 42},
+        retry=False,
     )
 
 
@@ -137,7 +139,7 @@ async def test_attach_requires_linode_id(sample_config: Config) -> None:
 async def test_attach_threads_config_id_into_body(sample_config: Config) -> None:
     """A real attach forwards config_id in the POST body when given."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        client = _mock_client_returning("post_raw", {"id": 5, "label": "vol"})
+        client = _mock_client_returning("route_raw", {"id": 5, "label": "vol"})
         mock_cls.return_value = client
 
         await handle_linode_volume_attach(
@@ -145,9 +147,10 @@ async def test_attach_threads_config_id_into_body(sample_config: Config) -> None
             sample_config,
         )
 
-    client.post_raw.assert_awaited_once_with(
-        "/volumes/5/attach",
-        {"linode_id": 42, "config_id": 7},
+    client.route_raw.assert_awaited_once_with(
+        "linode_volume_attach",
+        5,
+        body={"linode_id": 42, "config_id": 7},
     )
 
 

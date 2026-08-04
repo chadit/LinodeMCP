@@ -115,8 +115,8 @@ func TestClientGetRegionAvailabilityEscapesRegionID(t *testing.T) {
 	t.Parallel()
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.EscapedPath() != "/regions/us-east%2Fbad%3Fx=1/availability" {
-			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/regions/us-east%2Fbad%3Fx=1/availability")
+		if r.URL.EscapedPath() != "/regions/us-east%2Fbad%3Fx%3D1/availability" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/regions/us-east%2Fbad%3Fx%3D1/availability")
 		}
 
 		if r.URL.RawQuery != "" {

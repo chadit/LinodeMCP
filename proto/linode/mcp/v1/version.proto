@@ -4,6 +4,8 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "linode/mcp/v1/options.proto";
+
 // VersionResponse is the shared wire shape the `version` MCP tool and the CLI
 // `version` subcommand return in both languages. The values are build-time and
 // runtime metadata: version and api_version are the server versions, build_date
@@ -22,12 +24,25 @@ message VersionResponse {
 // parameters; the empty message generates an empty-properties object schema.
 // The tool is CapMeta and talks to no Linode API, so it advertises no
 // environment param.
-message VersionInput {}
+message VersionInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "version"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.VersionResponse";
+}
 
 // HelloInput is the input contract for the hello smoke-test meta tool. The
 // hand-built tool does NOT advertise environment (no API client), so the
 // message carries only the optional greeting name.
 message HelloInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "hello"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.HelloResponse";
+  option (linode.mcp.v1.success_message) = "Hello, {name}! LinodeMCP server is running and ready.";
+
   // Name to include in the greeting (optional).
   optional string name = 1;
 }

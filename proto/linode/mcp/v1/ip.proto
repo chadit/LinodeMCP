@@ -227,17 +227,21 @@ message ReservedIPCreateInput {
     method: "POST"
     path: "/networking/reserved/ips"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
+  option (linode.mcp.v1.confirm_message) = "This reserves a public IPv4 address and starts billing. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region in which to reserve the public IPv4 address.
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Existing tags to apply to the reserved address.
-  repeated string tags = 3;
+  repeated string tags = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm reservation and billing. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ReservedIPListInput is the input contract for
@@ -248,13 +252,15 @@ message ReservedIPListInput {
     method: "GET"
     path: "/networking/reserved/ips"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ReservedIPGetInput is the input contract for
@@ -265,11 +271,13 @@ message ReservedIPGetInput {
     method: "GET"
     path: "/networking/reserved/ips/{address}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Reserved public IPv4 address to retrieve.
-  string address = 2;
+  string address = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ReservedIPUpdateInput is the input contract for
@@ -281,17 +289,20 @@ message ReservedIPUpdateInput {
     method: "PUT"
     path: "/networking/reserved/ips/{address}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPAddress";
+  option (linode.mcp.v1.confirm_message) = "This replaces all tags on the reserved IP. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Reserved public IPv4 address whose tags will be replaced.
-  string address = 2;
+  string address = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Complete replacement set of existing tags. An empty list removes all tags.
-  repeated string tags = 3;
+  repeated string tags = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm replacing tags. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ReservedIPTypeListInput is the input contract for
@@ -302,9 +313,11 @@ message ReservedIPTypeListInput {
     method: "GET"
     path: "/networking/reserved/ips/types"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPTypeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ReservedIPDeleteInput is the input contract for
@@ -315,20 +328,25 @@ message ReservedIPDeleteInput {
     method: "DELETE"
     path: "/networking/reserved/ips/{address}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ReservedIPDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This permanently unreserves the IP and it cannot be recovered. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Reserved IP {address} unreserved successfully";
+  option (linode.mcp.v1.resource_type) = "ReservedIP";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Reserved public IPv4 address to unreserve permanently.
-  string address = 2;
+  string address = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm unreserving the address. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by mode:"plan", supplied with mode:"apply".
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // IPv6PoolListInput is the input contract for linode_ipv6_pool_list.
@@ -338,13 +356,15 @@ message IPv6PoolListInput {
     method: "GET"
     path: "/networking/ipv6/pools"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6PoolListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // IPv6RangeListInput is the input contract for linode_ipv6_range_list.
@@ -354,13 +374,15 @@ message IPv6RangeListInput {
     method: "GET"
     path: "/networking/ipv6/ranges"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // IPv6RangeGetInput is the input contract for linode_ipv6_range_get.
@@ -370,11 +392,13 @@ message IPv6RangeGetInput {
     method: "GET"
     path: "/networking/ipv6/ranges/{range}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6Range";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // IPv6 range prefix, for example 2001:0db8::/64.
-  string range = 2;
+  string range = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // IPv6RangeCreateInput is the input contract for linode_ipv6_range_create.
@@ -384,20 +408,25 @@ message IPv6RangeCreateInput {
     method: "POST"
     path: "/networking/ipv6/ranges"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates an IPv6 range and changes networking configuration. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IPv6 range created";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The IPv6 prefix length for the created range.
-  int32 prefix_length = 2;
+  int32 prefix_length = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional Linode ID to assign the new range to.
-  optional int32 linode_id = 3;
+  optional int32 linode_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional route target for the new IPv6 range.
-  optional string route_target = 4;
+  optional string route_target = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm IPv6 range creation. Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // IPv6RangeDeleteInput is the input contract for linode_ipv6_range_delete.
@@ -407,22 +436,27 @@ message IPv6RangeDeleteInput {
     method: "DELETE"
     path: "/networking/ipv6/ranges/{range}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPv6RangeDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes an IPv6 range and changes networking configuration. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IPv6 range deleted";
+  option (linode.mcp.v1.resource_type) = "IPv6Range";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // IPv6 range prefix, for example 2001:0db8::/64.
-  string range = 2;
+  string range = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm IPv6 range deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceIPDeleteResponse is the id-echo envelope linode_instance_ip_delete
@@ -483,11 +517,13 @@ message IPAddressGetInput {
     method: "GET"
     path: "/networking/ips/{address}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddress";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The IP address to retrieve (required).
-  string address = 2;
+  string address = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceIPGetInput is the input contract for linode_instance_ip_get (returns a
@@ -498,13 +534,15 @@ message InstanceIPGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/ips/{address}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddress";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The IP address to retrieve (required).
-  string address = 3;
+  string address = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceIPListInput is the input contract for linode_instance_ip_list.
@@ -514,11 +552,13 @@ message InstanceIPListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/ips"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceIPsResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceIPAllocateInput is the input contract for
@@ -531,21 +571,29 @@ message InstanceIPAllocateInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/ips"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This allocates a new IP address which may incur charges. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IP {address} allocated for instance {linode_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The type of IP address to allocate: ipv4 or ipv6.
-  InstanceIPType.Value type = 3;
+  InstanceIPType.Value type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the IP address should be public (true) or private (false).
-  bool public = 4;
+  bool public = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm IP allocation. Additional IPs may incur charges.
   // Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // An address already reserved on the account to assign to this Linode
+  // (optional). Omitting it allocates a new address instead.
+  optional string address = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // InstanceIPUpdateInput is the input contract for linode_instance_ip_update.
@@ -556,20 +604,24 @@ message InstanceIPUpdateInput {
     method: "PUT"
     path: "/linode/instances/{linode_id}/ips/{address}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates reverse DNS for the IP address. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "RDNS for IP {address} updated on instance {linode_id}";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The IP address to update (e.g. 203.0.113.1).
-  string address = 3;
+  string address = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The reverse DNS hostname to assign to the IP address.
-  string rdns = 4;
+  string rdns = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm the RDNS update. Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceIPDeleteInput is the input contract for linode_instance_ip_delete,
@@ -581,25 +633,30 @@ message InstanceIPDeleteInput {
     method: "DELETE"
     path: "/linode/instances/{linode_id}/ips/{address}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceIPDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This permanently removes the IP address and is irreversible. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "IP {address} removed from instance {linode_id}";
+  option (linode.mcp.v1.resource_type) = "InstanceIP";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The IP address to remove (e.g. 203.0.113.1).
-  string address = 3;
+  string address = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm IP removal. This action is irreversible. Ignored
   // when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
   // plan_id re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6; // system param
+  optional string mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7; // system param
+  optional string plan_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NetworkingIPListInput is the input contract for linode_networking_ip_list.
@@ -609,11 +666,13 @@ message NetworkingIPListInput {
     method: "GET"
     path: "/networking/ips"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Skip IPv6 reverse DNS lookups (optional).
-  optional bool skip_ipv6_rdns = 2;
+  optional bool skip_ipv6_rdns = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // IPAddressUpdateInput is the input contract for linode_networking_ip_update.
@@ -623,18 +682,26 @@ message IPAddressUpdateInput {
     method: "PUT"
     path: "/networking/ips/{address}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates reverse DNS for an IP address. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Networking IP {address} RDNS updated";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The IPv4 or IPv6 address to update.
-  string address = 2;
+  string address = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The reverse DNS value to set.
-  string rdns = 3;
+  string rdns = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm changing reverse DNS. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Whether the address stays reserved on the account when it is unassigned
+  // (optional). Omitting it leaves the address's current reservation alone.
+  optional bool reserved = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // IPAddressAllocateInput is the input contract for
@@ -646,21 +713,25 @@ message IPAddressAllocateInput {
     method: "POST"
     path: "/networking/ips"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.IPAddressWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This allocates a new IP address which may incur charges. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode that receives the new IP address.
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The type of IP address to allocate: ipv4 or ipv6.
-  InstanceIPType.Value type = 3;
+  InstanceIPType.Value type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the IP address should be public.
-  bool public = 4;
+  bool public = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm IP allocation. Additional IPs may incur charges.
   // Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NetworkingIPAssignmentItem is one address-to-Linode binding submitted by the
@@ -685,18 +756,22 @@ message NetworkingIPAssignInput {
     method: "POST"
     path: "/networking/ips/assign"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPAssignWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This assigns IP addresses to Linodes. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The region for the IP assignments.
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Assignment objects, each with an address and the Linode that receives it.
-  repeated NetworkingIPAssignmentItem assignments = 3;
+  repeated NetworkingIPAssignmentItem assignments = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm IP reassignment. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NetworkingIPv4AssignInput is the input contract for
@@ -709,18 +784,22 @@ message NetworkingIPv4AssignInput {
     method: "POST"
     path: "/networking/ipv4/assign"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPAssignWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This assigns IPv4 addresses to Linodes. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The region for the IPv4 assignments.
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Assignment objects, each with an address and the Linode that receives it.
-  repeated NetworkingIPAssignmentItem assignments = 3;
+  repeated NetworkingIPAssignmentItem assignments = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm IPv4 reassignment. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NetworkingIPShareInput is the input contract for linode_networking_ip_share.
@@ -733,20 +812,24 @@ message NetworkingIPShareInput {
     method: "POST"
     path: "/networking/ips/share"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPShareWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This changes shared IP assignments. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the primary Linode that receives the shared IP addresses.
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // IP addresses or IPv6 ranges to share. Use [] to remove all shared IP
   // addresses.
-  repeated string ips = 3;
+  repeated string ips = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm changing shared IP assignments. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NetworkingIPv4ShareInput is the input contract for
@@ -759,18 +842,22 @@ message NetworkingIPv4ShareInput {
     method: "POST"
     path: "/networking/ipv4/share"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkingIPShareWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This changes shared IP assignments. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the primary Linode that receives the shared IP addresses.
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // IP addresses or IPv6 ranges to share. Use [] to remove all shared IP
   // addresses.
-  repeated string ips = 3;
+  repeated string ips = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm changing shared IP assignments. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

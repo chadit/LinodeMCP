@@ -147,8 +147,9 @@ func handleInstanceIPAllocateRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	req := linode.AllocateIPRequest{
-		Type:   ipType,
-		Public: public,
+		Type:    ipType,
+		Public:  public,
+		Address: request.GetString("address", ""),
 	}
 
 	client, err := prepareClient(request, cfg)

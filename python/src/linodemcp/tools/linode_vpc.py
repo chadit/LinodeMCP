@@ -12,6 +12,9 @@ from linodemcp.tools.helpers import (
     error_response,
     execute_tool,
     pagination_int_argument,
+    pagination_query,
+    required_int_id,
+    standard_pagination_arguments,
     valid_ipv6_prefix,
 )
 from linodemcp.tools.proto_response import (
@@ -65,8 +68,15 @@ async def handle_linode_vpc_list(
     if region_filter:
         applied.append(f"region={region_filter}")
 
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/vpcs")
+        raw = await client.route_raw(
+            "linode_vpc_list", query=pagination_query(page, page_size)
+        )
         return serialize_list_response(
             raw,
             "vpcs",
@@ -142,13 +152,9 @@ async def handle_linode_vpc_get(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_get tool request."""
-    vpc_id_str = arguments.get("vpc_id", "")
-    if not vpc_id_str:
-        return error_response("vpc_id is required")
-    try:
-        vpc_id = int(vpc_id_str)
-    except ValueError:
-        return error_response("vpc_id must be a valid integer")
+    vpc_id, vpc_id_error = required_int_id(arguments, "vpc_id")
+    if vpc_id is None:
+        return error_response(vpc_id_error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(await client.get_vpc(vpc_id), vpc_pb2.Vpc())
@@ -257,9 +263,13 @@ async def handle_linode_vpc_ip_all_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_ip_all_list tool request."""
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        ips = await client.list_vpc_ips()
+        ips = await client.list_vpc_ips(page, page_size)
         return serialize_list_response(
             {"data": ips}, "ips", vpc_pb2.VPCIPListResponse()
         )
@@ -280,16 +290,17 @@ async def handle_linode_vpc_ip_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_ip_list tool request."""
-    vpc_id_str = arguments.get("vpc_id", "")
-    if not vpc_id_str:
-        return error_response("vpc_id is required")
+    vpc_id, vpc_id_error = required_int_id(arguments, "vpc_id")
+    if vpc_id is None:
+        return error_response(vpc_id_error)
+
     try:
-        vpc_id = int(vpc_id_str)
-    except ValueError:
-        return error_response("vpc_id must be a valid integer")
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        ips = await client.list_vpc_ip(vpc_id)
+        ips = await client.list_vpc_ip(vpc_id, page, page_size)
         return serialize_list_response(
             {"data": ips}, "ips", vpc_pb2.VPCIPListResponse()
         )
@@ -310,16 +321,19 @@ async def handle_linode_vpc_subnet_list(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_vpc_subnet_list tool request."""
-    vpc_id_str = arguments.get("vpc_id", "")
-    if not vpc_id_str:
-        return error_response("vpc_id is required")
+    vpc_id, vpc_id_error = required_int_id(arguments, "vpc_id")
+    if vpc_id is None:
+        return error_response(vpc_id_error)
+
     try:
-        vpc_id = int(vpc_id_str)
-    except ValueError:
-        return error_response("vpc_id must be a valid integer")
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(f"/vpcs/{vpc_id}/subnets")
+        raw = await client.route_raw(
+            "linode_vpc_subnet_list", vpc_id, query=pagination_query(page, page_size)
+        )
         return serialize_list_response(
             raw,
             "subnets",
@@ -346,21 +360,13 @@ def _parse_vpc_subnet_ids(
     Returns a (vpc_id, subnet_id) tuple on success, or an error
     response list on failure.
     """
-    vpc_id_str = arguments.get("vpc_id", "")
-    if not vpc_id_str:
-        return error_response("vpc_id is required")
-    try:
-        vpc_id = int(vpc_id_str)
-    except ValueError:
-        return error_response("vpc_id must be a valid integer")
+    vpc_id, vpc_id_error = required_int_id(arguments, "vpc_id")
+    if vpc_id is None:
+        return error_response(vpc_id_error)
 
-    subnet_id_str = arguments.get("subnet_id", "")
-    if not subnet_id_str:
-        return error_response("subnet_id is required")
-    try:
-        subnet_id = int(subnet_id_str)
-    except ValueError:
-        return error_response("subnet_id must be a valid integer")
+    subnet_id, subnet_id_error = required_int_id(arguments, "subnet_id")
+    if subnet_id is None:
+        return error_response(subnet_id_error)
 
     return (vpc_id, subnet_id)
 

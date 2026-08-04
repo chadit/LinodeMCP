@@ -29,12 +29,13 @@ type SSHKey struct {
 
 // CreateVolumeRequest represents the request body for creating a volume.
 type CreateVolumeRequest struct {
-	LinodeID *int     `json:"linode_id,omitempty"`
-	ConfigID *int     `json:"config_id,omitempty"`
-	Label    string   `json:"label"`
-	Region   string   `json:"region,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
-	Size     int      `json:"size,omitempty"`
+	LinodeID   *int     `json:"linode_id,omitempty"`
+	ConfigID   *int     `json:"config_id,omitempty"`
+	Label      string   `json:"label"`
+	Region     string   `json:"region,omitempty"`
+	Encryption string   `json:"encryption,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	Size       int      `json:"size,omitempty"`
 }
 
 // CloneVolumeRequest represents the request body for cloning a volume.

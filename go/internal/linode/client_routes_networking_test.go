@@ -34,7 +34,7 @@ func TestClientRoutesNetworkingPart1(t *testing.T) {
 			response: clientRouteObjProbe,
 			want:     clientRouteProbeValue,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.AssignNetworkingIPs(ctx, linode.AssignNetworkingIPsRequest{Region: "us-east", Assignments: []linode.IPAssignment{{Address: clientRouteIPv4Fixture, LinodeID: 4242}}})
+				got, err := client.AssignNetworkingIPs(ctx, linode.AssignNetworkingIPsRequest{Region: accountTransferRegion, Assignments: []linode.IPAssignment{{Address: clientRouteIPv4Fixture, LinodeID: 4242}}})
 
 				return clientRouteProbe(err, func() any { return got[clientRouteProbeKey] })
 			},
@@ -46,7 +46,7 @@ func TestClientRoutesNetworkingPart1(t *testing.T) {
 			response: clientRouteObjProbe,
 			want:     clientRouteProbeValue,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.AssignNetworkingIPv4s(ctx, linode.AssignNetworkingIPsRequest{Region: "us-east", Assignments: []linode.IPAssignment{{Address: clientRouteIPv4Fixture, LinodeID: 4242}}})
+				got, err := client.AssignNetworkingIPv4s(ctx, linode.AssignNetworkingIPsRequest{Region: accountTransferRegion, Assignments: []linode.IPAssignment{{Address: clientRouteIPv4Fixture, LinodeID: 4242}}})
 
 				return clientRouteProbe(err, func() any { return got[clientRouteProbeKey] })
 			},
@@ -58,7 +58,7 @@ func TestClientRoutesNetworkingPart1(t *testing.T) {
 			response: clientRouteProtoObjIDInt32,
 			want:     int32(4242),
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.CreateFirewallDeviceProto(ctx, 4242, &linode.CreateFirewallDeviceRequest{Type: "linode", ID: 4242})
+				got, err := client.CreateFirewallDeviceProto(ctx, 4242, &linode.CreateFirewallDeviceRequest{Type: accountMaintenanceEntityType, ID: 4242})
 
 				return clientRouteProbe(err, func() any { return got.GetId() })
 			},
@@ -118,7 +118,7 @@ func TestClientRoutesNetworkingPart1(t *testing.T) {
 			response: clientRouteProtoObjIDInt32,
 			want:     int32(4242),
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.CreateNodeBalancerProto(ctx, linode.CreateNodeBalancerRequest{})
+				got, err := client.CreateNodeBalancerProto(ctx, &linode.CreateNodeBalancerRequest{})
 
 				return clientRouteProbe(err, func() any { return got.GetId() })
 			},
@@ -498,7 +498,7 @@ func TestClientRoutesNetworkingPart4(t *testing.T) {
 			response: clientRouteProtoPageLabel,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListFirewallsProto(ctx)
+				got, err := client.ListFirewallsProto(ctx, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.Firewall).GetLabel) })
 			},
@@ -667,7 +667,7 @@ func TestClientRoutesNetworkingPart5(t *testing.T) {
 			response: clientRouteProtoPageLabel,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListNodeBalancersProto(ctx)
+				got, err := client.ListNodeBalancersProto(ctx, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.NodeBalancer).GetLabel) })
 			},
@@ -715,7 +715,7 @@ func TestClientRoutesNetworkingPart5(t *testing.T) {
 			response: clientRouteProtoObjIDInt32,
 			want:     int32(4242),
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.RebuildNodeBalancerConfigProto(ctx, 4242, 8615)
+				got, err := client.RebuildNodeBalancerConfigProto(ctx, 4242, 8615, &linode.RebuildNodeBalancerConfigRequest{Port: 80})
 
 				return clientRouteProbe(err, func() any { return got.GetId() })
 			},

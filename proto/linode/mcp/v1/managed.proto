@@ -51,11 +51,13 @@ message ManagedServiceGetInput {
     method: "GET"
     path: "/managed/services/{service_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedService";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Managed service to retrieve (required).
-  int32 service_id = 2;
+  int32 service_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ManagedServiceListInput is the input contract for
@@ -66,13 +68,15 @@ message ManagedServiceListInput {
     method: "GET"
     path: "/managed/services"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ManagedServiceCreateInput is the input contract for
@@ -84,33 +88,38 @@ message ManagedServiceCreateInput {
     method: "POST"
     path: "/managed/services"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a Managed service monitor. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed service monitor {id} created successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the Managed service.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Monitor type: tcp or url.
-  ManagedServiceType.Value service_type = 3;
+  ManagedServiceType.Value service_type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // URL or address monitored by the service.
-  string address = 4;
+  string address = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Timeout in seconds, 1-255.
-  int32 timeout = 5;
+  int32 timeout = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Expected response body text for URL monitors.
-  optional string body = 6;
+  optional string body = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Managed contact group to consult when an issue is detected.
-  optional string consultation_group = 7;
+  optional string consultation_group = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Managed credential IDs used when resolving service issues.
-  repeated int32 credentials = 8;
+  repeated int32 credentials = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Notes for responders.
-  optional string notes = 9;
+  optional string notes = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Region for private IP services.
-  optional string region = 10;
+  optional string region = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm Managed service creation. Ignored when
   // dry_run=true.
-  bool confirm = 11; // system param
+  bool confirm = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 12; // system param
+  optional bool dry_run = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedServiceUpdateInput is the input contract for
@@ -122,34 +131,39 @@ message ManagedServiceUpdateInput {
     method: "PUT"
     path: "/managed/services/{service_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a Managed service monitor. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed service monitor {service_id} updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric Managed service monitor ID to update.
-  int32 service_id = 2;
+  int32 service_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Updated label for the Managed service.
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated monitor type: tcp or url.
-  optional ManagedServiceType.Value service_type = 4;
+  optional ManagedServiceType.Value service_type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated URL or address monitored by the service.
-  optional string address = 5;
+  optional string address = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated timeout in seconds, 1-255.
-  optional int32 timeout = 6;
+  optional int32 timeout = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated expected response body text for URL monitors.
-  optional string body = 7;
+  optional string body = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated Managed contact group to consult when an issue is detected.
-  optional string consultation_group = 8;
+  optional string consultation_group = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated Managed credential IDs used when resolving service issues.
-  repeated int32 credentials = 9;
+  repeated int32 credentials = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated notes for responders.
-  optional string notes = 10;
+  optional string notes = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated region for private IP services.
-  optional string region = 11;
+  optional string region = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm Managed service update. Ignored when dry_run=true.
-  bool confirm = 12; // system param
+  bool confirm = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 13; // system param
+  optional bool dry_run = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedServiceDeleteInput is the input contract for
@@ -160,17 +174,21 @@ message ManagedServiceDeleteInput {
     method: "DELETE"
     path: "/managed/services/{service_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes a Managed service monitor. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed service deleted successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Managed service monitor ID to delete.
-  int32 service_id = 2;
+  int32 service_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm Managed service deletion. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedServiceDisableInput is the input contract for
@@ -181,17 +199,20 @@ message ManagedServiceDisableInput {
     method: "POST"
     path: "/managed/services/{service_id}/disable"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This disables a Managed service monitor. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Managed service monitor ID to disable.
-  int32 service_id = 2;
+  int32 service_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm disabling Managed service monitoring. Ignored
   // when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedServiceEnableInput is the input contract for
@@ -202,17 +223,20 @@ message ManagedServiceEnableInput {
     method: "POST"
     path: "/managed/services/{service_id}/enable"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedServiceIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This enables a Managed service monitor. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Managed service monitor ID to enable.
-  int32 service_id = 2;
+  int32 service_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm enabling Managed service monitoring. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedLinodeSettingsSSH is the SSH access block nested in Managed Linode
@@ -248,11 +272,13 @@ message ManagedLinodeSettingsGetInput {
     method: "GET"
     path: "/managed/linode-settings/{linode_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettings";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode whose Managed settings to retrieve (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ManagedLinodeSettingsListInput is the input contract for
@@ -263,13 +289,15 @@ message ManagedLinodeSettingsListInput {
     method: "GET"
     path: "/managed/linode-settings"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettingsListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ManagedLinodeSettingsUpdateInput is the input contract for
@@ -285,20 +313,25 @@ message ManagedLinodeSettingsUpdateInput {
     method: "PUT"
     path: "/managed/linode-settings/{linode_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedLinodeSettingsWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates Managed Linode settings. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed Linode settings for Linode {linode_id} updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric Linode ID whose Managed settings should be updated.
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // SSH settings object: { access: bool, ip: string, port: int (1-65535),
   // user: string }.
-  map<string, google.protobuf.Value> ssh = 3;
+  map<string, google.protobuf.Value> ssh = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm updating Managed Linode settings. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedContactPhone is the phone block nested in a Managed contact. primary and
@@ -334,11 +367,13 @@ message ManagedContactGetInput {
     method: "GET"
     path: "/managed/contacts/{contact_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContact";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Managed contact to retrieve (required).
-  int32 contact_id = 2;
+  int32 contact_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ManagedContactListInput is the input contract for
@@ -349,13 +384,15 @@ message ManagedContactListInput {
     method: "GET"
     path: "/managed/contacts"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ManagedContactCreateInput is the input contract for
@@ -369,23 +406,28 @@ message ManagedContactCreateInput {
     method: "POST"
     path: "/managed/contacts"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a managed contact. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed contact {id} created successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Name for the Managed contact (optional).
-  optional string name = 2;
+  optional string name = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Email address for the Managed contact (optional).
-  optional string email = 3;
+  optional string email = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Display grouping for the Managed contact (optional).
-  optional string group = 4;
+  optional string group = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Phone numbers object: { primary: string, secondary: string } (optional).
-  map<string, google.protobuf.Value> phone = 5;
+  map<string, google.protobuf.Value> phone = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm Managed contact creation. Ignored when
   // dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedContactUpdateInput is the input contract for
@@ -399,26 +441,30 @@ message ManagedContactUpdateInput {
     method: "PUT"
     path: "/managed/contacts/{contact_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a Managed contact. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed contact {contact_id} updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric Managed contact ID to update.
-  int32 contact_id = 2;
+  int32 contact_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Updated contact name (optional).
-  optional string name = 3;
+  optional string name = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated contact email address (optional).
-  optional string email = 4;
+  optional string email = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated contact group (optional).
-  optional string group = 5;
+  optional string group = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated phone numbers object: { primary: string, secondary: string }
   // (optional).
-  map<string, google.protobuf.Value> phone = 6;
+  map<string, google.protobuf.Value> phone = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm updating the Managed contact. Ignored when
   // dry_run=true.
-  bool confirm = 7; // system param
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8; // system param
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedContactDeleteInput is the input contract for
@@ -429,17 +475,21 @@ message ManagedContactDeleteInput {
     method: "DELETE"
     path: "/managed/contacts/{contact_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedContactIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes a Managed contact. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed contact deleted successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Managed contact ID to delete.
-  int32 contact_id = 2;
+  int32 contact_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm Managed contact deletion. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedSSHKey mirrors GET /managed/credentials/sshkey: the public SSH key the
@@ -455,9 +505,11 @@ message ManagedSSHKeyGetInput {
     method: "GET"
     path: "/managed/credentials/sshkey"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedSSHKey";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedStatsGetInput is the input contract for linode_managed_stats_get.
@@ -467,9 +519,10 @@ message ManagedStatsGetInput {
     method: "GET"
     path: "/managed/stats"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedCredential mirrors a Linode Managed credential (the secret is write-only
@@ -496,13 +549,15 @@ message ManagedCredentialGetInput {
     method: "GET"
     path: "/managed/credentials/{credential_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredential";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Managed credential to retrieve (required).
-  int32 credential_id = 2;
+  int32 credential_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Preview the request without retrieving it (optional).
-  optional bool dry_run = 3; // system param
+  optional bool dry_run = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedCredentialListInput is the input contract for
@@ -513,13 +568,15 @@ message ManagedCredentialListInput {
     method: "GET"
     path: "/managed/credentials"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ManagedCredentialCreateInput is the input contract for
@@ -530,21 +587,25 @@ message ManagedCredentialCreateInput {
     method: "POST"
     path: "/managed/credentials"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a stored Managed credential. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed credential {id} created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Label for the Managed credential.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Password to store for the Managed credential.
-  string password = 3;
+  string password = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Username to store for the Managed credential.
-  optional string username = 4;
+  optional string username = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm creating a stored Managed credential. Ignored
   // when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedCredentialUpdateInput is the input contract for
@@ -556,19 +617,23 @@ message ManagedCredentialUpdateInput {
     method: "PUT"
     path: "/managed/credentials/{credential_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a Managed credential. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed credential {credential_id} updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric Managed credential ID to update.
-  int32 credential_id = 2;
+  int32 credential_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Updated credential label.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm updating the Managed credential. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedCredentialUsernamePasswordUpdateInput is the input contract for
@@ -580,21 +645,25 @@ message ManagedCredentialUsernamePasswordUpdateInput {
     method: "POST"
     path: "/managed/credentials/{credential_id}/update"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a stored Managed credential's username and password. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed credential {credential_id} updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Managed credential ID to update.
-  int32 credential_id = 2;
+  int32 credential_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Updated password to store for the Managed credential.
-  string password = 3;
+  string password = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Updated username to store for the Managed credential.
-  optional string username = 4;
+  optional string username = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm updating a stored Managed credential's username
   // and password. Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedCredentialRevokeInput is the input contract for
@@ -605,17 +674,21 @@ message ManagedCredentialRevokeInput {
     method: "POST"
     path: "/managed/credentials/{credential_id}/revoke"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ManagedCredentialIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This revokes a stored Managed credential. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Managed credential {credential_id} revoked successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Managed credential ID to revoke.
-  int32 credential_id = 2;
+  int32 credential_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm revoking the stored Managed credential. Ignored
   // when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ManagedCredentialWriteResponse is the {message, credential} envelope the

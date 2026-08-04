@@ -36,15 +36,17 @@ message BucketSSLGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_ssl_get"
     method: "GET"
-    path: "/object-storage/buckets/{region_id}/{bucket}/ssl"
+    path: "/object-storage/buckets/{region}/{label}/ssl"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.BucketSSL";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (required).
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (required).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ObjectStorageSSLUploadInput is the input contract for
@@ -54,25 +56,29 @@ message ObjectStorageSSLUploadInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_ssl_upload"
     method: "POST"
-    path: "/object-storage/buckets/{region_id}/{bucket}/ssl"
+    path: "/object-storage/buckets/{region}/{label}/ssl"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageSSLWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This uploads an SSL certificate to the bucket. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "SSL certificate uploaded to bucket '{label}' in region '{region}'";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (name).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The PEM-encoded TLS/SSL certificate to upload.
-  string certificate = 4;
+  string certificate = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The PEM-encoded private key for the certificate.
-  string private_key = 5;
+  string private_key = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to proceed. This uploads a certificate to the bucket. Ignored
   // when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ObjectStorageSSLDeleteInput is the input contract for
@@ -81,25 +87,29 @@ message ObjectStorageSSLDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_ssl_delete"
     method: "DELETE"
-    path: "/object-storage/buckets/{region_id}/{bucket}/ssl"
+    path: "/object-storage/buckets/{region}/{label}/ssl"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageSSLDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This removes the SSL certificate from the bucket. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "ObjectStorageSSL";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (name).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to proceed. This removes the SSL certificate from the bucket.
   // Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6; // system param
+  optional string mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7; // system param
+  optional string plan_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

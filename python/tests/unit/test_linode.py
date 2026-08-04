@@ -2761,7 +2761,11 @@ async def test_retryable_acknowledge_account_agreements_does_not_replay() -> Non
 async def test_create_account_oauth_client_sends_post_body() -> None:
     """OAuth client creation sends POST /account/oauth-clients."""
     client = Client("https://api.linode.com/v4", "test-token")
-    payload = {"label": "demo-client", "redirect_uri": "https://example.com/cb"}
+    payload = {
+        "label": "demo-client",
+        "redirect_uri": "https://example.com/cb",
+        "public": False,
+    }
     response_data = {
         "id": "client-123",
         "label": "demo-client",
@@ -2868,7 +2872,7 @@ async def test_create_account_service_transfer_sends_post_body() -> None:
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.create_account_service_transfer([123, 456])
+        result = await client.create_account_service_transfer([123, 456], None)
 
     assert result == response_data
     mock_request.assert_called_once_with("POST", "/account/service-transfers", payload)
@@ -2963,7 +2967,7 @@ async def test_create_account_service_transfer_wraps_http_errors() -> None:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.create_account_service_transfer([123])
+            await client.create_account_service_transfer([123], None)
 
     assert "CreateAccountServiceTransfer" in str(excinfo.value)
     await client.close()
@@ -3056,9 +3060,9 @@ async def test_retryable_create_account_service_transfer_does_not_replay() -> No
     ) as mock_create:
         mock_create.side_effect = httpx.HTTPError("transient")
         with pytest.raises(httpx.HTTPError):
-            await retryable.create_account_service_transfer([123])
+            await retryable.create_account_service_transfer([123], None)
 
-    mock_create.assert_awaited_once_with([123])
+    mock_create.assert_awaited_once_with([123], None)
     await retryable.close()
 
 
@@ -3075,7 +3079,7 @@ async def test_retryable_create_account_oauth_client_does_not_replay() -> None:
                 "demo-client", "https://example.com/cb"
             )
 
-    mock_create.assert_awaited_once_with("demo-client", "https://example.com/cb")
+    mock_create.assert_awaited_once_with("demo-client", "https://example.com/cb", False)
     await retryable.close()
 
 
@@ -3619,7 +3623,7 @@ async def test_list_instance_configs_with_pagination() -> None:
     [
         ("1/2", "1%2F2"),
         ("1?x", "1%3Fx"),
-        ("..", ".."),
+        ("..", "%2E%2E"),
     ],
 )
 async def test_list_instance_configs_encodes_path_params(
@@ -5222,6 +5226,7 @@ async def test_retryable_create_tag_delegates_to_client() -> None:
         linodes=[123],
         nodebalancers=None,
         volumes=None,
+        reserved_ipv4_addresses=None,
     )
     await retryable.close()
 
@@ -10740,7 +10745,7 @@ async def test_retryable_create_nodebalancer_raw_does_not_replay_transient_error
                 region="us-east", ipv4="192.0.2.141"
             )
 
-    mock_create.assert_awaited_once_with("us-east", None, 0, None, "192.0.2.141")
+    mock_create.assert_awaited_once_with("us-east", None, 0, None, "192.0.2.141", None)
 
     await retryable.close()
 
@@ -10827,7 +10832,7 @@ async def test_retryable_create_firewall_raw_delegates_to_client() -> None:
         result = await retryable.create_firewall_raw("new-fw")
 
     assert result == {"id": 7, "label": "new-fw"}
-    mock_create.assert_awaited_once_with("new-fw", "ACCEPT", "ACCEPT")
+    mock_create.assert_awaited_once_with("new-fw", "ACCEPT", "ACCEPT", None, None, None)
     await retryable.close()
 
 
@@ -10842,7 +10847,7 @@ async def test_retryable_update_firewall_raw_delegates_to_client() -> None:
         result = await retryable.update_firewall_raw(1, label="updated-fw")
 
     assert result == {"id": 1, "label": "updated-fw"}
-    mock_update.assert_awaited_once_with(1, "updated-fw", None, None, None)
+    mock_update.assert_awaited_once_with(1, "updated-fw", None, None, None, None)
     await retryable.close()
 
 
@@ -10862,7 +10867,7 @@ async def test_retryable_update_firewall_rules_raw_delegates_to_client() -> None
         )
 
     assert result == {"inbound_policy": "DROP", "outbound_policy": "ACCEPT"}
-    mock_update.assert_awaited_once_with(12345, [], [])
+    mock_update.assert_awaited_once_with(12345, [], [], None, None)
     await retryable.close()
 
 
@@ -12177,7 +12182,7 @@ async def test_list_nodebalancer_vpc_configs() -> None:
     [
         ("1/2", "1%2F2"),
         ("1?x", "1%3Fx"),
-        ("..", ".."),
+        ("..", "%2E%2E"),
     ],
 )
 async def test_list_nodebalancer_vpc_configs_encodes_path_params(
@@ -12444,7 +12449,7 @@ async def test_retryable_update_instance_firewalls_does_not_replay() -> None:
     [
         ("1/2", "1%2F2"),
         ("1?x", "1%3Fx"),
-        ("..", ".."),
+        ("..", "%2E%2E"),
     ],
 )
 async def test_update_nodebalancer_firewalls_encodes_path_params(
@@ -12511,11 +12516,15 @@ async def test_rebuild_nodebalancer_config() -> None:
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
         mock_request.return_value = mock_response
 
-        result = await client.rebuild_nodebalancer_config(8, 6)
+        result = await client.rebuild_nodebalancer_config(
+            8, 6, {"nodes": [{"label": "web", "address": "192.0.2.10:80"}], "port": 80}
+        )
 
         assert result == {"rebuilt": True}
         mock_request.assert_called_once_with(
-            "POST", "/nodebalancers/8/configs/6/rebuild", {}
+            "POST",
+            "/nodebalancers/8/configs/6/rebuild",
+            {"nodes": [{"label": "web", "address": "192.0.2.10:80"}], "port": 80},
         )
 
     await client.close()
@@ -12525,7 +12534,7 @@ async def test_rebuild_nodebalancer_config() -> None:
     ("nodebalancer_id", "config_id", "encoded_nodebalancer_id", "encoded_config_id"),
     [
         ("1/2", "4?x", "1%2F2", "4%3Fx"),
-        ("..", "..", "..", ".."),
+        ("..", "..", "%2E%2E", "%2E%2E"),
     ],
 )
 async def test_rebuild_nodebalancer_config_encodes_path_params(
@@ -12547,6 +12556,7 @@ async def test_rebuild_nodebalancer_config_encodes_path_params(
         await client.rebuild_nodebalancer_config(
             cast("Any", nodebalancer_id),
             cast("Any", config_id),
+            {"nodes": []},
         )
 
         mock_request.assert_called_once_with(
@@ -12555,7 +12565,7 @@ async def test_rebuild_nodebalancer_config_encodes_path_params(
                 f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
                 f"{encoded_config_id}/rebuild"
             ),
-            {},
+            {"nodes": []},
         )
 
     await client.close()
@@ -12569,7 +12579,7 @@ async def test_rebuild_nodebalancer_config_wraps_http_errors() -> None:
         mock_request.side_effect = httpx.HTTPError("boom")
 
         with pytest.raises(NetworkError) as excinfo:
-            await client.rebuild_nodebalancer_config(8, 6)
+            await client.rebuild_nodebalancer_config(8, 6, {"nodes": []})
 
     assert "RebuildNodeBalancerConfig" in str(excinfo.value)
     await client.close()
@@ -12584,9 +12594,9 @@ async def test_retryable_rebuild_nodebalancer_config_does_not_replay() -> None:
     ) as mock_rebuild:
         mock_rebuild.side_effect = httpx.HTTPError("transient")
         with pytest.raises(httpx.HTTPError):
-            await retryable.rebuild_nodebalancer_config(8, 6)
+            await retryable.rebuild_nodebalancer_config(8, 6, {"nodes": []})
 
-    mock_rebuild.assert_awaited_once_with(8, 6)
+    mock_rebuild.assert_awaited_once_with(8, 6, {"nodes": []})
     await retryable.close()
 
 
@@ -12640,7 +12650,7 @@ async def test_list_nodebalancer_configs_with_pagination() -> None:
     [
         ("1/2", "1%2F2"),
         ("1?x", "1%3Fx"),
-        ("..", ".."),
+        ("..", "%2E%2E"),
     ],
 )
 async def test_list_nodebalancer_configs_encodes_path_params(
@@ -12751,7 +12761,7 @@ async def test_create_nodebalancer_config_node() -> None:
     [
         ("1/2", "4", "1%2F2", "4"),
         ("8", "3?x", "8", "3%3Fx"),
-        ("..", "../6", "..", "..%2F6"),
+        ("..", "../6", "%2E%2E", "..%2F6"),
     ],
 )
 async def test_create_nodebalancer_config_node_encodes_path_params(
@@ -12872,7 +12882,7 @@ async def test_list_nodebalancer_config_nodes_with_pagination() -> None:
     [
         ("1/2", "4", "1%2F2", "4"),
         ("8", "3?x", "8", "3%3Fx"),
-        ("..", "../6", "..", "..%2F6"),
+        ("..", "../6", "%2E%2E", "..%2F6"),
     ],
 )
 async def test_list_nodebalancer_config_nodes_encodes_path_params(
@@ -13349,7 +13359,7 @@ async def test_list_nodebalancer_firewalls() -> None:
     [
         ("1/2", "1%2F2"),
         ("1?x", "1%3Fx"),
-        ("..", ".."),
+        ("..", "%2E%2E"),
     ],
 )
 async def test_list_nodebalancer_firewalls_encodes_path_params(
@@ -15186,6 +15196,8 @@ class TestMakeRequestBody:
                 channel_ids=[10000],
                 description="High CPU usage",
                 entity_ids=["12345"],
+                scope="account",
+                group_by=["region"],
             )
 
             url_arg = mock_req.call_args[0][1]
@@ -15202,8 +15214,10 @@ class TestMakeRequestBody:
                 "rule_criteria": rule_criteria,
                 "trigger_conditions": trigger_conditions,
                 "channel_ids": [10000],
+                "scope": "account",
                 "description": "High CPU usage",
                 "entity_ids": ["12345"],
+                "group_by": ["region"],
             }
 
         await client.close()
@@ -19129,7 +19143,7 @@ async def test_retryable_update_networking_ip_delegates_to_client() -> None:
         result = await retryable.update_networking_ip("10.0.0.1", "host.example.com")
 
     assert result["rdns"] == "host.example.com"
-    mock_update.assert_awaited_once_with("10.0.0.1", "host.example.com")
+    mock_update.assert_awaited_once_with("10.0.0.1", "host.example.com", None)
     await retryable.close()
 
 
@@ -19250,6 +19264,8 @@ async def test_retryable_create_monitor_service_alert_definition_does_not_retry(
         channel_ids=[10000],
         description=None,
         entity_ids=None,
+        scope="",
+        group_by=None,
     )
     await retryable.close()
 
@@ -19349,6 +19365,7 @@ async def test_monitor_alert_definition_create_tool_schema_and_handler_success()
         "service_type",
         "label",
         "severity",
+        "scope",
         "confirm",
     }
 
@@ -19383,6 +19400,7 @@ async def test_monitor_alert_definition_create_tool_schema_and_handler_success()
                 "channel_ids": [10000],
                 "description": "High CPU usage",
                 "entity_ids": ["12345"],
+                "scope": "account",
                 "confirm": True,
             },
             cfg,
@@ -19397,6 +19415,8 @@ async def test_monitor_alert_definition_create_tool_schema_and_handler_success()
         channel_ids=[10000],
         description="High CPU usage",
         entity_ids=["12345"],
+        scope="account",
+        group_by=None,
     )
     assert "Monitor service alert definition created for 'dbaas'" in result[0].text
     assert "CPU high" in result[0].text

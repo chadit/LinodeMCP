@@ -6,14 +6,3 @@
 #   python3 scripts/verify_pagination.py --update-baseline
 # Spec side comes from docs/contracts/api-pagination-baseline.txt
 # (scripts/verify_sync_pagination.py owns that snapshot).
-linode_domain_list: GET /domains unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_domain_record_list: GET /domains/{domainId}/records unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_firewall_list: GET /networking/firewalls unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_nodebalancer_list: GET /nodebalancers unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_sshkey_list: GET /profile/sshkeys unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_stackscript_list: GET /linode/stackscripts unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_volume_list: GET /volumes unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_vpc_ip_all_list: GET /vpcs/ips unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_vpc_ip_list: GET /vpcs/{vpcId}/ips unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_vpc_list: GET /vpcs unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md
-linode_vpc_subnet_list: GET /vpcs/{vpcId}/subnets unpaginated  # accepted 2026-07-17 pre-gate backlog; expose page/page_size per docs/parity.md

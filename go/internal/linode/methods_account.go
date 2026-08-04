@@ -6,69 +6,29 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/url" // path parameter escaping
+	"net/url"
 	"strconv"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const (
-	endpointProfile                      = "/profile"
-	endpointProfilePreferences           = endpointProfile + "/preferences"
-	endpointProfileTokens                = endpointProfile + "/tokens"
-	endpointProfileTFAEnable             = endpointProfile + "/tfa-enable"
-	endpointProfilePhoneNumber           = "/profile/phone-number"
-	endpointProfilePhoneNumberVerify     = endpointProfilePhoneNumber + "/verify"
-	endpointProfileGrants                = "/profile/grants"
-	endpointProfileSecurityQuestions     = "/profile/security-questions"
-	endpointProfileLogins                = "/profile/logins"
-	endpointProfileApps                  = "/profile/apps"
-	endpointProfileDevices               = "/profile/devices"
-	endpointProfileTFADisable            = "/profile/tfa-disable"
-	endpointProfileTFAEnableConfirm      = "/profile/tfa-enable-confirm"
-	endpointAccount                      = "/account"
-	endpointAccountTransfer              = "/account/transfer"
-	endpointAccountSettings              = "/account/settings"
-	endpointAccountSettingsManagedEnable = "/account/settings/managed-enable"
-	endpointManagedCredentials           = "/managed/" + "credentials"
-	endpointManagedCredentialsSSHKey     = endpointManagedCredentials + "/sshkey"
-	endpointAccountCancel                = "/account/cancel"
-	endpointAccountAgreements            = "/account/agreements"
-	endpointAccountMaintenance           = "/account/maintenance"
-	endpointMaintenancePolicies          = "/maintenance/policies"
-	endpointAccountNotifications         = "/account/notifications"
-	endpointAccountAvailability          = "/account/availability"
-	endpointBetas                        = "/betas"
-	endpointAccountBetas                 = "/account/betas"
-	endpointAccountOAuthClients          = "/account/oauth-clients"
-	endpointLongviewClients              = "/longview/clients"
-	endpointLongviewPlan                 = "/longview/plan"
-	endpointLongviewTypes                = "/longview/types"
-	endpointLongviewSubscriptions        = "/longview/subscriptions"
-	endpointMonitorAlertChannels         = "/monitor/alert-channels"
-	endpointMonitorAlertDefinitions      = "/monitor/alert-definitions"
-	endpointMonitorDashboards            = "/monitor/dashboards"
-	endpointMonitorServices              = "/monitor/services"
-	endpointAccountPaymentMethods        = "/account/payment-methods"
-	endpointAccountEvents                = "/account/events"
-	endpointAccountUsers                 = "/account/users"
-	endpointAccountLogins                = "/account/logins"
-	endpointAccountInvoices              = "/account/invoices"
-	endpointAccountPayments              = "/account/payments"
-	endpointAccountPromoCodes            = "/account/promo-codes"
-	endpointAccountChildAccounts         = "/account/child-accounts"
-	endpointAccountEntityTransfers       = "/account/entity-transfers"
-	endpointAccountServiceTransfers      = "/account/service-transfers"
-)
+// Each method below calls one Linode API endpoint through its tool's declared
+// proto route, so paths live in the proto rather than here; endpointProfile is
+// the one exception. The *Proto variants decode into generated proto elements,
+// and the paginated list helpers encode page/page_size via withPaginationQuery.
 
-// GetProfile retrieves the authenticated user's profile from the Linode API.
+// endpointProfile is the last hand-built path in this package: PUT /profile
+// has no tool in front of it, so no proto route declares it.
+const endpointProfile = "/profile"
+
+// httpGetProfile retrieves the authenticated user's profile.
 func (c *Client) httpGetProfile(ctx context.Context) (*Profile, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfile, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfile", Err: err}
+		return nil, wrapRequestError("GetProfile", err)
 	}
 
 	defer drainClose(resp)
@@ -86,9 +46,9 @@ func (c *Client) httpGetProfileProto(ctx context.Context) (*linodev1.Profile, er
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfile, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfile", Err: err}
+		return nil, wrapRequestError("GetProfile", err)
 	}
 
 	defer drainClose(resp)
@@ -101,16 +61,15 @@ func (c *Client) httpGetProfileProto(ctx context.Context) (*linodev1.Profile, er
 	return profile, nil
 }
 
-// httpCreateProfileTokenProto creates a personal access token and decodes the
-// created token (including the one-time secret) into a proto message for the
-// proto-backed write path.
+// httpCreateProfileTokenProto creates a personal access token. The created
+// element carries the one-time secret, which no later read returns.
 func (c *Client) httpCreateProfileTokenProto(ctx context.Context, req CreateProfileTokenRequest) (*linodev1.CreatedPersonalAccessToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTokens, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_token_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateProfileToken", Err: err}
+		return nil, wrapRequestError("CreateProfileToken", err)
 	}
 
 	defer drainClose(resp)
@@ -132,9 +91,9 @@ func (c *Client) httpUpdateProfilePreferences(ctx context.Context, req ProfilePr
 		req = ProfilePreferences{}
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpointProfilePreferences, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_preferences_update", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateProfilePreferences", Err: err}
+		return nil, wrapRequestError("UpdateProfilePreferences", err)
 	}
 
 	defer drainClose(resp)
@@ -147,18 +106,16 @@ func (c *Client) httpUpdateProfilePreferences(ctx context.Context, req ProfilePr
 	return preferences, nil
 }
 
-// httpEnableProfileTFAProto generates a two-factor authentication secret and
-// decodes the {secret, expiry} body into a proto message for the proto-backed
-// write path. The handler sets the one-time-secret warning; the API does not
-// return it. The secret is returned to the user by design (it must be confirmed
-// to activate two-factor auth), so it is not output-redacted.
+// httpEnableProfileTFAProto generates a two-factor secret. The secret must be
+// confirmed to activate two-factor auth, so it is returned rather than
+// output-redacted; the handler adds the one-time warning the API omits.
 func (c *Client) httpEnableProfileTFAProto(ctx context.Context) (*linodev1.ProfileTfaEnableResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTFAEnable, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_tfa_enable", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "EnableProfileTFA", Err: err}
+		return nil, wrapRequestError("EnableProfileTFA", err)
 	}
 
 	defer drainClose(resp)
@@ -171,14 +128,14 @@ func (c *Client) httpEnableProfileTFAProto(ctx context.Context) (*linodev1.Profi
 	return result, nil
 }
 
-// httpSendProfilePhoneNumberVerificationCode sends a profile phone verification code.
+// httpSendProfilePhoneNumberVerificationCode sends a phone verification code.
 func (c *Client) httpSendProfilePhoneNumberVerificationCode(ctx context.Context, req *ProfilePhoneNumberRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfilePhoneNumber, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_phone_number_send", req)
 	if err != nil {
-		return &NetworkError{Operation: "SendProfilePhoneNumberVerificationCode", Err: err}
+		return wrapRequestError("SendProfilePhoneNumberVerificationCode", err)
 	}
 
 	defer drainClose(resp)
@@ -190,14 +147,14 @@ func (c *Client) httpSendProfilePhoneNumberVerificationCode(ctx context.Context,
 	return nil
 }
 
-// httpDeleteProfilePhoneNumber deletes the authenticated profile's phone number.
+// httpDeleteProfilePhoneNumber deletes the profile's phone number.
 func (c *Client) httpDeleteProfilePhoneNumber(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpointProfilePhoneNumber, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_phone_number_delete", nil)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteProfilePhoneNumber", Err: err}
+		return wrapRequestError("DeleteProfilePhoneNumber", err)
 	}
 
 	defer drainClose(resp)
@@ -209,14 +166,14 @@ func (c *Client) httpDeleteProfilePhoneNumber(ctx context.Context) error {
 	return nil
 }
 
-// httpVerifyProfilePhoneNumber verifies a profile phone number using an OTP code.
+// httpVerifyProfilePhoneNumber verifies a phone number with an OTP code.
 func (c *Client) httpVerifyProfilePhoneNumber(ctx context.Context, req *ProfilePhoneNumberVerifyRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfilePhoneNumberVerify, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_phone_number_verify", req)
 	if err != nil {
-		return &NetworkError{Operation: "VerifyProfilePhoneNumber", Err: err}
+		return wrapRequestError("VerifyProfilePhoneNumber", err)
 	}
 
 	defer drainClose(resp)
@@ -233,9 +190,9 @@ func (c *Client) httpDisableProfileTFA(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTFADisable, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_tfa_disable", nil)
 	if err != nil {
-		return &NetworkError{Operation: "DisableProfileTFA", Err: err}
+		return wrapRequestError("DisableProfileTFA", err)
 	}
 
 	defer drainClose(resp)
@@ -247,7 +204,7 @@ func (c *Client) httpDisableProfileTFA(ctx context.Context) error {
 	return nil
 }
 
-// httpConfirmProfileTFAEnable confirms two-factor authentication enablement for the profile.
+// httpConfirmProfileTFAEnable confirms two-factor authentication enablement.
 func (c *Client) httpConfirmProfileTFAEnable(ctx context.Context, req *ProfileTFAEnableConfirmRequest) (ProfileTFAEnableConfirmResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -256,9 +213,9 @@ func (c *Client) httpConfirmProfileTFAEnable(ctx context.Context, req *ProfileTF
 		req = &ProfileTFAEnableConfirmRequest{}
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileTFAEnableConfirm, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_tfa_enable_confirm", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ConfirmProfileTFAEnable", Err: err}
+		return nil, wrapRequestError("ConfirmProfileTFAEnable", err)
 	}
 
 	defer drainClose(resp)
@@ -271,24 +228,21 @@ func (c *Client) httpConfirmProfileTFAEnable(ctx context.Context, req *ProfileTF
 	return result, nil
 }
 
-// httpListProfileLoginsProto retrieves profile login history as proto messages
-// for the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListProfileLogins.
+// httpListProfileLoginsProto lists profile login history.
 func (c *Client) httpListProfileLoginsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountLogin, error) {
-	return listProtoElementsPaginated(ctx, c, "ListProfileLogins", endpointProfileLogins, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListProfileLogins",
+		"linode_profile_login_list", "", nil, page, pageSize,
 		func() *linodev1.AccountLogin { return &linodev1.AccountLogin{} })
 }
 
-// httpDeleteProfileToken revokes a personal access token for the authenticated profile.
+// httpDeleteProfileToken revokes one personal access token.
 func (c *Client) httpDeleteProfileToken(ctx context.Context, tokenID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileTokens + "/" + url.PathEscape(strconv.Itoa(tokenID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_token_delete", nil, tokenID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteProfileToken", Err: err}
+		return wrapRequestError("DeleteProfileToken", err)
 	}
 
 	defer drainClose(resp)
@@ -300,10 +254,8 @@ func (c *Client) httpDeleteProfileToken(ctx context.Context, tokenID int) error 
 	return nil
 }
 
-// httpUpdateProfileTokenProto updates one personal access token and decodes the
-// updated metadata into a proto message for the proto-backed write path. An
-// update never returns the token secret, so the metadata element carries no
-// secret field.
+// httpUpdateProfileTokenProto updates one personal access token. An update
+// never returns the secret, so the element carries metadata only.
 func (c *Client) httpUpdateProfileTokenProto(ctx context.Context, tokenID string, req UpdateProfileTokenRequest) (*linodev1.PersonalAccessToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -312,11 +264,9 @@ func (c *Client) httpUpdateProfileTokenProto(ctx context.Context, tokenID string
 		req = UpdateProfileTokenRequest{}
 	}
 
-	endpoint := endpointProfileTokens + "/" + url.PathEscape(tokenID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_token_update", req, tokenID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateProfileToken", Err: err}
+		return nil, wrapRequestError("UpdateProfileToken", err)
 	}
 
 	defer drainClose(resp)
@@ -329,17 +279,14 @@ func (c *Client) httpUpdateProfileTokenProto(ctx context.Context, tokenID string
 	return token, nil
 }
 
-// httpGetProfileLoginProto retrieves one profile login as a proto message (shared
-// AccountLogin shape).
+// httpGetProfileLoginProto retrieves one profile login (AccountLogin shape).
 func (c *Client) httpGetProfileLoginProto(ctx context.Context, loginID int) (*linodev1.AccountLogin, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileLogins + "/" + url.PathEscape(strconv.Itoa(loginID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_login_get", nil, loginID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfileLogin", Err: err}
+		return nil, wrapRequestError("GetProfileLogin", err)
 	}
 
 	defer drainClose(resp)
@@ -352,16 +299,14 @@ func (c *Client) httpGetProfileLoginProto(ctx context.Context, loginID int) (*li
 	return login, nil
 }
 
-// httpGetProfileApp retrieves one authorized OAuth app from the profile.
+// httpGetProfileApp retrieves one authorized OAuth app.
 func (c *Client) httpGetProfileApp(ctx context.Context, appID int) (*ProfileApp, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileApps + "/" + url.PathEscape(strconv.Itoa(appID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_app_get", nil, appID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfileApp", Err: err}
+		return nil, wrapRequestError("GetProfileApp", err)
 	}
 
 	defer drainClose(resp)
@@ -379,11 +324,9 @@ func (c *Client) httpGetProfileAppProto(ctx context.Context, appID int) (*linode
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileApps + "/" + url.PathEscape(strconv.Itoa(appID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_app_get", nil, appID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfileApp", Err: err}
+		return nil, wrapRequestError("GetProfileApp", err)
 	}
 
 	defer drainClose(resp)
@@ -396,16 +339,14 @@ func (c *Client) httpGetProfileAppProto(ctx context.Context, appID int) (*linode
 	return app, nil
 }
 
-// httpDeleteProfileApp revokes access for one OAuth app authorized on the profile.
+// httpDeleteProfileApp revokes access for one authorized OAuth app.
 func (c *Client) httpDeleteProfileApp(ctx context.Context, appID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileApps + "/" + url.PathEscape(strconv.Itoa(appID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_app_delete", nil, appID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteProfileApp", Err: err}
+		return wrapRequestError("DeleteProfileApp", err)
 	}
 
 	defer drainClose(resp)
@@ -417,16 +358,14 @@ func (c *Client) httpDeleteProfileApp(ctx context.Context, appID int) error {
 	return nil
 }
 
-// httpGetProfileDevice retrieves one trusted device from the profile.
+// httpGetProfileDevice retrieves one trusted device.
 func (c *Client) httpGetProfileDevice(ctx context.Context, deviceID int) (*ProfileDevice, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileDevices + "/" + url.PathEscape(strconv.Itoa(deviceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_device_get", nil, deviceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfileDevice", Err: err}
+		return nil, wrapRequestError("GetProfileDevice", err)
 	}
 
 	defer drainClose(resp)
@@ -439,17 +378,14 @@ func (c *Client) httpGetProfileDevice(ctx context.Context, deviceID int) (*Profi
 	return &device, nil
 }
 
-// httpGetProfileDeviceProto retrieves one trusted device from the profile and
-// decodes it into the TrustedDevice proto element for the proto-backed read path.
+// httpGetProfileDeviceProto retrieves one trusted device as a proto message.
 func (c *Client) httpGetProfileDeviceProto(ctx context.Context, deviceID int) (*linodev1.TrustedDevice, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileDevices + "/" + url.PathEscape(strconv.Itoa(deviceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_device_get", nil, deviceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfileDevice", Err: err}
+		return nil, wrapRequestError("GetProfileDevice", err)
 	}
 
 	defer drainClose(resp)
@@ -462,16 +398,14 @@ func (c *Client) httpGetProfileDeviceProto(ctx context.Context, deviceID int) (*
 	return device, nil
 }
 
-// httpDeleteProfileDevice revokes one trusted device from the profile.
+// httpDeleteProfileDevice revokes one trusted device.
 func (c *Client) httpDeleteProfileDevice(ctx context.Context, deviceID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileDevices + "/" + url.PathEscape(strconv.Itoa(deviceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_device_revoke", nil, deviceID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteProfileDevice", Err: err}
+		return wrapRequestError("DeleteProfileDevice", err)
 	}
 
 	defer drainClose(resp)
@@ -483,16 +417,14 @@ func (c *Client) httpDeleteProfileDevice(ctx context.Context, deviceID int) erro
 	return nil
 }
 
-// httpGetProfileGrants retrieves /profile/grants. Returns a Grants
-// struct for OAuth tokens; PATs return an empty payload by design (the
-// Linode API still returns 200 with zero-valued fields). Callers
-// distinguish PAT vs OAuth by checking Profile.Scopes != "" first; this
-// method does not need to know which token type the caller has.
+// httpGetProfileGrants retrieves the token's grants. A PAT gets a 200 with a
+// zero-valued payload by design; callers tell PAT from OAuth by checking
+// Profile.Scopes first, so this method does not need to know the token type.
 func (c *Client) httpGetProfileGrants(ctx context.Context) (*Grants, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfileGrants, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_grants_get", nil)
 	if err != nil {
 		return nil, &NetworkError{Operation: "GetProfileGrants", Err: err}
 	}
@@ -507,20 +439,15 @@ func (c *Client) httpGetProfileGrants(ctx context.Context) (*Grants, error) {
 	return &grants, nil
 }
 
-// httpGetProfileTokenProto retrieves one personal access token's metadata and
-// decodes it into the PersonalAccessToken proto element for the proto-backed
-// read path. The element models metadata only (id, label, scopes, created,
-// expiry) and no secret field, so any token value the API returns is dropped by
-// the DiscardUnknown decode.
+// httpGetProfileTokenProto retrieves one personal access token. The element
+// models metadata only, so any token value the API returns is dropped on decode.
 func (c *Client) httpGetProfileTokenProto(ctx context.Context, tokenID int) (*linodev1.PersonalAccessToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointProfileTokens + "/" + url.PathEscape(strconv.Itoa(tokenID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_token_get", nil, tokenID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfileToken", Err: err}
+		return nil, wrapRequestError("GetProfileToken", err)
 	}
 
 	defer drainClose(resp)
@@ -533,14 +460,14 @@ func (c *Client) httpGetProfileTokenProto(ctx context.Context, tokenID int) (*li
 	return token, nil
 }
 
-// httpAnswerProfileSecurityQuestions answers the authenticated user's security questions via POST /v4/profile/security-questions.
+// httpAnswerProfileSecurityQuestions answers the profile's security questions.
 func (c *Client) httpAnswerProfileSecurityQuestions(ctx context.Context, req *AnswerProfileSecurityQuestionsRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointProfileSecurityQuestions, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_security_question_answer", req)
 	if err != nil {
-		return &NetworkError{Operation: "AnswerProfileSecurityQuestions", Err: err}
+		return wrapRequestError("AnswerProfileSecurityQuestions", err)
 	}
 
 	defer drainClose(resp)
@@ -552,14 +479,14 @@ func (c *Client) httpAnswerProfileSecurityQuestions(ctx context.Context, req *An
 	return nil
 }
 
-// httpGetProfilePreferences retrieves /profile/preferences for the authenticated user.
+// httpGetProfilePreferences retrieves the profile's preferences.
 func (c *Client) httpGetProfilePreferences(ctx context.Context) (*ProfilePreferences, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointProfilePreferences, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_profile_preferences_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetProfilePreferences", Err: err}
+		return nil, wrapRequestError("GetProfilePreferences", err)
 	}
 
 	defer drainClose(resp)
@@ -572,22 +499,21 @@ func (c *Client) httpGetProfilePreferences(ctx context.Context) (*ProfilePrefere
 	return &preferences, nil
 }
 
-// httpListProfileAppsProto retrieves OAuth app authorizations as proto messages
-// for the proto-backed list path. page/page_size flow through withPaginationQuery,
-// so the request matches httpListProfileApps.
+// httpListProfileAppsProto lists OAuth app authorizations.
 func (c *Client) httpListProfileAppsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ProfileApp, error) {
-	return listProtoElementsPaginated(ctx, c, "ListProfileApps", endpointProfileApps, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListProfileApps",
+		"linode_profile_app_list", "", nil, page, pageSize,
 		func() *linodev1.ProfileApp { return &linodev1.ProfileApp{} })
 }
 
-// GetAccount retrieves the authenticated user's account information from the Linode API.
+// httpGetAccount retrieves the authenticated user's account.
 func (c *Client) httpGetAccount(ctx context.Context) (*Account, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccount, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccount", Err: err}
+		return nil, wrapRequestError("GetAccount", err)
 	}
 
 	defer drainClose(resp)
@@ -605,9 +531,9 @@ func (c *Client) httpGetAccountProto(ctx context.Context) (*linodev1.Account, er
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccount, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccount", Err: err}
+		return nil, wrapRequestError("GetAccount", err)
 	}
 
 	defer drainClose(resp)
@@ -620,14 +546,14 @@ func (c *Client) httpGetAccountProto(ctx context.Context) (*linodev1.Account, er
 	return account, nil
 }
 
-// httpUpdateAccountProto updates the account as a proto message.
+// httpUpdateAccountProto updates the account and returns it as a proto message.
 func (c *Client) httpUpdateAccountProto(ctx context.Context, req *UpdateAccountRequest) (*linodev1.Account, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpointAccount, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_update", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateAccount", Err: err}
+		return nil, wrapRequestError("UpdateAccount", err)
 	}
 
 	defer drainClose(resp)
@@ -640,14 +566,14 @@ func (c *Client) httpUpdateAccountProto(ctx context.Context, req *UpdateAccountR
 	return account, nil
 }
 
-// httpGetAccountTransferProto retrieves account transfer usage as a proto message.
+// httpGetAccountTransferProto retrieves account transfer usage.
 func (c *Client) httpGetAccountTransferProto(ctx context.Context) (*linodev1.AccountTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountTransfer, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_transfer_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountTransfer", Err: err}
+		return nil, wrapRequestError("GetAccountTransfer", err)
 	}
 
 	defer drainClose(resp)
@@ -660,14 +586,14 @@ func (c *Client) httpGetAccountTransferProto(ctx context.Context) (*linodev1.Acc
 	return transfer, nil
 }
 
-// httpGetAccountSettings retrieves account-wide settings from the Linode API.
+// httpGetAccountSettings retrieves account-wide settings.
 func (c *Client) httpGetAccountSettings(ctx context.Context) (*AccountSettings, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountSettings, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_settings_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountSettings", Err: err}
+		return nil, wrapRequestError("GetAccountSettings", err)
 	}
 
 	defer drainClose(resp)
@@ -680,14 +606,14 @@ func (c *Client) httpGetAccountSettings(ctx context.Context) (*AccountSettings, 
 	return &settings, nil
 }
 
-// httpGetAccountSettingsProto retrieves the account settings as a proto message.
+// httpGetAccountSettingsProto retrieves account settings as a proto message.
 func (c *Client) httpGetAccountSettingsProto(ctx context.Context) (*linodev1.AccountSettings, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountSettings, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_settings_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountSettings", Err: err}
+		return nil, wrapRequestError("GetAccountSettings", err)
 	}
 
 	defer drainClose(resp)
@@ -700,15 +626,14 @@ func (c *Client) httpGetAccountSettingsProto(ctx context.Context) (*linodev1.Acc
 	return settings, nil
 }
 
-// httpUpdateAccountSettingsProto updates account settings and decodes the
-// response into the proto AccountSettings element.
+// httpUpdateAccountSettingsProto updates account settings.
 func (c *Client) httpUpdateAccountSettingsProto(ctx context.Context, req *UpdateAccountSettingsRequest) (*linodev1.AccountSettings, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpointAccountSettings, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_settings_update", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateAccountSettings", Err: err}
+		return nil, wrapRequestError("UpdateAccountSettings", err)
 	}
 
 	defer drainClose(resp)
@@ -721,14 +646,14 @@ func (c *Client) httpUpdateAccountSettingsProto(ctx context.Context, req *Update
 	return settings, nil
 }
 
-// httpEnableAccountManaged enables Linode Managed for the account via POST /v4/account/settings/managed-enable.
+// httpEnableAccountManaged enables Linode Managed for the account.
 func (c *Client) httpEnableAccountManaged(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountSettingsManagedEnable, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_settings_managed_enable", nil)
 	if err != nil {
-		return &NetworkError{Operation: "EnableAccountManaged", Err: err}
+		return wrapRequestError("EnableAccountManaged", err)
 	}
 
 	defer drainClose(resp)
@@ -740,27 +665,22 @@ func (c *Client) httpEnableAccountManaged(ctx context.Context) error {
 	return nil
 }
 
-// httpListManagedCredentialsProto retrieves stored managed credentials as proto
-// messages for the proto-backed list path. page/page_size flows through
-// withPaginationQuery, so the request matches httpListManagedCredentials. The
-// secret material is write-only and never present in the list body.
+// httpListManagedCredentialsProto lists stored Managed credentials. The secret
+// material is write-only and never present in the list body.
 func (c *Client) httpListManagedCredentialsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedCredential, error) {
-	return listProtoElementsPaginated(ctx, c, "ListManagedCredentials", endpointManagedCredentials, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListManagedCredentials",
+		"linode_managed_credential_list", "", nil, page, pageSize,
 		func() *linodev1.ManagedCredential { return &linodev1.ManagedCredential{} })
 }
 
-// httpUpdateManagedCredentialProto updates one stored Managed credential's label
-// and decodes the response into the proto element so the write tool emits the
-// same field set as the credential GET/LIST path.
+// httpUpdateManagedCredentialProto updates one stored Managed credential's label.
 func (c *Client) httpUpdateManagedCredentialProto(ctx context.Context, credentialID int, req UpdateManagedCredentialRequest) (*linodev1.ManagedCredential, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_credential_update", req, credentialID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedCredential", Err: err}
+		return nil, wrapRequestError("UpdateManagedCredential", err)
 	}
 
 	defer drainClose(resp)
@@ -773,16 +693,15 @@ func (c *Client) httpUpdateManagedCredentialProto(ctx context.Context, credentia
 	return credential, nil
 }
 
-// httpUpdateManagedCredentialUsernamePassword updates one stored Managed credential's username and password.
+// httpUpdateManagedCredentialUsernamePassword updates one stored Managed
+// credential's username and password.
 func (c *Client) httpUpdateManagedCredentialUsernamePassword(ctx context.Context, credentialID int, req *UpdateManagedCredentialUsernamePasswordRequest) (*ManagedCredential, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID)) + "/update"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_credential_username_password_update", req, credentialID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedCredentialUsernamePassword", Err: err}
+		return nil, wrapRequestError("UpdateManagedCredentialUsernamePassword", err)
 	}
 
 	defer drainClose(resp)
@@ -795,15 +714,14 @@ func (c *Client) httpUpdateManagedCredentialUsernamePassword(ctx context.Context
 	return &credential, nil
 }
 
-// httpGetManagedSSHKeyProto retrieves the Managed SSH public key assigned to the
-// account and decodes it into the ManagedSSHKey proto element.
+// httpGetManagedSSHKeyProto retrieves the account's Managed SSH public key.
 func (c *Client) httpGetManagedSSHKeyProto(ctx context.Context) (*linodev1.ManagedSSHKey, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointManagedCredentialsSSHKey, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_sshkey_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedSSHKey", Err: err}
+		return nil, wrapRequestError("GetManagedSSHKey", err)
 	}
 
 	defer drainClose(resp)
@@ -816,16 +734,15 @@ func (c *Client) httpGetManagedSSHKeyProto(ctx context.Context) (*linodev1.Manag
 	return sshKey, nil
 }
 
-// httpCreateManagedCredentialProto creates a stored Managed credential and decodes
-// the response into the proto element so the write tool emits the same field set
-// as the credential GET/LIST path (the secret is never echoed).
+// httpCreateManagedCredentialProto creates a stored Managed credential. The
+// response never echoes the secret.
 func (c *Client) httpCreateManagedCredentialProto(ctx context.Context, request *CreateManagedCredentialRequest) (*linodev1.ManagedCredential, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedCredentials, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_credential_create", request)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateManagedCredential", Err: err}
+		return nil, wrapRequestError("CreateManagedCredential", err)
 	}
 
 	defer drainClose(resp)
@@ -838,16 +755,14 @@ func (c *Client) httpCreateManagedCredentialProto(ctx context.Context, request *
 	return credential, nil
 }
 
-// httpGetManagedCredential retrieves one stored managed credential.
+// httpGetManagedCredential retrieves one stored Managed credential.
 func (c *Client) httpGetManagedCredential(ctx context.Context, credentialID int) (*ManagedCredential, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_credential_get", nil, credentialID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedCredential", Err: err}
+		return nil, wrapRequestError("GetManagedCredential", err)
 	}
 
 	defer drainClose(resp)
@@ -860,16 +775,14 @@ func (c *Client) httpGetManagedCredential(ctx context.Context, credentialID int)
 	return &credential, nil
 }
 
-// httpGetManagedCredentialProto retrieves a Managed credential as a proto message.
+// httpGetManagedCredentialProto retrieves one Managed credential.
 func (c *Client) httpGetManagedCredentialProto(ctx context.Context, credentialID int) (*linodev1.ManagedCredential, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_credential_get", nil, credentialID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedCredential", Err: err}
+		return nil, wrapRequestError("GetManagedCredential", err)
 	}
 
 	defer drainClose(resp)
@@ -882,16 +795,14 @@ func (c *Client) httpGetManagedCredentialProto(ctx context.Context, credentialID
 	return credential, nil
 }
 
-// httpRevokeManagedCredential revokes one stored managed credential.
+// httpRevokeManagedCredential revokes one stored Managed credential.
 func (c *Client) httpRevokeManagedCredential(ctx context.Context, credentialID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedCredentials + "/" + url.PathEscape(strconv.Itoa(credentialID)) + "/revoke"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_credential_revoke", nil, credentialID)
 	if err != nil {
-		return &NetworkError{Operation: "RevokeManagedCredential", Err: err}
+		return wrapRequestError("RevokeManagedCredential", err)
 	}
 
 	defer drainClose(resp)
@@ -903,16 +814,15 @@ func (c *Client) httpRevokeManagedCredential(ctx context.Context, credentialID i
 	return nil
 }
 
-// httpGetAccountAgreementsProto retrieves account agreement acknowledgment status
-// as a proto message. The endpoint returns a flat object of bool flags, decoded
-// into AccountAgreements.
+// httpGetAccountAgreementsProto retrieves agreement acknowledgment status. The
+// endpoint returns a flat object of bool flags, not a list.
 func (c *Client) httpGetAccountAgreementsProto(ctx context.Context) (*linodev1.AccountAgreements, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointAccountAgreements, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_agreement_list", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountAgreements", Err: err}
+		return nil, wrapRequestError("GetAccountAgreements", err)
 	}
 
 	defer drainClose(resp)
@@ -925,73 +835,61 @@ func (c *Client) httpGetAccountAgreementsProto(ctx context.Context) (*linodev1.A
 	return agreements, nil
 }
 
-// httpListAccountMaintenanceProto retrieves account maintenance records as proto
-// messages for the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountMaintenance.
+// httpListAccountMaintenanceProto lists account maintenance records.
 func (c *Client) httpListAccountMaintenanceProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountMaintenance, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountMaintenance", endpointAccountMaintenance, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountMaintenance",
+		"linode_account_maintenance_list", "", nil, page, pageSize,
 		func() *linodev1.AccountMaintenance { return &linodev1.AccountMaintenance{} })
 }
 
-// httpListMaintenancePoliciesProto retrieves maintenance policies as proto
-// messages for the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListMaintenancePolicies.
+// httpListMaintenancePoliciesProto lists maintenance policies.
 func (c *Client) httpListMaintenancePoliciesProto(ctx context.Context, page, pageSize int) ([]*linodev1.MaintenancePolicy, error) {
-	return listProtoElementsPaginated(ctx, c, "ListMaintenancePolicies", endpointMaintenancePolicies, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListMaintenancePolicies",
+		"linode_maintenance_policy_list", "", nil, page, pageSize,
 		func() *linodev1.MaintenancePolicy { return &linodev1.MaintenancePolicy{} })
 }
 
-// httpListAccountNotificationsProto retrieves account notifications as proto
-// messages for the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountNotifications.
+// httpListAccountNotificationsProto lists account notifications.
 func (c *Client) httpListAccountNotificationsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountNotification, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountNotifications", endpointAccountNotifications, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountNotifications",
+		"linode_account_notification_list", "", nil, page, pageSize,
 		func() *linodev1.AccountNotification { return &linodev1.AccountNotification{} })
 }
 
-// httpListProfileDevicesProto retrieves trusted devices as proto messages for the
-// proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListProfileDevices.
-//
-// The list names the browsers holding a live Remember Me session, so a body the
-// lenient decode path would report as zero devices is a wrong answer a caller
-// acts on. It decodes through the required-data path to fail closed on a missing
-// or null data member, matching what the Python client already does.
+// httpListProfileDevicesProto lists trusted devices. It decodes through the
+// required-data path so a missing or null data member fails instead of reporting
+// zero live Remember Me sessions, matching what the Python client does.
 func (c *Client) httpListProfileDevicesProto(ctx context.Context, page, pageSize int) ([]*linodev1.TrustedDevice, error) {
-	return listProtoElementsPaginatedRequiredData(ctx, c, "ListProfileDevices", endpointProfileDevices, page, pageSize,
+	return listProtoElementsPaginatedRequiredDataRouted(ctx, c, "ListProfileDevices",
+		"linode_profile_device_list", "", nil, page, pageSize,
 		func() *linodev1.TrustedDevice { return &linodev1.TrustedDevice{} })
 }
 
-// httpListProfileTokensProto retrieves personal access token metadata as proto
-// messages for the proto-backed list path. The proto PersonalAccessToken models
-// no secret field, so any token value the API returns is dropped on decode and
-// the list never leaks a token. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListProfileTokens.
+// httpListProfileTokensProto lists personal access token metadata. The proto
+// models no secret field, so a token value the API returns is dropped on decode.
 func (c *Client) httpListProfileTokensProto(ctx context.Context, page, pageSize int) ([]*linodev1.PersonalAccessToken, error) {
-	return listProtoElementsPaginated(ctx, c, "ListProfileTokens", endpointProfileTokens, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListProfileTokens",
+		"linode_profile_token_list", "", nil, page, pageSize,
 		func() *linodev1.PersonalAccessToken { return &linodev1.PersonalAccessToken{} })
 }
 
-// httpListProfileSecurityQuestionsProto retrieves the profile security questions
-// as proto messages. The endpoint is not paginated and wraps its elements under
-// "security_questions" rather than the usual {data} page envelope, so this reads
-// that key via listProtoElementsKeyed.
+// httpListProfileSecurityQuestionsProto lists the profile security questions.
+// The endpoint is not paginated and wraps its elements under
+// "security_questions" rather than the usual {data} page envelope.
 func (c *Client) httpListProfileSecurityQuestionsProto(ctx context.Context) ([]*linodev1.SecurityQuestion, error) {
-	return listProtoElementsKeyed(ctx, c, "ListProfileSecurityQuestions", endpointProfileSecurityQuestions, "security_questions",
+	return listProtoElementsKeyedRouted(ctx, c, "ListProfileSecurityQuestions",
+		"linode_profile_security_question_list", "", "security_questions", nil,
 		func() *linodev1.SecurityQuestion { return &linodev1.SecurityQuestion{} })
 }
 
-// httpGetAccountAvailabilityProto retrieves one region's account availability as a
-// proto message.
+// httpGetAccountAvailabilityProto retrieves one region's account availability.
 func (c *Client) httpGetAccountAvailabilityProto(ctx context.Context, regionID string) (*linodev1.AccountAvailability, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountAvailability + "/" + url.PathEscape(regionID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_availability_get", nil, regionID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountAvailability", Err: err}
+		return nil, wrapRequestError("GetAccountAvailability", err)
 	}
 
 	defer drainClose(resp)
@@ -1004,32 +902,28 @@ func (c *Client) httpGetAccountAvailabilityProto(ctx context.Context, regionID s
 	return availability, nil
 }
 
-// httpListAccountAvailabilityProto retrieves account service availability as
-// proto messages for the proto-backed list path. The page/page_size pair flows
-// through withPaginationQuery, so the request matches httpListAccountAvailability.
+// httpListAccountAvailabilityProto lists account service availability by region.
 func (c *Client) httpListAccountAvailabilityProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountAvailability, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountAvailability", endpointAccountAvailability, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountAvailability",
+		"linode_account_availability_list", "", nil, page, pageSize,
 		func() *linodev1.AccountAvailability { return &linodev1.AccountAvailability{} })
 }
 
-// httpListBetasProto retrieves available beta programs as proto messages for the
-// proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListBetas.
+// httpListBetasProto lists available beta programs.
 func (c *Client) httpListBetasProto(ctx context.Context, page, pageSize int) ([]*linodev1.BetaProgram, error) {
-	return listProtoElementsPaginated(ctx, c, "ListBetas", endpointBetas, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListBetas",
+		"linode_beta_list", "", nil, page, pageSize,
 		func() *linodev1.BetaProgram { return &linodev1.BetaProgram{} })
 }
 
-// httpGetBetaProto retrieves one available beta program as a proto message.
+// httpGetBetaProto retrieves one available beta program.
 func (c *Client) httpGetBetaProto(ctx context.Context, betaID string) (*linodev1.BetaProgram, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointBetas + "/" + url.PathEscape(betaID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_beta_get", nil, betaID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetBeta", Err: err}
+		return nil, wrapRequestError("GetBeta", err)
 	}
 
 	defer drainClose(resp)
@@ -1042,47 +936,40 @@ func (c *Client) httpGetBetaProto(ctx context.Context, betaID string) (*linodev1
 	return beta, nil
 }
 
-// httpListAccountBetasProto retrieves enrolled account beta programs as proto
-// messages for the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountBetas.
+// httpListAccountBetasProto lists beta programs the account is enrolled in.
 func (c *Client) httpListAccountBetasProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountBetaProgram, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountBetas", endpointAccountBetas, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountBetas",
+		"linode_account_beta_list", "", nil, page, pageSize,
 		func() *linodev1.AccountBetaProgram { return &linodev1.AccountBetaProgram{} })
 }
 
-// httpListAccountOAuthClientsProto retrieves OAuth clients for the account as
-// proto messages for the proto-backed list path. The page/page_size pair flows
-// through withPaginationQuery, so the request matches httpListAccountOAuthClients.
+// httpListAccountOAuthClientsProto lists the account's OAuth clients.
 func (c *Client) httpListAccountOAuthClientsProto(ctx context.Context, page, pageSize int) ([]*linodev1.OAuthClient, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountOAuthClients", endpointAccountOAuthClients, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountOAuthClients",
+		"linode_account_oauth_client_list", "", nil, page, pageSize,
 		func() *linodev1.OAuthClient { return &linodev1.OAuthClient{} })
 }
 
-// httpListLongviewClientsProto retrieves Longview clients as proto messages for
-// the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListLongviewClients.
+// httpListLongviewClientsProto lists Longview clients.
 func (c *Client) httpListLongviewClientsProto(ctx context.Context, page, pageSize int) ([]*linodev1.LongviewClient, error) {
-	return listProtoElementsPaginated(ctx, c, "ListLongviewClients", endpointLongviewClients, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListLongviewClients",
+		"linode_longview_client_list", "", nil, page, pageSize,
 		func() *linodev1.LongviewClient { return &linodev1.LongviewClient{} })
 }
 
-// UpdateLongviewClientProto updates one Longview client and returns the proto
-// LongviewClient metadata element.
+// UpdateLongviewClientProto updates one Longview client.
 func (c *Client) UpdateLongviewClientProto(ctx context.Context, clientID int, req *UpdateLongviewClientRequest) (*linodev1.LongviewClient, error) {
 	return c.httpUpdateLongviewClientProto(ctx, clientID, req)
 }
 
-// httpUpdateLongviewClientProto updates one Longview client and decodes the
-// response into the proto LongviewClient element.
+// httpUpdateLongviewClientProto updates one Longview client.
 func (c *Client) httpUpdateLongviewClientProto(ctx context.Context, clientID int, req *UpdateLongviewClientRequest) (*linodev1.LongviewClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointLongviewClients + "/" + url.PathEscape(strconv.Itoa(clientID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_client_update", req, clientID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateLongviewClient", Err: err}
+		return nil, wrapRequestError("UpdateLongviewClient", err)
 	}
 
 	defer drainClose(resp)
@@ -1100,11 +987,9 @@ func (c *Client) httpDeleteLongviewClient(ctx context.Context, clientID int) err
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointLongviewClients + "/" + url.PathEscape(strconv.Itoa(clientID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_longview_client_delete", nil, clientID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteLongviewClient", Err: err}
+		return wrapRequestError("DeleteLongviewClient", err)
 	}
 
 	defer drainClose(resp)
@@ -1117,11 +1002,9 @@ func (c *Client) httpGetAccountPaymentMethod(ctx context.Context, paymentMethodI
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountPaymentMethods + "/" + url.PathEscape(paymentMethodID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_payment_method_get", nil, paymentMethodID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountPaymentMethod", Err: err}
+		return nil, wrapRequestError("GetAccountPaymentMethod", err)
 	}
 
 	defer drainClose(resp)
@@ -1134,18 +1017,15 @@ func (c *Client) httpGetAccountPaymentMethod(ctx context.Context, paymentMethodI
 	return &method, nil
 }
 
-// httpGetAccountPaymentMethodProto retrieves one account payment method and
-// decodes it into the proto AccountPaymentMethod element for the proto-backed
-// read path. The polymorphic data object rides through the element's Struct field.
+// httpGetAccountPaymentMethodProto retrieves one payment method. The
+// polymorphic data object rides through the element's Struct field.
 func (c *Client) httpGetAccountPaymentMethodProto(ctx context.Context, paymentMethodID string) (*linodev1.AccountPaymentMethod, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountPaymentMethods + "/" + url.PathEscape(paymentMethodID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_payment_method_get", nil, paymentMethodID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountPaymentMethod", Err: err}
+		return nil, wrapRequestError("GetAccountPaymentMethod", err)
 	}
 
 	defer drainClose(resp)
@@ -1158,21 +1038,19 @@ func (c *Client) httpGetAccountPaymentMethodProto(ctx context.Context, paymentMe
 	return method, nil
 }
 
-// CreateAccountPaymentMethodProto adds a payment method and returns the proto
-// AccountPaymentMethod element.
+// CreateAccountPaymentMethodProto adds a payment method to the account.
 func (c *Client) CreateAccountPaymentMethodProto(ctx context.Context, req *CreateAccountPaymentMethodRequest) (*linodev1.AccountPaymentMethod, error) {
 	return c.httpCreateAccountPaymentMethodProto(ctx, req)
 }
 
-// httpCreateAccountPaymentMethodProto adds a payment method and decodes the
-// response into the proto AccountPaymentMethod element.
+// httpCreateAccountPaymentMethodProto adds a payment method to the account.
 func (c *Client) httpCreateAccountPaymentMethodProto(ctx context.Context, req *CreateAccountPaymentMethodRequest) (*linodev1.AccountPaymentMethod, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountPaymentMethods, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_payment_method_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountPaymentMethod", Err: err}
+		return nil, wrapRequestError("CreateAccountPaymentMethod", err)
 	}
 
 	defer drainClose(resp)
@@ -1190,11 +1068,9 @@ func (c *Client) httpDeleteAccountPaymentMethod(ctx context.Context, paymentMeth
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountPaymentMethods + "/" + url.PathEscape(paymentMethodID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_payment_method_delete", nil, paymentMethodID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteAccountPaymentMethod", Err: err}
+		return wrapRequestError("DeleteAccountPaymentMethod", err)
 	}
 
 	defer drainClose(resp)
@@ -1206,11 +1082,9 @@ func (c *Client) httpMakeAccountPaymentMethodDefault(ctx context.Context, paymen
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountPaymentMethods + "/" + url.PathEscape(paymentMethodID) + "/make-default"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_payment_method_make_default", nil, paymentMethodID)
 	if err != nil {
-		return &NetworkError{Operation: "MakeAccountPaymentMethodDefault", Err: err}
+		return wrapRequestError("MakeAccountPaymentMethodDefault", err)
 	}
 
 	defer drainClose(resp)
@@ -1223,11 +1097,9 @@ func (c *Client) httpGetAccountOAuthClient(ctx context.Context, clientID string)
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_oauth_client_get", nil, clientID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountOAuthClient", Err: err}
+		return nil, wrapRequestError("GetAccountOAuthClient", err)
 	}
 
 	defer drainClose(resp)
@@ -1245,11 +1117,9 @@ func (c *Client) httpGetAccountOAuthClientProto(ctx context.Context, clientID st
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_oauth_client_get", nil, clientID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountOAuthClient", Err: err}
+		return nil, wrapRequestError("GetAccountOAuthClient", err)
 	}
 
 	defer drainClose(resp)
@@ -1262,17 +1132,15 @@ func (c *Client) httpGetAccountOAuthClientProto(ctx context.Context, clientID st
 	return oauthClient, nil
 }
 
-// httpUpdateOAuthClientProto updates one OAuth client and decodes the response
-// into the proto OAuthClient element (the metadata element, no secret).
+// httpUpdateOAuthClientProto updates one OAuth client. The response element
+// carries metadata only, no secret.
 func (c *Client) httpUpdateOAuthClientProto(ctx context.Context, clientID string, req *UpdateOAuthClientRequest) (*linodev1.OAuthClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_oauth_client_update", req, clientID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateOAuthClient", Err: err}
+		return nil, wrapRequestError("UpdateOAuthClient", err)
 	}
 
 	defer drainClose(resp)
@@ -1285,16 +1153,15 @@ func (c *Client) httpUpdateOAuthClientProto(ctx context.Context, clientID string
 	return client, nil
 }
 
-// httpUpdateOAuthClientThumbnail updates one OAuth client's thumbnail by ID.
+// httpUpdateOAuthClientThumbnail replaces one OAuth client's thumbnail PNG.
 func (c *Client) httpUpdateOAuthClientThumbnail(ctx context.Context, clientID string, thumbnailPNG []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID) + "/thumbnail"
-
-	resp, err := c.makeRequestWithContentType(ctx, http.MethodPut, endpoint, bytes.NewReader(thumbnailPNG), contentTypePNG)
+	resp, err := c.makeRouteRequestContentType(ctx, "linode_account_oauth_client_thumbnail_update",
+		contentTypePNG, bytes.NewReader(thumbnailPNG), clientID)
 	if err != nil {
-		return &NetworkError{Operation: "UpdateOAuthClientThumbnail", Err: err}
+		return wrapRequestError("UpdateOAuthClientThumbnail", err)
 	}
 
 	defer drainClose(resp)
@@ -1302,16 +1169,14 @@ func (c *Client) httpUpdateOAuthClientThumbnail(ctx context.Context, clientID st
 	return c.handleResponse(resp, nil)
 }
 
-// httpGetOAuthClientThumbnail retrieves one OAuth client's thumbnail by ID as raw PNG bytes.
+// httpGetOAuthClientThumbnail retrieves one OAuth client's thumbnail PNG bytes.
 func (c *Client) httpGetOAuthClientThumbnail(ctx context.Context, clientID string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID) + "/thumbnail"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_oauth_client_thumbnail_get", nil, clientID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetOAuthClientThumbnail", Err: err}
+		return nil, wrapRequestError("GetOAuthClientThumbnail", err)
 	}
 
 	defer drainClose(resp)
@@ -1342,11 +1207,9 @@ func (c *Client) httpDeleteAccountOAuthClient(ctx context.Context, clientID stri
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_oauth_client_delete", nil, clientID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteAccountOAuthClient", Err: err}
+		return wrapRequestError("DeleteAccountOAuthClient", err)
 	}
 
 	defer drainClose(resp)
@@ -1354,17 +1217,14 @@ func (c *Client) httpDeleteAccountOAuthClient(ctx context.Context, clientID stri
 	return c.handleResponse(resp, nil)
 }
 
-// httpResetOAuthClientSecretProto resets an OAuth client secret and decodes the
-// response into the proto OAuthClientSecret element.
+// httpResetOAuthClientSecretProto resets one OAuth client's secret.
 func (c *Client) httpResetOAuthClientSecretProto(ctx context.Context, clientID string) (*linodev1.OAuthClientSecret, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountOAuthClients + "/" + url.PathEscape(clientID) + "/reset-secret"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_oauth_client_secret_reset", nil, clientID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ResetOAuthClientSecret", Err: err}
+		return nil, wrapRequestError("ResetOAuthClientSecret", err)
 	}
 
 	defer drainClose(resp)
@@ -1377,19 +1237,17 @@ func (c *Client) httpResetOAuthClientSecretProto(ctx context.Context, clientID s
 	return secret, nil
 }
 
-// httpListAccountEventsProto retrieves account events as proto messages for the
-// proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountEvents.
+// httpListAccountEventsProto lists account events.
 func (c *Client) httpListAccountEventsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountEvent, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountEvents", endpointAccountEvents, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountEvents",
+		"linode_account_event_list", "", nil, page, pageSize,
 		func() *linodev1.AccountEvent { return &linodev1.AccountEvent{} })
 }
 
-// httpListAccountUsersProto retrieves account users as proto messages for the
-// proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountUsers.
+// httpListAccountUsersProto lists account users.
 func (c *Client) httpListAccountUsersProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountUser, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountUsers", endpointAccountUsers, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountUsers",
+		"linode_account_user_list", "", nil, page, pageSize,
 		func() *linodev1.AccountUser { return &linodev1.AccountUser{} })
 }
 
@@ -1398,11 +1256,9 @@ func (c *Client) httpGetAccountUser(ctx context.Context, username string) (*Acco
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_user_get", nil, username)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountUser", Err: err}
+		return nil, wrapRequestError("GetAccountUser", err)
 	}
 
 	defer drainClose(resp)
@@ -1420,11 +1276,9 @@ func (c *Client) httpGetAccountUserProto(ctx context.Context, username string) (
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_user_get", nil, username)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountUser", Err: err}
+		return nil, wrapRequestError("GetAccountUser", err)
 	}
 
 	defer drainClose(resp)
@@ -1442,11 +1296,9 @@ func (c *Client) httpGetAccountUserGrants(ctx context.Context, username string) 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username) + "/grants"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_user_grants_get", nil, username)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountUserGrants", Err: err}
+		return nil, wrapRequestError("GetAccountUserGrants", err)
 	}
 
 	defer drainClose(resp)
@@ -1459,19 +1311,16 @@ func (c *Client) httpGetAccountUserGrants(ctx context.Context, username string) 
 	return &grants, nil
 }
 
-// httpGetAccountUserGrantsProto retrieves one account user's grants and decodes
-// them into the proto AccountUserGrants element for the proto-backed read path.
-// The API omits grant sections the user has none of; protojson leaves those
-// repeated fields empty so the canonical output normalizes them to [].
+// httpGetAccountUserGrantsProto retrieves one account user's grants. The API
+// omits grant sections the user has none of; protojson leaves those repeated
+// fields empty, so the canonical output normalizes them to [].
 func (c *Client) httpGetAccountUserGrantsProto(ctx context.Context, username string) (*linodev1.AccountUserGrants, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username) + "/grants"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_user_grants_get", nil, username)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountUserGrants", Err: err}
+		return nil, wrapRequestError("GetAccountUserGrants", err)
 	}
 
 	defer drainClose(resp)
@@ -1484,15 +1333,14 @@ func (c *Client) httpGetAccountUserGrantsProto(ctx context.Context, username str
 	return grants, nil
 }
 
-// httpCreateAccountUserProto creates a user and decodes the response into the
-// proto AccountUser element.
+// httpCreateAccountUserProto creates an account user.
 func (c *Client) httpCreateAccountUserProto(ctx context.Context, request *CreateAccountUserRequest) (*linodev1.AccountUser, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountUsers, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_user_create", request)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountUser", Err: err}
+		return nil, wrapRequestError("CreateAccountUser", err)
 	}
 
 	defer drainClose(resp)
@@ -1505,17 +1353,14 @@ func (c *Client) httpCreateAccountUserProto(ctx context.Context, request *Create
 	return user, nil
 }
 
-// httpUpdateAccountUserProto updates one account user by username and decodes the
-// response into the proto AccountUser element.
+// httpUpdateAccountUserProto updates one account user by username.
 func (c *Client) httpUpdateAccountUserProto(ctx context.Context, username string, request *UpdateAccountUserRequest) (*linodev1.AccountUser, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_user_update", request, username)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateAccountUser", Err: err}
+		return nil, wrapRequestError("UpdateAccountUser", err)
 	}
 
 	defer drainClose(resp)
@@ -1528,17 +1373,14 @@ func (c *Client) httpUpdateAccountUserProto(ctx context.Context, username string
 	return user, nil
 }
 
-// httpUpdateAccountUserGrantsProto updates one account user's grants and decodes
-// the response into the proto AccountUserGrants element.
+// httpUpdateAccountUserGrantsProto updates one account user's grants.
 func (c *Client) httpUpdateAccountUserGrantsProto(ctx context.Context, username string, request *UpdateAccountUserGrantsRequest) (*linodev1.AccountUserGrants, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username) + "/grants"
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_user_grants_update", request, username)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateAccountUserGrants", Err: err}
+		return nil, wrapRequestError("UpdateAccountUserGrants", err)
 	}
 
 	defer drainClose(resp)
@@ -1556,11 +1398,9 @@ func (c *Client) httpDeleteAccountUser(ctx context.Context, username string) err
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountUsers + "/" + url.PathEscape(username)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_user_delete", nil, username)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteAccountUser", Err: err}
+		return wrapRequestError("DeleteAccountUser", err)
 	}
 
 	defer drainClose(resp)
@@ -1568,24 +1408,21 @@ func (c *Client) httpDeleteAccountUser(ctx context.Context, username string) err
 	return c.handleResponse(resp, nil)
 }
 
-// httpListAccountLoginsProto retrieves account logins as proto messages for the
-// proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountLogins.
+// httpListAccountLoginsProto lists account logins.
 func (c *Client) httpListAccountLoginsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountLogin, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountLogins", endpointAccountLogins, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountLogins",
+		"linode_account_login_list", "", nil, page, pageSize,
 		func() *linodev1.AccountLogin { return &linodev1.AccountLogin{} })
 }
 
-// httpGetAccountLoginProto retrieves one account login as a proto message.
+// httpGetAccountLoginProto retrieves one account login.
 func (c *Client) httpGetAccountLoginProto(ctx context.Context, loginID int) (*linodev1.AccountLogin, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountLogins + "/" + url.PathEscape(strconv.Itoa(loginID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_login_get", nil, loginID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountLogin", Err: err}
+		return nil, wrapRequestError("GetAccountLogin", err)
 	}
 
 	defer drainClose(resp)
@@ -1598,32 +1435,28 @@ func (c *Client) httpGetAccountLoginProto(ctx context.Context, loginID int) (*li
 	return login, nil
 }
 
-// httpListAccountInvoicesProto retrieves account invoices as proto messages for
-// the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountInvoices.
+// httpListAccountInvoicesProto lists account invoices.
 func (c *Client) httpListAccountInvoicesProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountInvoice, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountInvoices", endpointAccountInvoices, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountInvoices",
+		"linode_account_invoice_list", "", nil, page, pageSize,
 		func() *linodev1.AccountInvoice { return &linodev1.AccountInvoice{} })
 }
 
-// httpListAccountPaymentsProto retrieves account payments as proto messages for
-// the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountPayments.
+// httpListAccountPaymentsProto lists account payments.
 func (c *Client) httpListAccountPaymentsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountPayment, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountPayments", endpointAccountPayments, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountPayments",
+		"linode_account_payment_list", "", nil, page, pageSize,
 		func() *linodev1.AccountPayment { return &linodev1.AccountPayment{} })
 }
 
-// httpGetAccountPaymentProto retrieves one account payment as a proto message.
+// httpGetAccountPaymentProto retrieves one account payment.
 func (c *Client) httpGetAccountPaymentProto(ctx context.Context, paymentID int) (*linodev1.AccountPayment, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountPayments + "/" + url.PathEscape(strconv.Itoa(paymentID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_payment_get", nil, paymentID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountPayment", Err: err}
+		return nil, wrapRequestError("GetAccountPayment", err)
 	}
 
 	defer drainClose(resp)
@@ -1636,21 +1469,19 @@ func (c *Client) httpGetAccountPaymentProto(ctx context.Context, paymentID int) 
 	return payment, nil
 }
 
-// CreateAccountPaymentProto makes an account payment and returns the proto
-// AccountPayment element.
+// CreateAccountPaymentProto makes a payment against the account.
 func (c *Client) CreateAccountPaymentProto(ctx context.Context, req *CreateAccountPaymentRequest) (*linodev1.AccountPayment, error) {
 	return c.httpCreateAccountPaymentProto(ctx, req)
 }
 
-// httpCreateAccountPaymentProto makes an account payment and decodes the
-// response into the proto AccountPayment element.
+// httpCreateAccountPaymentProto makes a payment against the account.
 func (c *Client) httpCreateAccountPaymentProto(ctx context.Context, req *CreateAccountPaymentRequest) (*linodev1.AccountPayment, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountPayments, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_payment_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountPayment", Err: err}
+		return nil, wrapRequestError("CreateAccountPayment", err)
 	}
 
 	defer drainClose(resp)
@@ -1663,16 +1494,14 @@ func (c *Client) httpCreateAccountPaymentProto(ctx context.Context, req *CreateA
 	return payment, nil
 }
 
-// httpGetAccountInvoiceProto retrieves one account invoice as a proto message.
+// httpGetAccountInvoiceProto retrieves one account invoice.
 func (c *Client) httpGetAccountInvoiceProto(ctx context.Context, invoiceID int) (*linodev1.AccountInvoice, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountInvoices + "/" + strconv.Itoa(invoiceID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_invoice_get", nil, invoiceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountInvoice", Err: err}
+		return nil, wrapRequestError("GetAccountInvoice", err)
 	}
 
 	defer drainClose(resp)
@@ -1685,55 +1514,44 @@ func (c *Client) httpGetAccountInvoiceProto(ctx context.Context, invoiceID int) 
 	return invoice, nil
 }
 
-// httpListAccountPaymentMethodsProto retrieves account payment methods as proto
-// messages for the proto-backed list path. The payment method data sub-object is
-// modeled as a google.protobuf.Struct, so whatever object the API returns per
-// payment method type round-trips intact. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountPaymentMethods.
+// httpListAccountPaymentMethodsProto lists account payment methods. The data
+// sub-object is a google.protobuf.Struct, so whatever object the API returns
+// per payment method type round-trips intact.
 func (c *Client) httpListAccountPaymentMethodsProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountPaymentMethod, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountPaymentMethods", endpointAccountPaymentMethods, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountPaymentMethods",
+		"linode_account_payment_method_list", "", nil, page, pageSize,
 		func() *linodev1.AccountPaymentMethod { return &linodev1.AccountPaymentMethod{} })
 }
 
-// httpListAccountInvoiceItemsProto retrieves an invoice's line items as proto
-// messages for the proto-backed list path. The invoice id is formatted into the
-// endpoint the same way httpListAccountInvoiceItems does, then
-// listProtoElementsPaginated adds page/page_size via withPaginationQuery, so the
-// runtime request matches exactly.
+// httpListAccountInvoiceItemsProto lists one invoice's line items.
 func (c *Client) httpListAccountInvoiceItemsProto(ctx context.Context, invoiceID, page, pageSize int) ([]*linodev1.AccountInvoiceItem, error) {
-	endpoint := endpointAccountInvoices + "/" + strconv.Itoa(invoiceID) + "/items"
-
-	return listProtoElementsPaginated(ctx, c, "ListAccountInvoiceItems", endpoint, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountInvoiceItems",
+		"linode_account_invoice_item_list", "", []any{invoiceID}, page, pageSize,
 		func() *linodev1.AccountInvoiceItem { return &linodev1.AccountInvoiceItem{} })
 }
 
-// httpListAccountChildAccountsProto retrieves child-level accounts as proto
-// messages for the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListAccountChildAccounts.
+// httpListAccountChildAccountsProto lists child-level accounts.
 func (c *Client) httpListAccountChildAccountsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ChildAccount, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountChildAccounts", endpointAccountChildAccounts, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountChildAccounts",
+		"linode_account_child_account_list", "", nil, page, pageSize,
 		func() *linodev1.ChildAccount { return &linodev1.ChildAccount{} })
 }
 
-// httpListAccountServiceTransfersProto retrieves account service transfers as
-// proto messages for the proto-backed list path. The page/page_size pair flows
-// through withPaginationQuery, so the request matches
-// httpListAccountServiceTransfers.
+// httpListAccountServiceTransfersProto lists account service transfers.
 func (c *Client) httpListAccountServiceTransfersProto(ctx context.Context, page, pageSize int) ([]*linodev1.AccountEntityTransfer, error) {
-	return listProtoElementsPaginated(ctx, c, "ListAccountServiceTransfers", endpointAccountServiceTransfers, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListAccountServiceTransfers",
+		"linode_account_service_transfer_list", "", nil, page, pageSize,
 		func() *linodev1.AccountEntityTransfer { return &linodev1.AccountEntityTransfer{} })
 }
 
-// httpGetAccountServiceTransfer retrieves one account service transfer by token.
+// httpGetAccountServiceTransfer retrieves one service transfer by token.
 func (c *Client) httpGetAccountServiceTransfer(ctx context.Context, token string) (*AccountEntityTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountServiceTransfers + "/" + url.PathEscape(token)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_service_transfer_get", nil, token)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountServiceTransfer", Err: err}
+		return nil, wrapRequestError("GetAccountServiceTransfer", err)
 	}
 
 	defer drainClose(resp)
@@ -1746,17 +1564,14 @@ func (c *Client) httpGetAccountServiceTransfer(ctx context.Context, token string
 	return &transfer, nil
 }
 
-// httpGetAccountServiceTransferProto retrieves one account service transfer as a
-// proto message.
+// httpGetAccountServiceTransferProto retrieves one service transfer by token.
 func (c *Client) httpGetAccountServiceTransferProto(ctx context.Context, token string) (*linodev1.AccountEntityTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountServiceTransfers + "/" + url.PathEscape(token)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_service_transfer_get", nil, token)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountServiceTransfer", Err: err}
+		return nil, wrapRequestError("GetAccountServiceTransfer", err)
 	}
 
 	defer drainClose(resp)
@@ -1769,16 +1584,14 @@ func (c *Client) httpGetAccountServiceTransferProto(ctx context.Context, token s
 	return transfer, nil
 }
 
-// httpDeleteAccountServiceTransfer cancels one account service transfer by token.
+// httpDeleteAccountServiceTransfer cancels one service transfer by token.
 func (c *Client) httpDeleteAccountServiceTransfer(ctx context.Context, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountServiceTransfers + "/" + url.PathEscape(token)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_service_transfer_delete", nil, token)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteAccountServiceTransfer", Err: err}
+		return wrapRequestError("DeleteAccountServiceTransfer", err)
 	}
 
 	defer drainClose(resp)
@@ -1786,16 +1599,14 @@ func (c *Client) httpDeleteAccountServiceTransfer(ctx context.Context, token str
 	return c.handleResponse(resp, nil)
 }
 
-// httpAcceptAccountServiceTransfer accepts one account service transfer by token.
+// httpAcceptAccountServiceTransfer accepts one service transfer by token.
 func (c *Client) httpAcceptAccountServiceTransfer(ctx context.Context, token string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountServiceTransfers + "/" + url.PathEscape(token) + "/accept"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_service_transfer_accept", nil, token)
 	if err != nil {
-		return &NetworkError{Operation: "AcceptAccountServiceTransfer", Err: err}
+		return wrapRequestError("AcceptAccountServiceTransfer", err)
 	}
 
 	defer drainClose(resp)
@@ -1803,15 +1614,14 @@ func (c *Client) httpAcceptAccountServiceTransfer(ctx context.Context, token str
 	return c.handleResponse(resp, nil)
 }
 
-// httpCreateAccountServiceTransferProto creates an account service transfer and
-// decodes the response into the proto AccountEntityTransfer element.
+// httpCreateAccountServiceTransferProto creates an account service transfer.
 func (c *Client) httpCreateAccountServiceTransferProto(ctx context.Context, req *CreateAccountServiceTransferRequest) (*linodev1.AccountEntityTransfer, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountServiceTransfers, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_service_transfer_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountServiceTransfer", Err: err}
+		return nil, wrapRequestError("CreateAccountServiceTransfer", err)
 	}
 
 	defer drainClose(resp)
@@ -1829,11 +1639,9 @@ func (c *Client) httpGetAccountEvent(ctx context.Context, eventID int) (*Account
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountEvents + "/" + url.PathEscape(strconv.Itoa(eventID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_event_get", nil, eventID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountEvent", Err: err}
+		return nil, wrapRequestError("GetAccountEvent", err)
 	}
 
 	defer drainClose(resp)
@@ -1851,11 +1659,9 @@ func (c *Client) httpGetAccountEventProto(ctx context.Context, eventID int) (*li
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountEvents + "/" + url.PathEscape(strconv.Itoa(eventID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_event_get", nil, eventID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountEvent", Err: err}
+		return nil, wrapRequestError("GetAccountEvent", err)
 	}
 
 	defer drainClose(resp)
@@ -1868,16 +1674,14 @@ func (c *Client) httpGetAccountEventProto(ctx context.Context, eventID int) (*li
 	return event, nil
 }
 
-// httpMarkAccountEventSeen marks one account event as seen by ID.
+// httpMarkAccountEventSeen marks one account event as seen.
 func (c *Client) httpMarkAccountEventSeen(ctx context.Context, eventID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountEvents + "/" + url.PathEscape(strconv.Itoa(eventID)) + "/seen"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_event_seen", nil, eventID)
 	if err != nil {
-		return &NetworkError{Operation: "MarkAccountEventSeen", Err: err}
+		return wrapRequestError("MarkAccountEventSeen", err)
 	}
 
 	defer drainClose(resp)
@@ -1890,11 +1694,9 @@ func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountChildAccounts + "/" + url.PathEscape(euuid)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_child_account_get", nil, euuid)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountChildAccount", Err: err}
+		return nil, wrapRequestError("GetAccountChildAccount", err)
 	}
 
 	defer drainClose(resp)
@@ -1907,19 +1709,16 @@ func (c *Client) httpGetAccountChildAccount(ctx context.Context, euuid string) (
 	return &childAccount, nil
 }
 
-// httpGetAccountChildAccountProto retrieves one child-level account by EUUID and
-// decodes it into the proto ChildAccount element for the proto-backed read path.
-// credit_card is a message field, so a null credit_card from the API is omitted
-// rather than rendered as empty strings.
+// httpGetAccountChildAccountProto retrieves one child-level account by EUUID.
+// credit_card is a message field, so a null from the API is omitted rather than
+// rendered as empty strings.
 func (c *Client) httpGetAccountChildAccountProto(ctx context.Context, euuid string) (*linodev1.ChildAccount, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountChildAccounts + "/" + url.PathEscape(euuid)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_child_account_get", nil, euuid)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountChildAccount", Err: err}
+		return nil, wrapRequestError("GetAccountChildAccount", err)
 	}
 
 	defer drainClose(resp)
@@ -1933,17 +1732,14 @@ func (c *Client) httpGetAccountChildAccountProto(ctx context.Context, euuid stri
 }
 
 // httpCreateAccountChildAccountTokenProto creates a proxy user token for one
-// child-level account and decodes the response into the proto ProxyUserToken
-// element. The token it carries is returned to the user by design.
+// child-level account. The token it carries is returned to the user by design.
 func (c *Client) httpCreateAccountChildAccountTokenProto(ctx context.Context, euuid string) (*linodev1.ProxyUserToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountChildAccounts + "/" + url.PathEscape(euuid) + "/token"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_child_account_token_create", nil, euuid)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateAccountChildAccountToken", Err: err}
+		return nil, wrapRequestError("CreateAccountChildAccountToken", err)
 	}
 
 	defer drainClose(resp)
@@ -1956,15 +1752,15 @@ func (c *Client) httpCreateAccountChildAccountTokenProto(ctx context.Context, eu
 	return token, nil
 }
 
-// httpCreateOAuthClientProto creates an OAuth client and decodes the response
-// into the proto CreatedOAuthClient element (which carries the one-time secret).
+// httpCreateOAuthClientProto creates an OAuth client. The created element
+// carries the one-time secret, which no later read returns.
 func (c *Client) httpCreateOAuthClientProto(ctx context.Context, req *CreateOAuthClientRequest) (*linodev1.CreatedOAuthClient, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountOAuthClients, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_oauth_client_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateOAuthClient", Err: err}
+		return nil, wrapRequestError("CreateOAuthClient", err)
 	}
 
 	defer drainClose(resp)
@@ -1977,17 +1773,14 @@ func (c *Client) httpCreateOAuthClientProto(ctx context.Context, req *CreateOAut
 	return client, nil
 }
 
-// httpGetAccountBetaProto retrieves one enrolled account beta program as a proto
-// message.
+// httpGetAccountBetaProto retrieves one enrolled beta program.
 func (c *Client) httpGetAccountBetaProto(ctx context.Context, betaID string) (*linodev1.AccountBetaProgram, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointAccountBetas + "/" + url.PathEscape(betaID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_beta_get", nil, betaID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetAccountBeta", Err: err}
+		return nil, wrapRequestError("GetAccountBeta", err)
 	}
 
 	defer drainClose(resp)
@@ -2000,14 +1793,14 @@ func (c *Client) httpGetAccountBetaProto(ctx context.Context, betaID string) (*l
 	return beta, nil
 }
 
-// httpEnrollAccountBeta enrolls the account in a beta program via POST /v4/account/betas.
+// httpEnrollAccountBeta enrolls the account in a beta program.
 func (c *Client) httpEnrollAccountBeta(ctx context.Context, req *EnrollAccountBetaRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountBetas, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_beta_enroll", req)
 	if err != nil {
-		return &NetworkError{Operation: "EnrollAccountBeta", Err: err}
+		return wrapRequestError("EnrollAccountBeta", err)
 	}
 
 	defer drainClose(resp)
@@ -2015,14 +1808,14 @@ func (c *Client) httpEnrollAccountBeta(ctx context.Context, req *EnrollAccountBe
 	return c.handleResponse(resp, nil)
 }
 
-// httpAddAccountPromoCredit applies a promo credit to the account via POST /v4/account/promo-codes.
+// httpAddAccountPromoCredit applies a promo credit to the account.
 func (c *Client) httpAddAccountPromoCredit(ctx context.Context, req *AddAccountPromoCreditRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountPromoCodes, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_promo_credit_add", req)
 	if err != nil {
-		return &NetworkError{Operation: "AddAccountPromoCredit", Err: err}
+		return wrapRequestError("AddAccountPromoCredit", err)
 	}
 
 	defer drainClose(resp)
@@ -2048,14 +1841,14 @@ func withPaginationQuery(endpoint string, page, pageSize int) string {
 	return endpoint
 }
 
-// httpAcknowledgeAccountAgreements acknowledges account agreements via POST /v4/account/agreements.
+// httpAcknowledgeAccountAgreements acknowledges account agreements.
 func (c *Client) httpAcknowledgeAccountAgreements(ctx context.Context, req *AcknowledgeAccountAgreementsRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountAgreements, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_agreement_acknowledge", req)
 	if err != nil {
-		return &NetworkError{Operation: "AcknowledgeAccountAgreements", Err: err}
+		return wrapRequestError("AcknowledgeAccountAgreements", err)
 	}
 
 	defer drainClose(resp)
@@ -2063,15 +1856,14 @@ func (c *Client) httpAcknowledgeAccountAgreements(ctx context.Context, req *Ackn
 	return c.handleResponse(resp, nil)
 }
 
-// httpCancelAccountProto cancels the account and decodes the response into the
-// proto AccountCancelResponse element.
+// httpCancelAccountProto cancels the account.
 func (c *Client) httpCancelAccountProto(ctx context.Context, req *CancelAccountRequest) (*linodev1.AccountCancelResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointAccountCancel, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_account_cancel", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CancelAccount", Err: err}
+		return nil, wrapRequestError("CancelAccount", err)
 	}
 
 	defer drainClose(resp)
@@ -2084,7 +1876,7 @@ func (c *Client) httpCancelAccountProto(ctx context.Context, req *CancelAccountR
 	return cancelResponse, nil
 }
 
-// httpUpdateProfile updates the authenticated user's profile via PUT /v4/profile.
+// httpUpdateProfile updates the authenticated user's profile via PUT /profile.
 func (c *Client) httpUpdateProfile(ctx context.Context, req *UpdateProfileRequest) (*Profile, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()

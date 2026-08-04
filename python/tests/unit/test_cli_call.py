@@ -160,13 +160,14 @@ async def test_call_bad_json_exits_usage_error(cli_config_file: Path) -> None:
 async def test_call_tool_error_result_exits_one(cli_config_file: Path) -> None:
     """A tool that returns an error result exits 1 with the message on stderr.
 
-    ``linode_instance_get`` with a non-numeric instance_id returns an
-    ``Error:`` payload (handler-level validation), which the CLI maps to
-    exit 1.
+    ``linode_instance_get`` with instance_id=0 types cleanly against the
+    schema's integer, so it reaches the handler and comes back as an
+    ``Error:`` payload, which the CLI maps to exit 1. A non-numeric value
+    would fail argument typing first and exit 2 instead.
     """
     stdout, stderr = io.StringIO(), io.StringIO()
     code = await run_call_command(
-        ["linode_instance_get", "--arg", "instance_id=notanumber"],
+        ["linode_instance_get", "--arg", "instance_id=0"],
         stdout,
         stderr,
         config_path=cli_config_file,

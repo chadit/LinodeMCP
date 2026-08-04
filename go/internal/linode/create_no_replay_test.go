@@ -81,14 +81,14 @@ func noReplayInfraCreates() []createCall {
 			},
 		},
 		{
-			name:  "CreateLKEClusterProto",
+			name:  labelCreateLKEClusterProto,
 			route: "/lke/clusters",
 			call: func(ctx context.Context, client *linode.Client) error {
 				return errorFrom(client.CreateLKEClusterProto(ctx, &linode.CreateLKEClusterRequest{Label: noReplayLabel, Region: regionUSEast}))
 			},
 		},
 		{
-			name:  "CreateLKENodePoolProto",
+			name:  labelCreateLKENodePoolProto,
 			route: "/lke/clusters/123/pools",
 			call: func(ctx context.Context, client *linode.Client) error {
 				return errorFrom(client.CreateLKENodePoolProto(ctx, noReplayParentID, &linode.CreateLKENodePoolRequest{Count: 1}))
@@ -112,7 +112,7 @@ func noReplayInfraCreates() []createCall {
 			name:  "CreateFirewallDeviceProto",
 			route: "/networking/firewalls/123/devices",
 			call: func(ctx context.Context, client *linode.Client) error {
-				return errorFrom(client.CreateFirewallDeviceProto(ctx, noReplayParentID, &linode.CreateFirewallDeviceRequest{ID: noReplayChildID, Type: "linode"}))
+				return errorFrom(client.CreateFirewallDeviceProto(ctx, noReplayParentID, &linode.CreateFirewallDeviceRequest{ID: noReplayChildID, Type: accountMaintenanceEntityType}))
 			},
 		},
 		{
@@ -135,42 +135,42 @@ func noReplayInstanceCreates() []createCall {
 			},
 		},
 		{
-			name:  "CreateInstanceConfigProto",
+			name:  labelCreateInstanceConfigProto,
 			route: tcLinodeInstances123Configs,
 			call: func(ctx context.Context, client *linode.Client) error {
 				return errorFrom(client.CreateInstanceConfigProto(ctx, noReplayParentID, &linode.CreateConfigRequest{Label: labelBootConfig}))
 			},
 		},
 		{
-			name:  "CreateInstanceDiskProto",
+			name:  labelCreateInstanceDiskProto,
 			route: "/linode/instances/123/disks",
 			call: func(ctx context.Context, client *linode.Client) error {
 				return errorFrom(client.CreateInstanceDiskProto(ctx, noReplayParentID, &linode.CreateDiskRequest{Label: noReplayLabel, Size: 1024}))
 			},
 		},
 		{
-			name:  "CreateInstanceBackupProto",
+			name:  labelCreateInstanceBackupProto,
 			route: "/linode/instances/123/backups",
 			call: func(ctx context.Context, client *linode.Client) error {
 				return errorFrom(client.CreateInstanceBackupProto(ctx, noReplayParentID, noReplayLabel))
 			},
 		},
 		{
-			name:  "CloneInstanceProto",
+			name:  labelCloneInstanceProto,
 			route: "/linode/instances/123/clone",
 			call: func(ctx context.Context, client *linode.Client) error {
 				return errorFrom(client.CloneInstanceProto(ctx, noReplayParentID, &linode.CloneInstanceRequest{Region: regionUSEast, Type: tcNanode1GB}))
 			},
 		},
 		{
-			name:  "CloneInstanceDiskProto",
+			name:  labelCloneInstanceDiskProto,
 			route: "/linode/instances/123/disks/456/clone",
 			call: func(ctx context.Context, client *linode.Client) error {
 				return errorFrom(client.CloneInstanceDiskProto(ctx, noReplayParentID, noReplayChildID))
 			},
 		},
 		{
-			name:  "AddInstanceConfigInterfaceProto",
+			name:  labelAddInstanceConfigInterfaceProto,
 			route: tcLinodeInstances123Configs456Interfaces,
 			call: func(ctx context.Context, client *linode.Client) error {
 				return errorFrom(client.AddInstanceConfigInterfaceProto(ctx, noReplayParentID, noReplayChildID, &linode.ConfigInterface{Purpose: purposePublic}))
@@ -189,7 +189,7 @@ func retrySafeCreates() []createCall {
 			name:  "CreateObjectStorageBucketProto",
 			route: "/object-storage/buckets",
 			call: func(ctx context.Context, client *linode.Client) error {
-				return errorFrom(client.CreateObjectStorageBucketProto(ctx, linode.CreateObjectStorageBucketRequest{Label: noReplayLabel, Region: regionUSEast}))
+				return errorFrom(client.CreateObjectStorageBucketProto(ctx, &linode.CreateObjectStorageBucketRequest{Label: noReplayLabel, Region: regionUSEast}))
 			},
 		},
 		{

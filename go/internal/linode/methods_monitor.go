@@ -2,31 +2,30 @@ package linode
 
 import (
 	"context"
-	"net/http"
-	"net/url"
-	"strconv"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-// httpListMonitorServicesProto retrieves supported monitoring service types as
-// proto messages for the proto-backed list path. The endpoint returns a {data:
-// [...]} page envelope, so listProtoElements reads data.
+// Proto-backed list paths read the {data:[...]} page envelope these endpoints
+// return; trailing args fill the path slots the tool's route declares. Write
+// paths decode into the same proto element as the matching read path, so both
+// emit the same field set.
+
+// httpListMonitorServicesProto lists supported monitoring service types.
 func (c *Client) httpListMonitorServicesProto(ctx context.Context) ([]*linodev1.MonitorService, error) {
-	return listProtoElements(ctx, c, "ListMonitorServices", endpointMonitorServices,
+	return listProtoElementsRouted(ctx, c, "ListMonitorServices",
+		"linode_monitor_service_list", "", nil,
 		func() *linodev1.MonitorService { return &linodev1.MonitorService{} })
 }
 
-// httpGetMonitorServiceProto retrieves a Monitor service as a proto message.
+// httpGetMonitorServiceProto retrieves one monitoring service type.
 func (c *Client) httpGetMonitorServiceProto(ctx context.Context, serviceType string) (*linodev1.MonitorService, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_get", nil, serviceType)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetMonitorService", Err: err}
+		return nil, wrapRequestError("GetMonitorService", err)
 	}
 
 	defer drainClose(resp)
@@ -39,37 +38,27 @@ func (c *Client) httpGetMonitorServiceProto(ctx context.Context, serviceType str
 	return service, nil
 }
 
-// httpListMonitorServiceMetricDefinitionsProto retrieves metric definitions for
-// one monitoring service type as proto messages for the proto-backed list path.
-// The endpoint returns a {data:[...]} page envelope, so listProtoElements reads
-// data. The service type is formatted into the path exactly like the non-proto
-// method.
+// httpListMonitorServiceMetricDefinitionsProto lists metric definitions for one
+// monitoring service type.
 func (c *Client) httpListMonitorServiceMetricDefinitionsProto(ctx context.Context, serviceType string) ([]*linodev1.MonitorMetricDefinition, error) {
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/metric-definitions"
-
-	return listProtoElements(ctx, c, "ListMonitorServiceMetricDefinitions", endpoint,
+	return listProtoElementsRouted(ctx, c, "ListMonitorServiceMetricDefinitions",
+		"linode_monitor_service_metric_definition_list", "", []any{serviceType},
 		func() *linodev1.MonitorMetricDefinition { return &linodev1.MonitorMetricDefinition{} })
 }
 
-// httpListMonitorServiceAlertDefinitionsProto retrieves alert definitions for one
-// monitoring service type as proto messages for the proto-backed list path. The
-// endpoint returns a {data:[...]} page envelope, so listProtoElements reads data.
-// The service type is formatted into the path exactly like the non-proto method.
+// httpListMonitorServiceAlertDefinitionsProto lists alert definitions for one
+// monitoring service type.
 func (c *Client) httpListMonitorServiceAlertDefinitionsProto(ctx context.Context, serviceType string) ([]*linodev1.MonitorAlertDefinition, error) {
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions"
-
-	return listProtoElements(ctx, c, "ListMonitorServiceAlertDefinitions", endpoint,
+	return listProtoElementsRouted(ctx, c, "ListMonitorServiceAlertDefinitions",
+		"linode_monitor_service_alert_definition_list", "", []any{serviceType},
 		func() *linodev1.MonitorAlertDefinition { return &linodev1.MonitorAlertDefinition{} })
 }
 
-// httpListMonitorServiceDashboardsProto retrieves dashboards for one monitoring
-// service type as proto messages for the proto-backed list path. The endpoint
-// returns a {data:[...]} page envelope, so listProtoElements reads data. The
-// service type is formatted into the path exactly like the non-proto method.
+// httpListMonitorServiceDashboardsProto lists dashboards for one monitoring
+// service type.
 func (c *Client) httpListMonitorServiceDashboardsProto(ctx context.Context, serviceType string) ([]*linodev1.MonitorDashboard, error) {
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/dashboards"
-
-	return listProtoElements(ctx, c, "ListMonitorServiceDashboards", endpoint,
+	return listProtoElementsRouted(ctx, c, "ListMonitorServiceDashboards",
+		"linode_monitor_service_dashboard_list", "", []any{serviceType},
 		func() *linodev1.MonitorDashboard { return &linodev1.MonitorDashboard{} })
 }
 
@@ -78,11 +67,9 @@ func (c *Client) httpGetMonitorServiceMetrics(ctx context.Context, serviceType s
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/metrics"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, map[string]any{})
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_metric_query", map[string]any{}, serviceType)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetMonitorServiceMetrics", Err: err}
+		return nil, wrapRequestError("GetMonitorServiceMetrics", err)
 	}
 
 	defer drainClose(resp)
@@ -95,18 +82,14 @@ func (c *Client) httpGetMonitorServiceMetrics(ctx context.Context, serviceType s
 	return metrics, nil
 }
 
-// httpCreateMonitorServiceToken creates a token for one monitoring service
-// type and decodes the response into the MonitorServiceTokenCreateResponse
-// proto message so the write tool emits the proto-canonical body.
+// httpCreateMonitorServiceToken creates a token for one monitoring service type.
 func (c *Client) httpCreateMonitorServiceToken(ctx context.Context, serviceType string, request *CreateMonitorServiceTokenRequest) (*linodev1.MonitorServiceTokenCreateResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/token"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_token_create", request, serviceType)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateMonitorServiceToken", Err: err}
+		return nil, wrapRequestError("CreateMonitorServiceToken", err)
 	}
 
 	defer drainClose(resp)
@@ -119,18 +102,15 @@ func (c *Client) httpCreateMonitorServiceToken(ctx context.Context, serviceType 
 	return token, nil
 }
 
-// httpCreateMonitorServiceAlertDefinitionProto creates an alert definition and
-// decodes the response into the MonitorAlertDefinition proto element so the
-// write tool emits the same field set as the alert-definition GET/LIST path.
+// httpCreateMonitorServiceAlertDefinitionProto creates an alert definition for
+// one monitoring service type.
 func (c *Client) httpCreateMonitorServiceAlertDefinitionProto(ctx context.Context, serviceType string, request *CreateAlertDefinitionRequest) (*linodev1.MonitorAlertDefinition, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_alert_definition_create", request, serviceType)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateMonitorServiceAlertDefinition", Err: err}
+		return nil, wrapRequestError("CreateMonitorServiceAlertDefinition", err)
 	}
 
 	defer drainClose(resp)
@@ -143,17 +123,14 @@ func (c *Client) httpCreateMonitorServiceAlertDefinitionProto(ctx context.Contex
 	return definition, nil
 }
 
-// httpCloneMonitorServiceAlertDefinitionProto clones an alert definition and
-// decodes the response into the MonitorAlertDefinition proto element.
+// httpCloneMonitorServiceAlertDefinitionProto clones one alert definition.
 func (c *Client) httpCloneMonitorServiceAlertDefinitionProto(ctx context.Context, serviceType string, alertID int, request *CloneAlertDefinitionRequest) (*linodev1.MonitorAlertDefinition, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID)) + "/clone"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_alert_definition_clone", request, serviceType, alertID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CloneMonitorServiceAlertDefinition", Err: err}
+		return nil, wrapRequestError("CloneMonitorServiceAlertDefinition", err)
 	}
 
 	defer drainClose(resp)
@@ -166,17 +143,14 @@ func (c *Client) httpCloneMonitorServiceAlertDefinitionProto(ctx context.Context
 	return definition, nil
 }
 
-// httpUpdateMonitorServiceAlertDefinitionProto updates an alert definition and
-// decodes the response into the MonitorAlertDefinition proto element.
+// httpUpdateMonitorServiceAlertDefinitionProto updates one alert definition.
 func (c *Client) httpUpdateMonitorServiceAlertDefinitionProto(ctx context.Context, serviceType string, alertID int, request *UpdateAlertDefinitionRequest) (*linodev1.MonitorAlertDefinition, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_alert_definition_update", request, serviceType, alertID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateMonitorServiceAlertDefinition", Err: err}
+		return nil, wrapRequestError("UpdateMonitorServiceAlertDefinition", err)
 	}
 
 	defer drainClose(resp)
@@ -194,11 +168,9 @@ func (c *Client) httpGetMonitorServiceAlertDefinition(ctx context.Context, servi
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_alert_definition_get", nil, serviceType, alertID)
 	if err != nil {
-		return AlertDefinition{}, &NetworkError{Operation: "GetMonitorServiceAlertDefinition", Err: err}
+		return AlertDefinition{}, wrapRequestError("GetMonitorServiceAlertDefinition", err)
 	}
 
 	defer drainClose(resp)
@@ -220,11 +192,9 @@ func (c *Client) httpGetMonitorServiceAlertDefinitionProto(ctx context.Context, 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_alert_definition_get", nil, serviceType, alertID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetMonitorServiceAlertDefinition", Err: err}
+		return nil, wrapRequestError("GetMonitorServiceAlertDefinition", err)
 	}
 
 	defer drainClose(resp)
@@ -242,11 +212,9 @@ func (c *Client) httpDeleteMonitorServiceAlertDefinition(ctx context.Context, se
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorServices + "/" + url.PathEscape(serviceType) + "/alert-definitions/" + url.PathEscape(strconv.Itoa(alertID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_service_alert_definition_delete", nil, serviceType, alertID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteMonitorServiceAlertDefinition", Err: err}
+		return wrapRequestError("DeleteMonitorServiceAlertDefinition", err)
 	}
 
 	defer drainClose(resp)
@@ -260,7 +228,8 @@ func (c *Client) httpDeleteMonitorServiceAlertDefinition(ctx context.Context, se
 // listProtoElementsPaginated reads data after adding page/page_size, matching
 // the non-proto request exactly.
 func (c *Client) httpListMonitorDashboardsProto(ctx context.Context, page, pageSize int) ([]*linodev1.MonitorDashboard, error) {
-	return listProtoElementsPaginated(ctx, c, "ListMonitorDashboards", endpointMonitorDashboards, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListMonitorDashboards",
+		"linode_monitor_dashboard_list", "", nil, page, pageSize,
 		func() *linodev1.MonitorDashboard { return &linodev1.MonitorDashboard{} })
 }
 
@@ -272,11 +241,9 @@ func (c *Client) httpGetMonitorDashboardProto(ctx context.Context, dashboardID i
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointMonitorDashboards + "/" + url.PathEscape(strconv.Itoa(dashboardID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_monitor_dashboard_get", nil, dashboardID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetMonitorDashboard", Err: err}
+		return nil, wrapRequestError("GetMonitorDashboard", err)
 	}
 
 	defer drainClose(resp)
@@ -293,7 +260,8 @@ func (c *Client) httpGetMonitorDashboardProto(ctx context.Context, dashboardID i
 // proto messages for the proto-backed list path. page/page_size flow through
 // withPaginationQuery, so the request matches the non-proto method.
 func (c *Client) httpListMonitorAlertDefinitionsProto(ctx context.Context, page, pageSize int) ([]*linodev1.MonitorAlertDefinition, error) {
-	return listProtoElementsPaginated(ctx, c, "ListMonitorAlertDefinitions", endpointMonitorAlertDefinitions, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListMonitorAlertDefinitions",
+		"linode_monitor_alert_definition_list", "", nil, page, pageSize,
 		func() *linodev1.MonitorAlertDefinition { return &linodev1.MonitorAlertDefinition{} })
 }
 
@@ -301,6 +269,7 @@ func (c *Client) httpListMonitorAlertDefinitionsProto(ctx context.Context, page,
 // messages for the proto-backed list path. page/page_size flow through
 // withPaginationQuery, so the request matches the non-proto method.
 func (c *Client) httpListMonitorAlertChannelsProto(ctx context.Context, page, pageSize int) ([]*linodev1.MonitorAlertChannel, error) {
-	return listProtoElementsPaginated(ctx, c, "ListMonitorAlertChannels", endpointMonitorAlertChannels, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListMonitorAlertChannels",
+		"linode_monitor_alert_channel_list", "", nil, page, pageSize,
 		func() *linodev1.MonitorAlertChannel { return &linodev1.MonitorAlertChannel{} })
 }

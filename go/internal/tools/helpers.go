@@ -26,46 +26,41 @@ const (
 	paramDryRun          = "dry_run"
 	paramDryRunDesc      = "Preview the call without making it: returns the would-be request and current resource state. Default false."
 	paramLinodeID        = "linode_id"
-	// paramConfirmedDryRun / paramConfirmBypassDryRun drive the Phase 3
-	// bypass-dry-run gate on CapDestroy tools (see destroy.go). The model
-	// asserts confirmed_dry_run after running a dry-run, or sets
-	// confirm_bypass_dry_run to skip the preview explicitly.
+	// Drive the bypass-dry-run gate on CapDestroy tools (see destroy.go): the
+	// model asserts confirmed_dry_run after a dry-run, or sets
+	// confirm_bypass_dry_run to skip the preview.
 	paramConfirmedDryRun     = "confirmed_dry_run"
 	paramConfirmBypassDryRun = "confirm_bypass_dry_run"
 
-	// paramYolo is the request flag that bypasses preview and confirm. The
-	// server middleware honors it only when the active profile allows yolo.
+	// paramYolo bypasses preview and confirm, honored by the server middleware
+	// only when the active profile allows yolo.
 	paramYolo = "yolo"
 
-	// paramMode / paramPlanID drive the two-stage plan/apply flow on opted-in
-	// CapDestroy tools (see twostage_destroy.go). mode:"plan" returns a plan_id
-	// and a state hash; mode:"apply" with that plan_id re-checks for drift and
-	// executes.
+	// Drive the two-stage plan/apply flow on opted-in CapDestroy tools (see
+	// twostage_destroy.go): mode:"plan" returns a plan_id and a state hash,
+	// mode:"apply" with that plan_id re-checks drift and executes.
 	paramMode       = "mode"
 	paramModeDesc   = "Two-stage flow: \"plan\" previews and returns a plan_id; \"apply\" with plan_id re-checks drift and executes. Omit for a single-step call."
 	paramPlanID     = "plan_id"
 	paramPlanIDDesc = "The plan_id returned by a mode:\"plan\" call, supplied with mode:\"apply\" to execute it."
 
-	// twoStageNote is appended to every opted-in delete tool's description so
-	// the plan/apply flow shows up at the tool level, not only on the mode and
-	// plan_id params. See docs/two-stage-writes.md.
+	// twoStageNote is appended to every opted-in delete tool's description so the
+	// plan/apply flow shows up at the tool level, not only on its params. See
+	// docs/two-stage-writes.md.
 	twoStageNote = " Supports two-stage writes: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes."
 
-	// twoStageOptInNote is the variant for a tool whose two-stage flow is off
+	// twoStageOptInNote is the variant for a tool whose two-stage flow stays off
 	// until an operator enables it (e.g. instance_resize, a CapWrite tool that
-	// does not opt in by capability default). See docs/two-stage-writes.md.
+	// does not opt in by capability default).
 	twoStageOptInNote = " Supports two-stage writes when enabled in the two_stage config: mode=\"plan\" returns a plan_id; mode=\"apply\" with that plan_id re-checks for drift, then executes."
 )
 
-// liveConfigSource is the optional hot-reload provider. When set (by
-// main.go via SetLiveConfigSource), prepareClient reads through it on each
-// request so reloaded resilience/environment values take effect for new
-// API calls. When unset, prepareClient falls back to the cfg captured at
-// tool-registration time. Stored as an atomic pointer to a function so
-// reads are lock-free and the global mutation is bounded to one place.
-//
-// Suppression must be inline on the offending declaration line so that
-// newer golangci-lint releases associate it with the var.
+// liveConfigSource is the optional hot-reload provider. When set (by main.go
+// via SetLiveConfigSource), prepareClient reads through it on each request so
+// reloaded resilience/environment values apply to new API calls; when unset it
+// falls back to the cfg captured at tool-registration time. The nolint below
+// has to stay inline: newer golangci-lint releases only associate it with the
+// var from the declaration line.
 var liveConfigSource atomic.Pointer[func() *config.Config] //nolint:gochecknoglobals // process-wide hot-reload bridge; touching every factory signature would be a 123-file refactor.
 
 // SetLiveConfigSource registers a function that returns the latest Config.
@@ -92,10 +87,9 @@ func resolveConfig(snapshot *config.Config) *config.Config {
 	return snapshot
 }
 
-// prepareClient extracts the environment parameter, validates the config, and returns a ready-to-use API client.
-// When a live config source is registered (see SetLiveConfigSource), the
-// latest values flow through here so reloaded resilience and environment
-// settings take effect on the very next tool call.
+// prepareClient extracts the environment parameter, validates the config, and
+// returns a ready-to-use API client. A registered live config source (see
+// SetLiveConfigSource) takes effect on the very next tool call.
 func prepareClient(request *mcp.CallToolRequest, cfg *config.Config) (*linode.Client, error) {
 	cfg = resolveConfig(cfg)
 	environment := request.GetString(paramEnvironment, "")
@@ -890,6 +884,59 @@ func standardPaginationFromTool(request *mcp.CallToolRequest) (int, int, string)
 // string (legacy form), for callers that then decode strictly. An absent value
 // yields ("", ""); a non-object value returns a validation message naming the
 // argument.
+// stringMapFromToolArg returns a string-to-string object tool argument as a map.
+// It exists alongside objectMapFromToolArg for the arguments whose schema pins
+// string values (Kubernetes labels, for one), so a non-string value is rejected
+// here rather than reaching the API as a type error. An absent value yields
+// (nil, "").
+func stringMapFromToolArg(raw any, name string) (map[string]string, string) {
+	object, validationMessage := objectMapFromToolArg(raw, name)
+	if validationMessage != "" || object == nil {
+		return nil, validationMessage
+	}
+
+	values := make(map[string]string, len(object))
+
+	for key, value := range object {
+		text, isString := value.(string)
+		if !isString {
+			return nil, name + " values must be strings"
+		}
+
+		values[key] = text
+	}
+
+	return values, ""
+}
+
+// objectMapFromToolArg returns an object tool argument as a map holding exactly
+// the keys the caller sent, so nothing they omitted reaches the wire. It
+// accepts the native map form the schema produces and the JSON-string form some
+// clients still send. An absent or blank value yields (nil, ""); anything that
+// is not an object returns a validation message naming the argument.
+func objectMapFromToolArg(raw any, name string) (map[string]any, string) {
+	switch value := raw.(type) {
+	case nil:
+		return nil, ""
+	case map[string]any:
+		return value, ""
+	case string:
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return nil, ""
+		}
+
+		var decoded map[string]any
+		if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+			return nil, name + " must be an object"
+		}
+
+		return decoded, ""
+	default:
+		return nil, name + " must be an object"
+	}
+}
+
 func objectJSONFromToolArg(raw any, name string) (string, string) {
 	switch value := raw.(type) {
 	case nil:
@@ -906,4 +953,21 @@ func objectJSONFromToolArg(raw any, name string) (string, string) {
 	default:
 		return "", name + " must be an object"
 	}
+}
+
+// optionalBoolFromToolArg reads an optional boolean tool argument by presence,
+// so an explicit false still reaches the API instead of being indistinguishable
+// from an omitted field. An absent value yields (nil, "").
+func optionalBoolFromToolArg(args map[string]any, name string) (*bool, string) {
+	raw, present := args[name]
+	if !present {
+		return nil, ""
+	}
+
+	value, isBool := raw.(bool)
+	if !isBool {
+		return nil, name + " must be a boolean"
+	}
+
+	return &value, ""
 }

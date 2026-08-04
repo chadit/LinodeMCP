@@ -16,7 +16,7 @@ func TestClientRoutesLKEPart1(t *testing.T) {
 
 	runClientRouteCases(t, []clientRouteCase{
 		{
-			name:     "CreateLKEClusterProto",
+			name:     labelCreateLKEClusterProto,
 			wantVerb: http.MethodPost,
 			wantPath: clientRoutePathLkeClusters,
 			response: clientRouteProtoObjIDInt32,
@@ -28,7 +28,7 @@ func TestClientRoutesLKEPart1(t *testing.T) {
 			},
 		},
 		{
-			name:     "CreateLKENodePoolProto",
+			name:     labelCreateLKENodePoolProto,
 			wantVerb: http.MethodPost,
 			wantPath: clientRoutePathLkeClusters4242Pools,
 			response: clientRouteProtoObjIDInt32,
@@ -94,7 +94,7 @@ func TestClientRoutesLKEPart1(t *testing.T) {
 			},
 		},
 		{
-			name:     "GetLKECluster",
+			name:     labelGetLKECluster,
 			wantVerb: http.MethodGet,
 			wantPath: clientRoutePathLkeClusters4242,
 			response: clientRouteObjLabel,
@@ -118,7 +118,7 @@ func TestClientRoutesLKEPart1(t *testing.T) {
 			},
 		},
 		{
-			name:     "GetLKEControlPlaneACL",
+			name:     labelGetLKEControlPlaneACL,
 			wantVerb: http.MethodGet,
 			wantPath: clientRoutePathLkeClusters4242ControlPlaneACL,
 			response: clientRouteACLEnvelope,
@@ -175,7 +175,7 @@ func TestClientRoutesLKEPart2(t *testing.T) {
 			},
 		},
 		{
-			name:     "GetLKENode",
+			name:     labelGetLKENode,
 			wantVerb: http.MethodGet,
 			wantPath: clientRoutePathLkeClusters4242NodesAlpha,
 			response: clientRouteObjID,
@@ -187,7 +187,7 @@ func TestClientRoutesLKEPart2(t *testing.T) {
 			},
 		},
 		{
-			name:     "GetLKENodePool",
+			name:     labelGetLKENodePool,
 			wantVerb: http.MethodGet,
 			wantPath: clientRoutePathLkeClusters4242Pools8615,
 			response: clientRouteObjType,
@@ -372,7 +372,7 @@ func TestClientRoutesLKEPart3(t *testing.T) {
 			wantPath: "/lke/clusters/4242/regenerate",
 			response: clientRouteEmptyObject,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				return nil, clientRouteError(client.RegenerateLKECluster(ctx, 4242))
+				return nil, clientRouteError(client.RegenerateLKECluster(ctx, 4242, linode.RegenerateLKEClusterRequest{ServiceToken: true}))
 			},
 		},
 		{
@@ -406,7 +406,7 @@ func TestClientRoutesLKEPart3(t *testing.T) {
 			response: clientRouteProtoObjIDInt32,
 			want:     int32(4242),
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.UpdateLKENodePoolProto(ctx, 4242, 8615, linode.UpdateLKENodePoolRequest{})
+				got, err := client.UpdateLKENodePoolProto(ctx, 4242, 8615, &linode.UpdateLKENodePoolRequest{})
 
 				return clientRouteProbe(err, func() any { return got.GetId() })
 			},

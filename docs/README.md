@@ -112,15 +112,41 @@ against a resolved one runs it through `_toolroutes.norm_template` first.
 Shape is what the gates enforce; `make tool-routes` is the only place a name
 is checked, and only for the convention.
 
+Which tools exist and what each may do lives in the proto too. Every `*Input`
+message declares `linode.mcp.v1.tool_capability`, and names its tool in exactly
+one marker: `tool_route` for the 444 that reach the Linode API, and
+`linode.mcp.v1.tool_meta` for the 17 that work on local config or session state.
+So the descriptors alone answer "which tools exist, and which are Meta by
+design", which is what lets each language's route validator take no arguments
+and lets a server check its own registry against the contract at startup.
+`tools-capabilities.txt` is the cross-language mirror of that declaration rather
+than a second source for it, and `make tool-capability` holds the two to
+matching tool for tool and tier for tier.
+
+What a tool answers with lives on the same input message. `tool_response` names
+the message the handler serializes, `confirm_message` carries the exact prose a
+Write, Admin, or Destroy tool returns when `confirm` is unset, `success_message`
+carries the completed-mutation text with `{field}` placeholders bound to fields
+of the input or the response, `resource_type` names the two-stage hash-ignore
+key a Destroy uses, and `retry_disabled` marks a call that must not be replayed.
+The response binding is written out rather than derived: about half the surface
+answers with a message spelled differently from what its input name would
+suggest, so `AccountBetaGetInput` naming `AccountBetaProgram` is ordinary. Four
+tools whose Linode response is an open-ended object declare no response and are
+listed by name in the gate. `make tool-response` pins all five from both
+directions.
+
 ### Registries
 
 | File | Pins | Consumed by |
 |------|------|-------------|
 | [tools-manifest.txt](./contracts/tools-manifest.txt) | The full tool surface: every tool any registered language implements, one name per line | Manifest gate tests in each language |
-| [tools-capabilities.txt](./contracts/tools-capabilities.txt) | Capability tier (`Read`/`Write`/`Destroy`/`Admin`/`Meta`) for every tool | Capability gate tests in each language |
+| [tools-capabilities.txt](./contracts/tools-capabilities.txt) | Capability tier (`Read`/`Write`/`Destroy`/`Admin`/`Meta`) for every tool, mirroring the `tool_capability` option each proto input declares | `scripts/verify_tool_capability.py`, capability gate tests in each language |
 | [languages.txt](./contracts/languages.txt) | The registered language implementations: name, working dir, surface-dump command | `Makefile`, `scripts/verify_tool_parity.py` |
 | [env-vars.txt](./contracts/env-vars.txt) | The complete environment-variable surface every language reads (observability has none by design) | `scripts/verify_env_parity.py` |
 | [coverage-floors.txt](./contracts/coverage-floors.txt) | Minimum total unit-test statement coverage per registered language (rise-only; the per-line half is `make diff-coverage`) | `scripts/verify_coverage_floor.py` |
+| [route-source-counts.txt](./contracts/route-source-counts.txt) | Request call sites per registered language that still build their endpoint by hand instead of resolving it from the proto (fall-only; what is left of the route-builder migration) | `scripts/verify_route_source.py` |
+| [generated-tools-counts.txt](./contracts/generated-tools-counts.txt) | Tools per registered language still served by a hand-written factory rather than by the tree its emitter writes from the proto (fall-only; what is left of the codegen migration) | `scripts/verify_generated_tools.py` |
 | [system-params.txt](./contracts/system-params.txt) | The proto input fields the server consumes itself rather than passing to the Linode API, by field name and proto type; each one carries a trailing `// system param` marker that stays out of the generated schema | `scripts/verify_system_params.py` |
 
 ### Ratchet baselines

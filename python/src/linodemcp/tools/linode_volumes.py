@@ -6,7 +6,12 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import type_pb2, volume_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import execute_tool
+from linodemcp.tools.helpers import (
+    error_response,
+    execute_tool,
+    pagination_query,
+    standard_pagination_arguments,
+)
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -36,7 +41,7 @@ async def handle_linode_volume_get(
         return [TextContent(type="text", text="Error: volume_id is required")]
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(f"/volumes/{int(volume_id)}")
+        raw = await client.route_raw("linode_volume_get", int(volume_id))
         return serialize_api_response({"volume": raw}, volume_pb2.VolumeGetResponse())
 
     return await execute_tool(cfg, arguments, "retrieve Linode volume", _call)
@@ -99,8 +104,15 @@ async def handle_linode_volume_list(
     if label_contains:
         filters.append(f"label_contains={label_contains}")
 
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/volumes")
+        raw = await client.route_raw(
+            "linode_volume_list", query=pagination_query(page, page_size)
+        )
         return serialize_list_response(
             raw,
             "volumes",

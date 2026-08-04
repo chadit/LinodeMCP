@@ -12,12 +12,9 @@ import (
 
 // clientPackage is the parsed client package plus the two lookup tables
 // resolution needs: package-level string constants and every declared function
-// by name.
-//
-// Functions are keyed by their own name, so a method and a plain function that
-// share one name would collide. Rather than pick a winner, a shared name is
-// recorded as ambiguous and resolves to nothing, which surfaces the affected
-// call sites as unresolved instead of attributing a route to the wrong body.
+// by name. Functions key on their own name, so a name two declarations claim is
+// recorded as ambiguous and resolves to nothing, surfacing those call sites as
+// unresolved instead of attributing a route to the wrong body.
 type clientPackage struct {
 	fset      *token.FileSet
 	functions map[string]*ast.FuncDecl
@@ -28,10 +25,13 @@ type clientPackage struct {
 	resolving map[string]bool
 }
 
-// parsePackage parses every non-test .go file under dir. Test files are skipped
-// so a fixture endpoint in a _test.go can never enter the route surface as
-// evidence that the client builds it.
-func parsePackage(dir string) (*clientPackage, error) {
+// parsePackage parses every non-test .go file under each dir into one symbol
+// table. Test files are skipped so a fixture endpoint in a _test.go can never
+// enter the route surface as evidence that the client builds it. Directories
+// share one table because a call and the primitive it reaches can sit in
+// different packages. Resolution is by name throughout, so a name two packages
+// declare lands in the ambiguity guard rather than in a wrong answer.
+func parsePackage(dirs []string) (*clientPackage, error) {
 	pkg := &clientPackage{
 		fset:      token.NewFileSet(),
 		functions: map[string]*ast.FuncDecl{},
@@ -40,6 +40,28 @@ func parsePackage(dir string) (*clientPackage, error) {
 		resolving: map[string]bool{},
 	}
 
+	var files []*ast.File
+
+	for _, dir := range dirs {
+		parsed, err := pkg.parseDir(dir)
+		if err != nil {
+			return nil, err
+		}
+
+		files = append(files, parsed...)
+	}
+
+	pkg.indexFunctions(files)
+	pkg.indexConstants(files)
+
+	return pkg, nil
+}
+
+// parseDir parses one directory's non-test sources. A missing directory is an
+// error rather than an empty result: the generated tool package is written by
+// `make proto` and gitignored, so its absence would report every born-generated
+// route as one no client can build.
+func (pkg *clientPackage) parseDir(dir string) ([]*ast.File, error) {
 	var files []*ast.File
 
 	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, walkErr error) error {
@@ -64,10 +86,7 @@ func parsePackage(dir string) (*clientPackage, error) {
 		return nil, fmt.Errorf("walk %s: %w", dir, err)
 	}
 
-	pkg.indexFunctions(files)
-	pkg.indexConstants(files)
-
-	return pkg, nil
+	return files, nil
 }
 
 // indexFunctions records every function declaration by name and flags the

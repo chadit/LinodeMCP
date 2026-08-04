@@ -3,6 +3,7 @@ syntax = "proto3";
 package linode.mcp.v1;
 
 import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
@@ -14,6 +15,12 @@ option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1
 
 // ProfileDraftNewInput is the input contract for linode_profile_draft_new.
 message ProfileDraftNewInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_draft_new"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftResponse";
+
   // Name for the new draft. Must be unique within the registry.
   string name = 1;
   // Optional profile name to seed the draft from. Resolves against built-ins
@@ -23,6 +30,12 @@ message ProfileDraftNewInput {
 
 // ProfileDraftShowInput is the input contract for linode_profile_draft_show.
 message ProfileDraftShowInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_draft_show"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftResponse";
+
   // Draft name to show.
   string name = 1;
 }
@@ -30,6 +43,12 @@ message ProfileDraftShowInput {
 // ProfileDraftDiscardInput is the input contract for
 // linode_profile_draft_discard.
 message ProfileDraftDiscardInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_draft_discard"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftDiscardResponse";
+
   // Draft name to discard.
   string name = 1;
 }
@@ -37,6 +56,12 @@ message ProfileDraftDiscardInput {
 // ProfileDraftSetInput is the input contract for linode_profile_draft_set.
 // Each settable field is optional; missing fields are left unchanged.
 message ProfileDraftSetInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_draft_set"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftSetResponse";
+
   // Draft name to mutate.
   string name = 1;
   // Replace allowed_environments with this list.
@@ -49,6 +74,12 @@ message ProfileDraftSetInput {
 
 // ProfileDraftSaveInput is the input contract for linode_profile_draft_save.
 message ProfileDraftSaveInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_draft_save"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftSaveResponse";
+
   // Draft name to save.
   string name = 1;
   // Must be true. The save is a write operation that mutates the config file.
@@ -60,6 +91,12 @@ message ProfileDraftSaveInput {
 // field cannot be marked required in the generated schema, so the required flag
 // is dropped (the handler still enforces presence).
 message ProfileDraftAddToolsInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_draft_add_tools"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftAddToolsResponse";
+
   // Draft name to mutate.
   string name = 1;
   // Tool names to add to the draft. Required at runtime, though the generated
@@ -72,6 +109,12 @@ message ProfileDraftAddToolsInput {
 // repeated field cannot be marked required in the generated schema, so the
 // required flag is dropped (the handler still enforces presence).
 message ProfileDraftRemoveToolsInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_draft_remove_tools"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDraftRemoveToolsResponse";
+
   // Draft name to mutate.
   string name = 1;
   // Tool names to remove from the draft. Required at runtime, though the
@@ -81,6 +124,12 @@ message ProfileDraftRemoveToolsInput {
 
 // ProfileListToolsInput is the input contract for linode_profile_list_tools.
 message ProfileListToolsInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_list_tools"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileToolListResponse";
+
   // Filter to tools whose Categories include this exact name (e.g. "compute",
   // "dns").
   optional string category = 1;
@@ -92,7 +141,13 @@ message ProfileListToolsInput {
 // ProfileListCategoriesInput is the input contract for
 // linode_profile_list_categories. The tool takes no parameters; the empty
 // message generates an empty-properties object schema.
-message ProfileListCategoriesInput {}
+message ProfileListCategoriesInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_list_categories"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileCategoryListResponse";
+}
 
 // ProfileCanRunCall is one entry in a linode_profile_can_run request: a tool
 // name plus the arguments that would be passed to it.
@@ -108,6 +163,12 @@ message ProfileCanRunCall {
 // generated schema, so the required flag is dropped (the handler still enforces
 // presence).
 message ProfileCanRunInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_profile_can_run"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileCanRunResponse";
+
   // The tool calls to check against the active profile. Required at runtime,
   // though the generated schema cannot mark a repeated field required.
   repeated ProfileCanRunCall calls = 1;

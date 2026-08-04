@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
 import httpx
@@ -20,6 +21,7 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    optional_tags_argument,
 )
 from linodemcp.tools.proto_enum import enum_choice_error, optional_enum_error
 from linodemcp.tools.proto_response import serialize_api_response
@@ -79,6 +81,53 @@ def _firewall_policy_error(arguments: dict[str, Any]) -> str | None:
     return None
 
 
+def _object_argument(
+    arguments: dict[str, Any], name: str
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Read an optional object argument, keeping the caller's keys verbatim.
+
+    Wording matches Go's objectMapFromToolArg so the shared behavior fixtures
+    assert one byte-identical message in both languages. The JSON-string form is
+    accepted alongside the native object some clients still send.
+    """
+    value: Any = arguments.get(name)
+    if value is None:
+        return None, None
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None, None
+        try:
+            decoded: Any = json.loads(stripped)
+        except ValueError:
+            return None, f"{name} must be an object"
+        value = decoded
+    if not isinstance(value, dict):
+        return None, f"{name} must be an object"
+    return cast("dict[str, Any]", value), None
+
+
+def _firewall_create_body(
+    arguments: dict[str, Any],
+) -> tuple[
+    tuple[list[str] | None, dict[str, Any] | None, dict[str, Any] | None], str | None
+]:
+    """Parse the create body's tags, rules, and devices in Go's argument order."""
+    tags, tags_error = optional_tags_argument(arguments)
+    if tags_error:
+        return (None, None, None), tags_error
+
+    rules, rules_error = _object_argument(arguments, "rules")
+    if rules_error is not None:
+        return (None, None, None), rules_error
+
+    devices, devices_error = _object_argument(arguments, "devices")
+    if devices_error is not None:
+        return (None, None, None), devices_error
+
+    return (tags, rules, devices), None
+
+
 def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
     """Create the linode_firewall_create tool."""
     return Tool(
@@ -88,6 +137,30 @@ def create_linode_firewall_create_tool() -> tuple[Tool, Capability]:
         ),
         input_schema=schema("linode.mcp.v1.FirewallCreateInput"),
     ), Capability.Write
+
+
+def _firewall_create_preview(
+    arguments: dict[str, Any],
+    label: str,
+    inbound_policy: str,
+    outbound_policy: str,
+) -> list[TextContent]:
+    """Render the linode_firewall_create dry-run preview."""
+    if not label:
+        return error_response("label is required")
+    return build_dry_run_response(
+        "linode_firewall_create",
+        arguments.get("environment", ""),
+        "POST",
+        "/networking/firewalls",
+        None,
+        side_effects=[
+            (
+                f"A new Cloud Firewall {label!r} will be created with inbound "
+                f"policy {inbound_policy} and outbound policy {outbound_policy}."
+            )
+        ],
+    )
 
 
 async def handle_linode_firewall_create(
@@ -102,21 +175,14 @@ async def handle_linode_firewall_create(
     if policy_error is not None:
         return error_response(policy_error)
 
+    body, body_error = _firewall_create_body(arguments)
+    if body_error is not None:
+        return error_response(body_error)
+    tags, rules, devices = body
+
     if is_dry_run(arguments):
-        if not label:
-            return error_response("label is required")
-        return build_dry_run_response(
-            "linode_firewall_create",
-            arguments.get("environment", ""),
-            "POST",
-            "/networking/firewalls",
-            None,
-            side_effects=[
-                (
-                    f"A new Cloud Firewall {label!r} will be created with inbound "
-                    f"policy {inbound_policy} and outbound policy {outbound_policy}."
-                )
-            ],
+        return _firewall_create_preview(
+            arguments, label, inbound_policy, outbound_policy
         )
 
     if not arguments.get("confirm"):
@@ -132,6 +198,9 @@ async def handle_linode_firewall_create(
             label=label,
             inbound_policy=inbound_policy,
             outbound_policy=outbound_policy,
+            tags=tags,
+            rules=rules,
+            devices=devices,
         )
         return serialize_api_response(
             {
@@ -193,6 +262,10 @@ async def handle_linode_firewall_update(
     if policy_error is not None:
         return error_response(policy_error)
 
+    tags, tags_error = optional_tags_argument(arguments)
+    if tags_error:
+        return error_response(tags_error)
+
     if is_dry_run(arguments):
 
         async def _fetch(client: RetryableClient) -> Any:
@@ -225,6 +298,7 @@ async def handle_linode_firewall_update(
             status=arguments.get("status"),
             inbound_policy=arguments.get("inbound_policy"),
             outbound_policy=arguments.get("outbound_policy"),
+            tags=tags,
         )
         return serialize_api_response(
             {
@@ -518,7 +592,7 @@ def _firewall_rules_fields_error(arguments: dict[str, Any]) -> str | None:
         if not _is_firewall_rule_list(rules_raw):
             return f"{field} must be an array of objects"
 
-    return None
+    return _firewall_policy_error(arguments)
 
 
 def _firewall_rules_update_validation_error(arguments: dict[str, Any]) -> str | None:
@@ -557,12 +631,16 @@ async def handle_linode_firewall_rules_update(
 
     inbound = cast("list[dict[str, Any]]", arguments.get("inbound"))
     outbound = cast("list[dict[str, Any]]", arguments.get("outbound"))
+    inbound_policy = cast("str | None", arguments.get("inbound_policy"))
+    outbound_policy = cast("str | None", arguments.get("outbound_policy"))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         result = await client.update_firewall_rules_raw(
             firewall_id=firewall_id,
             inbound=inbound,
             outbound=outbound,
+            inbound_policy=inbound_policy,
+            outbound_policy=outbound_policy,
         )
         return serialize_api_response(
             {

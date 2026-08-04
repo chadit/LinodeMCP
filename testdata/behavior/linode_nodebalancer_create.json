@@ -4,29 +4,149 @@
   "cases": [
     {
       "name": "rejects missing region",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "region is required"
     },
     {
       "name": "posts the create body",
-      "args": { "region": "us-east", "client_conn_throttle": 20, "confirm": true },
-      "api_response": { "id": 100, "label": "web-lb", "region": "us-east" },
+      "args": {
+        "region": "us-east",
+        "client_conn_throttle": 20,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web-lb",
+        "region": "us-east"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/nodebalancers",
-        "body": { "region": "us-east", "client_conn_throttle": 20 }
+        "body": {
+          "region": "us-east",
+          "client_conn_throttle": 20
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"region": "us-east", "client_conn_throttle": 20},
+      "args": {
+        "region": "us-east",
+        "client_conn_throttle": 20
+      },
       "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "region": "us-east", "client_conn_throttle": 20, "confirm": true },
+      "args": {
+        "region": "us-east",
+        "client_conn_throttle": 20,
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create NodeBalancer"
+    },
+    {
+      "name": "sends the tags array in the body",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "tags": [
+          "prod",
+          "web"
+        ]
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web-lb",
+        "region": "us-east"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers",
+        "body": {
+          "region": "us-east",
+          "tags": [
+            "prod",
+            "web"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects a tags value that is not an array",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "tags": 5
+      },
+      "expect_error": "tags must be a JSON string array"
+    },
+    {
+      "name": "rejects a blank tag entry",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "tags": [
+          "prod",
+          "  "
+        ]
+      },
+      "expect_error": "tags entries must be non-empty strings"
+    },
+    {
+      "name": "carries configs, vpcs, and firewall_id into the body",
+      "args": {
+        "region": "us-east",
+        "confirm": true,
+        "firewall_id": 88,
+        "configs": [
+          {
+            "port": 80,
+            "protocol": "http"
+          }
+        ],
+        "vpcs": [
+          {
+            "subnet_id": 7
+          }
+        ]
+      },
+      "api_response": {
+        "id": 1,
+        "label": "nb",
+        "region": "us-east"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers",
+        "body": {
+          "region": "us-east",
+          "firewall_id": 88,
+          "configs": [
+            {
+              "port": 80,
+              "protocol": "http"
+            }
+          ],
+          "vpcs": [
+            {
+              "subnet_id": 7
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects a configs value that is not an array of objects",
+      "args": {
+        "region": "us-east",
+        "confirm": true,
+        "configs": 5
+      },
+      "expect_error": "configs must be an array of objects"
     }
   ]
 }

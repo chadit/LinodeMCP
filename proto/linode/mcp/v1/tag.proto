@@ -58,13 +58,15 @@ message TagListInput {
     method: "GET"
     path: "/tags"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TagListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // TagCreateInput is the input contract for linode_tag_create. label and
@@ -75,24 +77,30 @@ message TagCreateInput {
     method: "POST"
     path: "/tags"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TagWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a Linode tag. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Tag '{label}' created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The tag label.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional domain IDs to tag.
-  repeated int32 domains = 3;
+  repeated int32 domains = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional Linode IDs to tag.
-  repeated int32 linodes = 4;
+  repeated int32 linodes = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional NodeBalancer IDs to tag.
-  repeated int32 nodebalancers = 5;
+  repeated int32 nodebalancers = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional volume IDs to tag.
-  repeated int32 volumes = 6;
+  repeated int32 volumes = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm tag creation. Ignored when dry_run=true.
-  bool confirm = 7; // system param
+  bool confirm = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 8; // system param
+  optional bool dry_run = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Optional reserved public IPv4 addresses to tag.
+  repeated string reserved_ipv4_addresses = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // TagDeleteInput is the input contract for linode_tag_delete, a two-stage
@@ -103,22 +111,27 @@ message TagDeleteInput {
     method: "DELETE"
     path: "/tags/{tag_label}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "confirm must be true to delete a tag";
+  option (linode.mcp.v1.success_message) = "Tag '{tag_label}' deleted successfully";
+  option (linode.mcp.v1.resource_type) = "Tag";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Tag label to delete.
-  string tag_label = 2;
+  string tag_label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm tag deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // TaggedObjectListInput is the input contract for linode_tag_object_list.
@@ -129,13 +142,15 @@ message TaggedObjectListInput {
     method: "GET"
     path: "/tags/{tag_label}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TaggedObjectListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Tag label to list objects for.
-  string tag_label = 2;
+  string tag_label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }

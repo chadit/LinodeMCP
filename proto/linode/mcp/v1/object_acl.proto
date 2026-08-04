@@ -27,17 +27,19 @@ message ObjectACLGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_object_acl_get"
     method: "GET"
-    path: "/object-storage/buckets/{region_id}/{bucket}/object-acl"
+    path: "/object-storage/buckets/{region}/{label}/object-acl"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectACL";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (required).
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (required).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The object key within the bucket (required).
-  string name = 4;
+  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ObjectACLUpdateInput is the input contract for
@@ -47,24 +49,28 @@ message ObjectACLUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_object_storage_object_acl_update"
     method: "PUT"
-    path: "/object-storage/buckets/{region_id}/{bucket}/object-acl"
+    path: "/object-storage/buckets/{region}/{label}/object-acl"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageObjectACLWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This modifies the object's access permissions. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "ACL for object '{name}' in bucket '{label}' modified successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the bucket is located (e.g., 'us-east-1', 'us-southeast-1').
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The bucket label (name).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The object key (path/filename within the bucket).
-  string name = 4;
+  string name = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // ACL to set: 'private', 'public-read', 'authenticated-read', or
   // 'public-read-write'.
-  string acl = 5;
+  string acl = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to proceed. This modifies the object's access permissions.
   // Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

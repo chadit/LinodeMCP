@@ -4,23 +4,43 @@
   "cases": [
     {
       "name": "requires region",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "region is required"
     },
     {
       "name": "requires type",
-      "args": { "confirm": true, "region": "us-east" },
+      "args": {
+        "confirm": true,
+        "region": "us-east"
+      },
       "expect_error": "type is required"
     },
     {
       "name": "requires firewall_id",
-      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1" },
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1"
+      },
       "expect_error": "firewall_id is required for instance creation. Get a firewall ID from linode_firewall_list, or create one with linode_firewall_create."
     },
     {
       "name": "creates an instance with a public interface",
-      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1", "firewall_id": 123 },
-      "api_response": { "id": 100, "label": "web", "region": "us-east", "type": "g6-nanode-1", "status": "provisioning" },
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web",
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "status": "provisioning"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/linode/instances",
@@ -32,7 +52,10 @@
             {
               "public": {},
               "firewall_id": 123,
-              "default_route": { "ipv4": true, "ipv6": true }
+              "default_route": {
+                "ipv4": true,
+                "ipv6": true
+              }
             }
           ]
         }
@@ -45,21 +68,107 @@
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1", "firewall_id": 123 },
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create instance"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1", "firewall_id": 123 },
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123
+      },
       "api_response": true,
       "expect_api_error": "Failed to create instance"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "confirm": true, "region": "us-east", "type": "g6-nanode-1", "firewall_id": 123 },
-      "api_response": [1, 2],
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to create instance"
+    },
+    {
+      "name": "sends the tags array in the body",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "tags": [
+          "prod",
+          "web"
+        ]
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web",
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "status": "provisioning"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances",
+        "body": {
+          "region": "us-east",
+          "type": "g6-nanode-1",
+          "tags": [
+            "prod",
+            "web"
+          ],
+          "interface_generation": "linode",
+          "interfaces": [
+            {
+              "public": {},
+              "firewall_id": 123,
+              "default_route": {
+                "ipv4": true,
+                "ipv6": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects a tags value that is not an array",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "tags": 5
+      },
+      "expect_error": "tags must be a JSON string array"
+    },
+    {
+      "name": "rejects a blank tag entry",
+      "args": {
+        "confirm": true,
+        "region": "us-east",
+        "type": "g6-nanode-1",
+        "firewall_id": 123,
+        "tags": [
+          "prod",
+          "  "
+        ]
+      },
+      "expect_error": "tags entries must be non-empty strings"
     }
   ]
 }

@@ -68,6 +68,11 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolR
 	size := request.GetInt("size", 0)
 	linodeID := request.GetInt("linode_id", 0)
 
+	tags, _, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	if IsDryRun(request) {
 		if msg := validateVolumeCreateArgs(label, region, size, linodeID); msg != "" {
 			return mcp.NewToolResultError(msg), nil
@@ -96,10 +101,27 @@ func handleLinodeVolumeCreateRequest(ctx context.Context, request *mcp.CallToolR
 		Label:  label,
 		Region: region,
 		Size:   size,
+		Tags:   tags,
 	}
 
 	if linodeID != 0 {
 		req.LinodeID = &linodeID
+	}
+
+	encryption, validationMessage := optionalEnumChoice(request, "encryption", linodev1.DiskEncryption_Value_value)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req.Encryption = encryption
+
+	configID, validationMessage := optionalPaginationInt(request.GetArguments(), "config_id", 1, 0)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	if configID != 0 {
+		req.ConfigID = &configID
 	}
 
 	volume, err := client.CreateVolumeProto(ctx, &req)

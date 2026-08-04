@@ -1,12 +1,55 @@
 {
   "tool": "linode_nodebalancer_config_rebuild",
-  "description": "Pins the rebuild POST method and path (body omitted: Go sends no body, Python sends {}). Rejection paths diverge (see report). A response that is not a JSON object must fail rather than yield a zeroed config; the bare-array shape of that case is withheld because Python still fabricates a success from it (see report).",
+  "description": "Pins the rebuild POST method, path, and body. Rebuild replaces the config and its whole backend node set in one call, so nodes is required and both clients send the same body (they previously sent no body and {} respectively). Rejection paths diverge (see report). A response that is not a JSON object must fail rather than yield a zeroed config; the bare-array shape of that case is withheld because Python still fabricates a success from it (see report).",
   "cases": [
     {
       "name": "posts the rebuild request",
-      "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true },
+      "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true, "nodes": [{ "label": "web", "address": "192.0.2.10:80" }] },
       "api_response": { "id": 7, "nodebalancer_id": 5, "port": 80, "protocol": "http" },
-      "expect_request": { "method": "POST", "path": "/nodebalancers/5/configs/7/rebuild" }
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers/5/configs/7/rebuild",
+        "body": { "nodes": [{ "label": "web", "address": "192.0.2.10:80" }] }
+      }
+    },
+    {
+      "name": "carries the optional config fields into the body",
+      "args": {
+        "nodebalancer_id": 5,
+        "config_id": 7,
+        "confirm": true,
+        "nodes": [{ "label": "web", "address": "192.0.2.10:80", "weight": 50, "mode": "accept" }],
+        "port": 443,
+        "protocol": "http",
+        "algorithm": "leastconn",
+        "stickiness": "none",
+        "check": "connection",
+        "check_interval": 5,
+        "check_timeout": 3,
+        "check_attempts": 2,
+        "check_path": "/healthz",
+        "check_body": "ok",
+        "udp_check_port": 8080
+      },
+      "api_response": { "id": 7, "nodebalancer_id": 5, "port": 443, "protocol": "http" },
+      "expect_request": {
+        "method": "POST",
+        "path": "/nodebalancers/5/configs/7/rebuild",
+        "body": {
+          "nodes": [{ "label": "web", "address": "192.0.2.10:80", "weight": 50, "mode": "accept" }],
+          "port": 443,
+          "protocol": "http",
+          "algorithm": "leastconn",
+          "stickiness": "none",
+          "check": "connection",
+          "check_interval": 5,
+          "check_timeout": 3,
+          "check_attempts": 2,
+          "check_path": "/healthz",
+          "check_body": "ok",
+          "udp_check_port": 8080
+        }
+      }
     },
     {
       "name": "requires confirm",
@@ -14,8 +57,28 @@
       "expect_error": "This rebuilds a NodeBalancer config. Set confirm=true to proceed."
     },
     {
+      "name": "requires nodes",
+      "args": {"nodebalancer_id": 5, "config_id": 7, "confirm": true},
+      "expect_error": "nodes is required"
+    },
+    {
+      "name": "rejects a nodes value that is not an array of objects",
+      "args": {"nodebalancer_id": 5, "config_id": 7, "confirm": true, "nodes": 7},
+      "expect_error": "nodes must be an array of objects"
+    },
+    {
+      "name": "rejects an unknown algorithm",
+      "args": {"nodebalancer_id": 5, "config_id": 7, "confirm": true, "nodes": [], "algorithm": "fastest"},
+      "expect_error": "algorithm must be one of: roundrobin, leastconn, source, ring_hash"
+    },
+    {
+      "name": "rejects a port outside the valid range",
+      "args": {"nodebalancer_id": 5, "config_id": 7, "confirm": true, "nodes": [], "port": 70000},
+      "expect_error": "port must be an integer from 1 through 65535"
+    },
+    {
       "name": "rejects a non-object API response",
-      "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true },
+      "args": { "nodebalancer_id": 5, "config_id": 7, "confirm": true, "nodes": [{ "label": "web", "address": "192.0.2.10:80" }] },
       "api_response": 7,
       "expect_api_error": "Failed to rebuild"
     }

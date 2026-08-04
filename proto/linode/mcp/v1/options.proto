@@ -18,20 +18,53 @@ message ToolRoute {
   // HTTP method in uppercase: GET, POST, PUT, or DELETE.
   string method = 2;
   // Path template rooted at the API version, naming every path parameter:
-  // "/databases/postgresql/instances/{postgresql_instance_id}".
+  // "/databases/postgresql/instances/{instance_id}".
   //
-  // Names are snake_case, matching this file's field convention, and come
-  // from the Linode API documentation for that operation. They exist so a
-  // reader can bind a parameter to the documented one of the same name;
-  // nothing in this repo dispatches on them.
+  // Every placeholder names a field of this same message, so a consumer can
+  // substitute path parameters by name with no mapping table. That binding is
+  // what lets the route be built from the descriptor instead of being spelled
+  // out again in each language's client. Linode documents some of these
+  // parameters under a different name (postgresqlInstanceId for the example
+  // above); the binding is to the field, so this repo's field names win.
   //
   // The two route scanners cannot see a name. They read code that builds a
   // URL out of variables, so scripts/_routescan.py and go/cmd/route-dump both
   // collapse every parameter to the {p} placeholder. A consumer comparing a
   // declared route against either scanner normalizes the names away first
-  // (scripts/_toolroutes.py norm_template) and matches on shape. Shape is what
-  // is enforced; a name is free-form documentation.
+  // (scripts/_toolroutes.py norm_template) and matches on shape.
   string path = 3;
+}
+
+// ToolMeta names a tool that reaches no Linode route: the profile builder, the
+// audit readers, version, and hello all work on local state. A routed tool gets
+// its name from tool_route, so this exists to give the meta tools the same
+// self-describing input message rather than leaving them the one part of the
+// surface the descriptors cannot name.
+message ToolMeta {
+  // Registered MCP tool name, exactly as it appears in
+  // docs/contracts/tools-manifest.txt.
+  string tool = 1;
+}
+
+// ToolCapability is the permission tier a tool is registered under, which is
+// what a profile filters on. Declaring it here makes the descriptors answer
+// which tools exist and what each one is allowed to do, so a startup check and
+// the capability gate both read the contract instead of a second copy of it.
+enum ToolCapability {
+  TOOL_CAPABILITY_UNSPECIFIED = 0;
+  // Reads Linode state and changes nothing.
+  TOOL_CAPABILITY_READ = 1;
+  // Creates or updates a Linode resource.
+  TOOL_CAPABILITY_WRITE = 2;
+  // Removes a Linode resource, which is the tier the dry-run and two-stage
+  // rules key on.
+  TOOL_CAPABILITY_DESTROY = 3;
+  // Calls an endpoint the Linode API gates on the account or child_account
+  // superscope: account administration, profile self-service, and Managed.
+  TOOL_CAPABILITY_ADMIN = 4;
+  // Reaches no Linode route at all, working on local config or session state.
+  // Exactly the tools that carry tool_meta rather than tool_route.
+  TOOL_CAPABILITY_META = 5;
 }
 
 extend google.protobuf.MessageOptions {
@@ -40,4 +73,126 @@ extend google.protobuf.MessageOptions {
   // and carry no annotation. Field numbers from 50000 are the range reserved
   // for extensions private to one organization.
   ToolRoute tool_route = 50001;
+
+  // Declares the tier the annotated *Input message's tool is registered under.
+  // Required on every tool input, routed or meta, which is what lets a
+  // consumer enumerate the whole surface from the descriptors.
+  ToolCapability tool_capability = 50003;
+
+  // Names the meta tool the annotated *Input message belongs to. Carried only
+  // by messages with no tool_route: a message declaring a capability has
+  // exactly one of the two, so its tool name is written once either way.
+  ToolMeta tool_meta = 50004;
+
+  // Full name of the message the tool's handler serializes as its result, for
+  // example "linode.mcp.v1.DomainWriteResponse". An input message already says
+  // which route its tool calls and how to build the request; without this it
+  // says nothing about what comes back, so every language names the response
+  // type again at its own marshal call. Binding the pair here is what lets one
+  // serializer serve every tool.
+  //
+  // The binding is not derivable from the input message's name. A tool whose
+  // input is AccountBetaGetInput answers with AccountBetaProgram, and roughly
+  // half the surface diverges from the spelling its input would suggest, so
+  // the response is written out rather than inferred.
+  //
+  // Left unset by the handful of tools whose Linode response is an open-ended
+  // object with no proto model (database engine configs, profile preferences,
+  // Managed stats). Those serialize through google.protobuf.Struct, which has
+  // no per-tool message to name; `make tool-response` lists them by name so
+  // the gap stays deliberate.
+  string tool_response = 50005;
+
+  // The exact prose a Write, Admin, or Destroy tool answers with when the
+  // caller has not set confirm=true. The text is part of the tool contract
+  // rather than an implementation detail: clients surface it to a user who
+  // then decides, and it is pinned across languages by
+  // docs/contracts/message-parity-baseline.txt. Declaring it once here is what
+  // lets both languages read the same sentence instead of keeping two copies
+  // in step by hand.
+  string confirm_message = 50006;
+
+  // The prose a successful mutation reports, with {field_name} placeholders
+  // naming a field of this input message, of the tool_response message, or of
+  // one of that message's direct sub-messages. So
+  // "Domain '{domain}' (ID: {id}) created successfully" fills from the Domain
+  // carried inside DomainWriteResponse.
+  //
+  // Left unset where the current message interpolates something that is not a
+  // field at all, such as a family label chosen in code or a count computed
+  // from the request. Guessing a binding there would put words in the API's
+  // mouth, so those tools keep their handler-side text until the value they
+  // report becomes a field.
+  string success_message = 50007;
+
+  // The resource type a Destroy tool acts on, spelled as the key
+  // twostage.HashIgnoreFields takes. That table names the cosmetic fields
+  // stripped from fetched state before it is hashed for two-stage drift
+  // detection, and today the key is written out again at every call site in
+  // every language. Naming it on the input is what makes the tool-to-type
+  // binding one fact.
+  //
+  // A type the table has no entry for is legal and means the whole state is
+  // hashed; `make tool-response` holds those to being listed rather than
+  // typos, since a misspelled key silently turns drift detection into a
+  // whole-state compare.
+  string resource_type = 50008;
+
+  // True when the tool's call must not be retried. The route is not
+  // idempotent, so a retry after a timeout can create a second resource and
+  // bill for it: allocating an address, cloning a disk, opening a ticket. The
+  // client libraries each carry their own copy of this judgment today and the
+  // two copies disagree, which is the drift this option exists to end.
+  bool retry_disabled = 50009;
+
+  // The sentence a tool advertises to a client as its description, exactly as
+  // it reads in the registered tool. It is the most client-visible prose the
+  // contract has and the descriptors could not name it: the message comment
+  // above describes the input contract ("DomainGetInput is the input contract
+  // for linode_domain_get"), which is documentation for a reader of the proto,
+  // not the sentence a model chooses a tool by.
+  //
+  // Written here for the same reason confirm_message is: both languages spell
+  // it out today, nothing holds the two copies together, and a generator has
+  // no other place to read it from.
+  string tool_description = 50010;
+
+  // The prose a failed Linode call reports, with {field_name} placeholders
+  // naming a field of this input message and {error} standing for the failure
+  // itself. So "Failed to retrieve domain {domain_id}: {error}".
+  //
+  // The success side of the same call already reads its sentence from
+  // success_message; leaving the failure side spelled out in each language is
+  // what lets a tool answer a failure differently depending on which binary
+  // served it. Left unset by tools whose failure text is not per-tool, such as
+  // the list surface, where one shared sentence covers every collection.
+  string error_message = 50011;
+}
+
+// FieldLocation is where an input field travels in the HTTP request its tool
+// makes. Without it the descriptor says which route a tool calls but not how
+// to build the request for it, so each language has to spell the same URL out
+// again. Naming the location here is what lets one request builder serve every
+// tool in every language.
+enum FieldLocation {
+  FIELD_LOCATION_UNSPECIFIED = 0;
+  // Substituted into the tool_route path template by field name.
+  FIELD_LOCATION_PATH = 1;
+  // Appended to the query string when set.
+  FIELD_LOCATION_QUERY = 2;
+  // Carried in the JSON request body.
+  FIELD_LOCATION_BODY = 3;
+  // Consumed by the MCP layer and never sent to Linode. These are the fields
+  // marked `// system param`: dry_run, confirm, plan_id, environment, and the
+  // two-stage mode selector. Kept explicit rather than inferred from the
+  // comment so stripping a comment cannot silently put a local field on the
+  // wire.
+  FIELD_LOCATION_LOCAL = 4;
+}
+
+extend google.protobuf.FieldOptions {
+  // Declares where the annotated field goes in the request. Required on every
+  // field of a message that carries a tool_route; `make field-location`
+  // fails a routed message with an unannotated field.
+  FieldLocation field_location = 50002;
 }

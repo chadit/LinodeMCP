@@ -112,7 +112,7 @@ func TestClientRoutesVPCPart1(t *testing.T) {
 			response: clientRouteProtoPageRegion,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListVPCIPAddressesProto(ctx, 4242)
+				got, err := client.ListVPCIPAddressesProto(ctx, 4242, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.VPCIP).GetRegion) })
 			},
@@ -124,7 +124,7 @@ func TestClientRoutesVPCPart1(t *testing.T) {
 			response: clientRouteProtoPageRegion,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListVPCIPsProto(ctx)
+				got, err := client.ListVPCIPsProto(ctx, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.VPCIP).GetRegion) })
 			},
@@ -148,7 +148,7 @@ func TestClientRoutesVPCPart1(t *testing.T) {
 			response: clientRouteProtoPageLabel,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListVPCSubnetsProto(ctx, 4242)
+				got, err := client.ListVPCSubnetsProto(ctx, 4242, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.VpcSubnet).GetLabel) })
 			},
@@ -169,7 +169,7 @@ func TestClientRoutesVPCPart2(t *testing.T) {
 			response: clientRouteProtoPageLabel,
 			want:     clientRouteTwoElementProbe,
 			call: func(ctx context.Context, client *linode.Client) (any, error) {
-				got, err := client.ListVPCsProto(ctx)
+				got, err := client.ListVPCsProto(ctx, 1, 25)
 
 				return clientRouteProbe(err, func() any { return clientRouteList(got, (*linodev1.Vpc).GetLabel) })
 			},

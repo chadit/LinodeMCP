@@ -41,11 +41,13 @@ message InstanceTypeGetInput {
     method: "GET"
     path: "/linode/types/{type_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceType";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the instance type to retrieve (required).
-  string type_id = 2;
+  string type_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceTypeListInput is the input contract for linode_type_list. class is a
@@ -56,11 +58,13 @@ message InstanceTypeListInput {
     method: "GET"
     path: "/linode/types"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceTypeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter types by class (standard, dedicated, gpu, highmem, premium).
-  optional string class = 2;
+  optional string class = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // InstanceTypeListResponse is the linode_type_list envelope: count, the optional
@@ -108,9 +112,11 @@ message LKETypeListInput {
     method: "GET"
     path: "/lke/types"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKETypeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NodeBalancerTypeListResponse is the linode_nodebalancer_type_list envelope:
@@ -130,9 +136,11 @@ message NodeBalancerTypeListInput {
     method: "GET"
     path: "/nodebalancers/types"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerTypeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // VolumeTypeListResponse is the linode_volume_type_list envelope: count and the
@@ -162,9 +170,11 @@ message ObjectStorageTypeListInput {
     method: "GET"
     path: "/object-storage/types"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ObjectStorageTypeListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NetworkTransferPriceListResponse is the linode_network_transfer_price_list
@@ -187,7 +197,9 @@ message NetworkTransferPriceListInput {
     method: "GET"
     path: "/network-transfer/prices"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NetworkTransferPriceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

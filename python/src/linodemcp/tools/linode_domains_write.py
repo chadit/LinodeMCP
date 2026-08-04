@@ -10,29 +10,27 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import domain_pb2
 from linodemcp.linode import APIError, NetworkError, validate_label
 from linodemcp.profiles import Capability
+from linodemcp.tools.drivers import run_destructive_tool, run_write_tool
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
     DryRunDetails,
     build_dry_run_response,
     error_response,
-    execute_dry_run,
     execute_tool,
     is_dry_run,
+    optional_tags_argument,
 )
+from linodemcp.tools.proto_enum import optional_enum_error
 from linodemcp.tools.proto_response import raw_int, raw_str, serialize_api_response
 from linodemcp.tools.toolschemas import schema
-from linodemcp.tools.twostage_destroy import run_two_stage_destroy
-from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
 
 
-# The domain-name pattern POST /domains documents. Rejecting locally keeps a
-# malformed name from burning an API call, and pinning the documented pattern
-# (rather than a looser hand-rolled one) is what keeps both languages rejecting
-# the same set of names.
+# The domain-name pattern POST /domains documents. Pinning it verbatim rather
+# than hand-rolling one keeps both languages rejecting the same names.
 _DOMAIN_CREATE_NAME_PATTERN = re.compile(
     r"^(\*\.)?([a-zA-Z0-9-_]{1,63}\.)+"
     r"([a-zA-Z]{2,3}\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$"
@@ -109,10 +107,11 @@ async def handle_linode_domain_import(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        # retry=False because POST /domains/import is not idempotent: the API
-        # assigns the ID, so replaying after a transient failure leaves a
-        # duplicate zone the caller never learns about.
-        raw = await client.post_raw("/domains/import", request_body, retry=False)
+        # retry=False: POST /domains/import is not idempotent, so replaying
+        # after a transient failure leaves a duplicate zone nobody hears about.
+        raw = await client.route_raw(
+            "linode_domain_import", body=request_body, retry=False
+        )
         domain_id = raw_int(raw, "id")
         domain_label = raw_str(raw, "domain")
         return serialize_api_response(
@@ -182,11 +181,10 @@ async def handle_linode_domain_clone(
         return error_response("This clones a DNS domain. Set confirm=true to proceed.")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        # retry=False because the clone POST creates a new zone with its own
-        # API-assigned ID, so replaying after a transient failure leaves a
-        # duplicate the caller never learns about.
-        raw = await client.post_raw(
-            f"/domains/{encoded_domain_id}/clone", request_body, retry=False
+        # retry=False: the clone POST mints a new API-assigned ID, so replaying
+        # after a transient failure leaves a duplicate nobody hears about.
+        raw = await client.route_raw(
+            "linode_domain_clone", domain_id, body=request_body, retry=False
         )
         new_id = raw_int(raw, "id")
         new_label = raw_str(raw, "domain")
@@ -235,10 +233,9 @@ def _domain_create_type_error(domain_type: Any) -> str | None:
 def _domain_create_integer_fields_error(arguments: dict[str, Any]) -> str | None:
     """Return an integer-field type error, if any.
 
-    ``type(value) is int`` rather than ``isinstance`` because ``bool`` is an
-    ``int`` subclass, and ``true`` is not an interval the API accepts. A float
-    is allowed only when it is exactly integral, which also rejects NaN and the
-    infinities.
+    ``type(value) is int`` rather than ``isinstance`` because ``bool`` subclasses
+    ``int`` and ``true`` is not an interval the API accepts. A float passes only
+    when exactly integral, which also rejects NaN and the infinities.
     """
     for name in _DOMAIN_CREATE_INTEGER_FIELDS:
         if name not in arguments:
@@ -295,9 +292,8 @@ def _domain_create_request(
 ) -> tuple[dict[str, Any], str | None]:
     """Build the POST /domains body, or return the first validation failure.
 
-    Optional fields are copied by presence rather than by truthiness, so an
-    explicit "" or 0 still reaches the API instead of being dropped as if the
-    caller had said nothing.
+    Optional fields are copied by presence, not truthiness, so an explicit ""
+    or 0 still reaches the API instead of being dropped.
     """
     domain_name = arguments.get("domain")
     domain_type = arguments.get("type")
@@ -338,50 +334,24 @@ async def handle_linode_domain_create(
     """Handle linode_domain_create tool request."""
     body, validation_message = _domain_create_request(arguments)
 
-    if is_dry_run(arguments):
-        if validation_message is not None:
-            return error_response(validation_message)
-        return build_dry_run_response(
-            "linode_domain_create",
-            arguments.get("environment", ""),
-            "POST",
-            "/domains",
-            None,
-            request_body=body,
-            side_effects=[
-                f'A new {body["type"]} DNS domain "{body["domain"]}" will be created.'
-            ],
+    # The prose names body fields, so build it only once validation passed.
+    side_effects: tuple[str, ...] = ()
+    if validation_message is None:
+        side_effects = (
+            f'A new {body["type"]} DNS domain "{body["domain"]}" will be created.',
         )
 
-    if arguments.get("confirm") is not True:
-        return error_response("This creates a DNS domain. Set confirm=true to proceed.")
-
-    if validation_message is not None:
-        return error_response(validation_message)
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        # retry=False because POST /domains is not idempotent: replaying it
-        # after a transient failure can leave a duplicate zone the caller never
-        # learns about.
-        try:
-            raw = await client.post_raw("/domains", body, retry=False)
-        except ValueError as exc:
-            msg = f"domain create response is invalid: {exc}"
-            raise ValueError(msg) from exc
-        if not isinstance(raw, dict):
-            msg = "domain create response must be a JSON object"
-            raise TypeError(msg)
-        new_id = raw_int(raw, "id")
-        new_label = raw_str(raw, "domain")
-        return serialize_api_response(
-            {
-                "message": f"Domain '{new_label}' (ID: {new_id}) created successfully",
-                "domain": raw,
-            },
-            domain_pb2.DomainWriteResponse(),
-        )
-
-    return await execute_tool(cfg, arguments, "create domain", _call)
+    return await run_write_tool(
+        cfg,
+        arguments,
+        tool="linode_domain_create",
+        error_action="create domain",
+        body=body,
+        error=validation_message,
+        preview_error=validation_message,
+        side_effects=side_effects,
+        invalid_response_subject="domain create",
+    )
 
 
 def create_linode_domain_update_tool() -> tuple[Tool, Capability]:
@@ -399,9 +369,7 @@ def create_linode_domain_update_tool() -> tuple[Tool, Capability]:
 def _domain_update_side_effects(
     state: Any, new_domain: Any, new_soa: Any, new_description: Any
 ) -> DryRunDetails:
-    """Phase 2 Tier B walk for domain update. Reports the domain-name and SOA
-    email changes against the fetched state and notes a description change.
-    """
+    """Tier B dry-run walk for domain update, diffed against the fetched state."""
     side_effects: list[str] = []
     if new_domain:
         from_domain = getattr(state, "domain", "")
@@ -420,7 +388,9 @@ def _domain_update_side_effects(
     return {"side_effects": side_effects} if side_effects else {}
 
 
-def _domain_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
+def _domain_update_body(
+    arguments: dict[str, Any], tags: list[str] | None
+) -> dict[str, Any]:
     """Build the domain update PUT body, mirroring the client's omit rules."""
     body: dict[str, Any] = {}
     if arguments.get("domain"):
@@ -433,7 +403,58 @@ def _domain_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
         body["status"] = arguments.get("status")
     if arguments.get("ttl_sec") is not None:
         body["ttl_sec"] = arguments.get("ttl_sec")
+    if tags:
+        body["tags"] = tags
+    # Falsy values are dropped rather than sent, matching the omitempty tags on
+    # Go's UpdateDomainRequest so both clients put the same bytes on the wire.
+    for field in (
+        "axfr_ips",
+        "master_ips",
+        "expire_sec",
+        "refresh_sec",
+        "retry_sec",
+        "type",
+    ):
+        value = arguments.get(field)
+        if value:
+            body[field] = value
     return body
+
+
+def _domain_update_gate_error(domain_id: Any, arguments: dict[str, Any]) -> str | None:
+    """Check the required domain_id, then validate the update body."""
+    if not domain_id:
+        return "domain_id is required"
+    return _domain_update_body_error(arguments)
+
+
+def _domain_update_body_error(arguments: dict[str, Any]) -> str | None:
+    """Validate the zone-transfer lists, type enum, and SOA timers.
+
+    Check order and message text match Go's populateDomainUpdateOptionals so
+    both languages report the same first problem for the same input.
+    """
+    for field in ("axfr_ips", "master_ips"):
+        value: Any = arguments.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, list) or not all(
+            isinstance(entry, str) for entry in cast("list[object]", value)
+        ):
+            return f"{field} must be an array of strings"
+
+    type_error = optional_enum_error(arguments, "type", domain_pb2.DomainType.Value)
+    if type_error is not None:
+        return type_error
+
+    for field in ("expire_sec", "refresh_sec", "retry_sec"):
+        timer: Any = arguments.get(field)
+        if timer is None:
+            continue
+        if isinstance(timer, bool) or not isinstance(timer, int):
+            return f"{field} must be an integer"
+
+    return None
 
 
 async def handle_linode_domain_update(
@@ -442,50 +463,37 @@ async def handle_linode_domain_update(
     """Handle linode_domain_update tool request."""
     domain_id = arguments.get("domain_id", 0)
 
-    if is_dry_run(arguments):
-        if not domain_id:
-            return error_response("domain_id is required")
+    tags, tags_error = optional_tags_argument(arguments)
+    if tags_error:
+        return error_response(tags_error)
 
-        async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_domain(int(domain_id))
+    async def _fetch(client: RetryableClient) -> Any:
+        return await client.get_domain(int(domain_id))
 
-        async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
-            return _domain_update_side_effects(
-                state,
-                arguments.get("domain"),
-                arguments.get("soa_email"),
-                arguments.get("description"),
-            )
-
-        return await execute_dry_run(
-            cfg,
-            arguments,
-            "linode_domain_update",
-            "PUT",
-            f"/domains/{int(domain_id)}",
-            _fetch,
-            _walk,
+    async def _walk(_client: RetryableClient, state: Any) -> DryRunDetails:
+        return _domain_update_side_effects(
+            state,
+            arguments.get("domain"),
+            arguments.get("soa_email"),
+            arguments.get("description"),
         )
 
-    if not arguments.get("confirm"):
-        return error_response("This updates a DNS domain. Set confirm=true to proceed.")
-
-    if not domain_id:
-        return error_response("domain_id is required")
-
-    body = _domain_update_body(arguments)
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.put_raw(f"/domains/{int(domain_id)}", body)
-        return serialize_api_response(
-            {
-                "message": f"Domain {domain_id} modified successfully",
-                "domain": raw,
-            },
-            domain_pb2.DomainWriteResponse(),
-        )
-
-    return await execute_tool(cfg, arguments, "update domain", _call)
+    return await run_write_tool(
+        cfg,
+        arguments,
+        tool="linode_domain_update",
+        error_action="update domain",
+        body=_domain_update_body(arguments, tags),
+        path_values={"domain_id": int(domain_id or 0)},
+        # One gate for the id check and the body validation so both languages
+        # report the same first problem. A preview checks only the id, which is
+        # all Go's update preview checks.
+        error=_domain_update_gate_error(domain_id, arguments),
+        preview_error=None if domain_id else "domain_id is required",
+        state_fetch=_fetch,
+        walk=_walk,
+        preview_request_body=False,
+    )
 
 
 def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
@@ -504,11 +512,11 @@ def create_linode_domain_delete_tool() -> tuple[Tool, Capability]:
 async def _domain_delete_dependency_walk(
     client: RetryableClient, domain_id: int
 ) -> DryRunDetails:
-    """Phase 2 Tier A walk for domain delete. Deleting a domain destroys all
-    its DNS records; the walk surfaces the NS records (the delegation that
-    breaks) as cascade_deleted dependencies and warns with the total record
-    count. Best-effort: a failed record list becomes a warning, not a hard
-    error.
+    """Tier A dry-run walk for domain delete.
+
+    Deleting a domain destroys every record, so NS records (the delegation that
+    breaks) surface as cascade_deleted dependencies alongside a total-count
+    warning. Best effort: a failed record list degrades to a warning.
     """
     details: DryRunDetails = {}
     try:
@@ -544,97 +552,34 @@ async def _domain_delete_dependency_walk(
     return details
 
 
-async def _domain_delete_two_stage(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent] | None:
-    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
-    if arguments.get("mode") not in ("plan", "apply"):
-        return None
-
-    domain_id = arguments.get("domain_id", 0)
-    if not domain_id:
-        return error_response("domain_id is required")
-
-    async def _ts_fetch(client: RetryableClient) -> Any:
-        return await client.get_domain(int(domain_id))
-
-    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
-        await client.delete_domain(int(domain_id))
-        return serialize_api_response(
-            {
-                "message": (
-                    f"Domain {domain_id} and all its records removed successfully"
-                ),
-                "domain_id": domain_id,
-            },
-            domain_pb2.DomainDeleteResponse(),
-        )
-
-    async def _ts_walk(client: RetryableClient, _state: Any) -> DryRunDetails:
-        return await _domain_delete_dependency_walk(client, int(domain_id))
-
-    return await run_two_stage_destroy(
-        cfg,
-        arguments,
-        tool_name="linode_domain_delete",
-        method="DELETE",
-        path=f"/domains/{int(domain_id)}",
-        fetch_state=_ts_fetch,
-        execute=_ts_call,
-        hash_ignore=hash_ignore_fields("Domain"),
-        dependency_walk=_ts_walk,
-    )
-
-
 async def handle_linode_domain_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
     """Handle linode_domain_delete tool request."""
     domain_id = arguments.get("domain_id", 0)
 
-    two_stage = await _domain_delete_two_stage(arguments, cfg)
-    if two_stage is not None:
-        return two_stage
+    async def _fetch(client: RetryableClient) -> Any:
+        return await client.get_domain(int(domain_id))
 
-    if is_dry_run(arguments):
-        if not domain_id:
-            return error_response("domain_id is required")
-
-        async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_domain(int(domain_id))
-
-        async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
-            return await _domain_delete_dependency_walk(client, int(domain_id))
-
-        return await execute_dry_run(
-            cfg,
-            arguments,
-            "linode_domain_delete",
-            "DELETE",
-            f"/domains/{int(domain_id)}",
-            _fetch,
-            _walk,
-        )
-
-    if not arguments.get("confirm"):
-        return error_response(
-            "This operation is destructive and deletes all DNS records. Set "
-            "confirm=true to proceed."
-        )
-
-    if not domain_id:
-        return error_response("domain_id is required")
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
+    async def _execute(client: RetryableClient) -> None:
         await client.delete_domain(int(domain_id))
-        return serialize_api_response(
-            {
-                "message": (
-                    f"Domain {domain_id} and all its records removed successfully"
-                ),
-                "domain_id": domain_id,
-            },
-            domain_pb2.DomainDeleteResponse(),
-        )
 
-    return await execute_tool(cfg, arguments, "delete domain", _call)
+    async def _walk(client: RetryableClient, _state: Any) -> DryRunDetails:
+        return await _domain_delete_dependency_walk(client, int(domain_id))
+
+    return await run_destructive_tool(
+        cfg,
+        arguments,
+        tool="linode_domain_delete",
+        error_action="delete domain",
+        id_args={"domain_id": int(domain_id or 0)},
+        fetch_state=_fetch,
+        execute=_execute,
+        dependency_walk=_walk,
+        error=None if domain_id else "domain_id is required",
+        # The contract leaves this tool's success_message unset, so the prose
+        # stays here. `make tool-response` lists every tool in that position.
+        success_message=(
+            f"Domain {domain_id} and all its records removed successfully"
+        ),
+    )

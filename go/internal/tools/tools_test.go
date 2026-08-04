@@ -15,6 +15,7 @@ import (
 
 	"github.com/chadit/LinodeMCP/go/internal/appinfo"
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
@@ -745,7 +746,7 @@ func TestLinodeInstanceGetToolSuccess(t *testing.T) {
 	}
 	_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyInstanceID: "123"})
+	req := createRequestWithArgs(t, map[string]any{keyInstanceID: 123})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {
@@ -12127,8 +12128,8 @@ func TestLinodeAccountServiceTransferCreateToolSuccess(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 		}
 
-		if !reflect.DeepEqual(got.Entities.Linodes, []int{123, 456}) {
-			t.Errorf("got.Entities.Linodes = %v, want %v", got.Entities.Linodes, []int{123, 456})
+		if !reflect.DeepEqual(got.Entities["linodes"], []any{float64(123), float64(456)}) {
+			t.Errorf("got.Entities[linodes] = %v, want %v", got.Entities["linodes"], []int{123, 456})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -16510,7 +16511,7 @@ func TestLinodeDomainRecordGetToolDefinition(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	tool, capability, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+	tool, capability, handler := gentools.NewLinodeDomainRecordGetTool(cfg)
 
 	if tool.Name != "linode_domain_record_get" {
 		t.Errorf("tool.Name = %v, want %v", tool.Name, "linode_domain_record_get")
@@ -16533,7 +16534,7 @@ func TestLinodeDomainRecordGetToolMissingDomainId(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDomainRecordGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyRecordID: 456})
 
@@ -16564,7 +16565,7 @@ func TestLinodeDomainRecordGetToolMissingRecordId(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDomainRecordGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyDomainID: 123})
 
@@ -16595,7 +16596,7 @@ func TestLinodeDomainRecordGetToolNegativeDomainId(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDomainRecordGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyDomainID: -1, keyRecordID: 456})
 
@@ -16626,7 +16627,7 @@ func TestLinodeDomainRecordGetToolNegativeRecordId(t *testing.T) {
 	t.Parallel()
 
 	cfg := &config.Config{}
-	_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDomainRecordGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyDomainID: 123, keyRecordID: -1})
 
@@ -16690,7 +16691,7 @@ func TestLinodeDomainRecordGetToolSuccess(t *testing.T) {
 			},
 		},
 	}
-	_, _, handler := tools.NewLinodeDomainRecordGetTool(cfg)
+	_, _, handler := gentools.NewLinodeDomainRecordGetTool(cfg)
 
 	req := createRequestWithArgs(t, map[string]any{keyDomainID: 123, keyRecordID: 456})
 

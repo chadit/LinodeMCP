@@ -4,23 +4,149 @@
   "cases": [
     {
       "name": "requires domain_id",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "domain_id is required"
     },
     {
       "name": "updates the domain description",
-      "args": { "confirm": true, "domain_id": 5, "description": "updated desc" },
+      "args": {
+        "confirm": true,
+        "domain_id": 5,
+        "description": "updated desc"
+      },
       "api_response": {},
       "expect_request": {
         "method": "PUT",
         "path": "/domains/5",
-        "body": { "description": "updated desc" }
+        "body": {
+          "description": "updated desc"
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"domain_id": 5, "description": "updated desc"},
+      "args": {
+        "domain_id": 5,
+        "description": "updated desc"
+      },
       "expect_error": "This updates a DNS domain. Set confirm=true to proceed."
+    },
+    {
+      "name": "sends the tags array in the body",
+      "args": {
+        "confirm": true,
+        "domain_id": 5,
+        "description": "updated desc",
+        "tags": [
+          "prod",
+          "web"
+        ]
+      },
+      "api_response": {},
+      "expect_request": {
+        "method": "PUT",
+        "path": "/domains/5",
+        "body": {
+          "description": "updated desc",
+          "tags": [
+            "prod",
+            "web"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects a tags value that is not an array",
+      "args": {
+        "confirm": true,
+        "domain_id": 5,
+        "description": "updated desc",
+        "tags": 5
+      },
+      "expect_error": "tags must be a JSON string array"
+    },
+    {
+      "name": "rejects a blank tag entry",
+      "args": {
+        "confirm": true,
+        "domain_id": 5,
+        "description": "updated desc",
+        "tags": [
+          "prod",
+          "  "
+        ]
+      },
+      "expect_error": "tags entries must be non-empty strings"
+    },
+    {
+      "name": "carries the zone-transfer lists, SOA timers, and type",
+      "args": {
+        "domain_id": 5,
+        "confirm": true,
+        "axfr_ips": [
+          "192.0.2.1"
+        ],
+        "master_ips": [
+          "192.0.2.2"
+        ],
+        "expire_sec": 604800,
+        "refresh_sec": 14400,
+        "retry_sec": 3600,
+        "type": "slave"
+      },
+      "api_response": {
+        "id": 5,
+        "domain": "example.com",
+        "type": "slave"
+      },
+      "expect_request": {
+        "method": "PUT",
+        "path": "/domains/5",
+        "body": {
+          "axfr_ips": [
+            "192.0.2.1"
+          ],
+          "master_ips": [
+            "192.0.2.2"
+          ],
+          "expire_sec": 604800,
+          "refresh_sec": 14400,
+          "retry_sec": 3600,
+          "type": "slave"
+        }
+      }
+    },
+    {
+      "name": "rejects an unknown type",
+      "args": {
+        "domain_id": 5,
+        "confirm": true,
+        "type": "primary"
+      },
+      "expect_error": "type must be one of: master, slave"
+    },
+    {
+      "name": "rejects an axfr_ips value that is not an array of strings",
+      "args": {
+        "domain_id": 5,
+        "confirm": true,
+        "axfr_ips": [
+          5
+        ]
+      },
+      "expect_error": "axfr_ips must be an array of strings"
+    },
+    {
+      "name": "rejects a non-object API response",
+      "args": {
+        "domain_id": 5,
+        "confirm": true,
+        "description": "updated desc"
+      },
+      "api_response": 7,
+      "expect_api_error": "domain"
     }
   ]
 }

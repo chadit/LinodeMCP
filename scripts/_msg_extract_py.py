@@ -4,6 +4,12 @@
 For each handle_<tool> function, find the first confirm-check line and capture
 the message string(s) emitted by the following error return. Strips a leading
 "Error: " so the result compares against Go's bare messages.
+
+Handlers that delegate the gate to a tool driver have no literal, so their
+sentence comes from the proto's `confirm_message` option instead. Without that
+a migrated tool goes unresolved, which is only a coverage note here, so the
+gate would keep passing while comparing nothing. The proto is read as text, not
+through descriptors, to stay stdlib-only as the Makefile invocation assumes.
 """
 
 import json
@@ -11,9 +17,45 @@ import re
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PROTO_DIR = REPO_ROOT / "proto" / "linode" / "mcp" / "v1"
+
 CONFIRM_CHECK = re.compile(r"\bconfirm\b")
 NEG = ("is not True", "not confirm", "not arguments.get", "!= True", "is not true")
 STRLIT = re.compile(r'"((?:[^"\\]|\\.)*)"')
+
+# Handlers calling a driver take their confirm sentence from the proto. Matched
+# as source text, so renaming a driver silently drops those tools.
+DRIVER_CALLS = ("run_write_tool(", "run_destructive_tool(")
+
+# Line-anchored because the contract writes each marker on its own line.
+PROTO_TOOL = re.compile(r'^\s*tool:\s*"([^"]+)"', re.MULTILINE)
+PROTO_CONFIRM = re.compile(
+    r'^\s*option \(linode\.mcp\.v1\.confirm_message\) = "((?:[^"\\]|\\.)*)";',
+    re.MULTILINE,
+)
+
+
+def proto_confirm_messages() -> dict[str, str]:
+    """Tool name to the confirm sentence its input message declares.
+
+    The tool name always precedes the sentence inside a message block, so
+    pairing each sentence with the nearest preceding name is enough.
+    """
+    found: dict[str, str] = {}
+    for path in sorted(PROTO_DIR.glob("*.proto")):
+        text = path.read_text(encoding="utf-8")
+        marks = [(m.start(), "tool", m.group(1)) for m in PROTO_TOOL.finditer(text)]
+        marks += [
+            (m.start(), "confirm", m.group(1)) for m in PROTO_CONFIRM.finditer(text)
+        ]
+        tool = ""
+        for _, kind, value in sorted(marks):
+            if kind == "tool":
+                tool = value
+            elif tool:
+                found[tool] = value.replace('\\"', '"').replace("\\\\", "\\")
+    return found
 
 
 def collect_message(lines: list[str], start: int) -> str | None:
@@ -66,6 +108,7 @@ def collect_message(lines: list[str], start: int) -> str | None:
 
 def main() -> int:
     tools_dir = Path(sys.argv[1])
+    declared = proto_confirm_messages()
     result: dict[str, str] = {}
     for f in sorted(tools_dir.glob("linode_*.py")):
         lines = f.read_text().split("\n")
@@ -81,6 +124,11 @@ def main() -> int:
                 captured_for_cur = False
                 i += 1
                 continue
+            if cur and not captured_for_cur and any(c in line for c in DRIVER_CALLS):
+                declared_msg = declared.get(cur)
+                if declared_msg:
+                    result.setdefault(cur, declared_msg)
+                    captured_for_cur = True
             if (
                 cur
                 and not captured_for_cur

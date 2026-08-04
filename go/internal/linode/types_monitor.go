@@ -18,7 +18,8 @@ type MonitorMetrics map[string]any
 
 // CreateMonitorServiceTokenRequest describes a monitor service token create request.
 type CreateMonitorServiceTokenRequest struct {
-	EntityIDs []int `json:"entity_ids"`
+	Add       string `json:"add,omitempty"`
+	EntityIDs []int  `json:"entity_ids"`
 }
 
 // AlertDefinition describes a monitoring alert definition.
@@ -46,8 +47,10 @@ type CreateAlertDefinitionRequest struct {
 	RuleCriteria      map[string]any `json:"rule_criteria"`
 	TriggerConditions map[string]any `json:"trigger_conditions"`
 	Label             string         `json:"label"`
+	Scope             string         `json:"scope"`
 	ChannelIDs        []int          `json:"channel_ids"`
 	EntityIDs         []string       `json:"entity_ids,omitempty"`
+	GroupBy           []string       `json:"group_by,omitempty"`
 	Severity          int            `json:"severity"`
 }
 
@@ -76,4 +79,5 @@ type UpdateAlertDefinitionRequest struct {
 	TriggerConditions map[string]any `json:"trigger_conditions,omitempty"`
 	ChannelIDs        []int          `json:"channel_ids,omitempty"`
 	EntityIDs         []string       `json:"entity_ids,omitempty"`
+	GroupBy           []string       `json:"group_by,omitempty"`
 }

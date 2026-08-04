@@ -21,6 +21,7 @@ const (
 	paramSkipIPv6RDNS = "skip_ipv6_rdns"
 	paramAddress      = "address"
 	paramRDNS         = "rdns"
+	paramReserved     = "reserved"
 	paramIPs          = "ips"
 )
 
@@ -151,7 +152,12 @@ func handleLinodeNetworkingIPUpdateRDNSRequest(ctx context.Context, request *mcp
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ipAddr, failureMessage := updateNetworkingIPRDNS(ctx, client, address, rdns)
+	reserved, validationMessage := optionalBoolFromToolArg(request.GetArguments(), paramReserved)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	ipAddr, failureMessage := updateNetworkingIPRDNS(ctx, client, address, rdns, reserved)
 	if failureMessage != "" {
 		return mcp.NewToolResultError(failureMessage), nil
 	}
@@ -162,8 +168,10 @@ func handleLinodeNetworkingIPUpdateRDNSRequest(ctx context.Context, request *mcp
 	})
 }
 
-func updateNetworkingIPRDNS(ctx context.Context, client *linode.Client, address, rdns string) (*linodev1.IPAddress, string) {
-	ipAddr, err := client.UpdateNetworkingIPProto(ctx, address, linode.UpdateNetworkingIPRequest{RDNS: rdns})
+func updateNetworkingIPRDNS(ctx context.Context, client *linode.Client, address, rdns string, reserved *bool) (*linodev1.IPAddress, string) {
+	req := linode.UpdateNetworkingIPRequest{RDNS: rdns, Reserved: reserved}
+
+	ipAddr, err := client.UpdateNetworkingIPProto(ctx, address, req)
 	if err != nil {
 		return nil, "Failed to update networking IP " + address + " RDNS: " + err.Error()
 	}

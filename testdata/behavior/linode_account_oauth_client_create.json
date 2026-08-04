@@ -1,6 +1,6 @@
 {
   "tool": "linode_account_oauth_client_create",
-  "description": "OAuth client create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report). A successful response must be a decodable JSON object.",
+  "description": "OAuth client create: required-field rejections and the POST body once confirmed. Confirm-gate text diverges (see report). A successful response must be a decodable JSON object. public is a documented required body field, so both clients always send it; omitting it sends the documented default of false.",
   "cases": [
     {
       "name": "requires label",
@@ -9,29 +9,73 @@
     },
     {
       "name": "requires redirect_uri",
-      "args": { "label": "my-app" },
+      "args": {
+        "label": "my-app"
+      },
       "expect_error": "redirect_uri is required"
     },
     {
       "name": "creates an OAuth client",
-      "args": { "label": "my-app", "redirect_uri": "https://example.com/callback", "confirm": true },
-      "api_response": { "id": "abc123", "label": "my-app", "redirect_uri": "https://example.com/callback", "secret": "shh" },
+      "args": {
+        "label": "my-app",
+        "redirect_uri": "https://example.com/callback",
+        "confirm": true
+      },
+      "api_response": {
+        "id": "abc123",
+        "label": "my-app",
+        "redirect_uri": "https://example.com/callback",
+        "secret": "shh"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/account/oauth-clients",
-        "body": { "label": "my-app", "redirect_uri": "https://example.com/callback" }
+        "body": {
+          "label": "my-app",
+          "redirect_uri": "https://example.com/callback",
+          "public": false
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"label": "my-app", "redirect_uri": "https://example.com/callback"},
+      "args": {
+        "label": "my-app",
+        "redirect_uri": "https://example.com/callback"
+      },
       "expect_error": "This creates an OAuth client. The secret is only shown once. Set confirm=true to proceed."
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "label": "my-app", "redirect_uri": "https://example.com/callback", "confirm": true },
+      "args": {
+        "label": "my-app",
+        "redirect_uri": "https://example.com/callback",
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "sends an explicit public client",
+      "args": {
+        "confirm": true,
+        "label": "my-app",
+        "redirect_uri": "https://example.com/callback",
+        "public": true
+      },
+      "api_response": {
+        "id": "abc",
+        "label": "my-app"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/oauth-clients",
+        "body": {
+          "label": "my-app",
+          "redirect_uri": "https://example.com/callback",
+          "public": true
+        }
+      }
     }
   ]
 }

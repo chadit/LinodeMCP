@@ -185,13 +185,15 @@ type InstanceDisk struct {
 
 // CreateDiskRequest represents the request body for creating an instance disk.
 type CreateDiskRequest struct {
-	Label           string   `json:"label"`
-	Filesystem      string   `json:"filesystem,omitempty"`
-	Image           string   `json:"image,omitempty"`
-	RootPass        string   `json:"root_pass,omitempty"`
-	AuthorizedKeys  []string `json:"authorized_keys,omitempty"`
-	AuthorizedUsers []string `json:"authorized_users,omitempty"`
-	Size            int      `json:"size"`
+	StackScriptData map[string]string `json:"stackscript_data,omitempty"`
+	Label           string            `json:"label"`
+	Filesystem      string            `json:"filesystem,omitempty"`
+	Image           string            `json:"image,omitempty"`
+	RootPass        string            `json:"root_pass,omitempty"`
+	AuthorizedKeys  []string          `json:"authorized_keys,omitempty"`
+	AuthorizedUsers []string          `json:"authorized_users,omitempty"`
+	Size            int               `json:"size"`
+	StackScriptID   int               `json:"stackscript_id,omitempty"`
 }
 
 // UpdateDiskRequest represents the request body for updating an instance disk.
@@ -262,8 +264,11 @@ type IPv6Range struct {
 
 // AllocateIPRequest represents the request body for allocating an IP address to an instance.
 type AllocateIPRequest struct {
-	Type   string `json:"type"`
-	Public bool   `json:"public"`
+	Type string `json:"type"`
+	// Address names an already-reserved account address to assign; omitting it
+	// allocates a new one, so it stays out of the body when empty.
+	Address string `json:"address,omitempty"`
+	Public  bool   `json:"public"`
 }
 
 // UpdateIPRDNSRequest represents the request body for updating an IP address RDNS.

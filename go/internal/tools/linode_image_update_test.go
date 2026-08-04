@@ -260,8 +260,8 @@ func TestLinodeImageUpdateAcceptsDottedImageIDsAndDecodedTags(t *testing.T) {
 	tags := []string{envProd, imageUploadTagWeb}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.EscapedPath() != "/images/private%2Fcustom%2Ev1" {
-			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2Fcustom%2Ev1")
+		if r.URL.EscapedPath() != "/images/private%2Fcustom.v1" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2Fcustom.v1")
 		}
 
 		var body map[string]any

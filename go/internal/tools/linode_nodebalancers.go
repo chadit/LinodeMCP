@@ -31,10 +31,8 @@ const (
 	nodeBalancerConfigKeyUDPCheckPort  = "udp_check_port"
 	nodeBalancerConfigKeyNodes         = "nodes"
 	nodeBalancerNodeKeySubnetID        = "subnet_id"
-	// nodeBalancerConfigProtocolHTTPS gates the ssl_cert/ssl_key requirement; the
-	// protocol/algorithm/stickiness/check/cipher_suite choice sets now come from
-	// the generated proto enums (linodev1.NodeBalancer*_Value_value), not
-	// hand-maintained constants.
+	// Only the HTTPS value stays hand-written, to gate the ssl_cert/ssl_key
+	// requirement. Every choice set comes from linodev1.NodeBalancer*_Value_value.
 	nodeBalancerConfigProtocolHTTPS = "https"
 	nodeBalancerKeyID               = "nodebalancer_id"
 	nodeBalancerKeyConfigID         = "config_id"
@@ -65,14 +63,15 @@ func nodeBalancerTypeListResponse(items []*linodev1.LinodeType, count int32, fil
 
 // NewLinodeNodeBalancerListTool creates a tool for listing NodeBalancers.
 func NewLinodeNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolRawSchema(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_nodebalancer_list",
 		"Lists all NodeBalancers on your account. Can filter by region or label.",
 		"linode.mcp.v1.NodeBalancerListInput",
-		func(ctx context.Context, client *linode.Client) ([]*linodev1.NodeBalancer, error) {
-			return client.ListNodeBalancersProto(ctx)
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.NodeBalancer, error) {
+			return client.ListNodeBalancersProto(ctx, page, pageSize)
 		},
+		standardPaginationFromTool,
 		[]listFilterParam[*linodev1.NodeBalancer]{
 			fieldFilter("region", "Filter by region ID (e.g., us-east, eu-west)",
 				func(n *linodev1.NodeBalancer) string { return n.GetRegion() }),
@@ -91,9 +90,8 @@ func nodeBalancerListResponse(items []*linodev1.NodeBalancer, count int32, filte
 
 // NewLinodeInstanceNodeBalancerListTool creates a tool for listing NodeBalancers assigned to a Linode instance.
 func NewLinodeInstanceNodeBalancerListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	// The raw-schema tool advertises the generated InstanceNodeBalancerListInput;
-	// the list helper still builds the fetch/serialize handler, which is
-	// schema-source independent.
+	// Only the helper's handler is reused: the tool it builds is replaced below
+	// by the generated raw schema.
 	_, handler := newProtoListToolSubresource(
 		cfg,
 		"linode_instance_nodebalancer_list",
@@ -492,12 +490,19 @@ func handleLinodeNodeBalancerConfigRebuildRequest(ctx context.Context, request *
 		return result, nil
 	}
 
+	// Body validation runs after the confirm gate to match the Python twin's
+	// order, so both report the same first problem.
+	req, validationMessage := nodeBalancerConfigRebuildRequestFromTool(request)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	nodeBalancerConfig, err := client.RebuildNodeBalancerConfigProto(ctx, nodeBalancerID, configID)
+	nodeBalancerConfig, err := client.RebuildNodeBalancerConfigProto(ctx, nodeBalancerID, configID, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to rebuild config %d for NodeBalancer %d: %v", configID, nodeBalancerID, err)), nil
 	}
@@ -901,6 +906,76 @@ func nodeBalancerConfigCreateRequestFromTool(request *mcp.CallToolRequest) (lino
 	return req, ""
 }
 
+// nodeBalancerConfigRebuildRequestFromTool builds the rebuild body, a subset of
+// the create body (no ssl_cert/ssl_key, cipher_suite, proxy_protocol, or
+// check_passive). nodes is required because rebuild replaces the whole backend
+// node set instead of merging into it.
+func nodeBalancerConfigRebuildRequestFromTool(request *mcp.CallToolRequest) (linode.RebuildNodeBalancerConfigRequest, string) {
+	args := request.GetArguments()
+
+	req := linode.RebuildNodeBalancerConfigRequest{}
+
+	var message string
+	if _, exists := args[nodeBalancerConfigKeyPort]; exists {
+		if req.Port, message = optionalPaginationInt(args, nodeBalancerConfigKeyPort, 1, nodeBalancerConfigPortMax); message != "" {
+			return linode.RebuildNodeBalancerConfigRequest{}, message
+		}
+	}
+
+	if req.Protocol, message = optionalEnumChoice(request, nodeBalancerConfigKeyProtocol, linodev1.NodeBalancerProtocol_Value_value); message != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, message
+	}
+
+	if req.Algorithm, message = optionalEnumChoice(request, "algorithm", linodev1.NodeBalancerAlgorithm_Value_value); message != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, message
+	}
+
+	if req.Stickiness, message = optionalEnumChoice(request, "stickiness", linodev1.NodeBalancerStickiness_Value_value); message != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, message
+	}
+
+	if req.Check, message = optionalEnumChoice(request, "check", linodev1.NodeBalancerCheck_Value_value); message != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, message
+	}
+
+	if req.CheckInterval, message = optionalNodeBalancerConfigInt(args, "check_interval"); message != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, message
+	}
+
+	if req.CheckTimeout, message = optionalNodeBalancerConfigInt(args, "check_timeout"); message != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, message
+	}
+
+	if req.CheckAttempts, message = optionalNodeBalancerConfigInt(args, "check_attempts"); message != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, message
+	}
+
+	req.CheckPath = request.GetString("check_path", "")
+	req.CheckBody = request.GetString("check_body", "")
+
+	if req.UDPCheckPort, message = optionalNodeBalancerConfigInt(args, nodeBalancerConfigKeyUDPCheckPort); message != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, message
+	}
+
+	raw, exists := args[nodeBalancerConfigKeyNodes]
+	if !exists {
+		return linode.RebuildNodeBalancerConfigRequest{}, "nodes is required"
+	}
+
+	nodes, nodesMessage := objectSliceFromToolArg[linode.CreateNodeBalancerNodeRequest](raw, nodeBalancerConfigKeyNodes)
+	if nodesMessage != "" {
+		return linode.RebuildNodeBalancerConfigRequest{}, nodesMessage
+	}
+
+	if nodes == nil {
+		return linode.RebuildNodeBalancerConfigRequest{}, "nodes must be an array of objects"
+	}
+
+	req.Nodes = nodes
+
+	return req, ""
+}
+
 func nodeBalancerConfigUpdateRequestFromTool(request *mcp.CallToolRequest) (linode.UpdateNodeBalancerConfigRequest, string) {
 	args := request.GetArguments()
 	req := linode.UpdateNodeBalancerConfigRequest{}
@@ -1200,8 +1275,7 @@ func nodeBalancerNodeCreateRequestFromTool(request *mcp.CallToolRequest) (linode
 		return linode.CreateNodeBalancerNodeRequest{}, errLabelRequired
 	}
 
-	// Python bounds the node label to 3-32 characters; enforce the same range so
-	// both languages reject identically.
+	// Python bounds the node label to 3-32 characters; match it here.
 	if runes := utf8.RuneCountInString(label); runes < nodeBalancerNodeLabelMin || runes > nodeBalancerNodeLabelMax {
 		return linode.CreateNodeBalancerNodeRequest{}, errLabel3To32Chars
 	}

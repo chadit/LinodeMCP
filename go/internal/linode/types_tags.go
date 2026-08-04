@@ -16,9 +16,10 @@ type Tag struct {
 
 // CreateTagRequest represents the request body for creating a tag.
 type CreateTagRequest struct {
-	Label         string `json:"label"`
-	Domains       []int  `json:"domains,omitempty"`
-	Linodes       []int  `json:"linodes,omitempty"`
-	NodeBalancers []int  `json:"nodebalancers,omitempty"`
-	Volumes       []int  `json:"volumes,omitempty"`
+	Label                 string   `json:"label"`
+	Domains               []int    `json:"domains,omitempty"`
+	Linodes               []int    `json:"linodes,omitempty"`
+	NodeBalancers         []int    `json:"nodebalancers,omitempty"`
+	Volumes               []int    `json:"volumes,omitempty"`
+	ReservedIPv4Addresses []string `json:"reserved_ipv4_addresses,omitempty"`
 }

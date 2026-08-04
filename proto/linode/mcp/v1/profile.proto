@@ -27,9 +27,31 @@ message ProfileGetInput {
     method: "GET"
     path: "/profile"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Profile";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// ProfileGrantsGetInput is the input contract for linode_profile_grants_get
+// (the authenticated user's own grants, so no username in the path). It answers
+// with AccountUserGrants, the message the account-user grants tool already
+// returns, because /profile/grants is the same object addressed as "me" instead
+// of by username, and modeling it twice would be two spellings of one API shape.
+message ProfileGrantsGetInput {
+  option (linode.mcp.v1.tool_route) = {
+    tool: "linode_profile_grants_get"
+    method: "GET"
+    path: "/profile/grants"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AccountUserGrants";
+  option (linode.mcp.v1.tool_description) = "Gets the grants and account permissions for the authenticated user's profile.";
+  option (linode.mcp.v1.error_message) = "Failed to retrieve profile grants: {error}";
+
+  // Linode environment to use (optional, defaults to "default").
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileApp mirrors one OAuth app authorization on the profile.
@@ -55,11 +77,13 @@ message ProfileAppGetInput {
     method: "GET"
     path: "/profile/apps/{app_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileApp";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the authorized app to retrieve (required).
-  int32 app_id = 2;
+  int32 app_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // TrustedDevice mirrors one trusted device on the authenticated profile
@@ -213,9 +237,10 @@ message ProfilePreferencesGetInput {
     method: "GET"
     path: "/profile/preferences"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfilePreferencesUpdateInput is the input contract for
@@ -229,18 +254,22 @@ message ProfilePreferencesUpdateInput {
     method: "PUT"
     path: "/profile/preferences"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfilePreferencesUpdateResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates profile preferences. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile preferences updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Free-form user preferences to store. Required at runtime, though the
   // generated schema cannot mark a map field required.
-  map<string, google.protobuf.Value> preferences = 2;
+  map<string, google.protobuf.Value> preferences = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm updating profile preferences. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileAppListInput is the input contract for linode_profile_app_list.
@@ -250,13 +279,15 @@ message ProfileAppListInput {
     method: "GET"
     path: "/profile/apps"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileAppListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ProfileAppDeleteInput is the input contract for linode_profile_app_delete.
@@ -266,16 +297,19 @@ message ProfileAppDeleteInput {
     method: "DELETE"
     path: "/profile/apps/{app_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileAppIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This revokes OAuth app access. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Profile authorized app ID to revoke.
-  int32 app_id = 2;
+  int32 app_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm revoking OAuth app access. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileDeviceListInput is the input contract for linode_profile_device_list.
@@ -285,13 +319,15 @@ message ProfileDeviceListInput {
     method: "GET"
     path: "/profile/devices"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TrustedDeviceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ProfileDeviceGetInput is the input contract for linode_profile_device_get.
@@ -301,11 +337,13 @@ message ProfileDeviceGetInput {
     method: "GET"
     path: "/profile/devices/{device_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.TrustedDevice";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Profile trusted device ID.
-  int32 device_id = 2;
+  int32 device_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ProfileDeviceRevokeInput is the input contract for
@@ -316,16 +354,19 @@ message ProfileDeviceRevokeInput {
     method: "DELETE"
     path: "/profile/devices/{device_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileDeviceIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This revokes a trusted device. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Profile trusted device ID to revoke.
-  int32 device_id = 2;
+  int32 device_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm revoking a trusted device. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileTokenListInput is the input contract for linode_profile_token_list.
@@ -335,13 +376,15 @@ message ProfileTokenListInput {
     method: "GET"
     path: "/profile/tokens"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessTokenListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ProfileTokenGetInput is the input contract for linode_profile_token_get.
@@ -351,11 +394,13 @@ message ProfileTokenGetInput {
     method: "GET"
     path: "/profile/tokens/{token_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessToken";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Personal access token ID to retrieve.
-  int32 token_id = 2;
+  int32 token_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ProfileTokenCreateInput is the input contract for linode_profile_token_create.
@@ -365,21 +410,24 @@ message ProfileTokenCreateInput {
     method: "POST"
     path: "/profile/tokens"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTokenCreateResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a personal access token. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Token expiry timestamp (optional).
-  optional string expiry = 2;
+  optional string expiry = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Token label (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Token scopes string (optional).
-  optional string scopes = 4;
+  optional string scopes = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm personal access token creation. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileTokenUpdateInput is the input contract for linode_profile_token_update.
@@ -389,19 +437,23 @@ message ProfileTokenUpdateInput {
     method: "PUT"
     path: "/profile/tokens/{token_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PersonalAccessTokenWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a personal access token. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile token updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Personal access token ID.
-  int32 token_id = 2;
+  int32 token_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Token label. The label is the only field a token update can change.
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm updating a personal access token. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileTokenDeleteInput is the input contract for linode_profile_token_delete
@@ -412,17 +464,21 @@ message ProfileTokenDeleteInput {
     method: "DELETE"
     path: "/profile/tokens/{token_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTokenIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This revokes a personal access token. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile token {token_id} revoked successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The personal access token ID to revoke.
-  int32 token_id = 2;
+  int32 token_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm personal access token revocation. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileTfaEnableInput is the input contract for linode_profile_tfa_enable.
@@ -432,15 +488,18 @@ message ProfileTfaEnableInput {
     method: "POST"
     path: "/profile/tfa-enable"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTfaEnableResponse";
+  option (linode.mcp.v1.confirm_message) = "This generates a two-factor authentication secret. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Must be true to confirm generating a two-factor authentication secret.
   // Ignored when dry_run=true.
-  bool confirm = 2; // system param
+  bool confirm = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 3; // system param
+  optional bool dry_run = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileTfaDisableInput is the input contract for linode_profile_tfa_disable.
@@ -450,15 +509,19 @@ message ProfileTfaDisableInput {
     method: "POST"
     path: "/profile/tfa-disable"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "This disables two-factor authentication for the profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile two-factor authentication disabled successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Must be true to confirm disabling profile two-factor authentication.
   // Ignored when dry_run=true.
-  bool confirm = 2; // system param
+  bool confirm = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 3; // system param
+  optional bool dry_run = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfileTfaEnableConfirmInput is the input contract for
@@ -469,17 +532,21 @@ message ProfileTfaEnableConfirmInput {
     method: "POST"
     path: "/profile/tfa-enable-confirm"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ProfileTfaEnableConfirmResponse";
+  option (linode.mcp.v1.confirm_message) = "This enables two-factor authentication for the profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile two-factor authentication enabled successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-factor authentication code to confirm enablement.
-  string tfa_code = 2;
+  string tfa_code = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm enabling profile two-factor authentication.
   // Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfilePhoneNumberSendInput is the input contract for
@@ -490,19 +557,22 @@ message ProfilePhoneNumberSendInput {
     method: "POST"
     path: "/profile/phone-number"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "This sends a phone number verification code. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // ISO 3166-1 alpha-2 country code for the phone number.
-  string iso_code = 2;
+  string iso_code = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Phone number that should receive the verification code.
-  string phone_number = 3;
+  string phone_number = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm sending the verification code. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfilePhoneNumberDeleteInput is the input contract for
@@ -514,15 +584,19 @@ message ProfilePhoneNumberDeleteInput {
     method: "DELETE"
     path: "/profile/phone-number"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes the profile phone number. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile phone number deleted successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Must be true to confirm deleting the profile phone number. Ignored when
   // dry_run=true.
-  bool confirm = 2; // system param
+  bool confirm = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 3; // system param
+  optional bool dry_run = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ProfilePhoneNumberVerifyInput is the input contract for
@@ -533,17 +607,20 @@ message ProfilePhoneNumberVerifyInput {
     method: "POST"
     path: "/profile/phone-number/verify"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "This verifies a profile phone number. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // One-time SMS code sent to the profile phone number.
-  string otp_code = 2;
+  string otp_code = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm verifying the phone number. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // SecurityQuestionListInput is the input contract for
@@ -555,9 +632,11 @@ message SecurityQuestionListInput {
     method: "GET"
     path: "/profile/security-questions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SecurityQuestionListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // SecurityQuestionAnswerInput is the input contract for
@@ -572,17 +651,21 @@ message SecurityQuestionAnswerInput {
     method: "POST"
     path: "/profile/security-questions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_ADMIN;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MessageResponse";
+  option (linode.mcp.v1.confirm_message) = "This submits profile security question answers. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Profile security questions answered successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The security question answers to submit. Each entry is an object with a
   // question_id and a response. Required at runtime, though the generated schema
   // cannot mark a repeated field required.
-  repeated google.protobuf.Struct security_questions = 2;
+  repeated google.protobuf.Struct security_questions = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm answering security questions. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

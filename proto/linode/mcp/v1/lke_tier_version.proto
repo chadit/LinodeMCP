@@ -38,13 +38,15 @@ message LKETierVersionGetInput {
     method: "GET"
     path: "/lke/tiers/{tier}/versions/{version}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKETierVersion";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The LKE tier ID, standard or enterprise (required).
-  LKETier.Value tier = 2;
+  LKETier.Value tier = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The Kubernetes version ID (required).
-  string version = 3;
+  string version = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // LKETierVersionListInput is the input contract for
@@ -55,9 +57,11 @@ message LKETierVersionListInput {
     method: "GET"
     path: "/lke/tiers/{tier}/versions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKETierVersionListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // LKE tier: standard or enterprise (required).
-  LKETier.Value tier = 2;
+  LKETier.Value tier = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }

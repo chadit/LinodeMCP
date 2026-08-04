@@ -21,6 +21,7 @@ from urllib.parse import quote, urlencode
 import httpx
 
 from linodemcp.linode.metrics import get_api_recorder, metrics_endpoint
+from linodemcp.linode.routes import route_for
 from linodemcp.validation import is_non_blank_string_array
 
 _MANAGED_SERVICE_TIMEOUT_MAX = 255
@@ -145,16 +146,18 @@ def _object_body_or_empty(data: Any, subject: str) -> dict[str, Any]:
     return _require_object_body(data, subject)
 
 
-def _paginated_endpoint(base: str, page: int | None, page_size: int | None) -> str:
-    """Append page and page_size query parameters to an endpoint when set."""
+def _paginated_query(page: int | None, page_size: int | None) -> str:
+    """Encode the page and page_size parameters that are set.
+
+    Empty when neither is, which the route request reads as no query at all,
+    the way the endpoint this replaced was left bare.
+    """
     params: dict[str, int] = {}
     if page is not None:
         params["page"] = page
     if page_size is not None:
         params["page_size"] = page_size
-    if not params:
-        return base
-    return f"{base}?{urlencode(params)}"
+    return urlencode(params)
 
 
 def _validate_managed_linode_settings_ssh(value: object) -> dict[str, Any]:
@@ -1867,6 +1870,8 @@ def _build_monitor_service_alert_definition_body(
     channel_ids: object,
     description: object,
     entity_ids: object,
+    scope: object,
+    group_by: object,
 ) -> dict[str, Any]:
     """Validate and build a monitor service alert definition payload."""
     if not isinstance(label, str) or not label:
@@ -1922,11 +1927,14 @@ def _build_monitor_service_alert_definition_body(
         "rule_criteria": checked_rule_criteria,
         "trigger_conditions": checked_trigger_conditions,
         "channel_ids": checked_channel_ids,
+        "scope": scope,
     }
     if description is not None:
         body["description"] = description
     if checked_entity_ids is not None:
         body["entity_ids"] = checked_entity_ids
+    if group_by:
+        body["group_by"] = group_by
     return body
 
 
@@ -2128,7 +2136,7 @@ class Client:
     async def get_profile(self) -> Profile:
         """Get Linode user profile."""
         try:
-            response = await self.make_request("GET", "/profile")
+            response = await self.make_route_request("linode_profile_get")
             data = response.json()
             return self._parse_profile(data)
         except httpx.HTTPError as e:
@@ -2147,7 +2155,7 @@ class Client:
     async def get_profile_preferences(self) -> dict[str, Any]:
         """Get OAuth client-specific profile preferences."""
         try:
-            response = await self.make_request("GET", "/profile/preferences")
+            response = await self.make_route_request("linode_profile_preferences_get")
             data: Any = response.json()
             return _object_body_or_empty(data, "profile preferences")
         except httpx.HTTPError as e:
@@ -2158,8 +2166,8 @@ class Client:
     ) -> dict[str, Any]:
         """Update OAuth client-specific profile preferences."""
         try:
-            response = await self.make_request(
-                "PUT", "/profile/preferences", preferences
+            response = await self.make_route_request(
+                "linode_profile_preferences_update", body=preferences
             )
             data: Any = response.json()
             return _object_body_or_empty(data, "profile preferences")
@@ -2174,7 +2182,7 @@ class Client:
         consults Grants when the scope string is empty (OAuth path).
         """
         try:
-            response = await self.make_request("GET", "/profile/grants")
+            response = await self.make_route_request("linode_profile_grants_get")
             data: Any = response.json()
             if not isinstance(data, dict):
                 return Grants()
@@ -2185,7 +2193,7 @@ class Client:
     async def list_instances(self) -> list[Instance]:
         """List Linode instances."""
         try:
-            response = await self.make_request("GET", "/linode/instances")
+            response = await self.make_route_request("linode_instance_list")
             data = response.json()
             return [self._parse_instance(inst) for inst in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -2210,16 +2218,15 @@ class Client:
         ):
             msg = "page_size must be between 25 and 500"
             raise ValueError(msg)
-        endpoint = "/linode/kernels"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_kernel_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2228,10 +2235,10 @@ class Client:
     async def get_instance_stats(self, linode_id: int) -> dict[str, Any]:
         """Get daily statistics for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/stats"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_stats_get", linode_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2240,10 +2247,10 @@ class Client:
     async def get_instance_transfer(self, linode_id: int) -> dict[str, Any]:
         """Get this month's network transfer stats for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/transfer"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_transfer_get", linode_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2252,10 +2259,10 @@ class Client:
     async def list_instance_nodebalancers(self, linode_id: int) -> dict[str, Any]:
         """List NodeBalancers assigned to a Linode instance."""
         valid_linode_id = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(valid_linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/nodebalancers"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_nodebalancer_list", valid_linode_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2271,15 +2278,10 @@ class Client:
         )
         month = _validate_range_path_int(month, "month", 1, LINODE_STATS_MAX_MONTH)
 
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_year = quote(str(year), safe="")
-        encoded_month = quote(str(month), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}"
-            f"/stats/{encoded_year}/{encoded_month}"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_stats_month_get", linode_id, year, month
+            )
             data: Any = response.json()
             return _require_object_body(data, "instance stats")
         except httpx.HTTPError as e:
@@ -2292,17 +2294,15 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List configuration profiles for a Linode instance."""
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/configs"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_config_list", linode_id, query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2323,18 +2323,17 @@ class Client:
         ):
             raise ValueError("firewall_ids must be a list of positive integers")
         valid_firewall_ids = cast("list[int]", firewall_ids)
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/firewalls"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request(
-                "PUT", endpoint, {"firewall_ids": valid_firewall_ids}
+            response = await self.make_route_request(
+                "linode_instance_firewall_update",
+                linode_id,
+                body={"firewall_ids": valid_firewall_ids},
+                query=urlencode(params),
             )
             data: dict[str, Any] = response.json()
             return data
@@ -2385,10 +2384,10 @@ class Client:
             body["default_route"] = clean_default_route
         if network_helper is not None:
             body["network_helper"] = network_helper
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/interfaces/settings"
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_interface_settings_update", linode_id, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2410,11 +2409,10 @@ class Client:
             or config_id < 1
         ):
             raise ValueError("config_id must be a positive integer")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/configs/{encoded_config_id}"
         try:
-            response = await self.make_request("PUT", endpoint, fields)
+            response = await self.make_route_request(
+                "linode_instance_config_update", linode_id, config_id, body=fields
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2437,14 +2435,13 @@ class Client:
         ):
             raise ValueError("config_id must be a positive integer")
         interface_body = _validate_config_interface_payload(interface)
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/configs/"
-            f"{encoded_config_id}/interfaces"
-        )
         try:
-            response = await self.make_request("POST", endpoint, interface_body)
+            response = await self.make_route_request(
+                "linode_instance_config_interface_add",
+                linode_id,
+                config_id,
+                body=interface_body,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2458,10 +2455,10 @@ class Client:
         if not isinstance(interface, dict):
             raise TypeError("interface must be an object")
         interface_body = cast("dict[str, Any]", interface)
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/interfaces"
         try:
-            response = await self.make_request("POST", endpoint, interface_body)
+            response = await self.make_route_request(
+                "linode_instance_interface_add", linode_id, body=interface_body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2486,14 +2483,13 @@ class Client:
         if not _is_positive_int_list(ids):
             raise ValueError("ids must be a non-empty list of positive integers")
 
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}"
-            f"/configs/{encoded_config_id}/interfaces/order"
-        )
         try:
-            response = await self.make_request("POST", endpoint, {"ids": ids})
+            response = await self.make_route_request(
+                "linode_instance_config_interface_reorder",
+                linode_id,
+                config_id,
+                body={"ids": ids},
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2503,11 +2499,10 @@ class Client:
         self, linode_id: int, config_id: int
     ) -> dict[str, Any]:
         """Get a configuration profile for a Linode instance."""
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/configs/{encoded_config_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_config_get", linode_id, config_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2515,11 +2510,10 @@ class Client:
 
     async def delete_instance_config(self, linode_id: int, config_id: int) -> None:
         """Delete a configuration profile from a Linode instance."""
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/configs/{encoded_config_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_instance_config_delete", linode_id, config_id
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteInstanceConfig", e) from e
 
@@ -2530,15 +2524,13 @@ class Client:
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         config_id = _validate_positive_path_int(config_id, "config_id")
         interface_id = _validate_positive_path_int(interface_id, "interface_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        encoded_interface_id = quote(str(interface_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/configs/"
-            f"{encoded_config_id}/interfaces/{encoded_interface_id}"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_config_interface_get",
+                linode_id,
+                config_id,
+                interface_id,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2551,25 +2543,23 @@ class Client:
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         config_id = _validate_positive_path_int(config_id, "config_id")
         interface_id = _validate_positive_path_int(interface_id, "interface_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        encoded_interface_id = quote(str(interface_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/configs/"
-            f"{encoded_config_id}/interfaces/{encoded_interface_id}"
-        )
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_instance_config_interface_delete",
+                linode_id,
+                config_id,
+                interface_id,
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteInstanceConfigInterface", e) from e
 
     async def list_instance_interfaces(self, linode_id: int) -> dict[str, Any]:
         """List interfaces for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/interfaces"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_interface_list", linode_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2584,15 +2574,10 @@ class Client:
             year, "year", LINODE_STATS_MIN_YEAR, LINODE_STATS_MAX_YEAR
         )
         month = _validate_range_path_int(month, "month", 1, LINODE_STATS_MAX_MONTH)
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_year = quote(str(year), safe="")
-        encoded_month = quote(str(month), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/transfer/"
-            f"{encoded_year}/{encoded_month}"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_transfer_month_get", linode_id, year, month
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2604,23 +2589,20 @@ class Client:
         """Delete an interface from a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         interface_id = _validate_positive_path_int(interface_id, "interface_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_interface_id = quote(str(interface_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/interfaces/{encoded_interface_id}"
-        )
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_instance_interface_delete", linode_id, interface_id
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteInstanceInterface", e) from e
 
     async def get_instance_interface_settings(self, linode_id: int) -> dict[str, Any]:
         """List interface settings for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/interfaces/settings"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_interface_settings_get", linode_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2632,13 +2614,10 @@ class Client:
         """Get an interface for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         interface_id = _validate_positive_path_int(interface_id, "interface_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_interface_id = quote(str(interface_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/interfaces/{encoded_interface_id}"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_interface_get", linode_id, interface_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2655,13 +2634,13 @@ class Client:
         fields_body = cast("dict[str, Any]", fields)
         if not fields_body:
             raise ValueError("at least one update field is required")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_interface_id = quote(str(interface_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/interfaces/{encoded_interface_id}"
-        )
         try:
-            response = await self.make_request("PUT", endpoint, fields_body)
+            response = await self.make_route_request(
+                "linode_instance_interface_update",
+                linode_id,
+                interface_id,
+                body=fields_body,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2673,14 +2652,10 @@ class Client:
         """List interfaces for a Linode instance configuration profile."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         config_id = _validate_positive_path_int(config_id, "config_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/configs/"
-            f"{encoded_config_id}/interfaces"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_config_interface_list", linode_id, config_id
+            )
             data: Any = response.json()
             if not isinstance(data, list):
                 msg = "config interface list response must be an array"
@@ -2701,17 +2676,17 @@ class Client:
     ) -> dict[str, Any]:
         """List network interface history for a Linode instance."""
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/interfaces/history"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_interface_history_list",
+                linode_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2728,15 +2703,14 @@ class Client:
         linode_id = _validate_positive_path_int(linode_id, "linode_id")
         config_id = _validate_positive_path_int(config_id, "config_id")
         interface_id = _validate_positive_path_int(interface_id, "interface_id")
-        encoded_linode_id = quote(str(linode_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        encoded_interface_id = quote(str(interface_id), safe="")
-        endpoint = (
-            f"/linode/instances/{encoded_linode_id}/configs/"
-            f"{encoded_config_id}/interfaces/{encoded_interface_id}"
-        )
         try:
-            response = await self.make_request("PUT", endpoint, fields)
+            response = await self.make_route_request(
+                "linode_instance_config_interface_update",
+                linode_id,
+                config_id,
+                interface_id,
+                body=fields,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2744,9 +2718,8 @@ class Client:
 
     async def get_instance(self, instance_id: int) -> Instance:
         """Get a specific Linode instance."""
-        endpoint = f"/linode/instances/{instance_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_instance_get", instance_id)
             data = response.json()
             return self._parse_instance(data)
         except httpx.HTTPError as e:
@@ -2761,10 +2734,11 @@ class Client:
         handler decodes the full JSON into the write proto so Python output
         matches Go, which decodes the same full API JSON.
         """
-        endpoint = f"/linode/instances/{instance_id}"
         body = {key: value for key, value in fields.items() if value is not None}
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_update", instance_id, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2773,7 +2747,7 @@ class Client:
     async def get_account(self) -> Account:
         """Get Linode account information."""
         try:
-            response = await self.make_request("GET", "/account")
+            response = await self.make_route_request("linode_account_get")
             data = response.json()
             return self._parse_account(data)
         except httpx.HTTPError as e:
@@ -2782,7 +2756,7 @@ class Client:
     async def get_account_agreements(self) -> dict[str, Any]:
         """List agreements on the Linode account."""
         try:
-            response = await self.make_request("GET", "/account/agreements")
+            response = await self.make_route_request("linode_account_agreement_list")
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2791,7 +2765,7 @@ class Client:
     async def get_account_settings(self) -> dict[str, Any]:
         """Get settings for the Linode account."""
         try:
-            response = await self.make_request("GET", "/account/settings")
+            response = await self.make_route_request("linode_account_settings_get")
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2800,8 +2774,8 @@ class Client:
     async def enable_account_managed(self) -> dict[str, Any]:
         """Enable Linode Managed for the account."""
         try:
-            response = await self.make_request(
-                "POST", "/account/settings/managed-enable"
+            response = await self.make_route_request(
+                "linode_account_settings_managed_enable"
             )
             data: dict[str, Any] = response.json()
             return data
@@ -2811,7 +2785,7 @@ class Client:
     async def get_account_transfer(self) -> dict[str, Any]:
         """Get network transfer usage for the Linode account."""
         try:
-            response = await self.make_request("GET", "/account/transfer")
+            response = await self.make_route_request("linode_account_transfer_get")
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2821,16 +2795,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List user logins on the Linode account."""
-        endpoint = "/account/logins"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_login_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2840,16 +2813,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List users on the Linode account."""
-        endpoint = "/account/users"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_user_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2857,10 +2829,10 @@ class Client:
 
     async def delete_account_user(self, username: str) -> dict[str, Any]:
         """Delete a user on the Linode account."""
-        encoded_username = quote(str(username), safe="")
-        endpoint = f"/account/users/{encoded_username}"
         try:
-            response = await self.make_request("DELETE", endpoint)
+            response = await self.make_route_request(
+                "linode_account_user_delete", username
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2872,16 +2844,15 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List maintenances on the Linode account."""
-        endpoint = "/account/maintenance"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_maintenance_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2893,16 +2864,15 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List maintenance policies."""
-        endpoint = "/maintenance/policies"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_maintenance_policy_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2912,16 +2882,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List OAuth clients on the Linode account."""
-        endpoint = "/account/oauth-clients"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_oauth_client_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2931,11 +2900,10 @@ class Client:
         self, client_id: str, **fields: Any
     ) -> dict[str, Any]:
         """Update an OAuth client on the Linode account."""
-        encoded_client_id = quote(str(client_id), safe="")
         body = {key: value for key, value in fields.items() if value is not None}
         try:
-            response = await self.make_request(
-                "PUT", f"/account/oauth-clients/{encoded_client_id}", body
+            response = await self.make_route_request(
+                "linode_account_oauth_client_update", client_id, body=body
             )
             data: dict[str, Any] = response.json()
             return data
@@ -2976,16 +2944,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List events on the Linode account."""
-        endpoint = "/account/events"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_event_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -2995,16 +2962,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List invoices on the Linode account."""
-        endpoint = "/account/invoices"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_invoice_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3014,16 +2980,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List payments on the Linode account."""
-        endpoint = "/account/payments"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_payment_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3033,16 +2998,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List payment methods on the Linode account."""
-        endpoint = "/account/payment-methods"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_payment_method_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3052,16 +3016,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List notifications on the Linode account."""
-        endpoint = "/account/notifications"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_notification_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3071,17 +3034,15 @@ class Client:
         self, invoice_id: int, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List items on an account invoice."""
-        encoded_invoice_id = quote(str(invoice_id), safe="")
-        endpoint = f"/account/invoices/{encoded_invoice_id}/items"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_invoice_item_list", invoice_id, query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3089,10 +3050,10 @@ class Client:
 
     async def get_account_event(self, event_id: int) -> dict[str, Any]:
         """Get an event on the Linode account."""
-        encoded_event_id = quote(str(event_id), safe="")
-        endpoint = f"/account/events/{encoded_event_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_event_get", event_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3100,10 +3061,10 @@ class Client:
 
     async def mark_account_event_seen(self, event_id: int) -> dict[str, Any]:
         """Mark an account event as seen."""
-        encoded_event_id = quote(str(event_id), safe="")
-        endpoint = f"/account/events/{encoded_event_id}/seen"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_account_event_seen", event_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3114,8 +3075,8 @@ class Client:
     ) -> dict[str, Any]:
         """Acknowledge account agreements."""
         try:
-            response = await self.make_request(
-                "POST", "/account/agreements", agreements
+            response = await self.make_route_request(
+                "linode_account_agreement_acknowledge", body=agreements
             )
             data: dict[str, Any] = response.json()
             return data
@@ -3126,7 +3087,7 @@ class Client:
         """Update Linode account information."""
         body = {key: value for key, value in fields.items() if value is not None}
         try:
-            response = await self.make_request("PUT", "/account", body)
+            response = await self.make_route_request("linode_account_update", body=body)
             data = response.json()
             return self._parse_account(data)
         except httpx.HTTPError as e:
@@ -3139,7 +3100,9 @@ class Client:
             msg = "At least one account settings field is required"
             raise ValueError(msg)
         try:
-            response = await self.make_request("PUT", "/account/settings", body)
+            response = await self.make_route_request(
+                "linode_account_settings_update", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3151,7 +3114,9 @@ class Client:
         """Create a user on the Linode account."""
         body = {"username": username, "email": email, "restricted": restricted}
         try:
-            response = await self.make_request("POST", "/account/users", body)
+            response = await self.make_route_request(
+                "linode_account_user_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3165,10 +3130,10 @@ class Client:
         if not body:
             msg = "At least one account user field is required"
             raise ValueError(msg)
-        encoded_username = quote(current_username, safe="")
-        endpoint = f"/account/users/{encoded_username}"
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_account_user_update", current_username, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3178,22 +3143,32 @@ class Client:
         self, username: str, grants: dict[str, Any]
     ) -> dict[str, Any]:
         """Update grants for an account user."""
-        encoded_username = quote(username, safe="")
-        endpoint = f"/account/users/{encoded_username}/grants"
         try:
-            response = await self.make_request("PUT", endpoint, grants)
+            response = await self.make_route_request(
+                "linode_account_user_grants_update", username, body=grants
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
             raise NetworkError("UpdateAccountUserGrants", e) from e
 
     async def create_account_oauth_client(
-        self, label: str, redirect_uri: str
+        self, label: str, redirect_uri: str, public: bool = False
     ) -> dict[str, Any]:
-        """Create an OAuth client on the Linode account."""
-        body = {"label": label, "redirect_uri": redirect_uri}
+        """Create an OAuth client on the Linode account.
+
+        public is always sent because the API documents it as required; false is
+        its documented default.
+        """
+        body: dict[str, Any] = {
+            "label": label,
+            "redirect_uri": redirect_uri,
+            "public": public,
+        }
         try:
-            response = await self.make_request("POST", "/account/oauth-clients", body)
+            response = await self.make_route_request(
+                "linode_account_oauth_client_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3205,7 +3180,9 @@ class Client:
         """Add a payment method to the Linode account."""
         body = {"type": payment_type, "data": data, "is_default": is_default}
         try:
-            response = await self.make_request("POST", "/account/payment-methods", body)
+            response = await self.make_route_request(
+                "linode_account_payment_method_create", body=body
+            )
             data_response: dict[str, Any] = response.json()
             return data_response
         except httpx.HTTPError as e:
@@ -3219,7 +3196,9 @@ class Client:
         if payment_method_id is not None:
             body["payment_method_id"] = payment_method_id
         try:
-            response = await self.make_request("POST", "/account/payments", body)
+            response = await self.make_route_request(
+                "linode_account_payment_create", body=body
+            )
             data_response: dict[str, Any] = response.json()
             return data_response
         except httpx.HTTPError as e:
@@ -3229,20 +3208,27 @@ class Client:
         """Add a promo credit to the Linode account."""
         body = {"promo_code": promo_code}
         try:
-            response = await self.make_request("POST", "/account/promo-codes", body)
+            response = await self.make_route_request(
+                "linode_account_promo_credit_add", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
             raise NetworkError("AddAccountPromoCredit", e) from e
 
     async def create_account_service_transfer(
-        self, linode_ids: list[int]
+        self, linode_ids: list[int], entities: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """Request a service transfer for Linode entities."""
-        body = {"entities": {"linodes": linode_ids}}
+        """Request a service transfer for Linode entities.
+
+        A caller-supplied entities object wins outright, since it can name
+        entity types the linode_ids convenience form cannot; otherwise
+        linode_ids fills entities.linodes.
+        """
+        body = {"entities": entities or {"linodes": linode_ids}}
         try:
-            response = await self.make_request(
-                "POST", "/account/service-transfers", body
+            response = await self.make_route_request(
+                "linode_account_service_transfer_create", body=body
             )
             data_response: dict[str, Any] = response.json()
             return data_response
@@ -3251,10 +3237,10 @@ class Client:
 
     async def delete_account_oauth_client(self, client_id: str) -> dict[str, Any]:
         """Delete an OAuth client on the Linode account."""
-        encoded_client_id = quote(str(client_id), safe="")
-        endpoint = f"/account/oauth-clients/{encoded_client_id}"
         try:
-            response = await self.make_request("DELETE", endpoint)
+            response = await self.make_route_request(
+                "linode_account_oauth_client_delete", client_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3264,10 +3250,10 @@ class Client:
         self, payment_method_id: int | str
     ) -> dict[str, Any]:
         """Delete a payment method on the Linode account."""
-        encoded_payment_method_id = quote(str(payment_method_id), safe="")
-        endpoint = f"/account/payment-methods/{encoded_payment_method_id}"
         try:
-            response = await self.make_request("DELETE", endpoint)
+            response = await self.make_route_request(
+                "linode_account_payment_method_delete", payment_method_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3279,7 +3265,7 @@ class Client:
         if comments is not None:
             body["comments"] = comments
         try:
-            response = await self.make_request("POST", "/account/cancel", body)
+            response = await self.make_route_request("linode_account_cancel", body=body)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3289,16 +3275,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List enrolled Beta programs for the account."""
-        endpoint = "/account/betas"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_beta_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3308,16 +3293,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List available Beta programs."""
-        endpoint = "/betas"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_beta_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3327,16 +3311,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List MySQL Managed Database instances."""
-        endpoint = "/databases/mysql/instances"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3346,16 +3329,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List PostgreSQL Managed Database instances."""
-        endpoint = "/databases/postgresql/instances"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3365,16 +3347,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List Managed Database instances."""
-        endpoint = "/databases/instances"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_instance_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3385,8 +3366,8 @@ class Client:
     ) -> dict[str, Any]:
         """Create or restore a MySQL Managed Database instance."""
         try:
-            response = await self.make_request(
-                "POST", "/databases/mysql/instances", payload
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_create", body=payload
             )
             data: dict[str, Any] = response.json()
             return data
@@ -3398,8 +3379,8 @@ class Client:
     ) -> dict[str, Any]:
         """Create or restore a PostgreSQL Managed Database instance."""
         try:
-            response = await self.make_request(
-                "POST", "/databases/postgresql/instances", payload
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_create", body=payload
             )
             data: dict[str, Any] = response.json()
             return data
@@ -3410,10 +3391,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Delete a MySQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/mysql/instances/{encoded_instance_id}"
         try:
-            response = await self.make_request("DELETE", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_delete", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3423,10 +3404,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Delete a PostgreSQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}"
         try:
-            response = await self.make_request("DELETE", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_delete", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3436,10 +3417,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Apply pending patches to a MySQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/mysql/instances/{encoded_instance_id}/patch"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_patch", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3449,10 +3430,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Apply pending patches to a PostgreSQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}/patch"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_patch", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3460,10 +3441,10 @@ class Client:
 
     async def get_database_mysql_instance(self, instance_id: int) -> dict[str, Any]:
         """Get a MySQL Managed Database instance by ID."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/mysql/instances/{encoded_instance_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_get", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3473,10 +3454,10 @@ class Client:
         self, instance_id: int
     ) -> dict[str, Any]:
         """Get a PostgreSQL Managed Database instance by ID."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_get", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3486,12 +3467,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Reset PostgreSQL Managed Database credentials."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = (
-            f"/databases/postgresql/instances/{encoded_instance_id}/credentials/reset"
-        )
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_credentials_reset", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3501,10 +3480,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Get a PostgreSQL Managed Database SSL certificate by instance ID."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}/ssl"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_ssl_get", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3514,10 +3493,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Get a MySQL Managed Database SSL certificate by instance ID."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/mysql/instances/{encoded_instance_id}/ssl"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_ssl_get", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3527,10 +3506,10 @@ class Client:
         self, instance_id: int
     ) -> dict[str, Any]:
         """Get credentials for a MySQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/mysql/instances/{encoded_instance_id}/credentials"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_credentials_get", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3540,10 +3519,10 @@ class Client:
         self, instance_id: int
     ) -> dict[str, Any]:
         """Get credentials for a PostgreSQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}/credentials"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_credentials_get", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3553,10 +3532,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Resume a MySQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/mysql/instances/{encoded_instance_id}/resume"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_resume", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3566,10 +3545,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Suspend a MySQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/mysql/instances/{encoded_instance_id}/suspend"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_suspend", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3579,10 +3558,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Resume a PostgreSQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}/resume"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_resume", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3592,10 +3571,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Suspend a PostgreSQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/postgresql/instances/{encoded_instance_id}/suspend"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_suspend", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3605,10 +3584,9 @@ class Client:
         self, instance_id: int, payload: dict[str, Any]
     ) -> dict[str, Any]:
         """Update a MySQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
         try:
-            response = await self.make_request(
-                "PUT", f"/databases/mysql/instances/{encoded_instance_id}", payload
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_update", instance_id, body=payload
             )
             data: dict[str, Any] = response.json()
             return data
@@ -3619,10 +3597,10 @@ class Client:
         self, instance_id: int | str
     ) -> dict[str, Any]:
         """Reset MySQL Managed Database credentials."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/databases/mysql/instances/{encoded_instance_id}/credentials/reset"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_database_mysql_instance_credentials_reset", instance_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3632,16 +3610,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List child accounts for the account."""
-        endpoint = "/account/child-accounts"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_child_account_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3651,16 +3628,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List service transfers for the account."""
-        endpoint = "/account/service-transfers"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_service_transfer_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3668,10 +3644,10 @@ class Client:
 
     async def create_account_child_account_token(self, euuid: str) -> dict[str, Any]:
         """Create a proxy user token for a child account."""
-        encoded_euuid = quote(euuid, safe="")
-        endpoint = f"/account/child-accounts/{encoded_euuid}/token"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_account_child_account_token_create", euuid
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3679,11 +3655,8 @@ class Client:
 
     async def get_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Get an enrolled Beta program on the account."""
-        encoded_beta_id = quote(beta_id, safe="")
         try:
-            response = await self.make_request(
-                "GET", f"/account/betas/{encoded_beta_id}"
-            )
+            response = await self.make_route_request("linode_account_beta_get", beta_id)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3691,10 +3664,10 @@ class Client:
 
     async def get_account_child_account(self, euuid: str) -> dict[str, Any]:
         """Get a child account by EUUID."""
-        encoded_euuid = quote(euuid, safe="")
-        endpoint = f"/account/child-accounts/{encoded_euuid}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_child_account_get", euuid
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3702,10 +3675,10 @@ class Client:
 
     async def get_account_service_transfer(self, token: str) -> dict[str, Any]:
         """Get an account service transfer request by token."""
-        encoded_token = quote(token, safe="")
-        endpoint = f"/account/service-transfers/{encoded_token}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_service_transfer_get", token
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3713,10 +3686,10 @@ class Client:
 
     async def accept_account_service_transfer(self, token: str) -> dict[str, Any]:
         """Accept an account service transfer request by token."""
-        encoded_token = quote(token, safe="")
-        endpoint = f"/account/service-transfers/{encoded_token}/accept"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_account_service_transfer_accept", token
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3724,10 +3697,10 @@ class Client:
 
     async def delete_account_service_transfer(self, token: str) -> dict[str, Any]:
         """Cancel an account service transfer request by token."""
-        encoded_token = quote(token, safe="")
-        endpoint = f"/account/service-transfers/{encoded_token}"
         try:
-            response = await self.make_request("DELETE", endpoint)
+            response = await self.make_route_request(
+                "linode_account_service_transfer_delete", token
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3735,10 +3708,10 @@ class Client:
 
     async def get_account_invoice(self, invoice_id: int) -> dict[str, Any]:
         """Get an invoice by ID."""
-        encoded_invoice_id = quote(str(invoice_id), safe="")
-        endpoint = f"/account/invoices/{encoded_invoice_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_invoice_get", invoice_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3746,10 +3719,10 @@ class Client:
 
     async def get_account_oauth_client(self, client_id: str) -> dict[str, Any]:
         """Get an OAuth client by client ID."""
-        encoded_client_id = quote(client_id, safe="")
-        endpoint = f"/account/oauth-clients/{encoded_client_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_oauth_client_get", client_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3757,10 +3730,10 @@ class Client:
 
     async def get_account_payment(self, payment_id: int) -> dict[str, Any]:
         """Get an account payment by ID."""
-        encoded_payment_id = quote(str(payment_id), safe="")
-        endpoint = f"/account/payments/{encoded_payment_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_payment_get", payment_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3770,10 +3743,10 @@ class Client:
         self, payment_method_id: int
     ) -> dict[str, Any]:
         """Get an account payment method by ID."""
-        encoded_payment_method_id = quote(str(payment_method_id), safe="")
-        endpoint = f"/account/payment-methods/{encoded_payment_method_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_payment_method_get", payment_method_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3783,10 +3756,10 @@ class Client:
         self, payment_method_id: int
     ) -> dict[str, Any]:
         """Set an account payment method as the default payment method."""
-        encoded_payment_method_id = quote(str(payment_method_id), safe="")
-        endpoint = f"/account/payment-methods/{encoded_payment_method_id}/make-default"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_account_payment_method_make_default", payment_method_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3794,10 +3767,10 @@ class Client:
 
     async def reset_account_oauth_client_secret(self, client_id: str) -> dict[str, Any]:
         """Reset an OAuth client secret by client ID."""
-        encoded_client_id = quote(client_id, safe="")
-        endpoint = f"/account/oauth-clients/{encoded_client_id}/reset-secret"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_account_oauth_client_secret_reset", client_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3835,10 +3808,10 @@ class Client:
 
     async def get_account_login(self, login_id: int) -> dict[str, Any]:
         """Get an account login by ID."""
-        encoded_login_id = quote(str(login_id), safe="")
-        endpoint = f"/account/logins/{encoded_login_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_login_get", login_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3846,10 +3819,10 @@ class Client:
 
     async def get_account_user(self, username: str) -> dict[str, Any]:
         """Get an account user by username."""
-        encoded_username = quote(username, safe="")
-        endpoint = f"/account/users/{encoded_username}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_user_get", username
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3857,10 +3830,10 @@ class Client:
 
     async def get_account_user_grants(self, username: str) -> dict[str, Any]:
         """List grants for an account user by username."""
-        encoded_username = quote(username, safe="")
-        endpoint = f"/account/users/{encoded_username}/grants"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_user_grants_get", username
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3869,8 +3842,8 @@ class Client:
     async def enroll_account_beta(self, beta_id: str) -> dict[str, Any]:
         """Enroll the account in a beta program."""
         try:
-            response = await self.make_request(
-                "POST", "/account/betas", {"id": beta_id}
+            response = await self.make_route_request(
+                "linode_account_beta_enroll", body={"id": beta_id}
             )
             data: dict[str, Any] = response.json()
             return data
@@ -3881,16 +3854,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List available Linode services for the account."""
-        endpoint = "/account/availability"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_availability_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3898,10 +3870,10 @@ class Client:
 
     async def get_account_availability(self, region_id: str) -> dict[str, Any]:
         """Get available Linode services for the account in a region."""
-        encoded_region_id = quote(region_id, safe="")
-        endpoint = f"/account/availability/{encoded_region_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_account_availability_get", region_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3909,10 +3881,8 @@ class Client:
 
     async def get_beta(self, beta_id: str) -> dict[str, Any]:
         """Get an available Beta program."""
-        encoded_beta_id = quote(beta_id, safe="")
-        endpoint = f"/betas/{encoded_beta_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_beta_get", beta_id)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3922,18 +3892,16 @@ class Client:
         self, engine_id: str, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """Get a Managed Databases engine."""
-        encoded_engine_id = quote(engine_id, safe="")
-        endpoint = f"/databases/engines/{encoded_engine_id}"
         # The OpenAPI contract documents page/page_size for this endpoint.
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_engine_get", engine_id, query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3951,8 +3919,6 @@ class Client:
             raise ValueError(
                 "type_id must use letters, numbers, dots, underscores, and hyphens"
             )
-        encoded_type_id = quote(type_id, safe="")
-        endpoint = f"/databases/types/{encoded_type_id}"
         params: dict[str, int] = {}
         if page is not None:
             if type(page) is not int or page < 1:
@@ -3966,10 +3932,10 @@ class Client:
             ):
                 raise ValueError("page_size must be an integer between 25 and 500")
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_type_get", type_id, query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -3978,7 +3944,7 @@ class Client:
     async def list_regions(self) -> list[Region]:
         """List Linode regions."""
         try:
-            response = await self.make_request("GET", "/regions")
+            response = await self.make_route_request("linode_region_list")
             data = response.json()
             return [self._parse_region(r) for r in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -3986,10 +3952,8 @@ class Client:
 
     async def get_region(self, region_id: str) -> Region:
         """Get a Linode region."""
-        encoded_region_id = quote(region_id, safe="")
-        endpoint = f"/regions/{encoded_region_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_region_get", region_id)
             data = response.json()
             return self._parse_region(data)
         except httpx.HTTPError as e:
@@ -3997,10 +3961,10 @@ class Client:
 
     async def get_region_availability(self, region_id: str) -> list[dict[str, Any]]:
         """Get compute instance availability for a region."""
-        encoded_region_id = quote(region_id, safe="")
-        endpoint = f"/regions/{encoded_region_id}/availability"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_region_availability_get", region_id
+            )
             data: Any = response.json()
             if not isinstance(data, list):
                 msg = "region availability response must be an array"
@@ -4016,7 +3980,7 @@ class Client:
     async def list_regions_availability(self) -> list[dict[str, Any]]:
         """List compute instance availability across regions."""
         try:
-            response = await self.make_request("GET", "/regions/availability")
+            response = await self.make_route_request("linode_region_availability_list")
             data: list[dict[str, Any]] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4025,7 +3989,7 @@ class Client:
     async def list_types(self) -> list[InstanceType]:
         """List Linode instance types."""
         try:
-            response = await self.make_request("GET", "/linode/types")
+            response = await self.make_route_request("linode_type_list")
             data = response.json()
             return [self._parse_instance_type(t) for t in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -4035,10 +3999,8 @@ class Client:
         """Get a Linode instance type."""
         if not type_id:
             raise ValueError("type_id is required")
-        encoded_type_id = quote(type_id, safe="")
-        endpoint = f"/linode/types/{encoded_type_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_type_get", type_id)
             data = response.json()
             return self._parse_instance_type(data)
         except httpx.HTTPError as e:
@@ -4048,7 +4010,6 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List Linode Managed Databases engines."""
-        endpoint = "/databases/engines"
         params: dict[str, int] = {}
         if page is not None:
             if type(page) is not int or page < 1:
@@ -4062,10 +4023,10 @@ class Client:
             ):
                 raise ValueError("page_size must be an integer between 25 and 500")
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_engine_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4075,7 +4036,6 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List available Linode Managed Databases types."""
-        endpoint = "/databases/types"
         params: dict[str, int] = {}
         if page is not None:
             if type(page) is not int or page < 1:
@@ -4089,10 +4049,10 @@ class Client:
             ):
                 raise ValueError("page_size must be an integer between 25 and 500")
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_database_type_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4101,7 +4061,7 @@ class Client:
     async def get_database_mysql_config(self) -> dict[str, Any]:
         """List MySQL Managed Database advanced parameters."""
         try:
-            response = await self.make_request("GET", "/databases/mysql/config")
+            response = await self.make_route_request("linode_database_mysql_config_get")
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4110,7 +4070,9 @@ class Client:
     async def get_database_postgresql_config(self) -> dict[str, Any]:
         """List PostgreSQL Managed Database advanced parameters."""
         try:
-            response = await self.make_request("GET", "/databases/postgresql/config")
+            response = await self.make_route_request(
+                "linode_database_postgresql_config_get"
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4120,10 +4082,9 @@ class Client:
         self, instance_id: int, payload: dict[str, Any]
     ) -> dict[str, Any]:
         """Update a PostgreSQL Managed Database instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
         try:
-            response = await self.make_request(
-                "PUT", f"/databases/postgresql/instances/{encoded_instance_id}", payload
+            response = await self.make_route_request(
+                "linode_database_postgresql_instance_update", instance_id, body=payload
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4133,7 +4094,7 @@ class Client:
     async def list_volumes(self) -> list[Volume]:
         """List Linode block storage volumes."""
         try:
-            response = await self.make_request("GET", "/volumes")
+            response = await self.make_route_request("linode_volume_list")
             data = response.json()
             return [self._parse_volume(v) for v in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -4142,7 +4103,7 @@ class Client:
     async def list_volume_types(self) -> list[dict[str, Any]]:
         """List Linode block storage volume types."""
         try:
-            response = await self.make_request("GET", "/volumes/types")
+            response = await self.make_route_request("linode_volume_type_list")
             data = response.json()
             volume_types: list[dict[str, Any]] = data.get("data", [])
             return volume_types
@@ -4152,7 +4113,7 @@ class Client:
     async def get_volume(self, volume_id: int) -> Volume:
         """Get a Linode block storage volume."""
         try:
-            response = await self.make_request("GET", f"/volumes/{volume_id}")
+            response = await self.make_route_request("linode_volume_get", volume_id)
             data = response.json()
             return self._parse_volume(data)
         except httpx.HTTPError as e:
@@ -4161,7 +4122,7 @@ class Client:
     async def list_images(self) -> list[Image]:
         """List Linode images."""
         try:
-            response = await self.make_request("GET", "/images")
+            response = await self.make_route_request("linode_image_list")
             data = response.json()
             return [self._parse_image(i) for i in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -4169,9 +4130,8 @@ class Client:
 
     async def delete_image(self, image_id: str) -> None:
         """Delete a private image by ID."""
-        image_id_path = quote(str(image_id), safe="")
         try:
-            await self.make_request("DELETE", f"/images/{image_id_path}")
+            await self.make_route_request("linode_image_delete", image_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteImage", e) from e
 
@@ -4179,7 +4139,6 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List image share groups."""
-        endpoint = "/images/sharegroups"
         params: dict[str, int] = {}
         if page is not None:
             if type(page) is not int or page < 1:
@@ -4193,10 +4152,10 @@ class Client:
             ):
                 raise ValueError("page_size must be an integer between 25 and 500")
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_image_sharegroup_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4210,17 +4169,17 @@ class Client:
     ) -> dict[str, Any]:
         """List share groups for a Linode image."""
         image_id_value = validate_image_sharegroups_image_id(image_id)
-        image_id_path = quote(image_id_value, safe="")
-        endpoint = f"/images/{image_id_path}/sharegroups"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_image_sharegroup_by_image_list",
+                image_id_value,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4228,10 +4187,9 @@ class Client:
 
     async def delete_image_sharegroup(self, sharegroup_id: str) -> None:
         """Delete a single image share group."""
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
         try:
-            await self.make_request(
-                "DELETE", f"/images/sharegroups/{sharegroup_id_path}"
+            await self.make_route_request(
+                "linode_image_sharegroup_delete", sharegroup_id
             )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteImageSharegroup", e) from e
@@ -4250,7 +4208,9 @@ class Client:
             body["images"] = images
 
         try:
-            response = await self.make_request("POST", "/images/sharegroups", body)
+            response = await self.make_route_request(
+                "linode_image_sharegroup_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4258,10 +4218,9 @@ class Client:
 
     async def get_image_sharegroup(self, sharegroup_id: str) -> dict[str, Any]:
         """Get a single image share group."""
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
         try:
-            response = await self.make_request(
-                "GET", f"/images/sharegroups/{sharegroup_id_path}"
+            response = await self.make_route_request(
+                "linode_image_sharegroup_get", sharegroup_id
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4276,7 +4235,6 @@ class Client:
         description: str | None = None,
     ) -> dict[str, Any]:
         """Update a single image share group."""
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
         if label is None and description is None:
             raise ValueError("at least one of label or description must be provided")
         body: dict[str, Any] = {}
@@ -4285,8 +4243,8 @@ class Client:
         if description is not None:
             body["description"] = description
         try:
-            response = await self.make_request(
-                "PUT", f"/images/sharegroups/{sharegroup_id_path}", body
+            response = await self.make_route_request(
+                "linode_image_sharegroup_update", sharegroup_id, body=body
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4299,16 +4257,15 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List image share group tokens for the user."""
-        endpoint = "/images/sharegroups/tokens"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_image_sharegroup_token_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4316,10 +4273,9 @@ class Client:
 
     async def get_image_sharegroup_token(self, token_uuid: str) -> dict[str, Any]:
         """Get a single image share group token."""
-        token_uuid_path = quote(token_uuid, safe="")
         try:
-            response = await self.make_request(
-                "GET", f"/images/sharegroups/tokens/{token_uuid_path}"
+            response = await self.make_route_request(
+                "linode_image_sharegroup_token_get", token_uuid
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4328,10 +4284,9 @@ class Client:
 
     async def get_image_sharegroup_by_token(self, token_uuid: str) -> dict[str, Any]:
         """Get the image share group associated with a token."""
-        token_uuid_path = quote(token_uuid, safe="")
         try:
-            response = await self.make_request(
-                "GET", f"/images/sharegroups/tokens/{token_uuid_path}/sharegroup"
+            response = await self.make_route_request(
+                "linode_image_sharegroup_by_token_get", token_uuid
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4345,17 +4300,17 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List images available through an image share group token."""
-        token_uuid_path = quote(token_uuid, safe="")
-        endpoint = f"/images/sharegroups/tokens/{token_uuid_path}/sharegroup/images"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_image_sharegroup_token_image_list",
+                token_uuid,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4368,17 +4323,17 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List images available in an image share group."""
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
-        endpoint = f"/images/sharegroups/{sharegroup_id_path}/images"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_image_sharegroup_image_list",
+                sharegroup_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4391,17 +4346,17 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List members of an image share group."""
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
-        endpoint = f"/images/sharegroups/{sharegroup_id_path}/members"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_image_sharegroup_member_list",
+                sharegroup_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4411,12 +4366,9 @@ class Client:
         self, sharegroup_id: str, token_uuid: str
     ) -> dict[str, Any]:
         """Get a membership token in an image share group."""
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
-        token_uuid_path = quote(token_uuid, safe="")
         try:
-            response = await self.make_request(
-                "GET",
-                (f"/images/sharegroups/{sharegroup_id_path}/members/{token_uuid_path}"),
+            response = await self.make_route_request(
+                "linode_image_sharegroup_member_token_get", sharegroup_id, token_uuid
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4427,12 +4379,9 @@ class Client:
         self, sharegroup_id: str, token_uuid: str
     ) -> None:
         """Revoke a membership token in an image share group."""
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
-        token_uuid_path = quote(str(token_uuid), safe="")
         try:
-            await self.make_request(
-                "DELETE",
-                f"/images/sharegroups/{sharegroup_id_path}/members/{token_uuid_path}",
+            await self.make_route_request(
+                "linode_image_sharegroup_member_token_delete", sharegroup_id, token_uuid
             )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteImageSharegroupMemberToken", e) from e
@@ -4445,12 +4394,11 @@ class Client:
             raise ValueError("label must be a non-empty string")
         if not token.strip():
             raise ValueError("token must be a non-empty string")
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
         try:
-            response = await self.make_request(
-                "POST",
-                f"/images/sharegroups/{sharegroup_id_path}/members",
-                {"label": label, "token": token},
+            response = await self.make_route_request(
+                "linode_image_sharegroup_member_add",
+                sharegroup_id,
+                body={"label": label, "token": token},
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4463,13 +4411,12 @@ class Client:
         """Update a membership token in an image share group."""
         if not label.strip():
             raise ValueError("label must be a non-empty string")
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
-        token_uuid_path = quote(str(token_uuid), safe="")
         try:
-            response = await self.make_request(
-                "PUT",
-                f"/images/sharegroups/{sharegroup_id_path}/members/{token_uuid_path}",
-                {"label": label},
+            response = await self.make_route_request(
+                "linode_image_sharegroup_member_token_update",
+                sharegroup_id,
+                token_uuid,
+                body={"label": label},
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4482,12 +4429,11 @@ class Client:
         """Add images to an image share group."""
         if not images:
             raise ValueError("images must be a non-empty list of image objects")
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
         try:
-            response = await self.make_request(
-                "POST",
-                f"/images/sharegroups/{sharegroup_id_path}/images",
-                {"images": images},
+            response = await self.make_route_request(
+                "linode_image_sharegroup_image_add",
+                sharegroup_id,
+                body={"images": images},
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4514,13 +4460,12 @@ class Client:
             if not description.strip():
                 raise ValueError("description must be a non-empty string when provided")
             body["description"] = description.strip()
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
-        image_id_path = quote(str(image_id), safe="")
         try:
-            response = await self.make_request(
-                "PUT",
-                f"/images/sharegroups/{sharegroup_id_path}/images/{image_id_path}",
-                body,
+            response = await self.make_route_request(
+                "linode_image_sharegroup_image_update",
+                sharegroup_id,
+                image_id,
+                body=body,
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4531,12 +4476,9 @@ class Client:
         self, sharegroup_id: str, image_id: str
     ) -> None:
         """Revoke access to a shared image from an image share group."""
-        sharegroup_id_path = quote(str(sharegroup_id), safe="")
-        image_id_path = quote(str(image_id), safe="")
         try:
-            await self.make_request(
-                "DELETE",
-                f"/images/sharegroups/{sharegroup_id_path}/images/{image_id_path}",
+            await self.make_route_request(
+                "linode_image_sharegroup_image_delete", sharegroup_id, image_id
             )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteImageSharegroupImage", e) from e
@@ -4549,8 +4491,8 @@ class Client:
         if label is not None:
             body["label"] = label
         try:
-            response = await self.make_request(
-                "POST", "/images/sharegroups/tokens", body
+            response = await self.make_route_request(
+                "linode_image_sharegroup_token_create", body=body
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4561,12 +4503,11 @@ class Client:
         self, token_uuid: str, label: str
     ) -> dict[str, Any]:
         """Update an image share group token label."""
-        token_uuid_path = quote(token_uuid, safe="")
         try:
-            response = await self.make_request(
-                "PUT",
-                f"/images/sharegroups/tokens/{token_uuid_path}",
-                {"label": label},
+            response = await self.make_route_request(
+                "linode_image_sharegroup_token_update",
+                token_uuid,
+                body={"label": label},
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4594,7 +4535,6 @@ class Client:
                 "at least one of label, description, or tags must be provided"
             )
 
-        image_id_path = quote(image_id, safe="")
         body: dict[str, Any] = {}
         if label is not None:
             body["label"] = label
@@ -4604,7 +4544,9 @@ class Client:
             body["tags"] = tags
 
         try:
-            response = await self.make_request("PUT", f"/images/{image_id_path}", body)
+            response = await self.make_route_request(
+                "linode_image_update", image_id, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4612,19 +4554,17 @@ class Client:
 
     async def delete_image_sharegroup_token(self, token_uuid: str) -> None:
         """Delete an image share group token."""
-        token_uuid_path = quote(token_uuid, safe="")
         try:
-            await self.make_request(
-                "DELETE", f"/images/sharegroups/tokens/{token_uuid_path}"
+            await self.make_route_request(
+                "linode_image_sharegroup_token_delete", token_uuid
             )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteImageSharegroupToken", e) from e
 
     async def get_image(self, image_id: str) -> Image:
         """Get a single Linode image."""
-        encoded_image_id = quote(str(image_id), safe="")
         try:
-            response = await self.make_request("GET", f"/images/{encoded_image_id}")
+            response = await self.make_route_request("linode_image_get", image_id)
             data = response.json()
             return self._parse_image(data)
         except httpx.HTTPError as e:
@@ -4632,11 +4572,8 @@ class Client:
 
     async def get_kernel(self, kernel_id: str) -> dict[str, Any]:
         """Get a single Linode kernel."""
-        encoded_kernel_id = quote(str(kernel_id), safe="")
         try:
-            response = await self.make_request(
-                "GET", f"/linode/kernels/{encoded_kernel_id}"
-            )
+            response = await self.make_route_request("linode_kernel_get", kernel_id)
             data: Any = response.json()
             if not isinstance(data, dict):
                 raise LinodeError("GetKernel returned a non-object response")
@@ -4669,7 +4606,7 @@ class Client:
             body["tags"] = tags
 
         try:
-            response = await self.make_request("POST", "/images", body)
+            response = await self.make_route_request("linode_image_create", body=body)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4694,7 +4631,7 @@ class Client:
             body["tags"] = tags
 
         try:
-            response = await self.make_request("POST", "/images/upload", body)
+            response = await self.make_route_request("linode_image_upload", body=body)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -4704,10 +4641,9 @@ class Client:
         self, image_id: str, regions: list[str]
     ) -> dict[str, Any]:
         """Replicate an image to one or more regions."""
-        image_id_path = quote(str(image_id), safe="")
         try:
-            response = await self.make_request(
-                "POST", f"/images/{image_id_path}/regions", {"regions": regions}
+            response = await self.make_route_request(
+                "linode_image_replicate", image_id, body={"regions": regions}
             )
             data: dict[str, Any] = response.json()
             return data
@@ -4717,7 +4653,7 @@ class Client:
     async def list_ssh_keys(self) -> list[SSHKey]:
         """List SSH keys."""
         try:
-            response = await self.make_request("GET", "/profile/sshkeys")
+            response = await self.make_route_request("linode_sshkey_list")
             data = response.json()
             return [self._parse_ssh_key(k) for k in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -4726,7 +4662,7 @@ class Client:
     async def get_ssh_key(self, ssh_key_id: int) -> SSHKey:
         """Get a specific SSH key."""
         try:
-            response = await self.make_request("GET", f"/profile/sshkeys/{ssh_key_id}")
+            response = await self.make_route_request("linode_sshkey_get", ssh_key_id)
             data = response.json()
             return self._parse_ssh_key(data)
         except httpx.HTTPError as e:
@@ -4735,7 +4671,7 @@ class Client:
     async def list_domains(self) -> list[Domain]:
         """List domains."""
         try:
-            response = await self.make_request("GET", "/domains")
+            response = await self.make_route_request("linode_domain_list")
             data = response.json()
             return [self._parse_domain(d) for d in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -4743,9 +4679,8 @@ class Client:
 
     async def get_domain(self, domain_id: int) -> Domain:
         """Get a specific domain."""
-        endpoint = f"/domains/{domain_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_domain_get", domain_id)
             data = response.json()
             return self._parse_domain(data)
         except httpx.HTTPError as e:
@@ -4756,10 +4691,10 @@ class Client:
         if type(domain_id) is not int or domain_id <= 0:
             msg = "domain_id must be a positive integer"
             raise ValueError(msg)
-        encoded_domain_id = quote(str(domain_id), safe="")
-        endpoint = f"/domains/{encoded_domain_id}/zone-file"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_domain_zone_file_get", domain_id
+            )
             data = response.json()
             zone_file = data.get("zone_file", [])
             return DomainZoneFile(zone_file=list(zone_file))
@@ -4768,9 +4703,10 @@ class Client:
 
     async def list_domain_records(self, domain_id: int) -> list[DomainRecord]:
         """List domain records for a domain."""
-        endpoint = f"/domains/{domain_id}/records"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_domain_record_list", domain_id
+            )
             data = response.json()
             return [self._parse_domain_record(r) for r in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -4778,9 +4714,10 @@ class Client:
 
     async def get_domain_record(self, domain_id: int, record_id: int) -> DomainRecord:
         """Get a specific domain record."""
-        endpoint = f"/domains/{domain_id}/records/{record_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_domain_record_get", domain_id, record_id
+            )
             data = response.json()
             return self._parse_domain_record(data)
         except httpx.HTTPError as e:
@@ -4789,7 +4726,7 @@ class Client:
     async def list_firewalls(self) -> list[Firewall]:
         """List firewalls."""
         try:
-            response = await self.make_request("GET", "/networking/firewalls")
+            response = await self.make_route_request("linode_firewall_list")
             data = response.json()
             return [self._parse_firewall(f) for f in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -4797,9 +4734,8 @@ class Client:
 
     async def get_firewall(self, firewall_id: int) -> Firewall:
         """Get a specific firewall."""
-        endpoint = f"/networking/firewalls/{firewall_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_firewall_get", firewall_id)
             data = response.json()
             return self._parse_firewall(data)
         except httpx.HTTPError as e:
@@ -4809,7 +4745,6 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List default firewall settings."""
-        endpoint = "/networking/firewalls/settings"
         for name, value in (("page", page), ("page_size", page_size)):
             if value is not None and (type(value) is not int or value <= 0):
                 msg = f"{name} must be a positive integer"
@@ -4819,10 +4754,10 @@ class Client:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint = f"{endpoint}?{urlencode(params)}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_firewall_settings_get", query=urlencode(params)
+            )
             return cast("dict[str, Any]", response.json())
         except httpx.HTTPError as e:
             raise NetworkError("GetFirewallSettings", e) from e
@@ -4853,8 +4788,8 @@ class Client:
         body = {"default_firewall_ids": default_firewall_ids}
 
         try:
-            response = await self.make_request(
-                "PUT", "/networking/firewalls/settings", body
+            response = await self.make_route_request(
+                "linode_firewall_settings_update", body=body
             )
             return cast("dict[str, Any]", response.json())
         except httpx.HTTPError as e:
@@ -4864,16 +4799,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List firewall templates."""
-        endpoint = "/networking/firewalls/templates"
         params: dict[str, Any] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint = f"{endpoint}?{urlencode(params)}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_firewall_template_list", query=urlencode(params)
+            )
             return cast("dict[str, Any]", response.json())
         except httpx.HTTPError as e:
             raise NetworkError("ListFirewallTemplates", e) from e
@@ -4882,17 +4816,15 @@ class Client:
         self, slug: str, page: int | None = None, page_size: int | None = None
     ) -> FirewallTemplate:
         """Get a firewall template by slug."""
-        safe_slug = quote(slug, safe="")
-        endpoint = f"/networking/firewalls/templates/{safe_slug}"
         params: dict[str, Any] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint = f"{endpoint}?{urlencode(params)}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_firewall_template_get", slug, query=urlencode(params)
+            )
             data = response.json()
             return self._parse_firewall_template(data)
         except httpx.HTTPError as e:
@@ -4900,9 +4832,10 @@ class Client:
 
     async def get_firewall_rules(self, firewall_id: int) -> FirewallRules:
         """Get firewall rules for a specific firewall."""
-        endpoint = f"/networking/firewalls/{firewall_id}/rules"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_firewall_rules_get", firewall_id
+            )
             data = response.json()
             return self._parse_firewall_rules(data)
         except httpx.HTTPError as e:
@@ -4912,10 +4845,10 @@ class Client:
         self, firewall_id: int, version: str
     ) -> FirewallRule:
         """Get a specific firewall rule version."""
-        safe_version = quote(version, safe="")
-        endpoint = f"/networking/firewalls/{firewall_id}/history/rules/{safe_version}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_firewall_rule_version_get", firewall_id, version
+            )
             data = response.json()
             return self._parse_firewall_rule(data)
         except httpx.HTTPError as e:
@@ -4925,11 +4858,10 @@ class Client:
         self, firewall_id: int, device_id: int
     ) -> dict[str, Any]:
         """Get a specific firewall device."""
-        safe_firewall_id = quote(str(firewall_id), safe="")
-        safe_device_id = quote(str(device_id), safe="")
-        endpoint = f"/networking/firewalls/{safe_firewall_id}/devices/{safe_device_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_firewall_device_get", firewall_id, device_id
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -4939,11 +4871,10 @@ class Client:
         self, firewall_id: int | str, device_id: int | str
     ) -> None:
         """Delete a device from a Cloud Firewall."""
-        safe_firewall_id = quote(str(firewall_id), safe="")
-        safe_device_id = quote(str(device_id), safe="")
-        endpoint = f"/networking/firewalls/{safe_firewall_id}/devices/{safe_device_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_firewall_device_delete", firewall_id, device_id
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteFirewallDevice", e) from e
 
@@ -4954,17 +4885,15 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List devices attached to a Cloud Firewall."""
-        safe_firewall_id = quote(str(firewall_id), safe="")
-        endpoint = f"/networking/firewalls/{safe_firewall_id}/devices"
         params: dict[str, Any] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint = f"{endpoint}?{urlencode(params)}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_firewall_device_list", firewall_id, query=urlencode(params)
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -4976,9 +4905,10 @@ class Client:
         The history route answers with one firewall-shaped object, not a
         {data:[...]} page, so the result is that object as the single entry.
         """
-        endpoint = f"/networking/firewalls/{firewall_id}/history"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_firewall_rule_version_list", firewall_id
+            )
             data: Any = response.json()
             if not isinstance(data, dict) or "rules" not in data:
                 msg = "firewall history response must be a firewall object"
@@ -4993,16 +4923,15 @@ class Client:
         page_size: int | None = None,
     ) -> list[dict[str, Any]]:
         """List VLANs."""
-        endpoint = "/networking/vlans"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_vlan_list", query=urlencode(params)
+            )
             data = response.json()
             vlans: list[dict[str, Any]] = data.get("data", [])
             return vlans
@@ -5011,9 +4940,8 @@ class Client:
 
     async def delete_vlan(self, region_id: str, label: str) -> None:
         """Delete a VLAN."""
-        endpoint = f"/networking/vlans/{region_id}/{label}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_vlan_delete", region_id, label)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVLAN", e) from e
 
@@ -5021,7 +4949,9 @@ class Client:
         """Share IPv4 addresses with a Linode."""
         try:
             body: dict[str, Any] = {"ips": ips, "linode_id": linode_id}
-            response = await self.make_request("POST", "/networking/ipv4/share", body)
+            response = await self.make_route_request(
+                "linode_networking_ipv4_share", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5031,7 +4961,9 @@ class Client:
         """Share IP addresses with a Linode."""
         try:
             body: dict[str, Any] = {"ips": ips, "linode_id": linode_id}
-            response = await self.make_request("POST", "/networking/ips/share", body)
+            response = await self.make_route_request(
+                "linode_networking_ip_share", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5046,7 +4978,9 @@ class Client:
                 "region": region,
                 "assignments": assignments,
             }
-            response = await self.make_request("POST", "/networking/ips/assign", body)
+            response = await self.make_route_request(
+                "linode_networking_ip_assign", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5061,7 +4995,9 @@ class Client:
                 "region": region,
                 "assignments": assignments,
             }
-            response = await self.make_request("POST", "/networking/ipv4/assign", body)
+            response = await self.make_route_request(
+                "linode_networking_ipv4_assign", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5071,16 +5007,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List account tags."""
-        endpoint = "/tags"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_tag_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5090,17 +5025,15 @@ class Client:
         self, tag_label: str, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List objects assigned to a tag."""
-        encoded_label = quote(tag_label, safe="")
-        endpoint = f"/tags/{encoded_label}"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_tag_object_list", tag_label, query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5113,6 +5046,7 @@ class Client:
         linodes: list[int] | None = None,
         nodebalancers: list[int] | None = None,
         volumes: list[int] | None = None,
+        reserved_ipv4_addresses: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a tag and optionally assign supported resources."""
         body: dict[str, Any] = {"label": label}
@@ -5124,8 +5058,10 @@ class Client:
             body["nodebalancers"] = nodebalancers
         if volumes is not None:
             body["volumes"] = volumes
+        if reserved_ipv4_addresses is not None:
+            body["reserved_ipv4_addresses"] = reserved_ipv4_addresses
         try:
-            response = await self.make_request("POST", "/tags", body)
+            response = await self.make_route_request("linode_tag_create", body=body)
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5135,7 +5071,9 @@ class Client:
         """Create a Longview client."""
         body = {"label": label}
         try:
-            response = await self.make_request("POST", "/longview/clients", body)
+            response = await self.make_route_request(
+                "linode_longview_client_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5143,10 +5081,8 @@ class Client:
 
     async def delete_tag(self, tag_label: str) -> None:
         """Delete a tag."""
-        encoded_label = quote(tag_label, safe="")
-        endpoint = f"/tags/{encoded_label}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_tag_delete", tag_label)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteTag", e) from e
 
@@ -5195,7 +5131,9 @@ class Client:
             {key: value for key, value in optional_fields.items() if value is not None}
         )
         try:
-            response = await self.make_request("POST", "/support/tickets", body)
+            response = await self.make_route_request(
+                "linode_support_ticket_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5205,16 +5143,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List Managed credentials on the Linode account."""
-        endpoint = "/managed/credentials"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_credential_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5224,16 +5161,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List open Managed issues on the Linode account."""
-        endpoint = "/managed/issues"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_issue_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5243,16 +5179,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List Managed Linode settings on the account."""
-        endpoint = "/managed/linode-settings"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_linode_settings_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5270,10 +5205,9 @@ class Client:
             msg = "At least one Managed Linode settings field is required"
             raise ValueError(msg)
 
-        encoded_linode_id = quote(str(validated_linode_id), safe="")
         try:
-            response = await self.make_request(
-                "PUT", f"/managed/linode-settings/{encoded_linode_id}", body
+            response = await self.make_route_request(
+                "linode_managed_linode_settings_update", validated_linode_id, body=body
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5283,7 +5217,7 @@ class Client:
     async def get_managed_ssh_key(self) -> dict[str, Any]:
         """Get the Managed SSH public key for this account."""
         try:
-            response = await self.make_request("GET", "/managed/credentials/sshkey")
+            response = await self.make_route_request("linode_managed_sshkey_get")
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5294,10 +5228,9 @@ class Client:
         valid_credential_id = _validate_positive_path_int(
             credential_id, "credential_id"
         )
-        encoded_credential_id = quote(str(valid_credential_id), safe="")
         try:
-            response = await self.make_request(
-                "GET", f"/managed/credentials/{encoded_credential_id}"
+            response = await self.make_route_request(
+                "linode_managed_credential_get", valid_credential_id
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5308,16 +5241,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List Managed contacts on the Linode account."""
-        endpoint = "/managed/contacts"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_contact_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5340,7 +5272,9 @@ class Client:
         }
         payload = {key: value for key, value in body.items() if value is not None}
         try:
-            response = await self.make_request("POST", "/managed/contacts", payload)
+            response = await self.make_route_request(
+                "linode_managed_contact_create", body=payload
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5358,7 +5292,9 @@ class Client:
         if username is not None:
             body["username"] = username
         try:
-            response = await self.make_request("POST", "/managed/credentials", body)
+            response = await self.make_route_request(
+                "linode_managed_credential_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5391,7 +5327,9 @@ class Client:
         _add_managed_service_credentials(payload, credentials)
 
         try:
-            response = await self.make_request("POST", "/managed/services", payload)
+            response = await self.make_route_request(
+                "linode_managed_service_create", body=payload
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5400,11 +5338,10 @@ class Client:
     async def get_managed_service(self, service_id: int) -> dict[str, Any]:
         """Get a Managed service monitor by service ID."""
         valid_service_id = _validate_positive_path_int(service_id, "service_id")
-        # Keep URL construction encoded at the client boundary for path-param safety.
-        encoded_service_id = quote(str(valid_service_id), safe="")
-        endpoint = f"/managed/services/{encoded_service_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_service_get", valid_service_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5413,10 +5350,9 @@ class Client:
     async def disable_managed_service(self, service_id: int) -> dict[str, Any]:
         """Disable a Managed service monitor."""
         validated_service_id = _validate_positive_path_int(service_id, "service_id")
-        encoded_service_id = quote(str(validated_service_id), safe="")
         try:
-            response = await self.make_request(
-                "POST", f"/managed/services/{encoded_service_id}/disable"
+            response = await self.make_route_request(
+                "linode_managed_service_disable", validated_service_id
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5436,11 +5372,10 @@ class Client:
         if not isinstance(label, str) or not label.strip():
             msg = "label must be a non-empty string"
             raise ValueError(msg)
-        encoded_credential_id = quote(str(validated_credential_id), safe="")
         body = {"label": label.strip()}
         try:
-            response = await self.make_request(
-                "PUT", f"/managed/credentials/{encoded_credential_id}", body
+            response = await self.make_route_request(
+                "linode_managed_credential_update", validated_credential_id, body=body
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5467,10 +5402,11 @@ class Client:
                 msg = "username must be a non-empty string"
                 raise ValueError(msg)
             body["username"] = username
-        encoded_credential_id = quote(str(validated_credential_id), safe="")
         try:
-            response = await self.make_request(
-                "POST", f"/managed/credentials/{encoded_credential_id}/update", body
+            response = await self.make_route_request(
+                "linode_managed_credential_username_password_update",
+                validated_credential_id,
+                body=body,
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5482,11 +5418,9 @@ class Client:
         validated_credential_id = _validate_positive_path_int(
             credential_id, "credential_id"
         )
-        encoded_credential_id = quote(str(validated_credential_id), safe="")
         try:
-            response = await self.make_request(
-                "POST",
-                f"/managed/credentials/{encoded_credential_id}/revoke",
+            response = await self.make_route_request(
+                "linode_managed_credential_revoke", validated_credential_id
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5496,10 +5430,9 @@ class Client:
     async def delete_managed_contact(self, contact_id: int) -> dict[str, Any]:
         """Delete a Managed contact by contact ID."""
         validated_contact_id = _validate_positive_path_int(contact_id, "contact_id")
-        encoded_contact_id = quote(str(validated_contact_id), safe="")
         try:
-            response = await self.make_request(
-                "DELETE", f"/managed/contacts/{encoded_contact_id}"
+            response = await self.make_route_request(
+                "linode_managed_contact_delete", validated_contact_id
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5530,10 +5463,9 @@ class Client:
             msg = "At least one managed contact field is required"
             raise ValueError(msg)
 
-        encoded_contact_id = quote(str(validated_contact_id), safe="")
         try:
-            response = await self.make_request(
-                "PUT", f"/managed/contacts/{encoded_contact_id}", body
+            response = await self.make_route_request(
+                "linode_managed_contact_update", validated_contact_id, body=body
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5579,10 +5511,9 @@ class Client:
             msg = "At least one managed service field is required"
             raise ValueError(msg)
 
-        encoded_service_id = quote(str(validated_service_id), safe="")
         try:
-            response = await self.make_request(
-                "PUT", f"/managed/services/{encoded_service_id}", request_body
+            response = await self.make_route_request(
+                "linode_managed_service_update", validated_service_id, body=request_body
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5592,10 +5523,9 @@ class Client:
     async def enable_managed_service(self, service_id: int) -> dict[str, Any]:
         """Enable a Managed service monitor by service ID."""
         validated_service_id = _validate_positive_path_int(service_id, "service_id")
-        encoded_service_id = quote(str(validated_service_id), safe="")
         try:
-            response = await self.make_request(
-                "POST", f"/managed/services/{encoded_service_id}/enable"
+            response = await self.make_route_request(
+                "linode_managed_service_enable", validated_service_id
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5605,7 +5535,7 @@ class Client:
     async def get_managed_stats(self) -> dict[str, Any]:
         """List Managed statistics from the last 24 hours."""
         try:
-            response = await self.make_request("GET", "/managed/stats")
+            response = await self.make_route_request("linode_managed_stats_get")
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5614,10 +5544,10 @@ class Client:
     async def get_managed_linode_settings(self, linode_id: int) -> dict[str, Any]:
         """Get Managed settings for a Linode."""
         valid_linode_id = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(valid_linode_id), safe="")
-        endpoint = f"/managed/linode-settings/{encoded_linode_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_linode_settings_get", valid_linode_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5629,16 +5559,15 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List Managed services."""
-        endpoint = "/managed/services"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_service_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5647,10 +5576,9 @@ class Client:
     async def delete_managed_service(self, service_id: int) -> dict[str, Any]:
         """Delete a Managed service monitor by service ID."""
         validated_service_id = _validate_positive_path_int(service_id, "service_id")
-        encoded_service_id = quote(str(validated_service_id), safe="")
         try:
-            response = await self.make_request(
-                "DELETE", f"/managed/services/{encoded_service_id}"
+            response = await self.make_route_request(
+                "linode_managed_service_delete", validated_service_id
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5660,11 +5588,10 @@ class Client:
     async def get_managed_issue(self, issue_id: int) -> dict[str, Any]:
         """Get a Managed issue by issue ID."""
         valid_issue_id = _validate_positive_path_int(issue_id, "issue_id")
-        # Keep URL construction encoded at the client boundary for path-param safety.
-        encoded_issue_id = quote(str(valid_issue_id), safe="")
-        endpoint = f"/managed/issues/{encoded_issue_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_issue_get", valid_issue_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5673,11 +5600,10 @@ class Client:
     async def get_managed_contact(self, contact_id: int) -> dict[str, Any]:
         """Get a Managed contact."""
         valid_contact_id = _validate_positive_path_int(contact_id, "contact_id")
-        # Keep URL construction encoded at the client boundary for path-param safety.
-        encoded_contact_id = quote(str(valid_contact_id), safe="")
-        endpoint = f"/managed/contacts/{encoded_contact_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_managed_contact_get", valid_contact_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5687,16 +5613,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List support tickets."""
-        endpoint = "/support/tickets"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_support_ticket_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5704,9 +5629,10 @@ class Client:
 
     async def get_support_ticket(self, ticket_id: int) -> dict[str, Any]:
         """Get a support ticket."""
-        endpoint = f"/support/tickets/{ticket_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_support_ticket_get", ticket_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5716,16 +5642,15 @@ class Client:
         self, ticket_id: int, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List replies for a support ticket."""
-        endpoint = f"/support/tickets/{ticket_id}/replies"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_support_ticket_reply_list", ticket_id, query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5735,10 +5660,11 @@ class Client:
         self, ticket_id: int, description: str
     ) -> dict[str, Any]:
         """Create a reply for a support ticket."""
-        endpoint = f"/support/tickets/{ticket_id}/replies"
         try:
-            response = await self.make_request(
-                "POST", endpoint, {"description": description}
+            response = await self.make_route_request(
+                "linode_support_ticket_reply_create",
+                ticket_id,
+                body={"description": description},
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5747,9 +5673,10 @@ class Client:
 
     async def close_support_ticket(self, ticket_id: int) -> dict[str, Any]:
         """Close a support ticket."""
-        endpoint = f"/support/tickets/{ticket_id}/close"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_support_ticket_close", ticket_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5770,7 +5697,7 @@ class Client:
     async def list_nodebalancers(self) -> list[NodeBalancer]:
         """List NodeBalancers."""
         try:
-            response = await self.make_request("GET", "/nodebalancers")
+            response = await self.make_route_request("linode_nodebalancer_list")
             data = response.json()
             return [self._parse_nodebalancer(nb) for nb in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -5779,7 +5706,7 @@ class Client:
     async def list_nodebalancer_types(self) -> list[dict[str, Any]]:
         """List NodeBalancer types."""
         try:
-            response = await self.make_request("GET", "/nodebalancers/types")
+            response = await self.make_route_request("linode_nodebalancer_type_list")
             data = response.json()
             types: list[dict[str, Any]] = data.get("data", [])
             return types
@@ -5788,10 +5715,10 @@ class Client:
 
     async def get_nodebalancer(self, nodebalancer_id: int) -> NodeBalancer:
         """Get a specific NodeBalancer."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_get", nodebalancer_id
+            )
             data = response.json()
             return self._parse_nodebalancer(data)
         except httpx.HTTPError as e:
@@ -5799,10 +5726,10 @@ class Client:
 
     async def get_nodebalancer_stats(self, nodebalancer_id: int) -> dict[str, Any]:
         """Get statistics for a specific NodeBalancer."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/stats"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_stats_get", nodebalancer_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5812,13 +5739,10 @@ class Client:
         self, nodebalancer_id: int, vpc_config_id: int
     ) -> dict[str, Any]:
         """Get a NodeBalancer VPC configuration."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_vpc_config_id = quote(str(vpc_config_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/vpcs/{encoded_vpc_config_id}"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_vpc_config_get", nodebalancer_id, vpc_config_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5831,17 +5755,17 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List VPC configurations for a NodeBalancer."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/vpcs"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_vpc_config_list",
+                nodebalancer_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5855,10 +5779,10 @@ class Client:
         if linode_id_value <= 0:
             raise ValueError("linode_id must be a positive integer")
 
-        encoded_linode_id = quote(str(linode_id_value), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/firewalls/apply"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_firewall_apply", linode_id_value
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5872,18 +5796,17 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """Update firewall assignments for a NodeBalancer."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/firewalls"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request(
-                "PUT", endpoint, {"firewall_ids": firewall_ids}
+            response = await self.make_route_request(
+                "linode_nodebalancer_firewall_update",
+                nodebalancer_id,
+                body={"firewall_ids": firewall_ids},
+                query=urlencode(params),
             )
             data: dict[str, Any] = response.json()
             return data
@@ -5891,17 +5814,16 @@ class Client:
             raise NetworkError("UpdateNodeBalancerFirewalls", e) from e
 
     async def rebuild_nodebalancer_config(
-        self, nodebalancer_id: int, config_id: int
+        self, nodebalancer_id: int, config_id: int, fields: dict[str, Any]
     ) -> dict[str, Any]:
         """Rebuild a NodeBalancer config."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
-            f"{encoded_config_id}/rebuild"
-        )
         try:
-            response = await self.make_request("POST", endpoint, {})
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_rebuild",
+                nodebalancer_id,
+                config_id,
+                body=fields,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5914,17 +5836,17 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List configs for a NodeBalancer."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/configs"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_list",
+                nodebalancer_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5940,10 +5862,10 @@ class Client:
             or nodebalancer_id < 1
         ):
             raise ValueError("nodebalancer_id must be a positive integer")
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/configs"
         try:
-            response = await self.make_request("POST", endpoint, fields)
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_create", nodebalancer_id, body=fields
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5953,13 +5875,10 @@ class Client:
         self, nodebalancer_id: int, config_id: int
     ) -> dict[str, Any]:
         """Get a NodeBalancer config."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_get", nodebalancer_id, config_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -5981,11 +5900,6 @@ class Client:
             or config_id < 1
         ):
             raise ValueError("config_id must be a positive integer")
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}"
-        )
         logger.info(
             "Updating NodeBalancer config",
             extra={
@@ -5994,7 +5908,12 @@ class Client:
             },
         )
         try:
-            response = await self.make_request("PUT", endpoint, fields)
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_update",
+                nodebalancer_id,
+                config_id,
+                body=fields,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -6015,11 +5934,6 @@ class Client:
         self, nodebalancer_id: int, config_id: int
     ) -> None:
         """Delete a NodeBalancer config."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/{encoded_config_id}"
-        )
         logger.info(
             "Deleting NodeBalancer config",
             extra={
@@ -6028,7 +5942,9 @@ class Client:
             },
         )
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_nodebalancer_config_delete", nodebalancer_id, config_id
+            )
             logger.info(
                 "NodeBalancer config deleted",
                 extra={
@@ -6058,21 +5974,18 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List nodes in a NodeBalancer config."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
-            f"{encoded_config_id}/nodes"
-        )
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_node_list",
+                nodebalancer_id,
+                config_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6085,14 +5998,13 @@ class Client:
         fields: dict[str, Any],
     ) -> dict[str, Any]:
         """Create a node in a NodeBalancer config."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
-            f"{encoded_config_id}/nodes"
-        )
         try:
-            response = await self.make_request("POST", endpoint, fields)
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_node_create",
+                nodebalancer_id,
+                config_id,
+                body=fields,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6106,15 +6018,14 @@ class Client:
         fields: dict[str, Any],
     ) -> dict[str, Any]:
         """Update a node in a NodeBalancer config."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        encoded_node_id = quote(str(node_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
-            f"{encoded_config_id}/nodes/{encoded_node_id}"
-        )
         try:
-            response = await self.make_request("PUT", endpoint, fields)
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_node_update",
+                nodebalancer_id,
+                config_id,
+                node_id,
+                body=fields,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6124,13 +6035,6 @@ class Client:
         self, nodebalancer_id: int, config_id: int, node_id: int
     ) -> None:
         """Delete a node from a NodeBalancer config."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        encoded_node_id = quote(str(node_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
-            f"{encoded_config_id}/nodes/{encoded_node_id}"
-        )
         logger.info(
             "Deleting NodeBalancer config node",
             extra={
@@ -6140,7 +6044,12 @@ class Client:
             },
         )
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_nodebalancer_config_node_delete",
+                nodebalancer_id,
+                config_id,
+                node_id,
+            )
             logger.info(
                 "NodeBalancer config node deleted",
                 extra={
@@ -6167,15 +6076,13 @@ class Client:
         self, nodebalancer_id: int, config_id: int, node_id: int
     ) -> dict[str, Any]:
         """Get a node from a NodeBalancer config."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        encoded_config_id = quote(str(config_id), safe="")
-        encoded_node_id = quote(str(node_id), safe="")
-        endpoint = (
-            f"/nodebalancers/{encoded_nodebalancer_id}/configs/"
-            f"{encoded_config_id}/nodes/{encoded_node_id}"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_config_node_get",
+                nodebalancer_id,
+                config_id,
+                node_id,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6188,17 +6095,17 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List firewalls assigned to a NodeBalancer."""
-        encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-        endpoint = f"/nodebalancers/{encoded_nodebalancer_id}/firewalls"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_nodebalancer_firewall_list",
+                nodebalancer_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6207,7 +6114,7 @@ class Client:
     async def list_stackscripts(self) -> list[StackScript]:
         """List StackScripts."""
         try:
-            response = await self.make_request("GET", "/linode/stackscripts")
+            response = await self.make_route_request("linode_stackscript_list")
             data = response.json()
             return [self._parse_stackscript(s) for s in data.get("data", [])]
         except httpx.HTTPError as e:
@@ -6215,10 +6122,10 @@ class Client:
 
     async def get_stackscript(self, stackscript_id: int | str) -> StackScript:
         """Get a StackScript by ID."""
-        encoded_stackscript_id = quote(str(stackscript_id), safe="")
-        endpoint = f"/linode/stackscripts/{encoded_stackscript_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_stackscript_get", stackscript_id
+            )
             data = response.json()
             return self._parse_stackscript(data)
         except httpx.HTTPError as e:
@@ -6229,10 +6136,10 @@ class Client:
         valid_stackscript_id = _validate_positive_path_int(
             stackscript_id, "stackscript_id"
         )
-        encoded_stackscript_id = quote(str(valid_stackscript_id), safe="")
-        endpoint = f"/linode/stackscripts/{encoded_stackscript_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_stackscript_delete", valid_stackscript_id
+            )
             return {}
         except httpx.HTTPError as e:
             raise NetworkError("DeleteStackScript", e) from e
@@ -6260,7 +6167,9 @@ class Client:
             body["rev_note"] = rev_note
 
         try:
-            response = await self.make_request("POST", "/linode/stackscripts", body)
+            response = await self.make_route_request(
+                "linode_stackscript_create", body=body
+            )
             data = response.json()
             return self._parse_stackscript(data)
         except httpx.HTTPError as e:
@@ -6281,7 +6190,6 @@ class Client:
         valid_stackscript_id = _validate_positive_path_int(
             stackscript_id, "stackscript_id"
         )
-        encoded_stackscript_id = quote(str(valid_stackscript_id), safe="")
         body: dict[str, Any] = {}
         if label is not None:
             body["label"] = label
@@ -6297,8 +6205,8 @@ class Client:
             body["rev_note"] = rev_note
 
         try:
-            response = await self.make_request(
-                "PUT", f"/linode/stackscripts/{encoded_stackscript_id}", body
+            response = await self.make_route_request(
+                "linode_stackscript_update", valid_stackscript_id, body=body
             )
             data = response.json()
             return self._parse_stackscript(data)
@@ -6313,12 +6221,11 @@ class Client:
     ) -> dict[str, Any]:
         """Update a Longview client."""
         valid_client_id = _validate_positive_path_int(client_id, "client_id")
-        encoded_client_id = quote(str(valid_client_id), safe="")
         body = {"label": label}
 
         try:
-            response = await self.make_request(
-                "PUT", f"/longview/clients/{encoded_client_id}", body
+            response = await self.make_route_request(
+                "linode_longview_client_update", valid_client_id, body=body
             )
             data: dict[str, Any] = response.json()
             return data
@@ -6328,7 +6235,9 @@ class Client:
     async def list_object_storage_buckets(self) -> list[dict[str, Any]]:
         """List Object Storage buckets."""
         try:
-            response = await self.make_request("GET", "/object-storage/buckets")
+            response = await self.make_route_request(
+                "linode_object_storage_bucket_list"
+            )
             data = response.json()
             buckets: list[dict[str, Any]] = data.get("data", [])
             return buckets
@@ -6339,10 +6248,9 @@ class Client:
         self, region_id: str
     ) -> list[dict[str, Any]]:
         """List Object Storage buckets in a region."""
-        encoded_region_id = quote(str(region_id), safe="")
         try:
-            response = await self.make_request(
-                "GET", f"/object-storage/buckets/{encoded_region_id}"
+            response = await self.make_route_request(
+                "linode_object_storage_bucket_by_region_list", region_id
             )
             data = response.json()
             buckets: list[dict[str, Any]] = data.get("data", [])
@@ -6354,11 +6262,10 @@ class Client:
         self, region: str, label: str
     ) -> dict[str, Any]:
         """Get a specific Object Storage bucket."""
-        encoded_region = quote(str(region), safe="")
-        encoded_label = quote(str(label), safe="")
-        endpoint = f"/object-storage/buckets/{encoded_region}/{encoded_label}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_bucket_get", region, label
+            )
             bucket: dict[str, Any] = response.json()
             return bucket
         except httpx.HTTPError as e:
@@ -6368,23 +6275,21 @@ class Client:
         self, region: str, label: str, params: dict[str, str] | None = None
     ) -> dict[str, Any]:
         """List contents of an Object Storage bucket."""
-        encoded_region = quote(str(region), safe="")
-        encoded_label = quote(str(label), safe="")
-        endpoint = (
-            f"/object-storage/buckets/{encoded_region}/{encoded_label}/object-list"
-        )
-
+        filtered: dict[str, str] = {}
         if params:
-            filtered: dict[str, str] = {
+            filtered = {
                 key: params[key]
                 for key in ("prefix", "delimiter", "marker", "page_size")
                 if key in params
             }
-            if filtered:
-                endpoint += "?" + urlencode(filtered)
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_bucket_object_list",
+                region,
+                label,
+                query=urlencode(filtered),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6394,16 +6299,15 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> list[dict[str, Any]]:
         """List a page of Object Storage endpoints."""
-        endpoint = "/object-storage/endpoints"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_endpoint_list", query=urlencode(params)
+            )
             data = response.json()
             endpoints: list[dict[str, Any]] = data.get("data", [])
             return endpoints
@@ -6413,7 +6317,7 @@ class Client:
     async def list_object_storage_types(self) -> list[dict[str, Any]]:
         """List Object Storage types/pricing."""
         try:
-            response = await self.make_request("GET", "/object-storage/types")
+            response = await self.make_route_request("linode_object_storage_type_list")
             data = response.json()
             types: list[dict[str, Any]] = data.get("data", [])
             return types
@@ -6423,7 +6327,7 @@ class Client:
     async def list_object_storage_keys(self) -> list[dict[str, Any]]:
         """List all Object Storage access keys."""
         try:
-            response = await self.make_request("GET", "/object-storage/keys")
+            response = await self.make_route_request("linode_object_storage_key_list")
             data = response.json()
             keys: list[dict[str, Any]] = data.get("data", [])
             return keys
@@ -6432,9 +6336,10 @@ class Client:
 
     async def get_object_storage_key(self, key_id: int) -> dict[str, Any]:
         """Get a specific Object Storage access key."""
-        endpoint = f"/object-storage/keys/{key_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_key_get", key_id
+            )
             key: dict[str, Any] = response.json()
             return key
         except httpx.HTTPError as e:
@@ -6443,7 +6348,9 @@ class Client:
     async def get_object_storage_transfer(self) -> dict[str, Any]:
         """Get Object Storage outbound data transfer usage."""
         try:
-            response = await self.make_request("GET", "/object-storage/transfer")
+            response = await self.make_route_request(
+                "linode_object_storage_transfer_get"
+            )
             transfer: dict[str, Any] = response.json()
             return transfer
         except httpx.HTTPError as e:
@@ -6452,7 +6359,9 @@ class Client:
     async def get_network_transfer_prices(self) -> dict[str, Any]:
         """Get network transfer prices."""
         try:
-            response = await self.make_request("GET", "/network-transfer/prices")
+            response = await self.make_route_request(
+                "linode_network_transfer_price_list"
+            )
             prices: dict[str, Any] = response.json()
             return prices
         except httpx.HTTPError as e:
@@ -6461,7 +6370,7 @@ class Client:
     async def cancel_object_storage(self) -> dict[str, Any]:
         """Cancel Object Storage service for the account."""
         try:
-            response = await self.make_request("POST", "/object-storage/cancel")
+            response = await self.make_route_request("linode_object_storage_cancel")
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6470,7 +6379,7 @@ class Client:
     async def list_object_storage_quotas(self) -> list[dict[str, Any]]:
         """List Object Storage quotas."""
         try:
-            response = await self.make_request("GET", "/object-storage/quotas")
+            response = await self.make_route_request("linode_object_storage_quota_list")
             data = response.json()
             quotas: list[dict[str, Any]] = data.get("data", [])
             return quotas
@@ -6479,10 +6388,10 @@ class Client:
 
     async def get_object_storage_quota(self, obj_quota_id: str) -> dict[str, Any]:
         """Get a single Object Storage quota."""
-        encoded_quota_id = quote(obj_quota_id, safe="")
-        endpoint = f"/object-storage/quotas/{encoded_quota_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_quota_get", obj_quota_id
+            )
             quota: dict[str, Any] = response.json()
             return quota
         except httpx.HTTPError as e:
@@ -6492,10 +6401,10 @@ class Client:
         self, obj_quota_id: int | str
     ) -> dict[str, Any]:
         """Get Object Storage quota usage data."""
-        encoded_quota_id = quote(str(obj_quota_id), safe="")
-        endpoint = f"/object-storage/quotas/{encoded_quota_id}/usage"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_quota_usage_get", obj_quota_id
+            )
             usage: dict[str, Any] = response.json()
             return usage
         except httpx.HTTPError as e:
@@ -6505,9 +6414,10 @@ class Client:
         self, region: str, label: str
     ) -> dict[str, Any]:
         """Get bucket ACL and CORS settings."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/access"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_bucket_access_get", region, label
+            )
             access: dict[str, Any] = response.json()
             return access
         except httpx.HTTPError as e:
@@ -6519,6 +6429,8 @@ class Client:
         region: str,
         acl: str | None = None,
         cors_enabled: bool | None = None,
+        endpoint_type: str | None = None,
+        s3_endpoint: str | None = None,
     ) -> dict[str, Any]:
         """Create a new Object Storage bucket."""
         try:
@@ -6530,7 +6442,13 @@ class Client:
                 body["acl"] = acl
             if cors_enabled is not None:
                 body["cors_enabled"] = cors_enabled
-            response = await self.make_request("POST", "/object-storage/buckets", body)
+            if endpoint_type:
+                body["endpoint_type"] = endpoint_type
+            if s3_endpoint:
+                body["s3_endpoint"] = s3_endpoint
+            response = await self.make_route_request(
+                "linode_object_storage_bucket_create", body=body
+            )
             bucket: dict[str, Any] = response.json()
             return bucket
         except httpx.HTTPError as e:
@@ -6538,9 +6456,10 @@ class Client:
 
     async def delete_object_storage_bucket(self, region: str, label: str) -> None:
         """Delete an Object Storage bucket."""
-        endpoint = f"/object-storage/buckets/{region}/{label}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_object_storage_bucket_delete", region, label
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteObjectStorageBucket", e) from e
 
@@ -6552,14 +6471,15 @@ class Client:
         cors_enabled: bool | None = None,
     ) -> None:
         """Update bucket ACL and CORS settings."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/access"
         try:
             body: dict[str, Any] = {}
             if acl is not None:
                 body["acl"] = acl
             if cors_enabled is not None:
                 body["cors_enabled"] = cors_enabled
-            await self.make_request("PUT", endpoint, body)
+            await self.make_route_request(
+                "linode_object_storage_bucket_access_update", region, label, body=body
+            )
         except httpx.HTTPError as e:
             raise NetworkError("UpdateObjectStorageBucketAccess", e) from e
 
@@ -6571,14 +6491,15 @@ class Client:
         cors_enabled: bool | None = None,
     ) -> dict[str, Any]:
         """Allow access to an Object Storage bucket."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/access"
         try:
             body: dict[str, Any] = {}
             if acl is not None:
                 body["acl"] = acl
             if cors_enabled is not None:
                 body["cors_enabled"] = cors_enabled
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_object_storage_bucket_access_allow", region, label, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -6594,7 +6515,9 @@ class Client:
             body: dict[str, Any] = {"label": label}
             if bucket_access is not None:
                 body["bucket_access"] = bucket_access
-            response = await self.make_request("POST", "/object-storage/keys", body)
+            response = await self.make_route_request(
+                "linode_object_storage_key_create", body=body
+            )
             key: dict[str, Any] = response.json()
             return key
         except httpx.HTTPError as e:
@@ -6607,22 +6530,22 @@ class Client:
         bucket_access: list[dict[str, str]] | None = None,
     ) -> None:
         """Update an Object Storage access key."""
-        endpoint = f"/object-storage/keys/{key_id}"
         try:
             body: dict[str, Any] = {}
             if label is not None:
                 body["label"] = label
             if bucket_access is not None:
                 body["bucket_access"] = bucket_access
-            await self.make_request("PUT", endpoint, body)
+            await self.make_route_request(
+                "linode_object_storage_key_update", key_id, body=body
+            )
         except httpx.HTTPError as e:
             raise NetworkError("UpdateObjectStorageKey", e) from e
 
     async def delete_object_storage_key(self, key_id: int) -> None:
         """Delete (revoke) an Object Storage access key."""
-        endpoint = f"/object-storage/keys/{key_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_object_storage_key_delete", key_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteObjectStorageKey", e) from e
 
@@ -6633,21 +6556,26 @@ class Client:
         name: str,
         method: str,
         expires_in: int | None = None,
+        content_type: str | None = None,
     ) -> dict[str, Any]:
         """Generate a presigned URL for an object.
 
         expires_in is sent only when provided; the API applies its documented
-        default (3600) otherwise.
+        default (3600) otherwise. content_type is covered by the signature, so
+        it is sent only when the caller pinned one.
         """
-        endpoint = f"/object-storage/buckets/{region}/{label}/object-url"
         body: dict[str, Any] = {
             "method": method,
             "name": name,
         }
         if expires_in is not None:
             body["expires_in"] = expires_in
+        if content_type:
+            body["content_type"] = content_type
         try:
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_object_storage_presigned_url_create", region, label, body=body
+            )
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("CreatePresignedURL", e) from e
@@ -6656,11 +6584,13 @@ class Client:
         self, region: str, label: str, name: str
     ) -> dict[str, Any]:
         """Get the ACL for an object in Object Storage."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/object-acl?" + urlencode(
-            {"name": name}
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_object_acl_get",
+                region,
+                label,
+                query=urlencode({"name": name}),
+            )
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("GetObjectACL", e) from e
@@ -6669,19 +6599,21 @@ class Client:
         self, region: str, label: str, name: str, acl: str
     ) -> dict[str, Any]:
         """Update the ACL for an object in Object Storage."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/object-acl"
         body = {"acl": acl, "name": name}
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_object_storage_object_acl_update", region, label, body=body
+            )
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("UpdateObjectACL", e) from e
 
     async def get_bucket_ssl(self, region: str, label: str) -> dict[str, Any]:
         """Get the SSL/TLS certificate status for a bucket."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_object_storage_ssl_get", region, label
+            )
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("GetBucketSSL", e) from e
@@ -6690,19 +6622,21 @@ class Client:
         self, region: str, label: str, certificate: str, private_key: str
     ) -> dict[str, Any]:
         """Upload an SSL/TLS certificate for a bucket."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
         body = {"certificate": certificate, "private_key": private_key}
         try:
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_object_storage_ssl_upload", region, label, body=body
+            )
             return dict(response.json())
         except httpx.HTTPError as e:
             raise NetworkError("UploadBucketSSL", e) from e
 
     async def delete_bucket_ssl(self, region: str, label: str) -> None:
         """Delete the SSL/TLS certificate from a bucket."""
-        endpoint = f"/object-storage/buckets/{region}/{label}/ssl"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_object_storage_ssl_delete", region, label
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteBucketSSL", e) from e
 
@@ -6715,7 +6649,7 @@ class Client:
 
         try:
             body = {"label": label, "ssh_key": ssh_key}
-            response = await self.make_request("POST", "/profile/sshkeys", body)
+            response = await self.make_route_request("linode_sshkey_create", body=body)
             data = response.json()
             result = self._parse_ssh_key(data)
             logger.info("SSH key created", extra={"id": result.id})
@@ -6736,13 +6670,14 @@ class Client:
     async def update_ssh_key(self, ssh_key_id: int, label: str) -> SSHKey:
         """Update an SSH key."""
         validate_label(label)
-        endpoint = f"/profile/sshkeys/{ssh_key_id}"
 
         logger.info("Updating SSH key", extra={"ssh_key_id": ssh_key_id})
 
         try:
             body = {"label": label}
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_sshkey_update", ssh_key_id, body=body
+            )
             data = response.json()
             result = self._parse_ssh_key(data)
             logger.info("SSH key updated", extra={"ssh_key_id": ssh_key_id})
@@ -6762,11 +6697,10 @@ class Client:
 
     async def delete_ssh_key(self, ssh_key_id: int) -> None:
         """Delete an SSH key."""
-        endpoint = f"/profile/sshkeys/{ssh_key_id}"
         logger.info("Deleting SSH key", extra={"ssh_key_id": ssh_key_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_sshkey_delete", ssh_key_id)
             logger.info("SSH key deleted", extra={"ssh_key_id": ssh_key_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting SSH key: %s", e)
@@ -6786,7 +6720,7 @@ class Client:
         logger.info("Creating profile two-factor authentication secret")
 
         try:
-            response = await self.make_request("POST", "/profile/tfa-enable")
+            response = await self.make_route_request("linode_profile_tfa_enable")
             result: dict[str, Any] = response.json()
             logger.info("Profile two-factor authentication secret created")
             return result
@@ -6824,8 +6758,8 @@ class Client:
         logger.info("Confirming profile two-factor authentication enablement")
 
         try:
-            response = await self.make_request(
-                "POST", "/profile/tfa-enable-confirm", body
+            response = await self.make_route_request(
+                "linode_profile_tfa_enable_confirm", body=body
             )
             result: dict[str, Any] = response.json()
             logger.info("Profile two-factor authentication enablement confirmed")
@@ -6854,7 +6788,7 @@ class Client:
         logger.info("Disabling profile two-factor authentication")
 
         try:
-            response = await self.make_request("POST", "/profile/tfa-disable")
+            response = await self.make_route_request("linode_profile_tfa_disable")
             result: dict[str, Any] = response.json()
             logger.info("Profile two-factor authentication disabled")
             return result
@@ -6885,7 +6819,9 @@ class Client:
         logger.info("Sending profile phone number verification code")
 
         try:
-            response = await self.make_request("POST", "/profile/phone-number", body)
+            response = await self.make_route_request(
+                "linode_profile_phone_number_send", body=body
+            )
             result: dict[str, Any] = response.json()
             logger.info("Profile phone number verification code sent")
             return result
@@ -6917,8 +6853,8 @@ class Client:
         logger.info("Verifying profile phone number")
 
         try:
-            response = await self.make_request(
-                "POST", "/profile/phone-number/verify", body
+            response = await self.make_route_request(
+                "linode_profile_phone_number_verify", body=body
             )
             result: dict[str, Any] = response.json()
             logger.info("Profile phone number verified")
@@ -6941,7 +6877,9 @@ class Client:
         logger.info("Deleting profile phone number")
 
         try:
-            response = await self.make_request("DELETE", "/profile/phone-number")
+            response = await self.make_route_request(
+                "linode_profile_phone_number_delete"
+            )
             result: dict[str, Any] = response.json()
             logger.info("Profile phone number deleted")
             return result
@@ -6963,7 +6901,9 @@ class Client:
         logger.info("Listing profile security questions")
 
         try:
-            response = await self.make_request("GET", "/profile/security-questions")
+            response = await self.make_route_request(
+                "linode_profile_security_question_list"
+            )
             result: dict[str, Any] = response.json()
             logger.info("Profile security questions listed")
             return result
@@ -6993,8 +6933,8 @@ class Client:
         )
 
         try:
-            response = await self.make_request(
-                "POST", "/profile/security-questions", body
+            response = await self.make_route_request(
+                "linode_profile_security_question_answer", body=body
             )
             result: dict[str, Any] = response.json()
             logger.info("Profile security questions answered")
@@ -7028,7 +6968,9 @@ class Client:
         logger.info("Creating profile token")
 
         try:
-            response = await self.make_request("POST", "/profile/tokens", body)
+            response = await self.make_route_request(
+                "linode_profile_token_create", body=body
+            )
             result: dict[str, Any] = response.json()
             logger.info("Profile token created", extra={"token_id": result.get("id")})
             return result
@@ -7123,8 +7065,10 @@ class Client:
             pages = 1
             while current_page <= pages:
                 query_page = current_page if (single_page or current_page > 1) else None
-                endpoint = _paginated_endpoint("/profile/logins", query_page, page_size)
-                response = await self.make_request("GET", endpoint)
+                response = await self.make_route_request(
+                    "linode_profile_login_list",
+                    query=_paginated_query(query_page, page_size),
+                )
                 page_logins, pages = self._parse_profile_logins_page(response)
                 logins.extend(page_logins)
                 if single_page:
@@ -7198,10 +7142,10 @@ class Client:
             # always breaks after one pass, so entering unconditionally is safe.
             while single_page or current_page <= pages:
                 query_page = current_page if (single_page or current_page > 1) else None
-                endpoint = _paginated_endpoint(
-                    "/profile/devices", query_page, page_size
+                response = await self.make_route_request(
+                    "linode_profile_device_list",
+                    query=_paginated_query(query_page, page_size),
                 )
-                response = await self.make_request("GET", endpoint)
                 page_devices, pages = self._parse_profile_devices_page(response)
                 devices.extend(page_devices)
                 if single_page:
@@ -7247,8 +7191,10 @@ class Client:
             pages = 1
             while current_page <= pages:
                 query_page = current_page if (single_page or current_page > 1) else None
-                endpoint = _paginated_endpoint("/profile/tokens", query_page, page_size)
-                response = await self.make_request("GET", endpoint)
+                response = await self.make_route_request(
+                    "linode_profile_token_list",
+                    query=_paginated_query(query_page, page_size),
+                )
                 page_tokens, pages = self._parse_profile_tokens_page(response)
                 tokens.extend(page_tokens)
                 if single_page:
@@ -7271,12 +7217,12 @@ class Client:
 
     async def get_profile_token(self, token_id: int) -> dict[str, Any]:
         """Get a personal access token."""
-        encoded_token_id = quote(str(token_id), safe="")
-        endpoint = f"/profile/tokens/{encoded_token_id}"
         logger.info("Getting profile token", extra={"token_id": token_id})
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_profile_token_get", token_id
+            )
             result: dict[str, Any] = response.json()
             logger.info("Profile token retrieved", extra={"token_id": token_id})
             return result
@@ -7295,12 +7241,12 @@ class Client:
 
     async def get_profile_login(self, login_id: int) -> dict[str, Any]:
         """Get a profile login."""
-        encoded_login_id = quote(str(login_id), safe="")
-        endpoint = f"/profile/logins/{encoded_login_id}"
         logger.info("Getting profile login", extra={"login_id": login_id})
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_profile_login_get", login_id
+            )
             result: dict[str, Any] = response.json()
             logger.info("Profile login retrieved", extra={"login_id": login_id})
             return result
@@ -7319,12 +7265,12 @@ class Client:
 
     async def get_profile_device(self, device_id: int) -> dict[str, Any]:
         """Get a trusted profile device."""
-        encoded_device_id = quote(str(device_id), safe="")
-        endpoint = f"/profile/devices/{encoded_device_id}"
         logger.info("Getting profile trusted device", extra={"device_id": device_id})
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_profile_device_get", device_id
+            )
             result: dict[str, Any] = response.json()
             logger.info(
                 "Profile trusted device retrieved", extra={"device_id": device_id}
@@ -7346,10 +7292,10 @@ class Client:
     async def get_longview_subscription(self, subscription_id: str) -> dict[str, Any]:
         """Get a Longview subscription."""
         # Longview subscription IDs are opaque strings (for example "longview-10").
-        encoded_subscription_id = quote(subscription_id, safe="")
-        endpoint = f"/longview/subscriptions/{encoded_subscription_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_longview_subscription_get", subscription_id
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.ConnectTimeout as e:
@@ -7370,7 +7316,7 @@ class Client:
         logger.info("Getting Longview plan")
 
         try:
-            response = await self.make_request("GET", "/longview/plan")
+            response = await self.make_route_request("linode_longview_plan_get")
             result: dict[str, Any] = response.json()
             logger.info("Longview plan retrieved")
             return result
@@ -7391,7 +7337,6 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List Longview subscriptions."""
-        endpoint = "/longview/subscriptions"
         params: dict[str, int] = {}
         min_page_size = 25
         max_page_size = 500
@@ -7409,13 +7354,13 @@ class Client:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
 
         logger.info("Listing Longview subscriptions")
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_longview_subscription_list", query=urlencode(params)
+            )
             result: dict[str, Any] = response.json()
             logger.info("Longview subscriptions listed")
             return result
@@ -7437,7 +7382,7 @@ class Client:
         logger.info("Listing Longview types")
 
         try:
-            response = await self.make_request("GET", "/longview/types")
+            response = await self.make_route_request("linode_longview_type_list")
             result: dict[str, Any] = response.json()
             logger.info("Longview types listed")
             return result
@@ -7458,7 +7403,6 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List Longview clients."""
-        endpoint = "/longview/clients"
         params: dict[str, int] = {}
         min_page_size = 25
         max_page_size = 500
@@ -7476,13 +7420,13 @@ class Client:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
 
         logger.info("Listing Longview clients")
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_longview_client_list", query=urlencode(params)
+            )
             result: dict[str, Any] = response.json()
             logger.info("Longview clients listed")
             return result
@@ -7502,10 +7446,10 @@ class Client:
     async def get_longview_client(self, client_id: object) -> dict[str, Any]:
         """Get a Longview client."""
         valid_client_id = _validate_positive_path_int(client_id, "client_id")
-        encoded_client_id = quote(str(valid_client_id), safe="")
-        endpoint = f"/longview/clients/{encoded_client_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_longview_client_get", valid_client_id
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.ConnectTimeout as e:
@@ -7524,10 +7468,10 @@ class Client:
     async def delete_longview_client(self, client_id: int) -> None:
         """Delete a Longview client."""
         valid_client_id = _validate_positive_path_int(client_id, "client_id")
-        encoded_client_id = quote(str(valid_client_id), safe="")
-        endpoint = f"/longview/clients/{encoded_client_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_longview_client_delete", valid_client_id
+            )
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting Longview client: %s", e)
             raise NetworkError("DeleteLongviewClient", e) from e
@@ -7563,7 +7507,9 @@ class Client:
         body: dict[str, Any] = {"longview_subscription": longview_subscription}
 
         try:
-            response = await self.make_request("PUT", "/longview/plan", body)
+            response = await self.make_route_request(
+                "linode_longview_plan_update", body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.ConnectTimeout as e:
@@ -7583,19 +7529,18 @@ class Client:
         self, page: int | None = None, page_size: int | None = None
     ) -> dict[str, Any]:
         """List OAuth app authorizations from the profile."""
-        endpoint = "/profile/apps"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
 
         logger.info("Listing profile app authorizations")
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_profile_app_list", query=urlencode(params)
+            )
             result: dict[str, Any] = response.json()
             logger.info("Profile app authorizations listed")
             return result
@@ -7616,12 +7561,10 @@ class Client:
 
     async def get_profile_app(self, app_id: int) -> dict[str, Any]:
         """Get an OAuth app authorization from the profile."""
-        encoded_app_id = quote(str(app_id), safe="")
-        endpoint = f"/profile/apps/{encoded_app_id}"
         logger.info("Getting profile app authorization", extra={"app_id": app_id})
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_profile_app_get", app_id)
             result: dict[str, Any] = response.json()
             logger.info("Profile app authorization retrieved", extra={"app_id": app_id})
             return result
@@ -7642,12 +7585,10 @@ class Client:
 
     async def delete_profile_app(self, app_id: int) -> None:
         """Revoke OAuth app access from the profile."""
-        encoded_app_id = quote(str(app_id), safe="")
-        endpoint = f"/profile/apps/{encoded_app_id}"
         logger.info("Revoking profile app access", extra={"app_id": app_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_profile_app_delete", app_id)
             logger.info("Profile app access revoked", extra={"app_id": app_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout revoking profile app access: %s", e)
@@ -7664,12 +7605,10 @@ class Client:
 
     async def delete_profile_device(self, device_id: int) -> None:
         """Revoke a trusted profile device."""
-        encoded_device_id = quote(str(device_id), safe="")
-        endpoint = f"/profile/devices/{encoded_device_id}"
         logger.info("Revoking profile trusted device", extra={"device_id": device_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_profile_device_revoke", device_id)
             logger.info(
                 "Profile trusted device revoked", extra={"device_id": device_id}
             )
@@ -7690,12 +7629,10 @@ class Client:
 
     async def delete_profile_token(self, token_id: int) -> None:
         """Revoke a personal access token."""
-        encoded_token_id = quote(str(token_id), safe="")
-        endpoint = f"/profile/tokens/{encoded_token_id}"
         logger.info("Revoking profile token", extra={"token_id": token_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_profile_token_delete", token_id)
             logger.info("Profile token revoked", extra={"token_id": token_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout revoking profile token: %s", e)
@@ -7712,13 +7649,13 @@ class Client:
 
     async def update_profile_token(self, token_id: int, label: str) -> dict[str, Any]:
         """Update a personal access token."""
-        encoded_token_id = quote(str(token_id), safe="")
-        endpoint = f"/profile/tokens/{encoded_token_id}"
         body = {"label": label}
         logger.info("Updating profile token", extra={"token_id": token_id})
 
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_profile_token_update", token_id, body=body
+            )
             result: dict[str, Any] = response.json()
             logger.info("Profile token updated", extra={"token_id": token_id})
             return result
@@ -7740,7 +7677,7 @@ class Client:
         logger.info("Listing monitor services")
 
         try:
-            response = await self.make_request("GET", "/monitor/services")
+            response = await self.make_route_request("linode_monitor_service_list")
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -7764,16 +7701,15 @@ class Client:
         """List Linode Metrics dashboards."""
         logger.info("Listing monitor dashboards")
 
-        endpoint = "/monitor/dashboards"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_dashboard_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -7797,16 +7733,15 @@ class Client:
         """List Linode Metrics alert definitions."""
         logger.info("Listing monitor alert definitions")
 
-        endpoint = "/monitor/alert-definitions"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_alert_definition_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -7832,16 +7767,15 @@ class Client:
         """List Linode Metrics alert channels."""
         logger.info("Listing monitor alert channels")
 
-        endpoint = "/monitor/alert-channels"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_alert_channel_list", query=urlencode(params)
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -7863,12 +7797,12 @@ class Client:
             msg = "service_type is required"
             raise ValueError(msg)
 
-        encoded = quote(service_type, safe="")
-        endpoint = f"/monitor/services/{encoded}"
         logger.info("Getting monitor service", extra={"service_type": service_type})
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_service_get", service_type
+            )
             data: dict[str, Any] = response.json()
             logger.info(
                 "Monitor service retrieved", extra={"service_type": service_type}
@@ -7903,12 +7837,6 @@ class Client:
         if alert_id <= 0:
             msg = "alert_id must be a positive integer"
             raise ValueError(msg)
-        encoded_service_type = quote(service_type, safe="")
-        encoded_alert_id = quote(str(alert_id), safe="")
-        endpoint = (
-            f"/monitor/services/{encoded_service_type}"
-            f"/alert-definitions/{encoded_alert_id}"
-        )
         body = {key: value for key, value in fields.items() if value is not None}
         if not body:
             msg = "at least one update field is required"
@@ -7918,7 +7846,12 @@ class Client:
             extra={"service_type": service_type, "alert_id": alert_id},
         )
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_monitor_service_alert_definition_update",
+                service_type,
+                alert_id,
+                body=body,
+            )
             data: dict[str, Any] = response.json()
             logger.info(
                 "Monitor alert definition updated",
@@ -7939,7 +7872,7 @@ class Client:
             raise NetworkError("UpdateMonitorAlertDefinition", e) from e
 
     async def create_monitor_service_token(
-        self, service_type: str, entity_ids: list[int]
+        self, service_type: str, entity_ids: list[int], add: str | None = None
     ) -> dict[str, Any]:
         """Create a Linode Metrics token scoped to a service type and entities."""
         if not service_type:
@@ -7949,17 +7882,18 @@ class Client:
             msg = "entity_ids must be a non-empty list"
             raise ValueError(msg)
 
-        # URL-encode the path segment so unexpected characters can't escape it.
-        encoded = quote(service_type, safe="")
-        endpoint = f"/monitor/services/{encoded}/token"
         logger.info(
             "Creating monitor service token",
             extra={"service_type": service_type, "entity_count": len(entity_ids)},
         )
 
         try:
-            body = {"entity_ids": entity_ids}
-            response = await self.make_request("POST", endpoint, body)
+            body: dict[str, Any] = {"entity_ids": entity_ids}
+            if add:
+                body["add"] = add
+            response = await self.make_route_request(
+                "linode_monitor_service_token_create", service_type, body=body
+            )
             data: dict[str, Any] = response.json()
             # Log success without the secret token value.
             logger.info(
@@ -7991,15 +7925,15 @@ class Client:
             msg = "service_type is required"
             raise ValueError(msg)
 
-        encoded = quote(service_type, safe="")
-        endpoint = f"/monitor/services/{encoded}/dashboards"
         logger.info(
             "Listing monitor service dashboards",
             extra={"service_type": service_type},
         )
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_service_dashboard_list", service_type
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -8024,15 +7958,15 @@ class Client:
             msg = "dashboard_id must be a positive integer"
             raise ValueError(msg)
 
-        encoded_dashboard_id = quote(str(dashboard_id), safe="")
-        endpoint = f"/monitor/dashboards/{encoded_dashboard_id}"
         logger.info(
             "Getting monitor dashboard",
             extra={"dashboard_id": dashboard_id},
         )
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_dashboard_get", dashboard_id
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.ConnectTimeout as e:
@@ -8054,15 +7988,15 @@ class Client:
             msg = "service_type is required"
             raise ValueError(msg)
 
-        encoded = quote(service_type, safe="")
-        endpoint = f"/monitor/services/{encoded}/metrics"
         logger.info(
             "Reading monitor service metrics",
             extra={"service_type": service_type},
         )
 
         try:
-            response = await self.make_request("POST", endpoint, {})
+            response = await self.make_route_request(
+                "linode_monitor_service_metric_query", service_type, body={}
+            )
             data: dict[str, Any] = response.json()
             logger.info(
                 "Monitor service metrics read",
@@ -8090,15 +8024,15 @@ class Client:
             msg = "service_type is required"
             raise ValueError(msg)
 
-        encoded = quote(service_type, safe="")
-        endpoint = f"/monitor/services/{encoded}/metric-definitions"
         logger.info(
             "Listing monitor service metric definitions",
             extra={"service_type": service_type},
         )
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_service_metric_definition_list", service_type
+            )
             data: dict[str, Any] = response.json()
             logger.info(
                 "Monitor service metric definitions listed",
@@ -8128,15 +8062,15 @@ class Client:
             msg = "service_type is required"
             raise ValueError(msg)
 
-        encoded_service_type = quote(service_type, safe="")
-        endpoint = f"/monitor/services/{encoded_service_type}/alert-definitions"
         logger.info(
             "Listing monitor service alert definitions",
             extra={"service_type": service_type},
         )
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_service_alert_definition_list", service_type
+            )
             data: dict[str, Any] = response.json()
             logger.info(
                 "Monitor service alert definitions listed",
@@ -8169,6 +8103,8 @@ class Client:
         channel_ids: list[int],
         description: str | None = None,
         entity_ids: list[str] | None = None,
+        scope: str = "",
+        group_by: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create an alert definition for a Linode Metrics service type."""
         if not service_type:
@@ -8182,10 +8118,9 @@ class Client:
             channel_ids=channel_ids,
             description=description,
             entity_ids=entity_ids,
+            scope=scope,
+            group_by=group_by,
         )
-
-        encoded_service_type = quote(service_type, safe="")
-        endpoint = f"/monitor/services/{encoded_service_type}/alert-definitions"
 
         logger.info(
             "Creating monitor service alert definition",
@@ -8193,7 +8128,11 @@ class Client:
         )
 
         try:
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_monitor_service_alert_definition_create",
+                service_type,
+                body=body,
+            )
             data: dict[str, Any] = response.json()
             logger.info(
                 "Monitor service alert definition created",
@@ -8252,19 +8191,18 @@ class Client:
             trigger_conditions=trigger_conditions,
         )
 
-        encoded_service_type = quote(service_type, safe="")
-        encoded_alert_id = quote(str(alert_id), safe="")
-        endpoint = (
-            f"/monitor/services/{encoded_service_type}"
-            f"/alert-definitions/{encoded_alert_id}/clone"
-        )
         logger.info(
             "Cloning monitor service alert definition",
             extra={"service_type": service_type, "alert_id": alert_id},
         )
 
         try:
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_monitor_service_alert_definition_clone",
+                service_type,
+                alert_id,
+                body=body,
+            )
             data: dict[str, Any] = response.json()
             logger.info(
                 "Monitor service alert definition cloned",
@@ -8298,19 +8236,15 @@ class Client:
             msg = "alert_id must be a positive integer"
             raise ValueError(msg)
 
-        encoded_service_type = quote(service_type, safe="")
-        encoded_alert_id = quote(str(alert_id), safe="")
-        endpoint = (
-            f"/monitor/services/{encoded_service_type}"
-            f"/alert-definitions/{encoded_alert_id}"
-        )
         logger.info(
             "Getting monitor service alert definition",
             extra={"service_type": service_type, "alert_id": alert_id},
         )
 
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_monitor_service_alert_definition_get", service_type, alert_id
+            )
             data: dict[str, Any] = response.json()
             logger.info(
                 "Monitor service alert definition retrieved",
@@ -8346,19 +8280,15 @@ class Client:
             msg = "alert_id must be a positive integer"
             raise ValueError(msg)
 
-        encoded_service_type = quote(service_type, safe="")
-        encoded_alert_id = quote(str(alert_id), safe="")
-        endpoint = (
-            f"/monitor/services/{encoded_service_type}"
-            f"/alert-definitions/{encoded_alert_id}"
-        )
         logger.info(
             "Deleting monitor service alert definition",
             extra={"service_type": service_type, "alert_id": alert_id},
         )
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_monitor_service_alert_definition_delete", service_type, alert_id
+            )
             logger.info(
                 "Monitor service alert definition deleted",
                 extra={"service_type": service_type, "alert_id": alert_id},
@@ -8382,14 +8312,15 @@ class Client:
         self, instance_id: int, config_id: int | None = None
     ) -> None:
         """Boot an instance."""
-        endpoint = f"/linode/instances/{instance_id}/boot"
         logger.info("Booting instance", extra={"instance_id": instance_id})
 
         try:
             body: dict[str, Any] = {}
             if config_id is not None:
                 body["config_id"] = config_id
-            await self.make_request("POST", endpoint, body or None)
+            await self.make_route_request(
+                "linode_instance_boot", instance_id, body=body or None
+            )
             logger.info("Instance booted", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout booting instance: %s", e)
@@ -8408,14 +8339,15 @@ class Client:
         self, instance_id: int, config_id: int | None = None
     ) -> None:
         """Reboot an instance."""
-        endpoint = f"/linode/instances/{instance_id}/reboot"
         logger.info("Rebooting instance", extra={"instance_id": instance_id})
 
         try:
             body: dict[str, Any] = {}
             if config_id is not None:
                 body["config_id"] = config_id
-            await self.make_request("POST", endpoint, body or None)
+            await self.make_route_request(
+                "linode_instance_reboot", instance_id, body=body or None
+            )
             logger.info("Instance rebooted", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout rebooting instance: %s", e)
@@ -8432,11 +8364,10 @@ class Client:
 
     async def shutdown_instance(self, instance_id: int) -> None:
         """Shutdown an instance."""
-        endpoint = f"/linode/instances/{instance_id}/shutdown"
         logger.info("Shutting down instance", extra={"instance_id": instance_id})
 
         try:
-            await self.make_request("POST", endpoint)
+            await self.make_route_request("linode_instance_shutdown", instance_id)
             logger.info("Instance shut down", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout shutting down instance: %s", e)
@@ -8508,7 +8439,9 @@ class Client:
             if tags:
                 body["tags"] = tags
 
-            response = await self.make_request("POST", "/linode/instances", body)
+            response = await self.make_route_request(
+                "linode_instance_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -8516,11 +8449,10 @@ class Client:
 
     async def delete_instance(self, instance_id: int) -> None:
         """Delete an instance."""
-        endpoint = f"/linode/instances/{instance_id}"
         logger.info("Deleting instance", extra={"instance_id": instance_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_instance_delete", instance_id)
             logger.info("Instance deleted", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting instance: %s", e)
@@ -8543,7 +8475,6 @@ class Client:
         migration_type: str = "",
     ) -> None:
         """Resize an instance."""
-        endpoint = f"/linode/instances/{instance_id}/resize"
         logger.info(
             "Resizing instance",
             extra={"instance_id": instance_id, "new_type": instance_type},
@@ -8558,7 +8489,9 @@ class Client:
                 body["allow_auto_disk_resize"] = True
             if migration_type:
                 body["migration_type"] = migration_type
-            await self.make_request("POST", endpoint, body)
+            await self.make_route_request(
+                "linode_instance_resize", instance_id, body=body
+            )
             logger.info("Instance resized", extra={"instance_id": instance_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout resizing instance: %s", e)
@@ -8578,8 +8511,6 @@ class Client:
     ) -> dict[str, Any]:
         """Upgrade a Linode with the mutate endpoint."""
         linode_id_value = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(linode_id_value), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/mutate"
         logger.info("Mutating instance", extra={"linode_id": linode_id_value})
 
         # Send allow_auto_disk_resize only when the caller set it; an omitted value
@@ -8590,7 +8521,9 @@ class Client:
             body["allow_auto_disk_resize"] = allow_auto_disk_resize
 
         try:
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_mutate", linode_id_value, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -8605,8 +8538,6 @@ class Client:
     ) -> dict[str, Any]:
         """Upgrade a Linode to Linode Interfaces."""
         linode_id_value = _validate_positive_path_int(linode_id, "linode_id")
-        encoded_linode_id = quote(str(linode_id_value), safe="")
-        endpoint = f"/linode/instances/{encoded_linode_id}/upgrade-interfaces"
         logger.info(
             "Upgrading instance interfaces", extra={"linode_id": linode_id_value}
         )
@@ -8623,7 +8554,9 @@ class Client:
             body["dry_run"] = dry_run
 
         try:
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_interface_upgrade", linode_id_value, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -8635,26 +8568,39 @@ class Client:
         label: str,
         inbound_policy: str = "ACCEPT",
         outbound_policy: str = "ACCEPT",
+        tags: list[str] | None = None,
+        rules: dict[str, Any] | None = None,
+        devices: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a firewall and return the raw API body.
 
         Proto-backed write tools decode this full response into the Firewall proto
         element, so their output matches the Go implementation's write envelope.
+
+        The API requires a rules object, so one is always sent. A caller-supplied
+        rules object wins key by key over the flat inbound_policy and
+        outbound_policy arguments, which stay for callers that only need default
+        policies. Rule objects pass through verbatim so nothing the caller
+        omitted reaches the wire.
         """
         validate_label(label)
         validate_firewall_policy(inbound_policy)
         validate_firewall_policy(outbound_policy)
 
-        body = {
-            "label": label,
-            "rules": {
-                "inbound_policy": inbound_policy,
-                "outbound_policy": outbound_policy,
-            },
-        }
+        rules_body: dict[str, Any] = dict(rules or {})
+        rules_body.setdefault("inbound_policy", inbound_policy)
+        rules_body.setdefault("outbound_policy", outbound_policy)
+
+        body: dict[str, Any] = {"label": label, "rules": rules_body}
+        if devices:
+            body["devices"] = devices
+        if tags:
+            body["tags"] = tags
 
         try:
-            response = await self.make_request("POST", "/networking/firewalls", body)
+            response = await self.make_route_request(
+                "linode_firewall_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -8667,13 +8613,13 @@ class Client:
         status: str | None = None,
         inbound_policy: str | None = None,
         outbound_policy: str | None = None,
+        tags: list[str] | None = None,
     ) -> dict[str, Any]:
         """Update a firewall and return the raw API body.
 
         Proto-backed write tools decode this full response into the Firewall proto
         element, so their output matches the Go implementation's write envelope.
         """
-        endpoint = f"/networking/firewalls/{firewall_id}"
         if inbound_policy:
             validate_firewall_policy(inbound_policy)
         if outbound_policy:
@@ -8690,9 +8636,13 @@ class Client:
                 body["rules"]["inbound_policy"] = inbound_policy
             if outbound_policy:
                 body["rules"]["outbound_policy"] = outbound_policy
+        if tags:
+            body["tags"] = tags
 
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_firewall_update", firewall_id, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -8700,11 +8650,10 @@ class Client:
 
     async def delete_firewall(self, firewall_id: int) -> None:
         """Delete a firewall."""
-        endpoint = f"/networking/firewalls/{firewall_id}"
         logger.info("Deleting firewall", extra={"firewall_id": firewall_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_firewall_delete", firewall_id)
             logger.info("Firewall deleted", extra={"firewall_id": firewall_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting firewall: %s", e)
@@ -8737,12 +8686,12 @@ class Client:
         if type(device_type) is not str or not device_type.strip():
             raise ValueError("type must be a non-empty string")
 
-        safe_firewall_id = quote(str(firewall_id), safe="")
-        endpoint = f"/networking/firewalls/{safe_firewall_id}/devices"
         body = {"id": device_id, "type": device_type}
 
         try:
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_firewall_device_create", firewall_id, body=body
+            )
             result: dict[str, Any] = response.json()
             logger.info(
                 "Firewall device created",
@@ -8767,6 +8716,8 @@ class Client:
         firewall_id: int,
         inbound: list[dict[str, Any]],
         outbound: list[dict[str, Any]],
+        inbound_policy: str | None = None,
+        outbound_policy: str | None = None,
     ) -> dict[str, Any]:
         """Replace a firewall's rules and return the raw API body.
 
@@ -8774,14 +8725,22 @@ class Client:
         proto element, so their output matches the Go implementation's write
         envelope. Unlike update_firewall_rules, this keeps the inbound_policy and
         outbound_policy fields the proto element carries.
+
+        Each default policy is sent only when supplied: omitting one leaves that
+        direction's current policy alone rather than resetting it.
         """
         _validate_firewall_rules_update_request(firewall_id, inbound, outbound)
 
-        endpoint = f"/networking/firewalls/{firewall_id}/rules"
         body: dict[str, Any] = {"inbound": inbound, "outbound": outbound}
+        if inbound_policy:
+            body["inbound_policy"] = inbound_policy
+        if outbound_policy:
+            body["outbound_policy"] = outbound_policy
 
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_firewall_rules_update", firewall_id, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -8793,12 +8752,12 @@ class Client:
             msg = "domain is required"
             raise ValueError(msg)
         validate_label(domain)
-        encoded_domain_id = quote(str(domain_id), safe="")
-        endpoint = f"/domains/{encoded_domain_id}/clone"
         logger.info("Cloning domain", extra={"domain_id": domain_id})
 
         try:
-            response = await self.make_request("POST", endpoint, {"domain": domain})
+            response = await self.make_route_request(
+                "linode_domain_clone", domain_id, body={"domain": domain}
+            )
             data = response.json()
             result = self._parse_domain(data)
             logger.info("Domain cloned", extra={"id": result.id})
@@ -8833,7 +8792,7 @@ class Client:
                 "domain": domain,
                 "remote_nameserver": remote_nameserver,
             }
-            response = await self.make_request("POST", "/domains/import", body)
+            response = await self.make_route_request("linode_domain_import", body=body)
             data = response.json()
             result = self._parse_domain(data)
             logger.info("Domain imported", extra={"id": result.id})
@@ -8862,7 +8821,6 @@ class Client:
         ttl_sec: int | None = None,
     ) -> Domain:
         """Update a domain."""
-        endpoint = f"/domains/{domain_id}"
         logger.info("Updating domain", extra={"domain_id": domain_id})
 
         try:
@@ -8880,7 +8838,9 @@ class Client:
             if ttl_sec is not None:
                 body["ttl_sec"] = ttl_sec
 
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_domain_update", domain_id, body=body
+            )
             data = response.json()
             result = self._parse_domain(data)
             logger.info("Domain updated", extra={"id": result.id})
@@ -8900,11 +8860,10 @@ class Client:
 
     async def delete_domain(self, domain_id: int) -> None:
         """Delete a domain."""
-        endpoint = f"/domains/{domain_id}"
         logger.info("Deleting domain", extra={"domain_id": domain_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_domain_delete", domain_id)
             logger.info("Domain deleted", extra={"domain_id": domain_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting domain: %s", e)
@@ -8934,7 +8893,6 @@ class Client:
         tag: str | None = None,
     ) -> DomainRecord:
         """Create a new domain record."""
-        endpoint = f"/domains/{domain_id}/records"
         if name:
             validate_dns_record_name(name)
         if target:
@@ -8960,7 +8918,9 @@ class Client:
             }
             body.update({k: v for k, v in optional_fields.items() if v is not None})
 
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_domain_record_create", domain_id, body=body
+            )
             data = response.json()
             result = self._parse_domain_record(data)
             logger.info("Domain record created", extra={"id": result.id})
@@ -8992,7 +8952,6 @@ class Client:
         ttl_sec: int | None = None,
     ) -> DomainRecord:
         """Update a domain record."""
-        endpoint = f"/domains/{domain_id}/records/{record_id}"
         if name:
             validate_dns_record_name(name)
 
@@ -9016,7 +8975,9 @@ class Client:
             if ttl_sec is not None:
                 body["ttl_sec"] = ttl_sec
 
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_domain_record_update", domain_id, record_id, body=body
+            )
             data = response.json()
             result = self._parse_domain_record(data)
             logger.info("Domain record updated", extra={"id": result.id})
@@ -9038,14 +8999,15 @@ class Client:
 
     async def delete_domain_record(self, domain_id: int, record_id: int) -> None:
         """Delete a domain record."""
-        endpoint = f"/domains/{domain_id}/records/{record_id}"
         logger.info(
             "Deleting domain record",
             extra={"domain_id": domain_id, "record_id": record_id},
         )
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_domain_record_delete", domain_id, record_id
+            )
             logger.info("Domain record deleted", extra={"record_id": record_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting domain record: %s", e)
@@ -9090,7 +9052,7 @@ class Client:
             if tags:
                 body["tags"] = tags
 
-            response = await self.make_request("POST", "/volumes", body)
+            response = await self.make_route_request("linode_volume_create", body=body)
             data = response.json()
             result = self._parse_volume(data)
             logger.info("Volume created", extra={"id": result.id})
@@ -9110,13 +9072,14 @@ class Client:
 
     async def clone_volume(self, volume_id: int, label: str) -> Volume:
         """Clone a volume."""
-        endpoint = f"/volumes/{volume_id}/clone"
         validate_label(label)
 
         logger.info("Cloning volume", extra={"volume_id": volume_id, "label": label})
 
         try:
-            response = await self.make_request("POST", endpoint, {"label": label})
+            response = await self.make_route_request(
+                "linode_volume_clone", volume_id, body={"label": label}
+            )
             data = response.json()
             result = self._parse_volume(data)
             logger.info(
@@ -9145,7 +9108,6 @@ class Client:
         persist_across_boots: bool = False,
     ) -> Volume:
         """Attach a volume to an instance."""
-        endpoint = f"/volumes/{volume_id}/attach"
         logger.info(
             "Attaching volume",
             extra={"volume_id": volume_id, "linode_id": linode_id},
@@ -9160,7 +9122,9 @@ class Client:
             if config_id is not None:
                 body["config_id"] = config_id
 
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_volume_attach", volume_id, body=body
+            )
             data = response.json()
             result = self._parse_volume(data)
             logger.info("Volume attached", extra={"volume_id": volume_id})
@@ -9180,11 +9144,10 @@ class Client:
 
     async def detach_volume(self, volume_id: int) -> None:
         """Detach a volume from an instance."""
-        endpoint = f"/volumes/{volume_id}/detach"
         logger.info("Detaching volume", extra={"volume_id": volume_id})
 
         try:
-            await self.make_request("POST", endpoint)
+            await self.make_route_request("linode_volume_detach", volume_id)
             logger.info("Volume detached", extra={"volume_id": volume_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout detaching volume: %s", e)
@@ -9201,14 +9164,15 @@ class Client:
 
     async def resize_volume(self, volume_id: int, size: int) -> Volume:
         """Resize a volume."""
-        endpoint = f"/volumes/{volume_id}/resize"
         validate_volume_size(size)
 
         logger.info("Resizing volume", extra={"volume_id": volume_id, "new_size": size})
 
         try:
             body = {"size": size}
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_volume_resize", volume_id, body=body
+            )
             data = response.json()
             result = self._parse_volume(data)
             logger.info("Volume resized", extra={"volume_id": volume_id})
@@ -9233,7 +9197,6 @@ class Client:
         tags: list[str] | None = None,
     ) -> Volume:
         """Update a volume."""
-        endpoint = f"/volumes/{volume_id}"
 
         if label is not None:
             validate_label(label)
@@ -9247,7 +9210,9 @@ class Client:
             if tags is not None:
                 body["tags"] = tags
 
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_volume_update", volume_id, body=body
+            )
             data = response.json()
             result = self._parse_volume(data)
             logger.info("Volume updated", extra={"volume_id": volume_id})
@@ -9267,11 +9232,10 @@ class Client:
 
     async def delete_volume(self, volume_id: int) -> None:
         """Delete a volume."""
-        endpoint = f"/volumes/{volume_id}"
         logger.info("Deleting volume", extra={"volume_id": volume_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_volume_delete", volume_id)
             logger.info("Volume deleted", extra={"volume_id": volume_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting volume: %s", e)
@@ -9293,6 +9257,7 @@ class Client:
         client_conn_throttle: int = 0,
         tags: list[str] | None = None,
         ipv4: str | None = None,
+        fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a NodeBalancer and return the full raw API body.
 
@@ -9316,8 +9281,12 @@ class Client:
                 body["tags"] = tags
             if ipv4 is not None:
                 body["ipv4"] = ipv4
+            if fields:
+                body.update(fields)
 
-            response = await self.make_request("POST", "/nodebalancers", body)
+            response = await self.make_route_request(
+                "linode_nodebalancer_create", body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -9336,7 +9305,6 @@ class Client:
         handler decodes the full JSON into the write proto so Python output
         matches Go, which decodes the same full API JSON.
         """
-        endpoint = f"/nodebalancers/{nodebalancer_id}"
         try:
             body: dict[str, Any] = {}
             if label:
@@ -9346,7 +9314,9 @@ class Client:
             if tags is not None:
                 body["tags"] = tags
 
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_nodebalancer_update", nodebalancer_id, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -9354,11 +9324,10 @@ class Client:
 
     async def delete_nodebalancer(self, nodebalancer_id: int) -> None:
         """Delete a NodeBalancer."""
-        endpoint = f"/nodebalancers/{nodebalancer_id}"
         logger.info("Deleting NodeBalancer", extra={"nodebalancer_id": nodebalancer_id})
 
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_nodebalancer_delete", nodebalancer_id)
             logger.info("NodeBalancer deleted", extra={"id": nodebalancer_id})
         except httpx.ConnectTimeout as e:
             logger.exception("Connection timeout deleting NodeBalancer: %s", e)
@@ -9378,7 +9347,7 @@ class Client:
     async def list_lke_clusters(self) -> list[dict[str, Any]]:
         """List LKE clusters."""
         try:
-            response = await self.make_request("GET", "/lke/clusters")
+            response = await self.make_route_request("linode_lke_cluster_list")
             data = response.json()
             clusters: list[dict[str, Any]] = data.get("data", [])
             return clusters
@@ -9387,9 +9356,10 @@ class Client:
 
     async def get_lke_cluster(self, cluster_id: int) -> dict[str, Any]:
         """Get a specific LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_cluster_get", cluster_id
+            )
             cluster: dict[str, Any] = response.json()
             return cluster
         except httpx.HTTPError as e:
@@ -9403,8 +9373,13 @@ class Client:
         node_pools: list[dict[str, Any]],
         tags: list[str] | None = None,
         control_plane: dict[str, Any] | None = None,
+        fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create a new LKE cluster."""
+        """Create a new LKE cluster.
+
+        fields carries the remaining documented body keys (tier, apl_enabled,
+        stack_type, vpc_id, subnet_id) already validated by the handler.
+        """
         try:
             body: dict[str, Any] = {
                 "label": label,
@@ -9416,7 +9391,11 @@ class Client:
                 body["tags"] = tags
             if control_plane is not None:
                 body["control_plane"] = control_plane
-            response = await self.make_request("POST", "/lke/clusters", body)
+            if fields:
+                body.update(fields)
+            response = await self.make_route_request(
+                "linode_lke_cluster_create", body=body
+            )
             cluster: dict[str, Any] = response.json()
             return cluster
         except httpx.HTTPError as e:
@@ -9431,7 +9410,6 @@ class Client:
         control_plane: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Update an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}"
         try:
             body: dict[str, Any] = {}
             if label is not None:
@@ -9442,7 +9420,9 @@ class Client:
                 body["tags"] = tags
             if control_plane is not None:
                 body["control_plane"] = control_plane
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_lke_cluster_update", cluster_id, body=body
+            )
             cluster: dict[str, Any] = response.json()
             return cluster
         except httpx.HTTPError as e:
@@ -9450,33 +9430,44 @@ class Client:
 
     async def delete_lke_cluster(self, cluster_id: int) -> None:
         """Delete an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_lke_cluster_delete", cluster_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteLKECluster", e) from e
 
     async def recycle_lke_cluster(self, cluster_id: int) -> None:
         """Recycle all nodes in an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/recycle"
         try:
-            await self.make_request("POST", endpoint)
+            await self.make_route_request("linode_lke_cluster_recycle", cluster_id)
         except httpx.HTTPError as e:
             raise NetworkError("RecycleLKECluster", e) from e
 
-    async def regenerate_lke_cluster(self, cluster_id: int) -> None:
-        """Regenerate the service token for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/regenerate"
+    async def regenerate_lke_cluster(
+        self, cluster_id: int, kubeconfig: bool = False, servicetoken: bool = False
+    ) -> None:
+        """Regenerate an LKE cluster's kubeconfig, service token, or both.
+
+        Each flag selects one credential, and the API defaults both to false, so
+        each is sent only when the caller asked for it.
+        """
+        body: dict[str, Any] = {}
+        if kubeconfig:
+            body["kubeconfig"] = True
+        if servicetoken:
+            body["servicetoken"] = True
         try:
-            await self.make_request("POST", endpoint)
+            # A caller who selected neither credential keeps sending no body at
+            # all, matching what the endpoint accepted before the flags existed.
+            await self.make_route_request(
+                "linode_lke_cluster_regenerate", cluster_id, body=body or None
+            )
         except httpx.HTTPError as e:
             raise NetworkError("RegenerateLKECluster", e) from e
 
     async def list_lke_node_pools(self, cluster_id: int) -> list[dict[str, Any]]:
         """List node pools for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/pools"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_lke_pool_list", cluster_id)
             data = response.json()
             pools: list[dict[str, Any]] = data.get("data", [])
             return pools
@@ -9485,9 +9476,10 @@ class Client:
 
     async def get_lke_node_pool(self, cluster_id: int, pool_id: int) -> dict[str, Any]:
         """Get a specific node pool."""
-        endpoint = f"/lke/clusters/{cluster_id}/pools/{pool_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_pool_get", cluster_id, pool_id
+            )
             pool: dict[str, Any] = response.json()
             return pool
         except httpx.HTTPError as e:
@@ -9500,9 +9492,15 @@ class Client:
         count: int,
         autoscaler: dict[str, Any] | None = None,
         tags: list[str] | None = None,
+        fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create a new node pool in an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/pools"
+        """Create a new node pool in an LKE cluster.
+
+        fields carries the remaining documented body keys (label, k8s_version,
+        disks, labels, taints, firewall_id, disk_encryption, update_strategy)
+        already validated by the handler, so this method does not grow a
+        parameter per optional field.
+        """
         try:
             body: dict[str, Any] = {
                 "type": node_type,
@@ -9512,7 +9510,11 @@ class Client:
                 body["autoscaler"] = autoscaler
             if tags is not None:
                 body["tags"] = tags
-            response = await self.make_request("POST", endpoint, body)
+            if fields:
+                body.update(fields)
+            response = await self.make_route_request(
+                "linode_lke_pool_create", cluster_id, body=body
+            )
             pool: dict[str, Any] = response.json()
             return pool
         except httpx.HTTPError as e:
@@ -9525,9 +9527,13 @@ class Client:
         count: int | None = None,
         autoscaler: dict[str, Any] | None = None,
         tags: list[str] | None = None,
+        fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Update a node pool in an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/pools/{pool_id}"
+        """Update a node pool in an LKE cluster.
+
+        fields carries the remaining documented body keys (firewall_id, labels,
+        taints) already validated by the handler.
+        """
         try:
             body: dict[str, Any] = {}
             if count is not None:
@@ -9536,7 +9542,11 @@ class Client:
                 body["autoscaler"] = autoscaler
             if tags is not None:
                 body["tags"] = tags
-            response = await self.make_request("PUT", endpoint, body)
+            if fields:
+                body.update(fields)
+            response = await self.make_route_request(
+                "linode_lke_pool_update", cluster_id, pool_id, body=body
+            )
             pool: dict[str, Any] = response.json()
             return pool
         except httpx.HTTPError as e:
@@ -9544,25 +9554,26 @@ class Client:
 
     async def delete_lke_node_pool(self, cluster_id: int, pool_id: int) -> None:
         """Delete a node pool from an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/pools/{pool_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_lke_pool_delete", cluster_id, pool_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteLKENodePool", e) from e
 
     async def recycle_lke_node_pool(self, cluster_id: int, pool_id: int) -> None:
         """Recycle all nodes in a node pool."""
-        endpoint = f"/lke/clusters/{cluster_id}/pools/{pool_id}/recycle"
         try:
-            await self.make_request("POST", endpoint)
+            await self.make_route_request(
+                "linode_lke_pool_recycle", cluster_id, pool_id
+            )
         except httpx.HTTPError as e:
             raise NetworkError("RecycleLKENodePool", e) from e
 
     async def get_lke_node(self, cluster_id: int, node_id: str) -> dict[str, Any]:
         """Get a specific node in an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/nodes/{node_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_node_get", cluster_id, node_id
+            )
             node: dict[str, Any] = response.json()
             return node
         except httpx.HTTPError as e:
@@ -9570,25 +9581,26 @@ class Client:
 
     async def delete_lke_node(self, cluster_id: int, node_id: str) -> None:
         """Delete a specific node from an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/nodes/{node_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_lke_node_delete", cluster_id, node_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteLKENode", e) from e
 
     async def recycle_lke_node(self, cluster_id: int, node_id: str) -> None:
         """Recycle a specific node in an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/nodes/{node_id}/recycle"
         try:
-            await self.make_request("POST", endpoint)
+            await self.make_route_request(
+                "linode_lke_node_recycle", cluster_id, node_id
+            )
         except httpx.HTTPError as e:
             raise NetworkError("RecycleLKENode", e) from e
 
     async def get_lke_kubeconfig(self, cluster_id: int) -> dict[str, Any]:
         """Get the kubeconfig for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/kubeconfig"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_kubeconfig_get", cluster_id
+            )
             kubeconfig: dict[str, Any] = response.json()
             return kubeconfig
         except httpx.HTTPError as e:
@@ -9596,17 +9608,17 @@ class Client:
 
     async def delete_lke_kubeconfig(self, cluster_id: int) -> None:
         """Delete/regenerate the kubeconfig for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/kubeconfig"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_lke_kubeconfig_delete", cluster_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteLKEKubeconfig", e) from e
 
     async def get_lke_dashboard(self, cluster_id: int) -> dict[str, Any]:
         """Get the dashboard URL for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/dashboard"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_dashboard_get", cluster_id
+            )
             dashboard: dict[str, Any] = response.json()
             return dashboard
         except httpx.HTTPError as e:
@@ -9614,9 +9626,10 @@ class Client:
 
     async def list_lke_api_endpoints(self, cluster_id: int) -> list[dict[str, Any]]:
         """List API endpoints for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/api-endpoints"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_api_endpoint_list", cluster_id
+            )
             data = response.json()
             endpoints: list[dict[str, Any]] = data.get("data", [])
             return endpoints
@@ -9625,9 +9638,8 @@ class Client:
 
     async def delete_lke_service_token(self, cluster_id: int) -> None:
         """Delete the service token for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/servicetoken"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_lke_service_token_delete", cluster_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteLKEServiceToken", e) from e
 
@@ -9638,9 +9650,8 @@ class Client:
         return the bare ACL so the emitted shape matches the Go implementation
         ({"enabled": ..., "addresses": {"ipv4": [...], "ipv6": [...]}}).
         """
-        endpoint = f"/lke/clusters/{cluster_id}/control_plane_acl"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_lke_acl_get", cluster_id)
             payload: dict[str, Any] = response.json()
             raw_acl = payload.get("acl", payload)
             acl: dict[str, Any] = (
@@ -9668,10 +9679,11 @@ class Client:
         acl: dict[str, Any],
     ) -> dict[str, Any]:
         """Update the control plane ACL for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/control_plane_acl"
         try:
             body: dict[str, Any] = {"acl": acl}
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_lke_acl_update", cluster_id, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -9679,16 +9691,15 @@ class Client:
 
     async def delete_lke_control_plane_acl(self, cluster_id: int) -> None:
         """Delete the control plane ACL for an LKE cluster."""
-        endpoint = f"/lke/clusters/{cluster_id}/control_plane_acl"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_lke_acl_delete", cluster_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteLKEControlPlaneACL", e) from e
 
     async def list_lke_versions(self) -> list[dict[str, Any]]:
         """List available LKE Kubernetes versions."""
         try:
-            response = await self.make_request("GET", "/lke/versions")
+            response = await self.make_route_request("linode_lke_version_list")
             data = response.json()
             versions: list[dict[str, Any]] = data.get("data", [])
             return versions
@@ -9697,9 +9708,10 @@ class Client:
 
     async def get_lke_version(self, version_id: str) -> dict[str, Any]:
         """Get a specific LKE Kubernetes version."""
-        endpoint = f"/lke/versions/{version_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_version_get", version_id
+            )
             version: dict[str, Any] = response.json()
             return version
         except httpx.HTTPError as e:
@@ -9708,7 +9720,7 @@ class Client:
     async def list_lke_types(self) -> list[dict[str, Any]]:
         """List available LKE node types."""
         try:
-            response = await self.make_request("GET", "/lke/types")
+            response = await self.make_route_request("linode_lke_type_list")
             data = response.json()
             types: list[dict[str, Any]] = data.get("data", [])
             return types
@@ -9717,10 +9729,10 @@ class Client:
 
     async def list_lke_tier_versions(self, tier: str) -> list[dict[str, Any]]:
         """List LKE Kubernetes versions for a tier."""
-        encoded_tier = quote(tier, safe="")
-        endpoint = f"/lke/tiers/{encoded_tier}/versions"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_tier_version_list", tier
+            )
             data = response.json()
             versions: list[dict[str, Any]] = data.get("data", [])
             return versions
@@ -9729,11 +9741,10 @@ class Client:
 
     async def get_lke_tier_version(self, tier: str, version: str) -> dict[str, Any]:
         """Get a specific LKE Kubernetes version for any tier."""
-        encoded_tier = quote(str(tier), safe="")
-        encoded_version = quote(str(version), safe="")
-        endpoint = f"/lke/tiers/{encoded_tier}/versions/{encoded_version}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_lke_tier_version_get", tier, version
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -9742,7 +9753,7 @@ class Client:
     async def list_vpcs(self) -> list[dict[str, Any]]:
         """List VPCs."""
         try:
-            response = await self.make_request("GET", "/vpcs")
+            response = await self.make_route_request("linode_vpc_list")
             data = response.json()
             vpcs: list[dict[str, Any]] = data.get("data", [])
             return vpcs
@@ -9751,9 +9762,8 @@ class Client:
 
     async def get_vpc(self, vpc_id: int) -> dict[str, Any]:
         """Get a specific VPC."""
-        endpoint = f"/vpcs/{vpc_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_vpc_get", vpc_id)
             vpc: dict[str, Any] = response.json()
             return vpc
         except httpx.HTTPError as e:
@@ -9776,7 +9786,7 @@ class Client:
                 body["description"] = description
             if subnets is not None:
                 body["subnets"] = subnets
-            response = await self.make_request("POST", "/vpcs", body)
+            response = await self.make_route_request("linode_vpc_create", body=body)
             vpc: dict[str, Any] = response.json()
             return vpc
         except httpx.HTTPError as e:
@@ -9789,14 +9799,15 @@ class Client:
         description: str | None = None,
     ) -> dict[str, Any]:
         """Update a VPC."""
-        endpoint = f"/vpcs/{vpc_id}"
         try:
             body: dict[str, Any] = {}
             if label is not None:
                 body["label"] = label
             if description is not None:
                 body["description"] = description
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_vpc_update", vpc_id, body=body
+            )
             vpc: dict[str, Any] = response.json()
             return vpc
         except httpx.HTTPError as e:
@@ -9804,27 +9815,33 @@ class Client:
 
     async def delete_vpc(self, vpc_id: int) -> None:
         """Delete a VPC."""
-        endpoint = f"/vpcs/{vpc_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_vpc_delete", vpc_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVPC", e) from e
 
-    async def list_vpc_ips(self) -> list[dict[str, Any]]:
-        """List all VPC IP addresses."""
+    async def list_vpc_ips(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]:
+        """List one page of VPC IP addresses across every VPC."""
         try:
-            response = await self.make_request("GET", "/vpcs/ips")
+            response = await self.make_route_request(
+                "linode_vpc_ip_all_list", query=_paginated_query(page, page_size)
+            )
             data = response.json()
             ips: list[dict[str, Any]] = data.get("data", [])
             return ips
         except httpx.HTTPError as e:
             raise NetworkError("ListVPCIPs", e) from e
 
-    async def list_vpc_ip(self, vpc_id: int) -> list[dict[str, Any]]:
-        """List IP addresses for a specific VPC."""
-        endpoint = f"/vpcs/{vpc_id}/ips"
+    async def list_vpc_ip(
+        self, vpc_id: int, page: int | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]:
+        """List one page of IP addresses for a specific VPC."""
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_vpc_ip_list", vpc_id, query=_paginated_query(page, page_size)
+            )
             data = response.json()
             ips: list[dict[str, Any]] = data.get("data", [])
             return ips
@@ -9833,9 +9850,8 @@ class Client:
 
     async def list_vpc_subnets(self, vpc_id: int) -> list[dict[str, Any]]:
         """List subnets for a VPC."""
-        endpoint = f"/vpcs/{vpc_id}/subnets"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request("linode_vpc_subnet_list", vpc_id)
             data = response.json()
             subnets: list[dict[str, Any]] = data.get("data", [])
             return subnets
@@ -9844,9 +9860,10 @@ class Client:
 
     async def get_vpc_subnet(self, vpc_id: int, subnet_id: int) -> dict[str, Any]:
         """Get a specific VPC subnet."""
-        endpoint = f"/vpcs/{vpc_id}/subnets/{subnet_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_vpc_subnet_get", vpc_id, subnet_id
+            )
             subnet: dict[str, Any] = response.json()
             return subnet
         except httpx.HTTPError as e:
@@ -9859,13 +9876,14 @@ class Client:
         ipv4: str,
     ) -> dict[str, Any]:
         """Create a new subnet in a VPC."""
-        endpoint = f"/vpcs/{vpc_id}/subnets"
         try:
             body: dict[str, Any] = {
                 "label": label,
                 "ipv4": ipv4,
             }
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_vpc_subnet_create", vpc_id, body=body
+            )
             subnet: dict[str, Any] = response.json()
             return subnet
         except httpx.HTTPError as e:
@@ -9878,10 +9896,11 @@ class Client:
         label: str,
     ) -> dict[str, Any]:
         """Update a VPC subnet."""
-        endpoint = f"/vpcs/{vpc_id}/subnets/{subnet_id}"
         try:
             body: dict[str, Any] = {"label": label}
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_vpc_subnet_update", vpc_id, subnet_id, body=body
+            )
             subnet: dict[str, Any] = response.json()
             return subnet
         except httpx.HTTPError as e:
@@ -9889,9 +9908,8 @@ class Client:
 
     async def delete_vpc_subnet(self, vpc_id: int, subnet_id: int) -> None:
         """Delete a VPC subnet."""
-        endpoint = f"/vpcs/{vpc_id}/subnets/{subnet_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_vpc_subnet_delete", vpc_id, subnet_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteVPCSubnet", e) from e
 
@@ -9909,7 +9927,9 @@ class Client:
             if route_target is not None:
                 body["route_target"] = route_target
 
-            response = await self.make_request("POST", "/networking/ipv6/ranges", body)
+            response = await self.make_route_request(
+                "linode_ipv6_range_create", body=body
+            )
             ipv6_range: dict[str, Any] = response.json()
             return ipv6_range
         except httpx.HTTPError as e:
@@ -9924,14 +9944,10 @@ class Client:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        query_string = urlencode(params) if params else ""
-        endpoint = (
-            f"/networking/ipv6/ranges?{query_string}"
-            if query_string
-            else "/networking/ipv6/ranges"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_ipv6_range_list", query=urlencode(params)
+            )
             ipv6_ranges: dict[str, Any] = response.json()
             return ipv6_ranges
         except httpx.HTTPError as e:
@@ -9946,14 +9962,10 @@ class Client:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        query_string = urlencode(params) if params else ""
-        endpoint = (
-            f"/networking/ipv6/pools?{query_string}"
-            if query_string
-            else "/networking/ipv6/pools"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_ipv6_pool_list", query=urlencode(params)
+            )
             ipv6_pools: dict[str, Any] = response.json()
             return ipv6_pools
         except httpx.HTTPError as e:
@@ -9968,12 +9980,10 @@ class Client:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        query_string = urlencode(params) if params else ""
-        endpoint = (
-            f"/placement/groups?{query_string}" if query_string else "/placement/groups"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_placement_group_list", query=urlencode(params)
+            )
             placement_groups: dict[str, Any] = response.json()
             return placement_groups
         except httpx.HTTPError as e:
@@ -10008,7 +10018,9 @@ class Client:
         }
 
         try:
-            response = await self.make_request("POST", "/placement/groups", body)
+            response = await self.make_route_request(
+                "linode_placement_group_create", body=body
+            )
             placement_group: dict[str, Any] = response.json()
             return placement_group
         except httpx.HTTPError as e:
@@ -10016,10 +10028,10 @@ class Client:
 
     async def get_placement_group(self, group_id: int) -> dict[str, Any]:
         """Get a placement group."""
-        encoded_group_id = quote(str(group_id), safe="")
-        endpoint = f"/placement/groups/{encoded_group_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_placement_group_get", group_id
+            )
             placement_group: dict[str, Any] = response.json()
             return placement_group
         except httpx.HTTPError as e:
@@ -10029,10 +10041,10 @@ class Client:
         self, group_id: int, linodes: list[int]
     ) -> dict[str, Any]:
         """Assign Linodes to a placement group."""
-        encoded_group_id = quote(str(group_id), safe="")
-        endpoint = f"/placement/groups/{encoded_group_id}/assign"
         try:
-            response = await self.make_request("POST", endpoint, {"linodes": linodes})
+            response = await self.make_route_request(
+                "linode_placement_group_assign", group_id, body={"linodes": linodes}
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10042,10 +10054,10 @@ class Client:
         self, group_id: int, linodes: list[int]
     ) -> dict[str, Any]:
         """Unassign Linodes from a placement group."""
-        encoded_group_id = quote(str(group_id), safe="")
-        endpoint = f"/placement/groups/{encoded_group_id}/unassign"
         try:
-            response = await self.make_request("POST", endpoint, {"linodes": linodes})
+            response = await self.make_route_request(
+                "linode_placement_group_unassign", group_id, body={"linodes": linodes}
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10053,10 +10065,8 @@ class Client:
 
     async def delete_placement_group(self, group_id: int) -> None:
         """Delete a placement group."""
-        encoded_group_id = quote(str(group_id), safe="")
-        endpoint = f"/placement/groups/{encoded_group_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_placement_group_delete", group_id)
         except httpx.HTTPError as e:
             raise NetworkError("DeletePlacementGroup", e) from e
 
@@ -10069,12 +10079,12 @@ class Client:
                 "underscores, or periods"
             )
 
-        encoded_group_id = quote(str(group_id), safe="")
-        endpoint = f"/placement/groups/{encoded_group_id}"
         body: dict[str, Any] = {"label": label}
 
         try:
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_placement_group_update", group_id, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10082,12 +10092,10 @@ class Client:
 
     async def get_ipv6_range(self, ipv6_range: str) -> dict[str, Any]:
         """Get an IPv6 range."""
-        # safe=":" matches Go's url.PathEscape, which keeps the colon literal
-        # (RFC 3986 allows it in path segments) while escaping the CIDR slash.
-        encoded_range = quote(ipv6_range, safe=":")
-        endpoint = f"/networking/ipv6/ranges/{encoded_range}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_ipv6_range_get", ipv6_range
+            )
             range_data: dict[str, Any] = response.json()
             return range_data
         except httpx.HTTPError as e:
@@ -10095,11 +10103,8 @@ class Client:
 
     async def delete_ipv6_range(self, ipv6_range: str) -> None:
         """Delete an IPv6 range."""
-        # safe=":" matches Go's url.PathEscape (see get_ipv6_range).
-        encoded_range = quote(ipv6_range, safe=":")
-        endpoint = f"/networking/ipv6/ranges/{encoded_range}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request("linode_ipv6_range_delete", ipv6_range)
         except httpx.HTTPError as e:
             raise NetworkError("DeleteIPv6Range", e) from e
 
@@ -10111,7 +10116,9 @@ class Client:
         if tags is not None:
             body["tags"] = tags
         try:
-            response = await self.make_request("POST", "/networking/reserved/ips", body)
+            response = await self.make_route_request(
+                "linode_networking_reserved_ip_create", body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10126,14 +10133,10 @@ class Client:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        query_string = urlencode(params) if params else ""
-        endpoint = (
-            f"/networking/reserved/ips?{query_string}"
-            if query_string
-            else "/networking/reserved/ips"
-        )
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_networking_reserved_ip_list", query=urlencode(params)
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10141,10 +10144,10 @@ class Client:
 
     async def get_reserved_ip(self, address: str) -> dict[str, Any]:
         """Get a reserved public IPv4 address."""
-        encoded_address = quote(address, safe="")
-        endpoint = f"/networking/reserved/ips/{encoded_address}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_networking_reserved_ip_get", address
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10152,10 +10155,10 @@ class Client:
 
     async def update_reserved_ip(self, address: str, tags: list[str]) -> dict[str, Any]:
         """Replace a reserved public IPv4 address's tags."""
-        encoded_address = quote(address, safe="")
-        endpoint = f"/networking/reserved/ips/{encoded_address}"
         try:
-            response = await self.make_request("PUT", endpoint, {"tags": tags})
+            response = await self.make_route_request(
+                "linode_networking_reserved_ip_update", address, body={"tags": tags}
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10164,7 +10167,9 @@ class Client:
     async def list_reserved_ip_types(self) -> dict[str, Any]:
         """List reserved public IPv4 pricing types."""
         try:
-            response = await self.make_request("GET", "/networking/reserved/ips/types")
+            response = await self.make_route_request(
+                "linode_networking_reserved_ip_type_list"
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10172,18 +10177,19 @@ class Client:
 
     async def delete_reserved_ip(self, address: str) -> None:
         """Permanently unreserve a public IPv4 address."""
-        encoded_address = quote(address, safe="")
-        endpoint = f"/networking/reserved/ips/{encoded_address}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_networking_reserved_ip_delete", address
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteReservedIP", e) from e
 
     async def list_instance_backups(self, instance_id: int) -> dict[str, Any]:
         """List backups for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/backups"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_backup_list", instance_id
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10193,9 +10199,10 @@ class Client:
         self, instance_id: int, backup_id: int
     ) -> dict[str, Any]:
         """Get a specific backup for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/backups/{backup_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_backup_get", instance_id, backup_id
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10205,12 +10212,13 @@ class Client:
         self, instance_id: int, label: str | None = None
     ) -> dict[str, Any]:
         """Create a snapshot backup of an instance."""
-        endpoint = f"/linode/instances/{instance_id}/backups"
         try:
             body: dict[str, Any] = {}
             if label is not None:
                 body["label"] = label
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_backup_create", instance_id, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10224,29 +10232,28 @@ class Client:
         overwrite: bool = False,
     ) -> None:
         """Restore a backup to an instance."""
-        endpoint = f"/linode/instances/{instance_id}/backups/{backup_id}/restore"
         try:
             body: dict[str, Any] = {
                 "linode_id": linode_id,
                 "overwrite": overwrite,
             }
-            await self.make_request("POST", endpoint, body)
+            await self.make_route_request(
+                "linode_instance_backup_restore", instance_id, backup_id, body=body
+            )
         except httpx.HTTPError as e:
             raise NetworkError("RestoreInstanceBackup", e) from e
 
     async def enable_instance_backups(self, instance_id: int) -> None:
         """Enable backups for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/backups/enable"
         try:
-            await self.make_request("POST", endpoint)
+            await self.make_route_request("linode_instance_backups_enable", instance_id)
         except httpx.HTTPError as e:
             raise NetworkError("EnableInstanceBackups", e) from e
 
     async def cancel_instance_backups(self, instance_id: int) -> None:
         """Cancel backups for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/backups/cancel"
         try:
-            await self.make_request("POST", endpoint)
+            await self.make_route_request("linode_instance_backups_cancel", instance_id)
         except httpx.HTTPError as e:
             raise NetworkError("CancelInstanceBackups", e) from e
 
@@ -10257,16 +10264,15 @@ class Client:
         page_size: int | None = None,
     ) -> list[dict[str, Any]]:
         """List a page of disks for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/disks"
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_disk_list", instance_id, query=urlencode(params)
+            )
             data = response.json()
             disks: list[dict[str, Any]] = data.get("data", [])
             return disks
@@ -10280,19 +10286,18 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List volumes attached to a Linode instance."""
-        safe_linode_id = quote(
-            str(_validate_positive_path_int(linode_id, "linode_id")), safe=""
-        )
-        endpoint = f"/linode/instances/{safe_linode_id}/volumes"
+        valid_linode_id = _validate_positive_path_int(linode_id, "linode_id")
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_volume_list",
+                valid_linode_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -10305,19 +10310,18 @@ class Client:
         page_size: int | None = None,
     ) -> dict[str, Any]:
         """List firewalls assigned to a Linode instance."""
-        safe_linode_id = quote(
-            str(_validate_positive_path_int(linode_id, "linode_id")), safe=""
-        )
-        endpoint = f"/linode/instances/{safe_linode_id}/firewalls"
+        valid_linode_id = _validate_positive_path_int(linode_id, "linode_id")
         params: dict[str, int] = {}
         if page is not None:
             params["page"] = page
         if page_size is not None:
             params["page_size"] = page_size
-        if params:
-            endpoint += "?" + urlencode(params)
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_firewall_list",
+                valid_linode_id,
+                query=urlencode(params),
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -10329,18 +10333,14 @@ class Client:
         interface_id: int,
     ) -> dict[str, Any]:
         """List firewalls assigned to a Linode instance interface."""
-        safe_linode_id = quote(
-            str(_validate_positive_path_int(linode_id, "linode_id")), safe=""
-        )
-        safe_interface_id = quote(
-            str(_validate_positive_path_int(interface_id, "interface_id")), safe=""
-        )
-        endpoint = (
-            f"/linode/instances/{safe_linode_id}/interfaces/"
-            f"{safe_interface_id}/firewalls"
-        )
+        valid_linode_id = _validate_positive_path_int(linode_id, "linode_id")
+        valid_interface_id = _validate_positive_path_int(interface_id, "interface_id")
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_interface_firewall_list",
+                valid_linode_id,
+                valid_interface_id,
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -10348,9 +10348,10 @@ class Client:
 
     async def get_instance_disk(self, instance_id: int, disk_id: int) -> dict[str, Any]:
         """Get a specific disk for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_disk_get", instance_id, disk_id
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10366,9 +10367,10 @@ class Client:
         root_pass: str | None = None,
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
+        stackscript_id: int | None = None,
+        stackscript_data: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Create a disk for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/disks"
         try:
             body: dict[str, Any] = {
                 "label": label,
@@ -10384,7 +10386,13 @@ class Client:
                 body["authorized_keys"] = authorized_keys
             if authorized_users is not None:
                 body["authorized_users"] = authorized_users
-            response = await self.make_request("POST", endpoint, body)
+            if stackscript_id:
+                body["stackscript_id"] = stackscript_id
+            if stackscript_data:
+                body["stackscript_data"] = stackscript_data
+            response = await self.make_route_request(
+                "linode_instance_disk_create", instance_id, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10405,8 +10413,6 @@ class Client:
         interfaces: list[Any] | None = None,
     ) -> dict[str, Any]:
         """Create a configuration profile for an instance."""
-        encoded_instance_id = quote(str(instance_id), safe="")
-        endpoint = f"/linode/instances/{encoded_instance_id}/configs"
         try:
             body: dict[str, Any] = {"label": label, "devices": devices}
             optional_fields: dict[str, Any] = {
@@ -10421,7 +10427,9 @@ class Client:
             }
             body.update({k: v for k, v in optional_fields.items() if v is not None})
 
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_config_create", instance_id, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10434,12 +10442,13 @@ class Client:
         label: str | None = None,
     ) -> dict[str, Any]:
         """Update a disk for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}"
         try:
             body: dict[str, Any] = {}
             if label is not None:
                 body["label"] = label
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_disk_update", instance_id, disk_id, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10447,9 +10456,10 @@ class Client:
 
     async def delete_instance_disk(self, instance_id: int, disk_id: int) -> None:
         """Delete a disk from an instance."""
-        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_instance_disk_delete", instance_id, disk_id
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteInstanceDisk", e) from e
 
@@ -10457,9 +10467,10 @@ class Client:
         self, instance_id: int, disk_id: int
     ) -> dict[str, Any]:
         """Clone a disk on an instance."""
-        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}/clone"
         try:
-            response = await self.make_request("POST", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_disk_clone", instance_id, disk_id
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10469,10 +10480,11 @@ class Client:
         self, instance_id: int, disk_id: int, size: int
     ) -> None:
         """Resize a disk on an instance."""
-        endpoint = f"/linode/instances/{instance_id}/disks/{disk_id}/resize"
         try:
             body: dict[str, Any] = {"size": size}
-            await self.make_request("POST", endpoint, body)
+            await self.make_route_request(
+                "linode_instance_disk_resize", instance_id, disk_id, body=body
+            )
         except httpx.HTTPError as e:
             raise NetworkError("ResizeInstanceDisk", e) from e
 
@@ -10483,25 +10495,24 @@ class Client:
         if not password:
             msg = "password is required"
             raise ValueError(msg)
-        encoded_instance_id = quote(
-            str(_validate_positive_path_int(instance_id, "instance_id")), safe=""
-        )
-        encoded_disk_id = quote(
-            str(_validate_positive_path_int(disk_id, "disk_id")), safe=""
-        )
-        endpoint = (
-            f"/linode/instances/{encoded_instance_id}/disks/{encoded_disk_id}/password"
-        )
+        valid_instance_id = _validate_positive_path_int(instance_id, "instance_id")
+        valid_disk_id = _validate_positive_path_int(disk_id, "disk_id")
         try:
-            await self.make_request("POST", endpoint, {"password": password})
+            await self.make_route_request(
+                "linode_instance_disk_password_reset",
+                valid_instance_id,
+                valid_disk_id,
+                body={"password": password},
+            )
         except httpx.HTTPError as e:
             raise NetworkError("ResetInstanceDiskPassword", e) from e
 
     async def list_instance_ips(self, instance_id: int) -> dict[str, Any]:
         """List IP addresses for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_ip_list", instance_id
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10509,9 +10520,10 @@ class Client:
 
     async def get_instance_ip(self, instance_id: int, address: str) -> dict[str, Any]:
         """Get a specific IP address for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe=':')}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_instance_ip_get", instance_id, address
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10519,9 +10531,10 @@ class Client:
 
     async def get_networking_ip(self, address: str) -> dict[str, Any]:
         """Get a networking-level IP address."""
-        endpoint = f"/networking/ips/{quote(address, safe=':')}"
         try:
-            response = await self.make_request("GET", endpoint)
+            response = await self.make_route_request(
+                "linode_networking_ip_get", address
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10532,15 +10545,23 @@ class Client:
         instance_id: int,
         ip_type: str,
         public: bool = True,
+        address: str | None = None,
     ) -> dict[str, Any]:
-        """Allocate a new IP address for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips"
+        """Allocate a new IP address for an instance.
+
+        address names an already-reserved account address to assign; omitting it
+        allocates a new one, so it is sent only when supplied.
+        """
         try:
             body: dict[str, Any] = {
                 "type": ip_type,
                 "public": public,
             }
-            response = await self.make_request("POST", endpoint, body)
+            if address:
+                body["address"] = address
+            response = await self.make_route_request(
+                "linode_instance_ip_allocate", instance_id, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10553,10 +10574,11 @@ class Client:
         rdns: str | None,
     ) -> dict[str, Any]:
         """Update reverse DNS for a specific IP address on an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe=':')}"
         try:
             body: dict[str, Any] = {"rdns": rdns}
-            response = await self.make_request("PUT", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_ip_update", instance_id, address, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10570,16 +10592,15 @@ class Client:
         page = 1
         try:
             while True:
-                endpoint = "/networking/ips"
                 query_parts: list[str] = []
                 if skip_ipv6_rdns:
                     query_parts.append("skip_ipv6_rdns=true")
                 if page > 1:
                     query_parts.append(f"page={page}")
-                if query_parts:
-                    endpoint += "?" + "&".join(query_parts)
 
-                response = await self.make_request("GET", endpoint)
+                response = await self.make_route_request(
+                    "linode_networking_ip_list", query="&".join(query_parts)
+                )
                 data = response.json()
                 ips: list[dict[str, Any]] = data.get("data", [])
                 all_ips.extend(ips)
@@ -10595,12 +10616,20 @@ class Client:
         self,
         address: str,
         rdns: str | None,
+        reserved: bool | None = None,
     ) -> dict[str, Any]:
-        """Update reverse DNS for a networking-level IP address."""
-        endpoint = f"/networking/ips/{quote(address, safe=':')}"
+        """Update reverse DNS, and optionally the reservation, for an IP address.
+
+        An omitted reserved leaves the address's current reservation alone, so
+        the flag is sent only when the caller supplied one.
+        """
         try:
             body: dict[str, Any] = {"rdns": rdns}
-            response = await self.make_request("PUT", endpoint, body)
+            if reserved is not None:
+                body["reserved"] = reserved
+            response = await self.make_route_request(
+                "linode_networking_ip_update", address, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10613,14 +10642,15 @@ class Client:
         public: bool = True,
     ) -> dict[str, Any]:
         """Allocate a new IP address at the networking level."""
-        endpoint = "/networking/ips"
         try:
             body: dict[str, Any] = {
                 "linode_id": linode_id,
                 "type": ip_type,
                 "public": public,
             }
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_networking_ip_allocate", body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10628,9 +10658,10 @@ class Client:
 
     async def delete_instance_ip(self, instance_id: int, address: str) -> None:
         """Delete an IP address from an instance."""
-        endpoint = f"/linode/instances/{instance_id}/ips/{quote(address, safe=':')}"
         try:
-            await self.make_request("DELETE", endpoint)
+            await self.make_route_request(
+                "linode_instance_ip_delete", instance_id, address
+            )
         except httpx.HTTPError as e:
             raise NetworkError("DeleteInstanceIP", e) from e
 
@@ -10650,7 +10681,6 @@ class Client:
         decodes the full JSON into the write proto so Python output matches Go,
         which decodes the same full API JSON.
         """
-        endpoint = f"/linode/instances/{instance_id}/clone"
         try:
             body: dict[str, Any] = {}
             if region is not None:
@@ -10665,7 +10695,9 @@ class Client:
                 body["disks"] = disks
             if configs is not None:
                 body["configs"] = configs
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_clone", instance_id, body=body
+            )
             data: dict[str, Any] = response.json()
             return data
         except httpx.HTTPError as e:
@@ -10677,12 +10709,13 @@ class Client:
         region: str | None = None,
     ) -> None:
         """Migrate an instance to a new region."""
-        endpoint = f"/linode/instances/{instance_id}/migrate"
         try:
             body: dict[str, Any] = {}
             if region is not None:
                 body["region"] = region
-            await self.make_request("POST", endpoint, body)
+            await self.make_route_request(
+                "linode_instance_migrate", instance_id, body=body
+            )
         except httpx.HTTPError as e:
             raise NetworkError("MigrateInstance", e) from e
 
@@ -10696,7 +10729,6 @@ class Client:
         booted: bool | None = None,
     ) -> dict[str, Any]:
         """Rebuild an instance with a new image."""
-        endpoint = f"/linode/instances/{instance_id}/rebuild"
         try:
             body: dict[str, Any] = {
                 "image": image,
@@ -10708,7 +10740,9 @@ class Client:
                 body["authorized_users"] = authorized_users
             if booted is not None:
                 body["booted"] = booted
-            response = await self.make_request("POST", endpoint, body)
+            response = await self.make_route_request(
+                "linode_instance_rebuild", instance_id, body=body
+            )
             result: dict[str, Any] = response.json()
             return result
         except httpx.HTTPError as e:
@@ -10720,21 +10754,23 @@ class Client:
         devices: dict[str, Any] | None = None,
     ) -> None:
         """Boot an instance into rescue mode."""
-        endpoint = f"/linode/instances/{instance_id}/rescue"
         try:
             body: dict[str, Any] = {}
             if devices is not None:
                 body["devices"] = devices
-            await self.make_request("POST", endpoint, body)
+            await self.make_route_request(
+                "linode_instance_rescue", instance_id, body=body
+            )
         except httpx.HTTPError as e:
             raise NetworkError("RescueInstance", e) from e
 
     async def reset_instance_password(self, instance_id: int, root_pass: str) -> None:
         """Reset the root password for an instance."""
-        endpoint = f"/linode/instances/{instance_id}/password"
         try:
             body: dict[str, Any] = {"root_pass": root_pass}
-            await self.make_request("POST", endpoint, body)
+            await self.make_route_request(
+                "linode_instance_password_reset", instance_id, body=body
+            )
         except httpx.HTTPError as e:
             raise NetworkError("ResetInstancePassword", e) from e
 
@@ -10779,6 +10815,35 @@ class Client:
 
         return response
 
+    async def make_route_request(
+        self,
+        tool: str,
+        *values: object,
+        body: dict[str, Any] | None = None,
+        query: str | None = None,
+    ) -> httpx.Response:
+        """Make a request whose method and path come from the tool's proto route.
+
+        A call site that names its tool stops carrying a second copy of the
+        route the proto already declares, so the two cannot drift. Path values
+        are positional, in the order the template names them.
+
+        The query string arrives already encoded: the contract declares the
+        path and nothing else, so query composition stays with the call site
+        exactly as it was before the site was routed.
+
+        The body is forwarded only when there is one, so a route call reaches
+        make_request with the same arguments the hand-built call it replaces
+        did.
+        """
+        route = route_for(tool)
+        endpoint = route.endpoint(*values)
+        if query:
+            endpoint += "?" + query
+        if body is None:
+            return await self.make_request(route.method, endpoint)
+        return await self.make_request(route.method, endpoint, body)
+
     async def get_raw(self, endpoint: str) -> Any:
         """Fetch a GET endpoint and return its decoded JSON body.
 
@@ -10808,6 +10873,28 @@ class Client:
         write proto so Python output matches Go's protojson output.
         """
         response = await self.make_request("PUT", endpoint, body or {})
+        data: Any = response.json()
+        return data
+
+    async def route_raw(
+        self,
+        tool: str,
+        *values: object,
+        body: dict[str, Any] | None = None,
+        query: str | None = None,
+    ) -> Any:
+        """Resolve a tool's route and return the decoded JSON body.
+
+        The routed twin of get_raw, post_raw, and put_raw: the HTTP method
+        travels with the path in the proto contract, so a caller names its
+        tool and neither. POST and PUT default to an empty JSON body because
+        the raw wrappers always sent one, and a routed call must put the same
+        bytes on the wire as the hand-built call it replaces.
+        """
+        route = route_for(tool)
+        if body is None and route.method in ("POST", "PUT"):
+            body = {}
+        response = await self.make_route_request(tool, *values, body=body, query=query)
         data: Any = response.json()
         return data
 
@@ -11393,6 +11480,28 @@ class RetryableClient:
         result: Any = await self._execute_with_retry(
             self.client.put_raw, endpoint, body
         )
+        return result
+
+    async def route_raw(
+        self,
+        tool: str,
+        *values: object,
+        body: dict[str, Any] | None = None,
+        query: str | None = None,
+        retry: bool = True,
+    ) -> Any:
+        """Resolve a tool's route as raw decoded JSON, retrying by default.
+
+        Callers creating non-idempotent resources select one protected
+        attempt, the same trade post_raw documents. The partial exists because
+        the retry executor forwards positional arguments only, and body and
+        query are keyword-only on the client side.
+        """
+        execute = self._execute_with_retry if retry else self._execute_without_retry
+        call = functools.partial(
+            self.client.route_raw, tool, *values, body=body, query=query
+        )
+        result: Any = await execute(call)
         return result
 
     async def get_profile(self) -> Profile:
@@ -12105,11 +12214,11 @@ class RetryableClient:
         return await self.client.update_account_user_grants(username, grants)
 
     async def create_account_oauth_client(
-        self, label: str, redirect_uri: str
+        self, label: str, redirect_uri: str, public: bool = False
     ) -> dict[str, Any]:
         """Create an OAuth client once without retry replay."""
         result: dict[str, Any] = await self._execute_without_retry(
-            self.client.create_account_oauth_client, label, redirect_uri
+            self.client.create_account_oauth_client, label, redirect_uri, public
         )
         return result
 
@@ -12136,11 +12245,11 @@ class RetryableClient:
         return await self.client.add_account_promo_credit(promo_code)
 
     async def create_account_service_transfer(
-        self, linode_ids: list[int]
+        self, linode_ids: list[int], entities: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Request an account service transfer once without retry replay."""
         result: dict[str, Any] = await self._execute_without_retry(
-            self.client.create_account_service_transfer, linode_ids
+            self.client.create_account_service_transfer, linode_ids, entities
         )
         return result
 
@@ -12912,6 +13021,7 @@ class RetryableClient:
         linodes: list[int] | None = None,
         nodebalancers: list[int] | None = None,
         volumes: list[int] | None = None,
+        reserved_ipv4_addresses: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create tag with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -12921,6 +13031,7 @@ class RetryableClient:
                 linodes=linodes,
                 nodebalancers=nodebalancers,
                 volumes=volumes,
+                reserved_ipv4_addresses=reserved_ipv4_addresses,
             )
         )
         return result
@@ -13374,10 +13485,12 @@ class RetryableClient:
         )
 
     async def rebuild_nodebalancer_config(
-        self, nodebalancer_id: int, config_id: int
+        self, nodebalancer_id: int, config_id: int, fields: dict[str, Any]
     ) -> dict[str, Any]:
         """Rebuild a NodeBalancer config without replay retry."""
-        return await self.client.rebuild_nodebalancer_config(nodebalancer_id, config_id)
+        return await self.client.rebuild_nodebalancer_config(
+            nodebalancer_id, config_id, fields
+        )
 
     async def list_nodebalancer_configs(
         self,
@@ -13692,6 +13805,8 @@ class RetryableClient:
         region: str,
         acl: str | None = None,
         cors_enabled: bool | None = None,
+        endpoint_type: str | None = None,
+        s3_endpoint: str | None = None,
     ) -> dict[str, Any]:
         """Create an Object Storage bucket with retry.
 
@@ -13705,6 +13820,8 @@ class RetryableClient:
             region,
             acl,
             cors_enabled,
+            endpoint_type,
+            s3_endpoint,
         )
         return result
 
@@ -13793,6 +13910,7 @@ class RetryableClient:
         name: str,
         method: str,
         expires_in: int | None = None,
+        content_type: str | None = None,
     ) -> dict[str, Any]:
         """Generate a presigned URL with retry.
 
@@ -13806,6 +13924,7 @@ class RetryableClient:
             name,
             method,
             expires_in,
+            content_type,
         )
         return result
 
@@ -14148,7 +14267,7 @@ class RetryableClient:
         return result
 
     async def create_monitor_service_token(
-        self, service_type: str, entity_ids: list[int]
+        self, service_type: str, entity_ids: list[int], add: str | None = None
     ) -> dict[str, Any]:
         """Mint a monitor service token with one protected attempt.
 
@@ -14157,7 +14276,7 @@ class RetryableClient:
         hazard as create_object_storage_key.
         """
         result: dict[str, Any] = await self._execute_without_retry(
-            self.client.create_monitor_service_token, service_type, entity_ids
+            self.client.create_monitor_service_token, service_type, entity_ids, add
         )
         return result
 
@@ -14224,6 +14343,8 @@ class RetryableClient:
         channel_ids: list[int],
         description: str | None = None,
         entity_ids: list[str] | None = None,
+        scope: str = "",
+        group_by: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a monitor service alert definition without retry replay."""
         result: dict[str, Any] = await self._execute_without_retry(
@@ -14237,6 +14358,8 @@ class RetryableClient:
                 channel_ids=channel_ids,
                 description=description,
                 entity_ids=entity_ids,
+                scope=scope,
+                group_by=group_by,
             )
         )
         return result
@@ -14408,6 +14531,9 @@ class RetryableClient:
         label: str,
         inbound_policy: str = "ACCEPT",
         outbound_policy: str = "ACCEPT",
+        tags: list[str] | None = None,
+        rules: dict[str, Any] | None = None,
+        devices: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a firewall once and return the raw API body.
 
@@ -14416,7 +14542,13 @@ class RetryableClient:
         firewall behind, possibly already attached to the same devices.
         """
         result: dict[str, Any] = await self._execute_without_retry(
-            self.client.create_firewall_raw, label, inbound_policy, outbound_policy
+            self.client.create_firewall_raw,
+            label,
+            inbound_policy,
+            outbound_policy,
+            tags,
+            rules,
+            devices,
         )
         return result
 
@@ -14427,6 +14559,7 @@ class RetryableClient:
         status: str | None = None,
         inbound_policy: str | None = None,
         outbound_policy: str | None = None,
+        tags: list[str] | None = None,
     ) -> dict[str, Any]:
         """Update firewall and return the raw API body with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -14436,6 +14569,7 @@ class RetryableClient:
             status,
             inbound_policy,
             outbound_policy,
+            tags,
         )
         return result
 
@@ -14465,6 +14599,8 @@ class RetryableClient:
         firewall_id: int,
         inbound: list[dict[str, Any]],
         outbound: list[dict[str, Any]],
+        inbound_policy: str | None = None,
+        outbound_policy: str | None = None,
     ) -> dict[str, Any]:
         """Replace firewall rules and return the raw API body with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -14472,6 +14608,8 @@ class RetryableClient:
             firewall_id,
             inbound,
             outbound,
+            inbound_policy,
+            outbound_policy,
         )
         return result
 
@@ -14662,6 +14800,7 @@ class RetryableClient:
         client_conn_throttle: int = 0,
         tags: list[str] | None = None,
         ipv4: str | None = None,
+        fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create a NodeBalancer once and return the full raw API body."""
         return await self._execute_without_retry(
@@ -14671,6 +14810,7 @@ class RetryableClient:
             client_conn_throttle,
             tags,
             ipv4,
+            fields,
         )
 
     async def update_nodebalancer_raw(
@@ -14716,6 +14856,7 @@ class RetryableClient:
         node_pools: list[dict[str, Any]],
         tags: list[str] | None = None,
         control_plane: dict[str, Any] | None = None,
+        fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create an LKE cluster with one protected attempt.
 
@@ -14731,6 +14872,7 @@ class RetryableClient:
             node_pools,
             tags,
             control_plane,
+            fields,
         )
         return result
 
@@ -14761,9 +14903,13 @@ class RetryableClient:
         """Recycle LKE cluster nodes with retry."""
         await self._execute_with_retry(self.client.recycle_lke_cluster, cluster_id)
 
-    async def regenerate_lke_cluster(self, cluster_id: int) -> None:
-        """Regenerate LKE cluster service token with retry."""
-        await self._execute_with_retry(self.client.regenerate_lke_cluster, cluster_id)
+    async def regenerate_lke_cluster(
+        self, cluster_id: int, kubeconfig: bool = False, servicetoken: bool = False
+    ) -> None:
+        """Regenerate LKE cluster credentials with retry."""
+        await self._execute_with_retry(
+            self.client.regenerate_lke_cluster, cluster_id, kubeconfig, servicetoken
+        )
 
     async def list_lke_node_pools(self, cluster_id: int) -> list[dict[str, Any]]:
         """List LKE node pools with retry."""
@@ -14786,6 +14932,7 @@ class RetryableClient:
         count: int,
         autoscaler: dict[str, Any] | None = None,
         tags: list[str] | None = None,
+        fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create an LKE node pool with one protected attempt.
 
@@ -14800,6 +14947,7 @@ class RetryableClient:
             count,
             autoscaler,
             tags,
+            fields,
         )
         return result
 
@@ -14810,6 +14958,7 @@ class RetryableClient:
         count: int | None = None,
         autoscaler: dict[str, Any] | None = None,
         tags: list[str] | None = None,
+        fields: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Update LKE node pool with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -14819,6 +14968,7 @@ class RetryableClient:
             count,
             autoscaler,
             tags,
+            fields,
         )
         return result
 
@@ -14994,17 +15144,21 @@ class RetryableClient:
         """Delete VPC with retry."""
         await self._execute_with_retry(self.client.delete_vpc, vpc_id)
 
-    async def list_vpc_ips(self) -> list[dict[str, Any]]:
-        """List all VPC IP addresses with retry."""
+    async def list_vpc_ips(
+        self, page: int | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]:
+        """List one page of VPC IP addresses with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_vpc_ips
+            self.client.list_vpc_ips, page, page_size
         )
         return result
 
-    async def list_vpc_ip(self, vpc_id: int) -> list[dict[str, Any]]:
-        """List IPs for a specific VPC with retry."""
+    async def list_vpc_ip(
+        self, vpc_id: int, page: int | None = None, page_size: int | None = None
+    ) -> list[dict[str, Any]]:
+        """List one page of IPs for a specific VPC with retry."""
         result: list[dict[str, Any]] = await self._execute_with_retry(
-            self.client.list_vpc_ip, vpc_id
+            self.client.list_vpc_ip, vpc_id, page, page_size
         )
         return result
 
@@ -15339,6 +15493,8 @@ class RetryableClient:
         root_pass: str | None = None,
         authorized_keys: list[str] | None = None,
         authorized_users: list[str] | None = None,
+        stackscript_id: int | None = None,
+        stackscript_data: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Create an instance disk with one protected attempt.
 
@@ -15357,6 +15513,8 @@ class RetryableClient:
             root_pass,
             authorized_keys,
             authorized_users,
+            stackscript_id,
+            stackscript_data,
         )
         return result
 
@@ -15474,6 +15632,7 @@ class RetryableClient:
         instance_id: int,
         ip_type: str,
         public: bool = True,
+        address: str | None = None,
     ) -> dict[str, Any]:
         """Allocate instance IP with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
@@ -15481,6 +15640,7 @@ class RetryableClient:
             instance_id,
             ip_type,
             public,
+            address,
         )
         return result
 
@@ -15512,12 +15672,14 @@ class RetryableClient:
         self,
         address: str,
         rdns: str | None,
+        reserved: bool | None = None,
     ) -> dict[str, Any]:
         """Update networking IP RDNS with retry."""
         result: dict[str, Any] = await self._execute_with_retry(
             self.client.update_networking_ip,
             address,
             rdns,
+            reserved,
         )
         return result
 

@@ -4,61 +4,206 @@
   "cases": [
     {
       "name": "requires label",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "label is required"
     },
     {
       "name": "requires region or linode_id",
-      "args": { "confirm": true, "label": "my-vol" },
+      "args": {
+        "confirm": true,
+        "label": "my-vol"
+      },
       "expect_error": "either region or linode_id is required"
     },
     {
       "name": "rejects size below 10 GB",
-      "args": { "confirm": true, "label": "my-vol", "region": "us-east", "size": 5 },
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east",
+        "size": 5
+      },
       "expect_error": "volume size must be at least 10 GB"
     },
     {
       "name": "creates a volume with the API default size",
-      "args": { "confirm": true, "label": "my-vol", "region": "us-east" },
-      "api_response": { "id": 100, "label": "my-vol", "region": "us-east", "size": 20 },
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east"
+      },
+      "api_response": {
+        "id": 100,
+        "label": "my-vol",
+        "region": "us-east",
+        "size": 20
+      },
       "expect_request": {
         "method": "POST",
         "path": "/volumes",
-        "body": { "label": "my-vol", "region": "us-east" }
+        "body": {
+          "label": "my-vol",
+          "region": "us-east"
+        }
       }
     },
     {
       "name": "creates a volume with an explicit size",
-      "args": { "confirm": true, "label": "my-vol", "region": "us-east", "size": 20 },
-      "api_response": { "id": 100, "label": "my-vol", "region": "us-east", "size": 20 },
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east",
+        "size": 20
+      },
+      "api_response": {
+        "id": 100,
+        "label": "my-vol",
+        "region": "us-east",
+        "size": 20
+      },
       "expect_request": {
         "method": "POST",
         "path": "/volumes",
-        "body": { "label": "my-vol", "region": "us-east", "size": 20 }
+        "body": {
+          "label": "my-vol",
+          "region": "us-east",
+          "size": 20
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"label": "my-vol", "region": "us-east", "size": 20},
+      "args": {
+        "label": "my-vol",
+        "region": "us-east",
+        "size": 20
+      },
       "expect_error": "This operation creates a billable resource. Set confirm=true to proceed."
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "confirm": true, "label": "my-vol", "region": "us-east" },
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east"
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create volume"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "confirm": true, "label": "my-vol", "region": "us-east" },
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east"
+      },
       "api_response": true,
       "expect_api_error": "Failed to create volume"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "confirm": true, "label": "my-vol", "region": "us-east" },
-      "api_response": [1, 2],
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east"
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to create volume"
+    },
+    {
+      "name": "sends the tags array in the body",
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east",
+        "tags": [
+          "prod",
+          "web"
+        ]
+      },
+      "api_response": {
+        "id": 100,
+        "label": "my-vol",
+        "region": "us-east",
+        "size": 20
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes",
+        "body": {
+          "label": "my-vol",
+          "region": "us-east",
+          "tags": [
+            "prod",
+            "web"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects a tags value that is not an array",
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east",
+        "tags": 5
+      },
+      "expect_error": "tags must be a JSON string array"
+    },
+    {
+      "name": "rejects a blank tag entry",
+      "args": {
+        "confirm": true,
+        "label": "my-vol",
+        "region": "us-east",
+        "tags": [
+          "prod",
+          "  "
+        ]
+      },
+      "expect_error": "tags entries must be non-empty strings"
+    },
+    {
+      "name": "carries config_id and encryption into the body",
+      "args": {
+        "label": "data",
+        "region": "us-east",
+        "confirm": true,
+        "linode_id": 42,
+        "config_id": 9,
+        "encryption": "enabled"
+      },
+      "api_response": {
+        "id": 1,
+        "label": "data",
+        "region": "us-east"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/volumes",
+        "body": {
+          "label": "data",
+          "region": "us-east",
+          "linode_id": 42,
+          "config_id": 9,
+          "encryption": "enabled"
+        }
+      }
+    },
+    {
+      "name": "rejects an unknown encryption value",
+      "args": {
+        "label": "data",
+        "region": "us-east",
+        "confirm": true,
+        "encryption": "maybe"
+      },
+      "expect_error": "encryption must be one of: disabled, enabled"
     }
   ]
 }

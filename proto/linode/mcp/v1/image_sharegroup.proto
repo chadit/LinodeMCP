@@ -58,11 +58,13 @@ message ImageShareGroupGetInput {
     method: "GET"
     path: "/images/sharegroups/{sharegroup_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroup";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The image share group ID (required).
-  int32 sharegroup_id = 2;
+  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ImageShareGroupByTokenGetInput is the input contract for
@@ -73,11 +75,13 @@ message ImageShareGroupByTokenGetInput {
     method: "GET"
     path: "/images/sharegroups/tokens/{token_uuid}/sharegroup"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroup";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The image share group token UUID (required).
-  string token_uuid = 2;
+  string token_uuid = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ImageShareGroupListInput is the input contract for
@@ -88,13 +92,15 @@ message ImageShareGroupListInput {
     method: "GET"
     path: "/images/sharegroups"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ImageShareGroupByImageListInput is the input contract for
@@ -105,15 +111,17 @@ message ImageShareGroupByImageListInput {
     method: "GET"
     path: "/images/{image_id}/sharegroups"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Private image ID, for example private/12345.
-  string image_id = 2;
+  string image_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ImageShareGroupUpdateInput is the input contract for
@@ -124,21 +132,25 @@ message ImageShareGroupUpdateInput {
     method: "PUT"
     path: "/images/sharegroups/{sharegroup_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates an image share group. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Image share group '{label}' ({id}) updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric image share group ID to update.
-  int32 sharegroup_id = 2;
+  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New descriptive name for the share group (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New detailed description for the share group (optional).
-  optional string description = 4;
+  optional string description = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm the share group update. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageShareGroupDeleteInput is the input contract for
@@ -149,23 +161,28 @@ message ImageShareGroupDeleteInput {
     method: "DELETE"
     path: "/images/sharegroups/{sharegroup_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the image share group";
+  option (linode.mcp.v1.success_message) = "Image share group {sharegroup_id} removed successfully";
+  option (linode.mcp.v1.resource_type) = "ImageShareGroup";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric ID of the image share group to delete.
-  int32 sharegroup_id = 2;
+  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageShareGroupImageListInput is the input contract for
@@ -176,15 +193,17 @@ message ImageShareGroupImageListInput {
     method: "GET"
     path: "/images/sharegroups/{sharegroup_id}/images"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Image share group ID.
-  int32 sharegroup_id = 2;
+  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // ImageShareGroupImageUpdateInput is the input contract for
@@ -196,23 +215,27 @@ message ImageShareGroupImageUpdateInput {
     method: "PUT"
     path: "/images/sharegroups/{sharegroup_id}/images/{image_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a shared image. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Shared image '{id}' in image share group {sharegroup_id} updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric image share group ID that contains the shared image.
-  int32 sharegroup_id = 2;
+  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The shared image ID, for example shared/1.
-  string image_id = 3;
+  string image_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New descriptive name for the shared image (optional).
-  optional string label = 4;
+  optional string label = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New detailed description for the shared image (optional).
-  optional string description = 5;
+  optional string description = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm the shared image update. Ignored when
   // dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageShareGroupImageDeleteInput is the input contract for
@@ -225,19 +248,23 @@ message ImageShareGroupImageDeleteInput {
     method: "DELETE"
     path: "/images/sharegroups/{sharegroup_id}/images/{image_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupImageDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "confirm=true is required to remove the shared image";
+  option (linode.mcp.v1.success_message) = "Shared image {image_id} removed from image share group {sharegroup_id} successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric image share group ID.
-  int32 sharegroup_id = 2;
+  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The numeric shared image ID to remove from the group.
-  int32 image_id = 3;
+  int32 image_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm removing the shared image. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageShareGroupImageSpec is one entry in the images array of
@@ -262,22 +289,26 @@ message ImageShareGroupCreateInput {
     method: "POST"
     path: "/images/sharegroups"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageShareGroupWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates an image share group. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Image share group '{label}' ({id}) created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The share group's descriptive name.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Detailed description for the share group (optional).
-  optional string description = 3;
+  optional string description = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Images to include in the share group, each an id with optional
   // label/description.
-  repeated ImageShareGroupImageSpec images = 4;
+  repeated ImageShareGroupImageSpec images = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm image share group creation. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // ImageShareGroupImageAddInput is the input contract for
@@ -291,18 +322,22 @@ message ImageShareGroupImageAddInput {
     method: "POST"
     path: "/images/sharegroups/{sharegroup_id}/images"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ImageWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This adds images to an image share group. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Added image set to image share group {sharegroup_id}; last returned image: '{id}'";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The numeric image share group ID to add images to.
-  int32 sharegroup_id = 2;
+  int32 sharegroup_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Images to add to the share group, each an id with optional
   // label/description. Required at runtime.
-  repeated ImageShareGroupImageSpec images = 3;
+  repeated ImageShareGroupImageSpec images = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm adding images to the share group. Ignored
   // when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

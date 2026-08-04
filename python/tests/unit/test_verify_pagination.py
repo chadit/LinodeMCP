@@ -288,6 +288,10 @@ def test_main_fails_when_a_bound_drifts(
 
     monkeypatch.setattr(gate, "_SNAPSHOT", snapshot)
     monkeypatch.setattr(gate, "_LANGUAGES", _write_registry(tmp_path, "go"))
+    # Without this the registry's "go" entry resolves against the real repo,
+    # whose bounds match the snapshot, and main returns 1 only for whatever
+    # else happens to be true of the committed baseline.
+    monkeypatch.setattr(gate, "_REPO_ROOT", tmp_path)
 
     assert gate.main([]) == 1
 

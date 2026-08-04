@@ -1,9 +1,8 @@
 package linode
 
-// Profile represents a Linode user profile. The Scopes field is populated
-// for personal access tokens via the /profile response; OAuth tokens leave
-// it empty and Phase 6 scope validation falls back to /profile/grants for
-// those. Other callers can ignore the field.
+// Profile represents a Linode user profile. Scopes is populated only for
+// personal access tokens; OAuth tokens leave it empty, so scope validation
+// falls back to /profile/grants for those.
 type Profile struct {
 	Username           string `json:"username"`
 	Email              string `json:"email"`
@@ -57,15 +56,12 @@ type ProfileTFAEnableConfirmRequest struct {
 type ProfileTFAEnableConfirmResponse map[string]any
 
 // GrantPermission is one of "read_only", "read_write", or "" (no access).
-// The Linode API uses an explicit empty string when the OAuth grant carries
-// no permission on a resource, so we keep it as a string rather than an
-// enum so unknown future values round-trip cleanly.
+// The API sends an explicit empty string for no permission. It stays a string
+// rather than an enum so unknown future values round-trip.
 type GrantPermission string
 
 // Grant represents the permission an OAuth token has on a single resource
-// instance. The Linode /profile/grants response groups grants by resource
-// category (linode, domain, nodebalancer, etc); each entry inside the
-// category names a specific resource the token has access to.
+// instance within one /profile/grants category.
 type Grant struct {
 	Label       string          `json:"label"`
 	Permissions GrantPermission `json:"permissions"`
@@ -73,13 +69,8 @@ type Grant struct {
 }
 
 // Grants represents the full /profile/grants response for OAuth tokens.
-// Global covers account-level permissions (read/write per resource type);
-// the per-resource slices enumerate the specific instances the token can
-// touch. The shape mirrors the Linode API directly so future fields are
-// additive.
-//
-// PATs always return an empty Grants object; their scope information is
-// on Profile.Scopes instead. Phase 6's profile loader checks both.
+// PATs always return an empty Grants object; their scope information lives on
+// Profile.Scopes instead, so the profile loader checks both.
 type Grants struct {
 	Linode       []Grant      `json:"linode"`
 	Domain       []Grant      `json:"domain"`
@@ -108,9 +99,8 @@ type AnswerProfileSecurityQuestionsRequest struct {
 }
 
 // UpdateAccountUserGrantsRequest contains editable grant sections for
-// PUT /account/users/{username}/grants. Pointer fields preserve the caller's
-// intent so omitted sections are not serialized, while empty arrays can still
-// be sent when a grant category needs to be cleared.
+// PUT /account/users/{username}/grants. Pointer-to-slice fields keep an omitted
+// section out of the body while still allowing an empty array to clear a category.
 type UpdateAccountUserGrantsRequest struct {
 	Global       *UpdateAccountUserGlobalGrants `json:"global,omitempty"`
 	Linode       *[]UpdateAccountUserGrant      `json:"linode,omitempty"`
@@ -126,17 +116,15 @@ type UpdateAccountUserGrantsRequest struct {
 	LKECluster   *[]UpdateAccountUserGrant      `json:"lkecluster,omitempty"`
 }
 
-// UpdateAccountUserGrant contains one resource grant update. It intentionally
-// excludes Grant.Label because labels are returned by read APIs but are not part
-// of the update payload.
+// UpdateAccountUserGrant contains one resource grant update. Grant.Label is
+// excluded because read APIs return it but the update payload does not take it.
 type UpdateAccountUserGrant struct {
 	Permissions *GrantPermission `json:"permissions"`
 	ID          int              `json:"id"`
 }
 
-// UpdateAccountUserGlobalGrants contains optional global grant fields for
-// account user grants updates. Pointers preserve partial update intent so an
-// omitted permission is not serialized as false.
+// UpdateAccountUserGlobalGrants contains optional global grant fields for account
+// user grants updates. Pointers keep an omitted permission from serializing as false.
 type UpdateAccountUserGlobalGrants struct {
 	AccountAccess        *GrantPermission `json:"account_access,omitempty"`
 	AddDatabases         *bool            `json:"add_databases,omitempty"`
@@ -154,10 +142,8 @@ type UpdateAccountUserGlobalGrants struct {
 	LongviewSubscription *bool            `json:"longview_subscription,omitempty"`
 }
 
-// GlobalGrants captures the account-level permission booleans the OAuth
-// flow returns. The Linode API exposes each capability as its own bool;
-// keeping them as separate fields matches the wire format and avoids
-// magic-string lookups in scope-comparison code.
+// GlobalGrants captures the account-level permission booleans returned in the
+// global object of /profile/grants.
 type GlobalGrants struct {
 	AccountAccess        GrantPermission `json:"account_access"`
 	AddDatabases         bool            `json:"add_databases"`
@@ -349,8 +335,7 @@ type AccountEventEntity struct {
 }
 
 // CreateAccountUserRequest contains the fields for POST /account/users.
-// Restricted is a pointer so an omitted value is distinguishable from an
-// explicit false.
+// Restricted is a pointer to tell an omitted value from an explicit false.
 type CreateAccountUserRequest struct {
 	Restricted *bool  `json:"restricted,omitempty"`
 	Username   string `json:"username"`
@@ -521,6 +506,7 @@ type OAuthClientSecret struct {
 type CreateOAuthClientRequest struct {
 	Label       string `json:"label"`
 	RedirectURI string `json:"redirect_uri"`
+	Public      bool   `json:"public"`
 }
 
 // UpdateOAuthClientRequest contains fields for PUT /account/oauth-clients/{clientId}.
@@ -586,8 +572,11 @@ type AccountEntityTransferEntities struct {
 }
 
 // CreateAccountServiceTransferRequest contains the entities to transfer for POST /account/service-transfers.
+// Entities stays a raw map so callers can send entity types
+// AccountEntityTransferEntities does not name. The handler builds it from
+// linode_ids when the caller sends none.
 type CreateAccountServiceTransferRequest struct {
-	Entities AccountEntityTransferEntities `json:"entities"`
+	Entities map[string]any `json:"entities"`
 }
 
 // EnrollAccountBetaRequest contains the beta program identifier for POST /account/betas.
@@ -596,8 +585,7 @@ type EnrollAccountBetaRequest struct {
 }
 
 // AcknowledgeAccountAgreementsRequest contains the optional agreement flags for
-// POST /account/agreements. Pointer booleans distinguish omitted fields from
-// explicit false values.
+// POST /account/agreements. Pointer booleans tell omitted fields from explicit false.
 type AcknowledgeAccountAgreementsRequest struct {
 	BillingAgreement       *bool `json:"billing_agreement,omitempty"`
 	EUModel                *bool `json:"eu_model,omitempty"`

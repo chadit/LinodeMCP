@@ -199,6 +199,11 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 	routeIPv4 := request.GetBool("route_ipv4", true)
 	routeIPv6 := request.GetBool("route_ipv6", true)
 
+	tags, _, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	if IsDryRun(request) {
 		if msg := validateInstanceCreateArgs(region, instanceType, rootPass, firewallID); msg != "" {
 			return mcp.NewToolResultError(msg), nil
@@ -230,6 +235,7 @@ func handleLinodeInstanceCreateRequest(ctx context.Context, request *mcp.CallToo
 		Image:               image,
 		RootPass:            rootPass,
 		BackupsEnabled:      backupsEnabled,
+		Tags:                tags,
 		InterfaceGeneration: linode.CurrentInterfaceGeneration,
 		Interfaces: []linode.InstanceInterface{
 			{

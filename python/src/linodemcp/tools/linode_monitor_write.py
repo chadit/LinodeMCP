@@ -17,6 +17,7 @@ from linodemcp.tools.helpers import (
     is_dry_run,
     pagination_int_argument,
 )
+from linodemcp.tools.proto_enum import required_enum_error
 from linodemcp.tools.proto_response import (
     serialize_api_response,
     serialize_list_response,
@@ -466,6 +467,42 @@ def _coerce_entity_id_strings(raw: object) -> list[str] | None:
     return result
 
 
+def _alert_group_by_error(arguments: dict[str, Any]) -> str | None:
+    """Validate the optional group_by array, with Go's exact message.
+
+    Shared by alert-definition create and update so both reject the same values.
+    """
+    if "group_by" not in arguments:
+        return None
+    if not is_non_blank_string_array(arguments["group_by"]):
+        return "group_by must be an array of non-empty strings"
+    return None
+
+
+def _alert_severity_error(raw_severity: object) -> str | None:
+    """Validate the alert severity, with Go's exact messages in Go's order."""
+    if type(raw_severity) is not int:
+        return "severity must be a valid integer"
+    if raw_severity not in {0, 1, 2, 3}:
+        return "severity must be one of 0, 1, 2, or 3"
+    return None
+
+
+def _alert_create_extras_error(arguments: dict[str, Any]) -> str | None:
+    """Validate the required scope enum and the optional group_by array.
+
+    Split out of _build_alert_definition_create_args so that validator stays
+    under the branch ceiling. Order matches Go's
+    monitorServiceAlertDefinitionCreateRequestFromTool.
+    """
+    scope_error = required_enum_error(
+        arguments, "scope", monitor_pb2.MonitorAlertScope.Value
+    )
+    if scope_error is not None:
+        return scope_error
+    return _alert_group_by_error(arguments)
+
+
 def _build_alert_definition_create_args(
     arguments: dict[str, Any],
     *,
@@ -505,10 +542,8 @@ def _build_alert_definition_create_args(
         )
     elif not isinstance(label, str) or not label:
         error = "label is required"
-    elif type(raw_severity) is not int:
-        error = "severity must be a valid integer"
-    elif raw_severity not in {0, 1, 2, 3}:
-        error = "severity must be one of 0, 1, 2, or 3"
+    elif (severity_error := _alert_severity_error(raw_severity)) is not None:
+        error = severity_error
     elif not isinstance(rule_criteria, dict) or not rule_criteria:
         error = "rule_criteria must be a non-empty object"
     elif not isinstance(trigger_conditions, dict) or not trigger_conditions:
@@ -519,6 +554,8 @@ def _build_alert_definition_create_args(
         error = "entity_ids must be an array of non-empty strings"
     elif description is not None and not isinstance(description, str):
         error = "description must be a string"
+    elif (extras_error := _alert_create_extras_error(arguments)) is not None:
+        error = extras_error
     else:
         args = {
             "service_type": service_type,
@@ -529,6 +566,8 @@ def _build_alert_definition_create_args(
             "channel_ids": channel_ids,
             "description": description,
             "entity_ids": entity_ids,
+            "scope": arguments.get("scope"),
+            "group_by": arguments.get("group_by") or None,
         }
 
     return args, error
@@ -563,7 +602,9 @@ async def handle_linode_monitor_service_token_create(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        data = await client.create_monitor_service_token(service_type, entity_ids)
+        data = await client.create_monitor_service_token(
+            service_type, entity_ids, arguments.get("add")
+        )
         return serialize_api_response(
             data, monitor_pb2.MonitorServiceTokenCreateResponse()
         )
@@ -605,6 +646,8 @@ async def handle_linode_monitor_service_alert_definition_create(
             channel_ids=parsed["channel_ids"],
             description=parsed["description"],
             entity_ids=parsed["entity_ids"],
+            scope=parsed["scope"],
+            group_by=parsed["group_by"],
         )
         return serialize_api_response(
             {
@@ -952,6 +995,8 @@ def _validate_alert_update_fields(fields: dict[str, Any]) -> str | None:
         error = "entity_ids must be an array of non-empty strings"
     elif "description" in fields and not isinstance(fields["description"], str):
         error = "description must be a string"
+    elif (group_by_error := _alert_group_by_error(fields)) is not None:
+        error = group_by_error
     elif isinstance(label, str):
         fields["label"] = label.strip()
     return error
@@ -989,6 +1034,7 @@ async def handle_linode_monitor_service_alert_definition_update(
         "channel_ids",
         "description",
         "entity_ids",
+        "group_by",
         "label",
         "rule_criteria",
         "severity",

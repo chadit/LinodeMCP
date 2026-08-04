@@ -9,23 +9,89 @@
     },
     {
       "name": "requires confirm before creating",
-      "args": { "linode_ids": [123] },
+      "args": {
+        "linode_ids": [
+          123
+        ]
+      },
       "expect_error": "This creates an account service transfer. Set confirm=true to proceed."
     },
     {
       "name": "creates an account service transfer",
-      "args": { "linode_ids": [123], "confirm": true },
+      "args": {
+        "linode_ids": [
+          123
+        ],
+        "confirm": true
+      },
       "api_response": {},
       "expect_request": {
         "method": "POST",
         "path": "/account/service-transfers",
-        "body": { "entities": { "linodes": [123] } }
+        "body": {
+          "entities": {
+            "linodes": [
+              123
+            ]
+          }
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"linode_ids": [123]},
+      "args": {
+        "linode_ids": [
+          123
+        ]
+      },
       "expect_error": "This creates an account service transfer. Set confirm=true to proceed."
+    },
+    {
+      "name": "a caller-supplied entities object replaces the linode_ids form",
+      "args": {
+        "confirm": true,
+        "entities": {
+          "linodes": [
+            7
+          ],
+          "domains": [
+            9
+          ]
+        }
+      },
+      "api_response": {
+        "token": "t",
+        "entities": {
+          "linodes": [
+            7
+          ]
+        }
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/account/service-transfers",
+        "body": {
+          "entities": {
+            "linodes": [
+              7
+            ],
+            "domains": [
+              9
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects an entities value that is not an object",
+      "args": {
+        "confirm": true,
+        "entities": [
+          1,
+          2
+        ]
+      },
+      "expect_error": "entities must be an object"
     }
   ]
 }

@@ -22,6 +22,7 @@ const (
 	tagLinodesParam       = "linodes"
 	tagNodeBalancersParam = "nodebalancers"
 	tagVolumesParam       = "volumes"
+	tagReservedIPv4Param  = "reserved_ipv4_addresses"
 )
 
 // NewLinodeTagsTool creates a tool for listing account tags.
@@ -197,6 +198,15 @@ func createTagRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateTagRe
 		}
 
 		*field.dest = ids
+	}
+
+	if raw, exists := args[tagReservedIPv4Param]; exists {
+		addresses, validationMessage := stringSliceFromToolArg(raw, tagReservedIPv4Param)
+		if validationMessage != "" {
+			return nil, validationMessage
+		}
+
+		req.ReservedIPv4Addresses = addresses
 	}
 
 	return req, ""

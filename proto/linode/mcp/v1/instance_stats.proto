@@ -14,11 +14,13 @@ message InstanceStatsGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/stats"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceStats";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceStatsMonthGetInput is the input contract for
@@ -29,15 +31,17 @@ message InstanceStatsMonthGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/stats/{year}/{month}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceStats";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The statistics year, from 2000 through 2037 (required).
-  int32 year = 3;
+  int32 year = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The statistics month, from 1 through 12 (required).
-  int32 month = 4;
+  int32 month = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceStats is the response for linode_instance_stats_get and

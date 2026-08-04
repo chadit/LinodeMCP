@@ -195,7 +195,7 @@ func TestLinodeVPCGetToolValidation(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingVPCID, args: map[string]any{}, wantContains: errVPCIDRequired},
-		{name: "invalid vpc id", args: map[string]any{keyVPCID: notANumber}, wantContains: "vpc_id must be a valid integer"},
+		{name: "invalid vpc id", args: map[string]any{keyVPCID: notANumber}, wantContains: "vpc_id must be a positive integer"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -247,7 +247,7 @@ func TestLinodeVPCGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeVPCGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyVPCID: "123"})
+	req := createRequestWithArgs(t, map[string]any{keyVPCID: 123})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -446,7 +446,7 @@ func TestLinodeVPCIPListToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeVPCIPListTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyVPCID: "456"})
+	req := createRequestWithArgs(t, map[string]any{keyVPCID: 456})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -555,7 +555,7 @@ func TestLinodeVPCSubnetsListToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeVPCSubnetListTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyVPCID: "123"})
+	req := createRequestWithArgs(t, map[string]any{keyVPCID: 123})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -624,8 +624,8 @@ func TestLinodeVPCSubnetGetToolValidation(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseMissingVPCID, args: map[string]any{keySubnetID: "10"}, wantContains: errVPCIDRequired},
-		{name: caseMissingSubnetID, args: map[string]any{keyVPCID: "123"}, wantContains: errSubnetIDRequired},
+		{name: caseMissingVPCID, args: map[string]any{keySubnetID: 10}, wantContains: errVPCIDRequired},
+		{name: caseMissingSubnetID, args: map[string]any{keyVPCID: 123}, wantContains: errSubnetIDRequired},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -677,7 +677,7 @@ func TestLinodeVPCSubnetGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeVPCSubnetGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyVPCID: "123", keySubnetID: "10"})
+	req := createRequestWithArgs(t, map[string]any{keyVPCID: 123, keySubnetID: 10})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {

@@ -2,29 +2,24 @@ package linode
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const (
-	endpointVolumes     = "/volumes"
-	endpointVolumeTypes = "/volumes/types"
-	endpointSSHKeys     = "/profile/sshkeys"
-)
+// Methods with a Proto suffix decode the API JSON straight into proto messages
+// used by the proto-backed read and write paths.
 
-// httpListVolumesProto retrieves all block storage volumes as proto messages,
-// decoded directly from the API JSON for the proto-backed read path.
-func (c *Client) httpListVolumesProto(ctx context.Context) ([]*linodev1.Volume, error) {
-	return listProtoElements(ctx, c, "ListVolumes", endpointVolumes,
+// httpListVolumesProto retrieves one page of block storage volumes.
+func (c *Client) httpListVolumesProto(ctx context.Context, page, pageSize int) ([]*linodev1.Volume, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListVolumes",
+		"linode_volume_list", "", nil, page, pageSize,
 		func() *linodev1.Volume { return &linodev1.Volume{} })
 }
 
-// httpListVolumeTypesProto retrieves all block storage volume types as proto
-// messages, decoded directly from the API JSON for the proto-backed list path.
+// httpListVolumeTypesProto retrieves all block storage volume types.
 func (c *Client) httpListVolumeTypesProto(ctx context.Context) ([]*linodev1.LinodeType, error) {
-	return listProtoElements(ctx, c, "ListVolumeTypes", endpointVolumeTypes,
+	return listProtoElementsRouted(ctx, c, "ListVolumeTypes",
+		"linode_volume_type_list", "", nil,
 		func() *linodev1.LinodeType { return &linodev1.LinodeType{} })
 }
 
@@ -33,11 +28,9 @@ func (c *Client) httpGetVolume(ctx context.Context, volumeID int) (*Volume, erro
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_get", nil, volumeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetVolume", Err: err}
+		return nil, wrapRequestError("GetVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -50,17 +43,14 @@ func (c *Client) httpGetVolume(ctx context.Context, volumeID int) (*Volume, erro
 	return &volume, nil
 }
 
-// httpGetVolumeProto retrieves a single volume and decodes it as a proto message
-// for the proto-backed read path.
+// httpGetVolumeProto retrieves a single volume by its ID.
 func (c *Client) httpGetVolumeProto(ctx context.Context, volumeID int) (*linodev1.Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_get", nil, volumeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetVolume", Err: err}
+		return nil, wrapRequestError("GetVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -73,15 +63,14 @@ func (c *Client) httpGetVolumeProto(ctx context.Context, volumeID int) (*linodev
 	return volume, nil
 }
 
-// httpCreateVolumeProto creates a volume and decodes the response as a proto
-// message for the proto-backed write path.
+// httpCreateVolumeProto creates a block storage volume.
 func (c *Client) httpCreateVolumeProto(ctx context.Context, req *CreateVolumeRequest) (*linodev1.Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointVolumes, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateVolume", Err: err}
+		return nil, wrapRequestError("CreateVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -94,17 +83,14 @@ func (c *Client) httpCreateVolumeProto(ctx context.Context, req *CreateVolumeReq
 	return volume, nil
 }
 
-// httpCloneVolumeProto clones a volume and decodes the response as a proto
-// message for the proto-backed write path.
+// httpCloneVolumeProto clones a volume into a new one.
 func (c *Client) httpCloneVolumeProto(ctx context.Context, volumeID int, req CloneVolumeRequest) (*linodev1.Volume, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVolumes+"/%d/clone", volumeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_clone", req, volumeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CloneVolume", Err: err}
+		return nil, wrapRequestError("CloneVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -123,11 +109,9 @@ func (c *Client) httpAttachVolumeProto(ctx context.Context, volumeID int, req At
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVolumes+"/%d/attach", volumeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_attach", req, volumeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "AttachVolume", Err: err}
+		return nil, wrapRequestError("AttachVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -145,11 +129,9 @@ func (c *Client) httpDetachVolume(ctx context.Context, volumeID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVolumes+"/%d/detach", volumeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_detach", nil, volumeID)
 	if err != nil {
-		return &NetworkError{Operation: "DetachVolume", Err: err}
+		return wrapRequestError("DetachVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -163,12 +145,11 @@ func (c *Client) httpResizeVolumeProto(ctx context.Context, volumeID, size int) 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVolumes+"/%d/resize", volumeID)
 	payload := map[string]int{"size": size}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, payload)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_resize", payload, volumeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ResizeVolume", Err: err}
+		return nil, wrapRequestError("ResizeVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -186,11 +167,9 @@ func (c *Client) httpDeleteVolume(ctx context.Context, volumeID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_delete", nil, volumeID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteVolume", Err: err}
+		return wrapRequestError("DeleteVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -204,11 +183,9 @@ func (c *Client) httpUpdateVolumeProto(ctx context.Context, volumeID int, req *U
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointVolumes+"/%d", volumeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_volume_update", req, volumeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateVolume", Err: err}
+		return nil, wrapRequestError("UpdateVolume", err)
 	}
 
 	defer drainClose(resp)
@@ -221,10 +198,11 @@ func (c *Client) httpUpdateVolumeProto(ctx context.Context, volumeID int, req *U
 	return volume, nil
 }
 
-// httpListSSHKeysProto retrieves all SSH keys as proto messages for the
+// httpListSSHKeysProto retrieves one page of SSH keys as proto messages for the
 // proto-backed list path, sharing the decode tail with every other proto list.
-func (c *Client) httpListSSHKeysProto(ctx context.Context) ([]*linodev1.SSHKey, error) {
-	return listProtoElements(ctx, c, "ListSSHKeys", endpointSSHKeys,
+func (c *Client) httpListSSHKeysProto(ctx context.Context, page, pageSize int) ([]*linodev1.SSHKey, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListSSHKeys",
+		"linode_sshkey_list", "", nil, page, pageSize,
 		func() *linodev1.SSHKey { return &linodev1.SSHKey{} })
 }
 
@@ -233,11 +211,9 @@ func (c *Client) httpGetSSHKey(ctx context.Context, sshKeyID int) (*SSHKey, erro
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointSSHKeys+"/%d", sshKeyID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_sshkey_get", nil, sshKeyID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetSSHKey", Err: err}
+		return nil, wrapRequestError("GetSSHKey", err)
 	}
 
 	defer drainClose(resp)
@@ -255,11 +231,9 @@ func (c *Client) httpGetSSHKeyProto(ctx context.Context, sshKeyID int) (*linodev
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointSSHKeys+"/%d", sshKeyID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_sshkey_get", nil, sshKeyID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetSSHKey", Err: err}
+		return nil, wrapRequestError("GetSSHKey", err)
 	}
 
 	defer drainClose(resp)
@@ -278,9 +252,9 @@ func (c *Client) httpCreateSSHKeyProto(ctx context.Context, req CreateSSHKeyRequ
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointSSHKeys, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_sshkey_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateSSHKey", Err: err}
+		return nil, wrapRequestError("CreateSSHKey", err)
 	}
 
 	defer drainClose(resp)
@@ -299,11 +273,9 @@ func (c *Client) httpUpdateSSHKeyProto(ctx context.Context, sshKeyID int, req Up
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointSSHKeys+"/%d", sshKeyID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_sshkey_update", req, sshKeyID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateSSHKey", Err: err}
+		return nil, wrapRequestError("UpdateSSHKey", err)
 	}
 
 	defer drainClose(resp)
@@ -321,11 +293,9 @@ func (c *Client) httpDeleteSSHKey(ctx context.Context, sshKeyID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointSSHKeys+"/%d", sshKeyID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_sshkey_delete", nil, sshKeyID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteSSHKey", Err: err}
+		return wrapRequestError("DeleteSSHKey", err)
 	}
 
 	defer drainClose(resp)

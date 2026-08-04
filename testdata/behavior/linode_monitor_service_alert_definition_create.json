@@ -1,6 +1,6 @@
 {
   "tool": "linode_monitor_service_alert_definition_create",
-  "description": "Alert-definition entity IDs are strings in the Linode Metrics API, unlike the integer entity IDs the token endpoint takes; these cases pin that split plus the positivity rule on channel_ids. A body that will not parse must fail rather than turn into a made-up record. The two languages frame the parse failure differently, so the shared assertion is the parser's position marker.",
+  "description": "Alert-definition entity IDs are strings in the Linode Metrics API, unlike the integer entity IDs the token endpoint takes; these cases pin that split plus the positivity rule on channel_ids. A body that will not parse must fail rather than turn into a made-up record. The two languages frame the parse failure differently, so the shared assertion is the parser's position marker. scope is now a required body field (the API documents it as required with the single value account), so every case supplies it and it appears in the posted body.",
   "cases": [
     {
       "name": "rejects integer entity ids",
@@ -8,11 +8,24 @@
         "service_type": "dbaas",
         "label": "CPU high",
         "severity": 1,
-        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
-        "trigger_conditions": { "criteria_condition": "ALL" },
-        "channel_ids": [10000],
-        "entity_ids": [12345],
-        "confirm": true
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "entity_ids": [
+          12345
+        ],
+        "confirm": true,
+        "scope": "account"
       },
       "expect_error": "entity_ids must be an array of non-empty strings"
     },
@@ -22,10 +35,21 @@
         "service_type": "dbaas",
         "label": "CPU high",
         "severity": 1,
-        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
-        "trigger_conditions": { "criteria_condition": "ALL" },
-        "channel_ids": [0],
-        "confirm": true
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          0
+        ],
+        "confirm": true,
+        "scope": "account"
       },
       "expect_error": "channel_ids must be a non-empty array of positive integers"
     },
@@ -35,25 +59,54 @@
         "service_type": "dbaas",
         "label": "CPU high",
         "severity": 1,
-        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
-        "trigger_conditions": { "criteria_condition": "ALL" },
-        "channel_ids": [10000],
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
         "description": "High CPU usage",
-        "entity_ids": ["12345"],
-        "confirm": true
+        "entity_ids": [
+          "12345"
+        ],
+        "confirm": true,
+        "scope": "account"
       },
-      "api_response": { "id": 67890, "label": "CPU high" },
+      "api_response": {
+        "id": 67890,
+        "label": "CPU high"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/monitor/services/dbaas/alert-definitions",
         "body": {
           "label": "CPU high",
           "severity": 1,
-          "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
-          "trigger_conditions": { "criteria_condition": "ALL" },
-          "channel_ids": [10000],
+          "rule_criteria": {
+            "rules": [
+              {
+                "metric": "cpu_usage"
+              }
+            ]
+          },
+          "trigger_conditions": {
+            "criteria_condition": "ALL"
+          },
+          "channel_ids": [
+            10000
+          ],
           "description": "High CPU usage",
-          "entity_ids": ["12345"]
+          "entity_ids": [
+            "12345"
+          ],
+          "scope": "account"
         }
       }
     },
@@ -63,10 +116,23 @@
         "service_type": "dbaas",
         "label": "CPU high",
         "severity": 1,
-        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
-        "trigger_conditions": { "criteria_condition": "ALL" },
-        "channel_ids": [10000],
-        "entity_ids": ["12345"]
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "entity_ids": [
+          "12345"
+        ],
+        "scope": "account"
       },
       "expect_error": "This creates a monitor alert definition. Set confirm=true to proceed."
     },
@@ -76,11 +142,24 @@
         "service_type": "dbaas",
         "label": "CPU high",
         "severity": 1,
-        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
-        "trigger_conditions": { "criteria_condition": "ALL" },
-        "channel_ids": [10000],
-        "entity_ids": ["12345"],
-        "confirm": true
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "entity_ids": [
+          "12345"
+        ],
+        "confirm": true,
+        "scope": "account"
       },
       "api_response_raw": "not json",
       "expect_api_error": "line 1"
@@ -91,14 +170,82 @@
         "service_type": "dbaas",
         "label": "CPU high",
         "severity": 1,
-        "rule_criteria": { "rules": [{ "metric": "cpu_usage" }] },
-        "trigger_conditions": { "criteria_condition": "ALL" },
-        "channel_ids": [10000],
-        "entity_ids": ["12345"],
-        "confirm": true
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "entity_ids": [
+          "12345"
+        ],
+        "confirm": true,
+        "scope": "account"
       },
       "api_response_raw": "",
       "expect_api_error": "line 1"
+    },
+    {
+      "name": "rejects a missing scope",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "description": "High CPU usage",
+        "entity_ids": [
+          "12345"
+        ],
+        "confirm": true
+      },
+      "expect_error": "scope must be one of: account"
+    },
+    {
+      "name": "rejects an unknown scope",
+      "args": {
+        "service_type": "dbaas",
+        "label": "CPU high",
+        "severity": 1,
+        "rule_criteria": {
+          "rules": [
+            {
+              "metric": "cpu_usage"
+            }
+          ]
+        },
+        "trigger_conditions": {
+          "criteria_condition": "ALL"
+        },
+        "channel_ids": [
+          10000
+        ],
+        "description": "High CPU usage",
+        "entity_ids": [
+          "12345"
+        ],
+        "confirm": true,
+        "scope": "region"
+      },
+      "expect_error": "scope must be one of: account"
     }
   ]
 }

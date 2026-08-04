@@ -354,7 +354,7 @@ async def test_boot_instance_sends_config_id() -> None:
 
 
 async def test_boot_instance_omits_empty_body() -> None:
-    """boot_instance sends a None body when no config id is given."""
+    """boot_instance sends no body when no config id is given."""
     client = Client("https://api.linode.com/v4", "test-token")
 
     with patch.object(client, "make_request", new_callable=AsyncMock) as mock_request:
@@ -362,10 +362,11 @@ async def test_boot_instance_omits_empty_body() -> None:
 
         await client.boot_instance(7)
 
-    method, endpoint, sent = mock_request.await_args_list[0].args
+    # A routed call with no body reaches the transport without a body argument
+    # at all, which is the same empty request the None body produced before.
+    method, endpoint = mock_request.await_args_list[0].args
     assert method == "POST"
     assert endpoint == "/linode/instances/7/boot"
-    assert sent is None
     await client.close()
 
 

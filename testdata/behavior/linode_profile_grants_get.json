@@ -1,0 +1,12 @@
+{
+  "tool": "linode_profile_grants_get",
+  "description": "No local validation; pins the bare profile grants GET both languages issue.",
+  "cases": [
+    {
+      "name": "gets the authenticated user's grants",
+      "args": {},
+      "api_response": {},
+      "expect_request": { "method": "GET", "path": "/profile/grants" }
+    }
+  ]
+}

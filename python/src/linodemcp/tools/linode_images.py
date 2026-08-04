@@ -16,6 +16,7 @@ from linodemcp.genpb.linode.mcp.v1 import (
     image_sharegroup_token_pb2,
 )
 from linodemcp.profiles import Capability
+from linodemcp.tools.drivers import ListFilter, MatchMode, run_list_tool
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
     build_dry_run_response,
@@ -23,10 +24,8 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
-    paginated_path,
     pagination_int_argument,
     required_int_id,
-    standard_pagination_arguments,
 )
 from linodemcp.tools.proto_response import (
     raw_str,
@@ -1844,11 +1843,9 @@ async def handle_linode_image_get(
         return error_response(image_id_err)
     image_id_str = cast("str", image_id).strip()
 
-    encoded_image_id = quote(image_id_str, safe="")
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
-            await client.get_raw(f"/images/{encoded_image_id}"),
+            await client.route_raw("linode_image_get", image_id_str),
             image_pb2.Image(),
         )
 
@@ -1930,45 +1927,17 @@ async def handle_linode_image_list(
     arguments: dict[str, Any], cfg: Any
 ) -> list[TextContent]:
     """Handle linode_image_list tool request."""
-    try:
-        page, page_size = standard_pagination_arguments(arguments)
-    except (TypeError, ValueError) as exc:
-        return error_response(str(exc))
-
-    type_filter = str(arguments.get("type", ""))
-    is_public_filter = str(arguments.get("is_public", ""))
-    deprecated_filter = str(arguments.get("deprecated", ""))
-
-    def _matches(image: dict[str, Any]) -> bool:
-        image_type = str(image.get("type", ""))
-        if type_filter and image_type.lower() != type_filter.lower():
-            return False
-        if is_public_filter and bool(image.get("is_public", False)) != (
-            is_public_filter.lower() == "true"
-        ):
-            return False
-        return not (
-            deprecated_filter
-            and bool(image.get("deprecated", False))
-            != (deprecated_filter.lower() == "true")
-        )
-
-    filters: list[str] = []
-    if type_filter:
-        filters.append(f"type={type_filter}")
-    if is_public_filter:
-        filters.append(f"is_public={is_public_filter}")
-    if deprecated_filter:
-        filters.append(f"deprecated={deprecated_filter}")
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(paginated_path("/images", page, page_size))
-        return serialize_list_response(
-            raw,
-            "images",
-            image_pb2.ImageListResponse(),
-            filter_value=", ".join(filters) if filters else None,
-            item_filter=_matches,
-        )
-
-    return await execute_tool(cfg, arguments, "retrieve Linode images", _call)
+    return await run_list_tool(
+        cfg,
+        arguments,
+        tool="linode_image_list",
+        error_action="retrieve Linode images",
+        filters=(
+            ListFilter("type", "type", MatchMode.EQUALS),
+            # The contract advertises both flags as the strings "true"/"false"
+            # rather than booleans, which is why they read as text and compare
+            # against the item's boolean.
+            ListFilter("is_public", "is_public", MatchMode.BOOL),
+            ListFilter("deprecated", "deprecated", MatchMode.BOOL),
+        ),
+    )

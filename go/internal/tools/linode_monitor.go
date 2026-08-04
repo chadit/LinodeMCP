@@ -39,6 +39,8 @@ const (
 	monitorAlertDefinitionChannelIDsParam        = "channel_ids"
 	monitorAlertDefinitionDescriptionParam       = "description"
 	monitorAlertDefinitionGroupByParam           = "group_by"
+	monitorAlertDefinitionScopeParam             = "scope"
+	monitorTokenAddParam                         = "add"
 	monitorAlertDefinitionEntityIDsParam         = "entity_ids"
 	monitorAlertDefinitionRegionsParam           = "regions"
 	monitorAlertDefinitionStatusParam            = "status"
@@ -361,7 +363,7 @@ func monitorServiceTokenCreateRequestFromTool(request *mcp.CallToolRequest) (*li
 		return nil, validationMessage
 	}
 
-	return &linode.CreateMonitorServiceTokenRequest{EntityIDs: entityIDs}, ""
+	return &linode.CreateMonitorServiceTokenRequest{EntityIDs: entityIDs, Add: request.GetString(monitorTokenAddParam, "")}, ""
 }
 
 func monitorServiceTokenEntityIDsFromTool(request *mcp.CallToolRequest) ([]int, string) {
@@ -611,15 +613,41 @@ func monitorServiceAlertDefinitionCreateRequestFromTool(request *mcp.CallToolReq
 		description = &descriptionString
 	}
 
+	scope := request.GetString(monitorAlertDefinitionScopeParam, "")
+	if scopeMessage := requiredEnumChoiceValue(scope, monitorAlertDefinitionScopeParam, linodev1.MonitorAlertScope_Value_value); scopeMessage != "" {
+		return nil, scopeMessage
+	}
+
+	groupBy, validationMessage := monitorAlertDefinitionGroupByFromArgs(args)
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
 	return &linode.CreateAlertDefinitionRequest{
 		ChannelIDs:        channelIDs,
 		Description:       description,
 		EntityIDs:         entityIDs,
+		GroupBy:           groupBy,
 		Label:             label,
 		RuleCriteria:      ruleCriteria,
+		Scope:             scope,
 		Severity:          severity,
 		TriggerConditions: triggerConditions,
 	}, ""
+}
+
+// monitorAlertDefinitionGroupByFromArgs reads the optional group_by array the
+// alert create, update, and clone tools all accept.
+func monitorAlertDefinitionGroupByFromArgs(args map[string]any) ([]string, string) {
+	if _, exists := args[monitorAlertDefinitionGroupByParam]; !exists {
+		return nil, ""
+	}
+
+	return optionalStringArrayArgument(
+		args,
+		monitorAlertDefinitionGroupByParam,
+		errMonitorAlertDefinitionGroupBy,
+	)
 }
 
 func monitorAlertDefinitionSeverityFromArgs(args map[string]any) (int, string) {

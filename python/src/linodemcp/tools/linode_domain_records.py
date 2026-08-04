@@ -7,6 +7,7 @@ from mcp.types import TextContent, Tool
 from linodemcp.genpb.linode.mcp.v1 import domain_pb2
 from linodemcp.linode import validate_dns_record_name, validate_dns_record_target
 from linodemcp.profiles import Capability
+from linodemcp.tools.drivers import run_destructive_tool
 from linodemcp.tools.helpers import (
     TWO_STAGE_NOTE,
     DryRunDetails,
@@ -16,100 +17,17 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
+from linodemcp.tools.proto_enum import optional_enum_error
 from linodemcp.tools.proto_response import (
     raw_int,
     raw_str,
     serialize_api_response,
-    serialize_list_response,
 )
 from linodemcp.tools.toolschemas import schema
-from linodemcp.tools.twostage_destroy import run_two_stage_destroy
-from linodemcp.twostage.hash_ignore import hash_ignore_fields
 
 if TYPE_CHECKING:
     from linodemcp.config import Config
     from linodemcp.linode import RetryableClient
-
-
-def create_linode_domain_record_list_tool() -> tuple[Tool, Capability]:
-    """Create the linode_domain_record_list tool."""
-    return Tool(
-        name="linode_domain_record_list",
-        description=(
-            "Lists all DNS records for a specific domain. "
-            "Can filter by record type or name."
-        ),
-        input_schema=schema("linode.mcp.v1.DomainRecordListInput"),
-    ), Capability.Read
-
-
-def create_linode_domain_record_get_tool() -> tuple[Tool, Capability]:
-    """Create the linode_domain_record_get tool."""
-    return Tool(
-        name="linode_domain_record_get",
-        description="Gets a specific DNS record for a domain.",
-        input_schema=schema("linode.mcp.v1.DomainRecordGetInput"),
-    ), Capability.Read
-
-
-async def handle_linode_domain_record_get(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_domain_record_get tool request."""
-    domain_id = arguments.get("domain_id", 0)
-    record_id = arguments.get("record_id", 0)
-
-    if not domain_id:
-        return error_response("domain_id is required")
-    if not record_id:
-        return error_response("record_id is required")
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(
-            f"/domains/{int(domain_id)}/records/{int(record_id)}"
-        )
-        return serialize_api_response(raw, domain_pb2.DomainRecord())
-
-    return await execute_tool(cfg, arguments, "retrieve domain record", _call)
-
-
-async def handle_linode_domain_record_list(
-    arguments: dict[str, Any], cfg: Config
-) -> list[TextContent]:
-    """Handle linode_domain_record_list tool request."""
-    domain_id = arguments.get("domain_id", 0)
-    type_filter = arguments.get("type", "")
-    name_contains = arguments.get("name_contains", "")
-
-    if not domain_id:
-        return error_response("domain_id is required")
-
-    def _matches(record: dict[str, Any]) -> bool:
-        if type_filter and str(record.get("type", "")).upper() != type_filter.upper():
-            return False
-        return not (
-            name_contains
-            and name_contains.lower() not in str(record.get("name", "")).lower()
-        )
-
-    filters: list[str] = []
-    if type_filter:
-        filters.append(f"type={type_filter}")
-    if name_contains:
-        filters.append(f"name_contains={name_contains}")
-    filter_echo = ", ".join(filters) if filters else None
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(f"/domains/{int(domain_id)}/records")
-        return serialize_list_response(
-            raw,
-            "records",
-            domain_pb2.DomainRecordListResponse(),
-            filter_value=filter_echo,
-            item_filter=_matches,
-        )
-
-    return await execute_tool(cfg, arguments, "retrieve domain records", _call)
 
 
 def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
@@ -121,12 +39,17 @@ def create_linode_domain_record_create_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-def _record_create_error(domain_id: Any, record_type: str) -> list[TextContent] | None:
+def _record_create_error(
+    domain_id: Any, record_type: str, arguments: dict[str, Any]
+) -> list[TextContent] | None:
     """Validate record-create args; return an error response or None."""
     if not domain_id:
         return error_response("domain_id is required")
     if not record_type:
         return error_response("type is required")
+    tag_error = _record_tag_error(arguments)
+    if tag_error is not None:
+        return error_response(tag_error)
     return None
 
 
@@ -145,6 +68,13 @@ def _validate_record_fields(
         except ValueError as exc:
             return error_response(str(exc))
     return None
+
+
+def _record_tag_error(arguments: dict[str, Any]) -> str | None:
+    """Validate the CAA tag argument with Go's exact message. Shared by record
+    create and update so both tools reject the same values.
+    """
+    return optional_enum_error(arguments, "tag", domain_pb2.DomainRecordCAATag.Value)
 
 
 def _domain_record_create_body(
@@ -175,7 +105,7 @@ async def handle_linode_domain_record_create(
     record_type = arguments.get("type", "")
 
     if is_dry_run(arguments):
-        fields_error = _record_create_error(domain_id, record_type)
+        fields_error = _record_create_error(domain_id, record_type, arguments)
         if fields_error is not None:
             return fields_error
         effect = (
@@ -199,7 +129,7 @@ async def handle_linode_domain_record_create(
     if not arguments.get("confirm"):
         return error_response("This creates a DNS record. Set confirm=true to proceed.")
 
-    fields_error = _record_create_error(domain_id, record_type)
+    fields_error = _record_create_error(domain_id, record_type, arguments)
     if fields_error is not None:
         return fields_error
 
@@ -212,11 +142,11 @@ async def handle_linode_domain_record_create(
     body = _domain_record_create_body(record_type, arguments)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        # retry=False because POST /domains/{id}/records is not idempotent: the
-        # zone accepts identical records side by side, so replaying after a
-        # transient failure leaves a duplicate RR the caller never learns about.
-        raw = await client.post_raw(
-            f"/domains/{int(domain_id)}/records", body, retry=False
+        # POST /domains/{id}/records is not idempotent: the zone accepts
+        # identical records side by side, so a replay leaves a duplicate RR the
+        # caller never learns about.
+        raw = await client.route_raw(
+            "linode_domain_record_create", int(domain_id), body=body, retry=False
         )
         rec_type = raw_str(raw, "type")
         rec_id = raw_int(raw, "id")
@@ -240,12 +170,17 @@ def create_linode_domain_record_update_tool() -> tuple[Tool, Capability]:
     ), Capability.Write
 
 
-def _record_update_error(domain_id: Any, record_id: Any) -> list[TextContent] | None:
+def _record_update_error(
+    domain_id: Any, record_id: Any, arguments: dict[str, Any]
+) -> list[TextContent] | None:
     """Validate record-update args; return an error response or None."""
     if not domain_id:
         return error_response("domain_id is required")
     if not record_id:
         return error_response("record_id is required")
+    tag_error = _record_tag_error(arguments)
+    if tag_error is not None:
+        return error_response(tag_error)
     return None
 
 
@@ -255,6 +190,12 @@ def _domain_record_update_body(arguments: dict[str, Any]) -> dict[str, Any]:
     for field in ("name", "target", "priority", "weight", "port", "ttl_sec"):
         value = arguments.get(field)
         if value is not None:
+            body[field] = value
+    # Falsy values are dropped, matching the omitempty tags on Go's
+    # UpdateDomainRecordRequest so both clients send the same bytes.
+    for field in ("service", "protocol", "tag"):
+        value = arguments.get(field)
+        if value:
             body[field] = value
     return body
 
@@ -289,7 +230,7 @@ async def handle_linode_domain_record_update(
     record_id = arguments.get("record_id", 0)
 
     if is_dry_run(arguments):
-        fields_error = _record_update_error(domain_id, record_id)
+        fields_error = _record_update_error(domain_id, record_id, arguments)
         if fields_error is not None:
             return fields_error
 
@@ -314,7 +255,7 @@ async def handle_linode_domain_record_update(
     if not arguments.get("confirm"):
         return error_response("This updates a DNS record. Set confirm=true to proceed.")
 
-    fields_error = _record_update_error(domain_id, record_id)
+    fields_error = _record_update_error(domain_id, record_id, arguments)
     if fields_error is not None:
         return fields_error
 
@@ -328,8 +269,8 @@ async def handle_linode_domain_record_update(
     body = _domain_record_update_body(arguments)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.put_raw(
-            f"/domains/{int(domain_id)}/records/{int(record_id)}", body
+        raw = await client.route_raw(
+            "linode_domain_record_update", int(domain_id), int(record_id), body=body
         )
         return serialize_api_response(
             {
@@ -354,40 +295,6 @@ def create_linode_domain_record_delete_tool() -> tuple[Tool, Capability]:
     ), Capability.Destroy
 
 
-async def _domain_record_delete_two_stage(
-    arguments: dict[str, Any], cfg: Config, domain_id: int, record_id: int
-) -> list[TextContent] | None:
-    """Run the plan/apply flow when mode is plan/apply, else None to fall through."""
-    if arguments.get("mode") not in ("plan", "apply"):
-        return None
-
-    async def _ts_fetch(client: RetryableClient) -> Any:
-        return await client.get_domain_record(domain_id, record_id)
-
-    async def _ts_call(client: RetryableClient) -> dict[str, Any]:
-        await client.delete_domain_record(domain_id, record_id)
-        message = f"Record {record_id} removed successfully from domain {domain_id}"
-        return serialize_api_response(
-            {
-                "message": message,
-                "domain_id": domain_id,
-                "record_id": record_id,
-            },
-            domain_pb2.DomainRecordDeleteResponse(),
-        )
-
-    return await run_two_stage_destroy(
-        cfg,
-        arguments,
-        tool_name="linode_domain_record_delete",
-        method="DELETE",
-        path=f"/domains/{domain_id}/records/{record_id}",
-        fetch_state=_ts_fetch,
-        execute=_ts_call,
-        hash_ignore=hash_ignore_fields("DomainRecord"),
-    )
-
-
 async def handle_linode_domain_record_delete(
     arguments: dict[str, Any], cfg: Config
 ) -> list[TextContent]:
@@ -395,50 +302,31 @@ async def handle_linode_domain_record_delete(
     domain_id = arguments.get("domain_id", 0)
     record_id = arguments.get("record_id", 0)
 
-    # ID validation runs before both branches: dry-run and real call both
-    # need both IDs, and the spec is explicit that dry-run errors out on
-    # missing required args the same way the real call would.
+    # ID validation runs before every branch, including the plan/apply one:
+    # each of them needs both IDs, and the spec is explicit that a dry run
+    # errors out on a missing required arg the same way the real call would.
     if not domain_id:
         return error_response("domain_id is required")
     if not record_id:
         return error_response("record_id is required")
 
-    two_stage = await _domain_record_delete_two_stage(
-        arguments, cfg, int(domain_id), int(record_id)
-    )
-    if two_stage is not None:
-        return two_stage
+    async def _fetch(client: RetryableClient) -> Any:
+        return await client.get_domain_record(int(domain_id), int(record_id))
 
-    if is_dry_run(arguments):
-
-        async def _fetch(client: RetryableClient) -> Any:
-            return await client.get_domain_record(int(domain_id), int(record_id))
-
-        return await execute_dry_run(
-            cfg,
-            arguments,
-            "linode_domain_record_delete",
-            "DELETE",
-            f"/domains/{int(domain_id)}/records/{int(record_id)}",
-            _fetch,
-        )
-
-    if not arguments.get("confirm"):
-        return error_response(
-            "This deletes a DNS record and is irreversible. "
-            "Set confirm=true to proceed."
-        )
-
-    async def _call(client: RetryableClient) -> dict[str, Any]:
+    async def _execute(client: RetryableClient) -> None:
         await client.delete_domain_record(int(domain_id), int(record_id))
-        message = f"Record {record_id} removed successfully from domain {domain_id}"
-        return serialize_api_response(
-            {
-                "message": message,
-                "domain_id": domain_id,
-                "record_id": record_id,
-            },
-            domain_pb2.DomainRecordDeleteResponse(),
-        )
 
-    return await execute_tool(cfg, arguments, "delete DNS record", _call)
+    return await run_destructive_tool(
+        cfg,
+        arguments,
+        tool="linode_domain_record_delete",
+        error_action="delete DNS record",
+        id_args={"domain_id": int(domain_id), "record_id": int(record_id)},
+        fetch_state=_fetch,
+        execute=_execute,
+        # Undeclared in the contract, like every delete whose prose names two
+        # resources; see the note on linode_domain_delete.
+        success_message=(
+            f"Record {record_id} removed successfully from domain {domain_id}"
+        ),
+    )

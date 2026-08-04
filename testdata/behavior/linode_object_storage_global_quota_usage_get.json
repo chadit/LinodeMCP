@@ -1,0 +1,17 @@
+{
+  "tool": "linode_object_storage_global_quota_usage_get",
+  "description": "Global quota usage get requires obj_global_quota_id and then GETs the usage sub-resource of that quota.",
+  "cases": [
+    {
+      "name": "requires obj_global_quota_id",
+      "args": {},
+      "expect_error": "obj_global_quota_id is required"
+    },
+    {
+      "name": "gets global quota usage",
+      "args": { "obj_global_quota_id": "obj-objects-global" },
+      "api_response": { "quota_limit": 100 },
+      "expect_request": { "method": "GET", "path": "/object-storage/global-quotas/obj-objects-global/usage" }
+    }
+  ]
+}

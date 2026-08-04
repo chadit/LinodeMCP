@@ -4,48 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
 
-const (
-	endpointInstances                       = "/linode/instances"
-	endpointRegions                         = "/regions"
-	endpointRegionsAvailability             = "/regions/availability"
-	endpointRegionAvailability              = endpointRegions + "/%s/availability"
-	endpointKernels                         = "/linode/kernels"
-	endpointTypes                           = "/linode/types"
-	endpointImages                          = "/images"
-	endpointImagesUpload                    = "/images/upload"
-	endpointImageShareGroups                = "/images/sharegroups"
-	endpointImageShareGroupMembershipCreate = "/images/sharegroups/tokens"
-	endpointStackScripts                    = "/linode/stackscripts"
-)
+// The *Proto methods below decode the API JSON straight into the generated proto
+// message. Each names the same tool as its struct twin, so both resolve the one
+// declared route, and the paginated list helpers add page/page_size through
+// withPaginationQuery, which keeps the two runtime requests identical.
 
-// httpListInstancesProto retrieves all Linode instances as proto messages,
-// decoded directly from the API JSON for the proto-backed read path.
+// httpListInstancesProto lists Linode instances.
 func (c *Client) httpListInstancesProto(ctx context.Context, page, pageSize int) ([]*linodev1.Instance, error) {
-	return listProtoElementsPaginated(ctx, c, "ListInstances", endpointInstances, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListInstances",
+		"linode_instance_list", "", nil, page, pageSize,
 		func() *linodev1.Instance { return &linodev1.Instance{} })
 }
 
-// httpGetInstanceProto retrieves a single Linode instance by ID as a proto
-// message, decoded directly from the API JSON for the proto-backed read path.
+// httpGetInstanceProto retrieves one Linode instance by ID.
 func (c *Client) httpGetInstanceProto(ctx context.Context, instanceID int) (*linodev1.Instance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d", instanceID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetInstance", Err: err}
+		return nil, wrapRequestError("GetInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -63,11 +47,9 @@ func (c *Client) httpGetInstance(ctx context.Context, instanceID int) (*Instance
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d", instanceID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_get", nil, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetInstance", Err: err}
+		return nil, wrapRequestError("GetInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -81,8 +63,8 @@ func (c *Client) httpGetInstance(ctx context.Context, instanceID int) (*Instance
 }
 
 // httpGetInstanceStatsByYearMonthProto retrieves monthly statistics for a Linode
-// instance as a proto message. Like the daily stats endpoint, the graphs nest
-// under a top-level "data" object modeled by InstanceStats.
+// instance. Like the daily stats endpoint, the graphs nest under a top-level
+// "data" object modeled by InstanceStats.
 func (c *Client) httpGetInstanceStatsByYearMonthProto(ctx context.Context, linodeID, year, month int) (*linodev1.InstanceStats, error) {
 	if linodeID <= 0 {
 		return nil, ErrLinodeIDPositive
@@ -99,11 +81,9 @@ func (c *Client) httpGetInstanceStatsByYearMonthProto(ctx context.Context, linod
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d/stats/%d/%d", linodeID, year, month)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_stats_month_get", nil, linodeID, year, month)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetInstanceStatsByYearMonth", Err: err}
+		return nil, wrapRequestError("GetInstanceStatsByYearMonth", err)
 	}
 
 	defer drainClose(resp)
@@ -117,7 +97,7 @@ func (c *Client) httpGetInstanceStatsByYearMonthProto(ctx context.Context, linod
 }
 
 // httpGetInstanceTransferProto retrieves the current month's network transfer
-// pool for a Linode instance as a proto message.
+// pool for a Linode instance.
 func (c *Client) httpGetInstanceTransferProto(ctx context.Context, linodeID int) (*linodev1.InstanceTransfer, error) {
 	if linodeID <= 0 {
 		return nil, ErrLinodeIDPositive
@@ -126,12 +106,9 @@ func (c *Client) httpGetInstanceTransferProto(ctx context.Context, linodeID int)
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	encodedLinodeID := url.PathEscape(strconv.Itoa(linodeID))
-	endpoint := fmt.Sprintf(endpointInstances+"/%s/transfer", encodedLinodeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_transfer_get", nil, linodeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetInstanceTransfer", Err: err}
+		return nil, wrapRequestError("GetInstanceTransfer", err)
 	}
 
 	defer drainClose(resp)
@@ -144,10 +121,10 @@ func (c *Client) httpGetInstanceTransferProto(ctx context.Context, linodeID int)
 	return transfer, nil
 }
 
-// httpListRegionsProto retrieves all regions as proto messages for the
-// proto-backed list path, sharing the decode tail with every other proto list.
+// httpListRegionsProto lists regions.
 func (c *Client) httpListRegionsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Region, error) {
-	return listProtoElementsPaginated(ctx, c, "ListRegions", endpointRegions, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListRegions",
+		"linode_region_list", "", nil, page, pageSize,
 		func() *linodev1.Region { return &linodev1.Region{} })
 }
 
@@ -156,11 +133,9 @@ func (c *Client) httpGetRegion(ctx context.Context, regionID string) (*Region, e
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointRegions + "/" + url.PathEscape(regionID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_region_get", nil, regionID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetRegion", Err: err}
+		return nil, wrapRequestError("GetRegion", err)
 	}
 
 	defer drainClose(resp)
@@ -173,16 +148,14 @@ func (c *Client) httpGetRegion(ctx context.Context, regionID string) (*Region, e
 	return &region, nil
 }
 
-// httpGetRegionProto retrieves one region as a proto message.
+// httpGetRegionProto retrieves one region.
 func (c *Client) httpGetRegionProto(ctx context.Context, regionID string) (*linodev1.Region, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointRegions + "/" + url.PathEscape(regionID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_region_get", nil, regionID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetRegion", Err: err}
+		return nil, wrapRequestError("GetRegion", err)
 	}
 
 	defer drainClose(resp)
@@ -195,39 +168,34 @@ func (c *Client) httpGetRegionProto(ctx context.Context, regionID string) (*lino
 	return region, nil
 }
 
-// httpListRegionsAvailabilityProto retrieves compute type availability across
-// regions as proto RegionAvailability messages for the proto-backed list path.
+// httpListRegionsAvailabilityProto lists compute type availability across regions.
 func (c *Client) httpListRegionsAvailabilityProto(ctx context.Context) ([]*linodev1.RegionAvailability, error) {
-	return listProtoElements(ctx, c, "ListRegionsAvailability", endpointRegionsAvailability,
+	return listProtoElementsRouted(ctx, c, "ListRegionsAvailability",
+		"linode_region_availability_list", "", nil,
 		func() *linodev1.RegionAvailability { return &linodev1.RegionAvailability{} })
 }
 
-// httpGetRegionAvailabilityProto retrieves compute type availability for one
-// region as proto RegionAvailability messages for the proto-backed read path.
-// Unlike the cross-region list (a {data:[...]} page envelope), this endpoint
-// documents its 200 body as a bare top-level JSON array, so the strict bare
-// fetcher decodes the array directly and rejects anything else while sharing
-// the per-element decode tail, keeping the per-region get and the list
-// byte-identical element-for-element.
+// httpGetRegionAvailabilityProto lists compute type availability for one region.
+// This endpoint documents its 200 body as a bare top-level JSON array, not the
+// usual {data:[...]} page envelope, so the strict bare fetcher decodes the array
+// directly and rejects anything else.
 func (c *Client) httpGetRegionAvailabilityProto(ctx context.Context, regionID string) ([]*linodev1.RegionAvailability, error) {
-	endpoint := fmt.Sprintf(endpointRegionAvailability, url.PathEscape(regionID))
-
-	return listProtoElementsBare(ctx, c, "GetRegionAvailability", endpoint,
+	return listProtoElementsBareRouted(ctx, c, "GetRegionAvailability",
+		"linode_region_availability_get", "", []any{regionID},
 		func() *linodev1.RegionAvailability { return &linodev1.RegionAvailability{} })
 }
 
-// httpListKernelsProto retrieves kernels as proto messages for the proto-backed
-// list path. The page/page_size pair flows through withPaginationQuery, so the
-// request matches httpListKernels.
+// httpListKernelsProto lists kernels.
 func (c *Client) httpListKernelsProto(ctx context.Context, page, pageSize int) ([]*linodev1.Kernel, error) {
-	return listProtoElementsPaginated(ctx, c, "ListKernels", endpointKernels, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListKernels",
+		"linode_kernel_list", "", nil, page, pageSize,
 		func() *linodev1.Kernel { return &linodev1.Kernel{} })
 }
 
-// httpListTypesProto retrieves all available Linode instance types as proto
-// messages, decoded directly from the API JSON for the proto-backed list path.
+// httpListTypesProto lists the available Linode instance types.
 func (c *Client) httpListTypesProto(ctx context.Context) ([]*linodev1.InstanceType, error) {
-	return listProtoElements(ctx, c, "ListTypes", endpointTypes,
+	return listProtoElementsRouted(ctx, c, "ListTypes",
+		"linode_type_list", "", nil,
 		func() *linodev1.InstanceType { return &linodev1.InstanceType{} })
 }
 
@@ -236,11 +204,9 @@ func (c *Client) httpGetType(ctx context.Context, typeID string) (*InstanceType,
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointTypes + "/" + url.PathEscape(typeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_type_get", nil, typeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetType", Err: err}
+		return nil, wrapRequestError("GetType", err)
 	}
 
 	defer drainClose(resp)
@@ -253,16 +219,14 @@ func (c *Client) httpGetType(ctx context.Context, typeID string) (*InstanceType,
 	return &instanceType, nil
 }
 
-// httpGetTypeProto retrieves one instance type as a proto message.
+// httpGetTypeProto retrieves one instance type.
 func (c *Client) httpGetTypeProto(ctx context.Context, typeID string) (*linodev1.InstanceType, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointTypes + "/" + url.PathEscape(typeID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_type_get", nil, typeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetType", Err: err}
+		return nil, wrapRequestError("GetType", err)
 	}
 
 	defer drainClose(resp)
@@ -275,16 +239,14 @@ func (c *Client) httpGetTypeProto(ctx context.Context, typeID string) (*linodev1
 	return instanceType, nil
 }
 
-// httpGetKernelProto retrieves one kernel as a proto message.
+// httpGetKernelProto retrieves one kernel.
 func (c *Client) httpGetKernelProto(ctx context.Context, kernelID string) (*linodev1.Kernel, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointKernels + "/" + url.PathEscape(kernelID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_kernel_get", nil, kernelID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetKernel", Err: err}
+		return nil, wrapRequestError("GetKernel", err)
 	}
 
 	defer drainClose(resp)
@@ -297,10 +259,10 @@ func (c *Client) httpGetKernelProto(ctx context.Context, kernelID string) (*lino
 	return kernel, nil
 }
 
-// httpListImagesProto retrieves images as proto messages for the proto-backed
-// list path, decoded directly from the same /images endpoint httpListImages uses.
+// httpListImagesProto lists images.
 func (c *Client) httpListImagesProto(ctx context.Context, page, pageSize int) ([]*linodev1.Image, error) {
-	return listProtoElementsPaginated(ctx, c, "ListImages", endpointImages, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListImages",
+		"linode_image_list", "", nil, page, pageSize,
 		func() *linodev1.Image { return &linodev1.Image{} })
 }
 
@@ -309,11 +271,9 @@ func (c *Client) httpGetImage(ctx context.Context, imageID string) (*Image, erro
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_get", nil, imageID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetImage", Err: err}
+		return nil, wrapRequestError("GetImage", err)
 	}
 
 	defer drainClose(resp)
@@ -326,16 +286,14 @@ func (c *Client) httpGetImage(ctx context.Context, imageID string) (*Image, erro
 	return &image, nil
 }
 
-// httpGetImageProto retrieves an image and decodes it as a proto message.
+// httpGetImageProto retrieves one image.
 func (c *Client) httpGetImageProto(ctx context.Context, imageID string) (*linodev1.Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_get", nil, imageID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetImage", Err: err}
+		return nil, wrapRequestError("GetImage", err)
 	}
 
 	defer drainClose(resp)
@@ -353,11 +311,9 @@ func (c *Client) httpDeleteImage(ctx context.Context, imageID string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_delete", nil, imageID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteImage", Err: err}
+		return wrapRequestError("DeleteImage", err)
 	}
 
 	defer drainClose(resp)
@@ -365,17 +321,14 @@ func (c *Client) httpDeleteImage(ctx context.Context, imageID string) error {
 	return c.handleResponse(resp, nil)
 }
 
-// httpReplicateImageProto replicates an image and decodes the response as a proto
-// message for the proto-backed write path.
+// httpReplicateImageProto replicates an image.
 func (c *Client) httpReplicateImageProto(ctx context.Context, imageID string, req *ReplicateImageRequest) (*linodev1.Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID) + "/regions"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_replicate", req, imageID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "ReplicateImage", Err: err}
+		return nil, wrapRequestError("ReplicateImage", err)
 	}
 
 	defer drainClose(resp)
@@ -388,7 +341,7 @@ func (c *Client) httpReplicateImageProto(ctx context.Context, imageID string, re
 	return image, nil
 }
 
-// httpUpdateImageProto updates an image and decodes the response as a proto message.
+// httpUpdateImageProto updates an image.
 func (c *Client) httpUpdateImageProto(ctx context.Context, imageID string, req *UpdateImageRequest) (*linodev1.Image, error) {
 	if req == nil {
 		return nil, ErrUpdateImageRequestRequired
@@ -397,11 +350,9 @@ func (c *Client) httpUpdateImageProto(ctx context.Context, imageID string, req *
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_update", req, imageID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateImage", Err: err}
+		return nil, wrapRequestError("UpdateImage", err)
 	}
 
 	defer drainClose(resp)
@@ -414,11 +365,10 @@ func (c *Client) httpUpdateImageProto(ctx context.Context, imageID string, req *
 	return image, nil
 }
 
-// httpListImageShareGroupsProto retrieves owned image share groups as proto
-// messages for the proto-backed list path. The page/page_size pair flows through
-// withPaginationQuery, so the request matches httpListImageShareGroups.
+// httpListImageShareGroupsProto lists owned image share groups.
 func (c *Client) httpListImageShareGroupsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ImageShareGroup, error) {
-	return listProtoElementsPaginated(ctx, c, "ListImageShareGroups", endpointImageShareGroups, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListImageShareGroups",
+		"linode_image_sharegroup_list", "", nil, page, pageSize,
 		func() *linodev1.ImageShareGroup { return &linodev1.ImageShareGroup{} })
 }
 
@@ -427,11 +377,9 @@ func (c *Client) httpGetImageShareGroup(ctx context.Context, shareGroupID int) (
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointImageShareGroups+"/%d", shareGroupID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_get", nil, shareGroupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetImageShareGroup", Err: err}
+		return nil, wrapRequestError("GetImageShareGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -444,16 +392,14 @@ func (c *Client) httpGetImageShareGroup(ctx context.Context, shareGroupID int) (
 	return &shareGroup, nil
 }
 
-// httpGetImageShareGroupProto retrieves one image share group as a proto message.
+// httpGetImageShareGroupProto retrieves one image share group.
 func (c *Client) httpGetImageShareGroupProto(ctx context.Context, shareGroupID int) (*linodev1.ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointImageShareGroups+"/%d", shareGroupID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_get", nil, shareGroupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetImageShareGroup", Err: err}
+		return nil, wrapRequestError("GetImageShareGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -466,53 +412,35 @@ func (c *Client) httpGetImageShareGroupProto(ctx context.Context, shareGroupID i
 	return shareGroup, nil
 }
 
-// httpListImageShareGroupsByImageProto retrieves the share groups that contain an
-// image as proto messages for the proto-backed list path. The endpoint is
-// formatted with the same encoded image-id path httpListImageShareGroupsByImage
-// uses, then listProtoElementsPaginated adds page/page_size via
-// withPaginationQuery, so the runtime request matches exactly.
+// httpListImageShareGroupsByImageProto lists the share groups that contain an image.
 func (c *Client) httpListImageShareGroupsByImageProto(ctx context.Context, imageID string, page, pageSize int) ([]*linodev1.ImageShareGroup, error) {
-	endpoint := endpointImages + "/" + escapeImageIDSegment(imageID) + "/sharegroups"
-
-	return listProtoElementsPaginated(ctx, c, "ListImageShareGroupsByImage", endpoint, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListImageShareGroupsByImage",
+		"linode_image_sharegroup_by_image_list", "", []any{imageID}, page, pageSize,
 		func() *linodev1.ImageShareGroup { return &linodev1.ImageShareGroup{} })
 }
 
-// httpListImagesByShareGroupProto retrieves the images shared in an owned image
-// share group as proto messages for the proto-backed list path. The endpoint is
-// formatted with the same encoded share-group-id path httpListImagesByShareGroup
-// uses, then listProtoElementsPaginated adds page/page_size via
-// withPaginationQuery, so the runtime request matches exactly.
+// httpListImagesByShareGroupProto lists the images shared in an owned share group.
 func (c *Client) httpListImagesByShareGroupProto(ctx context.Context, shareGroupID, page, pageSize int) ([]*linodev1.Image, error) {
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/images"
-
-	return listProtoElementsPaginated(ctx, c, "ListImagesByShareGroup", endpoint, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListImagesByShareGroup",
+		"linode_image_sharegroup_image_list", "", []any{shareGroupID}, page, pageSize,
 		func() *linodev1.Image { return &linodev1.Image{} })
 }
 
-// httpListMembersByImageShareGroupProto retrieves members linked to an owned
-// image share group as proto messages for the proto-backed list path. The
-// endpoint is formatted with the same encoded share-group-id path
-// httpListMembersByImageShareGroup uses, then listProtoElementsPaginated adds
-// page/page_size via withPaginationQuery, so the runtime request matches exactly.
+// httpListMembersByImageShareGroupProto lists members linked to an owned share group.
 func (c *Client) httpListMembersByImageShareGroupProto(ctx context.Context, shareGroupID, page, pageSize int) ([]*linodev1.ImageShareGroupMember, error) {
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members"
-
-	return listProtoElementsPaginated(ctx, c, "ListMembersByImageShareGroup", endpoint, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListMembersByImageShareGroup",
+		"linode_image_sharegroup_member_list", "", []any{shareGroupID}, page, pageSize,
 		func() *linodev1.ImageShareGroupMember { return &linodev1.ImageShareGroupMember{} })
 }
 
-// httpGetImageShareGroupMemberTokenProto retrieves one image share group member
-// token as a proto message.
+// httpGetImageShareGroupMemberTokenProto retrieves one share group member token.
 func (c *Client) httpGetImageShareGroupMemberTokenProto(ctx context.Context, shareGroupID int, tokenUUID string) (*linodev1.ImageShareGroupMember, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members/" + escapeImageShareGroupTokenUUID(tokenUUID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_member_token_get", nil, shareGroupID, tokenUUID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetImageShareGroupMemberToken", Err: err}
+		return nil, wrapRequestError("GetImageShareGroupMemberToken", err)
 	}
 
 	defer drainClose(resp)
@@ -525,17 +453,14 @@ func (c *Client) httpGetImageShareGroupMemberTokenProto(ctx context.Context, sha
 	return member, nil
 }
 
-// httpUpdateImageShareGroupMemberProto updates a member token and decodes the
-// response as a proto message for the proto-backed write path.
+// httpUpdateImageShareGroupMemberProto updates one share group member token.
 func (c *Client) httpUpdateImageShareGroupMemberProto(ctx context.Context, shareGroupID int, tokenUUID string, req *UpdateImageShareGroupMemberRequest) (*linodev1.ImageShareGroupMember, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members/" + escapeImageShareGroupTokenUUID(tokenUUID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_member_token_update", req, shareGroupID, tokenUUID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateImageShareGroupMember", Err: err}
+		return nil, wrapRequestError("UpdateImageShareGroupMember", err)
 	}
 
 	defer drainClose(resp)
@@ -548,15 +473,14 @@ func (c *Client) httpUpdateImageShareGroupMemberProto(ctx context.Context, share
 	return member, nil
 }
 
-// httpCreateImageShareGroupProto creates a share group and decodes the response
-// as a proto message for the proto-backed write path.
+// httpCreateImageShareGroupProto creates an image share group.
 func (c *Client) httpCreateImageShareGroupProto(ctx context.Context, req *CreateImageShareGroupRequest) (*linodev1.ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImageShareGroups, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateImageShareGroup", Err: err}
+		return nil, wrapRequestError("CreateImageShareGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -569,17 +493,14 @@ func (c *Client) httpCreateImageShareGroupProto(ctx context.Context, req *Create
 	return shareGroup, nil
 }
 
-// httpAddImageShareGroupImagesProto adds images to a share group and decodes the
-// response image as a proto message for the proto-backed write path.
+// httpAddImageShareGroupImagesProto adds images to a share group.
 func (c *Client) httpAddImageShareGroupImagesProto(ctx context.Context, shareGroupID int, req *AddImageShareGroupImagesRequest) (*linodev1.Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/images"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_image_add", req, shareGroupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "AddImageShareGroupImages", Err: err}
+		return nil, wrapRequestError("AddImageShareGroupImages", err)
 	}
 
 	defer drainClose(resp)
@@ -592,17 +513,15 @@ func (c *Client) httpAddImageShareGroupImagesProto(ctx context.Context, shareGro
 	return image, nil
 }
 
-// httpAddImageShareGroupMembersProto adds members to a share group and decodes the
-// returned parent share group as a proto message for the proto-backed write path.
+// httpAddImageShareGroupMembersProto adds members to a share group, returning the
+// parent share group the API echoes back.
 func (c *Client) httpAddImageShareGroupMembersProto(ctx context.Context, shareGroupID int, req *AddImageShareGroupMembersRequest) (*linodev1.ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_member_add", req, shareGroupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "AddImageShareGroupMembers", Err: err}
+		return nil, wrapRequestError("AddImageShareGroupMembers", err)
 	}
 
 	defer drainClose(resp)
@@ -620,11 +539,9 @@ func (c *Client) httpDeleteImageShareGroupImage(ctx context.Context, shareGroupI
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/images/" + escapeImageShareGroupID(imageID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_image_delete", nil, shareGroupID, imageID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteImageShareGroupImage", Err: err}
+		return wrapRequestError("DeleteImageShareGroupImage", err)
 	}
 
 	defer drainClose(resp)
@@ -632,17 +549,14 @@ func (c *Client) httpDeleteImageShareGroupImage(ctx context.Context, shareGroupI
 	return c.handleResponse(resp, nil)
 }
 
-// httpUpdateImageShareGroupProto updates a share group and decodes the response
-// as a proto message for the proto-backed write path.
+// httpUpdateImageShareGroupProto updates an image share group.
 func (c *Client) httpUpdateImageShareGroupProto(ctx context.Context, shareGroupID int, req *UpdateImageShareGroupRequest) (*linodev1.ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_update", req, shareGroupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateImageShareGroup", Err: err}
+		return nil, wrapRequestError("UpdateImageShareGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -655,17 +569,14 @@ func (c *Client) httpUpdateImageShareGroupProto(ctx context.Context, shareGroupI
 	return shareGroup, nil
 }
 
-// httpUpdateImageShareGroupImageProto updates a shared image and decodes the
-// response as a proto message for the proto-backed write path.
+// httpUpdateImageShareGroupImageProto updates one shared image in a share group.
 func (c *Client) httpUpdateImageShareGroupImageProto(ctx context.Context, shareGroupID int, imageID string, req *UpdateImageShareGroupImageRequest) (*linodev1.Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/images/" + escapeImageIDSegment(imageID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_image_update", req, shareGroupID, imageID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateImageShareGroupImage", Err: err}
+		return nil, wrapRequestError("UpdateImageShareGroupImage", err)
 	}
 
 	defer drainClose(resp)
@@ -683,11 +594,9 @@ func (c *Client) httpDeleteImageShareGroup(ctx context.Context, shareGroupID int
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointImageShareGroups+"/%d", shareGroupID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_delete", nil, shareGroupID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteImageShareGroup", Err: err}
+		return wrapRequestError("DeleteImageShareGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -695,24 +604,21 @@ func (c *Client) httpDeleteImageShareGroup(ctx context.Context, shareGroupID int
 	return c.handleResponse(resp, nil)
 }
 
-// httpListImageShareGroupTokensProto retrieves image share group tokens for the
-// user as proto messages for the proto-backed list path. The page/page_size pair
-// flows through withPaginationQuery, so the request matches
-// httpListImageShareGroupTokens.
+// httpListImageShareGroupTokensProto lists the user's image share group tokens.
 func (c *Client) httpListImageShareGroupTokensProto(ctx context.Context, page, pageSize int) ([]*linodev1.ImageShareGroupToken, error) {
-	return listProtoElementsPaginated(ctx, c, "ListImageShareGroupTokens", endpointImageShareGroups+"/tokens", page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListImageShareGroupTokens",
+		"linode_image_sharegroup_token_list", "", nil, page, pageSize,
 		func() *linodev1.ImageShareGroupToken { return &linodev1.ImageShareGroupToken{} })
 }
 
-// httpCreateImageShareGroupTokenProto creates a membership token and decodes the
-// response as a proto message for the proto-backed write path.
+// httpCreateImageShareGroupTokenProto creates a membership token.
 func (c *Client) httpCreateImageShareGroupTokenProto(ctx context.Context, req *CreateImageShareGroupTokenRequest) (*linodev1.ImageShareGroupToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImageShareGroupMembershipCreate, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_token_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateImageShareGroupToken", Err: err}
+		return nil, wrapRequestError("CreateImageShareGroupToken", err)
 	}
 
 	defer drainClose(resp)
@@ -725,17 +631,14 @@ func (c *Client) httpCreateImageShareGroupTokenProto(ctx context.Context, req *C
 	return token, nil
 }
 
-// httpGetImageShareGroupTokenProto retrieves one image share group token as a
-// proto message.
+// httpGetImageShareGroupTokenProto retrieves one image share group token.
 func (c *Client) httpGetImageShareGroupTokenProto(ctx context.Context, tokenUUID string) (*linodev1.ImageShareGroupToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_token_get", nil, tokenUUID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetImageShareGroupToken", Err: err}
+		return nil, wrapRequestError("GetImageShareGroupToken", err)
 	}
 
 	defer drainClose(resp)
@@ -748,29 +651,21 @@ func (c *Client) httpGetImageShareGroupTokenProto(ctx context.Context, tokenUUID
 	return token, nil
 }
 
-// httpListImagesByShareGroupTokenProto retrieves the images available through an
-// image share group token as proto messages for the proto-backed list path. The
-// endpoint is formatted with the same encoded token-uuid path
-// httpListImagesByShareGroupToken uses, then listProtoElementsPaginated adds
-// page/page_size via withPaginationQuery, so the runtime request matches exactly.
+// httpListImagesByShareGroupTokenProto lists the images a membership token reaches.
 func (c *Client) httpListImagesByShareGroupTokenProto(ctx context.Context, tokenUUID string, page, pageSize int) ([]*linodev1.Image, error) {
-	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID) + "/sharegroup/images"
-
-	return listProtoElementsPaginated(ctx, c, "ListImagesByShareGroupToken", endpoint, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListImagesByShareGroupToken",
+		"linode_image_sharegroup_token_image_list", "", []any{tokenUUID}, page, pageSize,
 		func() *linodev1.Image { return &linodev1.Image{} })
 }
 
-// httpUpdateImageShareGroupTokenProto updates a membership token label and decodes
-// the response as a proto message for the proto-backed write path.
+// httpUpdateImageShareGroupTokenProto updates a membership token label.
 func (c *Client) httpUpdateImageShareGroupTokenProto(ctx context.Context, tokenUUID string, req *UpdateImageShareGroupTokenRequest) (*linodev1.ImageShareGroupToken, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroupMembershipCreate + "/" + escapeImageShareGroupTokenUUID(tokenUUID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_token_update", req, tokenUUID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateImageShareGroupToken", Err: err}
+		return nil, wrapRequestError("UpdateImageShareGroupToken", err)
 	}
 
 	defer drainClose(resp)
@@ -788,11 +683,9 @@ func (c *Client) httpGetImageShareGroupByToken(ctx context.Context, tokenUUID st
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID) + "/sharegroup"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_by_token_get", nil, tokenUUID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetImageShareGroupByToken", Err: err}
+		return nil, wrapRequestError("GetImageShareGroupByToken", err)
 	}
 
 	defer drainClose(resp)
@@ -805,17 +698,14 @@ func (c *Client) httpGetImageShareGroupByToken(ctx context.Context, tokenUUID st
 	return &shareGroup, nil
 }
 
-// httpGetImageShareGroupByTokenProto resolves a token to its parent share group
-// as a proto message.
+// httpGetImageShareGroupByTokenProto resolves a token to its parent share group.
 func (c *Client) httpGetImageShareGroupByTokenProto(ctx context.Context, tokenUUID string) (*linodev1.ImageShareGroup, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID) + "/sharegroup"
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_by_token_get", nil, tokenUUID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetImageShareGroupByToken", Err: err}
+		return nil, wrapRequestError("GetImageShareGroupByToken", err)
 	}
 
 	defer drainClose(resp)
@@ -828,33 +718,14 @@ func (c *Client) httpGetImageShareGroupByTokenProto(ctx context.Context, tokenUU
 	return shareGroup, nil
 }
 
-func escapeImageShareGroupTokenUUID(tokenUUID string) string {
-	escapedTokenUUID := url.PathEscape(tokenUUID)
-	if tokenUUID == "." || tokenUUID == ".." {
-		escapedTokenUUID = strings.ReplaceAll(escapedTokenUUID, ".", "%2E")
-	}
-
-	return escapedTokenUUID
-}
-
-func escapeImageShareGroupID(shareGroupID int) string {
-	return strings.ReplaceAll(url.PathEscape(strconv.Itoa(shareGroupID)), ".", "%2E")
-}
-
-func escapeImageIDSegment(imageID string) string {
-	return strings.ReplaceAll(url.PathEscape(imageID), ".", "%2E")
-}
-
 // DeleteImageShareGroupToken removes one image share group membership token.
 func (c *Client) httpDeleteImageShareGroupToken(ctx context.Context, tokenUUID string) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/tokens/" + escapeImageShareGroupTokenUUID(tokenUUID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_token_delete", nil, tokenUUID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteImageShareGroupToken", Err: err}
+		return wrapRequestError("DeleteImageShareGroupToken", err)
 	}
 
 	defer drainClose(resp)
@@ -867,11 +738,9 @@ func (c *Client) httpDeleteImageShareGroupMemberToken(ctx context.Context, share
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointImageShareGroups + "/" + escapeImageShareGroupID(shareGroupID) + "/members/" + escapeImageShareGroupTokenUUID(tokenUUID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_sharegroup_member_token_delete", nil, shareGroupID, tokenUUID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteImageShareGroupMemberToken", Err: err}
+		return wrapRequestError("DeleteImageShareGroupMemberToken", err)
 	}
 
 	defer drainClose(resp)
@@ -879,14 +748,14 @@ func (c *Client) httpDeleteImageShareGroupMemberToken(ctx context.Context, share
 	return c.handleResponse(resp, nil)
 }
 
-// httpCreateImageProto creates an image and decodes the response as a proto message.
+// httpCreateImageProto creates an image.
 func (c *Client) httpCreateImageProto(ctx context.Context, req *CreateImageRequest) (*linodev1.Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImages, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateImage", Err: err}
+		return nil, wrapRequestError("CreateImage", err)
 	}
 
 	defer drainClose(resp)
@@ -899,17 +768,16 @@ func (c *Client) httpCreateImageProto(ctx context.Context, req *CreateImageReque
 	return image, nil
 }
 
-// httpUploadImageProto creates an image upload target and returns the one-time
-// upload URL plus the created image decoded as a proto message. The endpoint body
-// is {image, upload_to}; the image sub-object is protojson-decoded into the proto
-// Image element (DiscardUnknown) so the output matches the Python serializer.
+// httpUploadImageProto creates an image upload target, returning the one-time
+// upload URL plus the created image. The body is {image, upload_to}, so the image
+// sub-object is protojson-decoded here to match the Python serializer.
 func (c *Client) httpUploadImageProto(ctx context.Context, req *UploadImageRequest) (*linodev1.Image, string, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointImagesUpload, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_image_upload", req)
 	if err != nil {
-		return nil, "", &NetworkError{Operation: "UploadImage", Err: err}
+		return nil, "", wrapRequestError("UploadImage", err)
 	}
 
 	defer drainClose(resp)
@@ -930,12 +798,12 @@ func (c *Client) httpUploadImageProto(ctx context.Context, req *UploadImageReque
 	return image, envelope.UploadTo, nil
 }
 
-// httpListStackScriptsProto retrieves StackScripts as proto messages for the
-// proto-backed list path. The endpoint returns a {data, page, ...} page
-// envelope, so listProtoElements reads the data field; the tool filters
-// (is_public / mine / label_contains) are applied client-side by the factory.
-func (c *Client) httpListStackScriptsProto(ctx context.Context) ([]*linodev1.StackScript, error) {
-	return listProtoElements(ctx, c, "ListStackScripts", endpointStackScripts,
+// httpListStackScriptsProto lists one page of StackScripts. The tool filters
+// (is_public / mine / label_contains) are applied client-side by the factory, to
+// the page this returns.
+func (c *Client) httpListStackScriptsProto(ctx context.Context, page, pageSize int) ([]*linodev1.StackScript, error) {
+	return listProtoElementsPaginatedRouted(ctx, c, "ListStackScripts",
+		"linode_stackscript_list", "", nil, page, pageSize,
 		func() *linodev1.StackScript { return &linodev1.StackScript{} })
 }
 
@@ -944,11 +812,9 @@ func (c *Client) httpGetStackScript(ctx context.Context, stackScriptID int) (*St
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointStackScripts + "/" + url.PathEscape(strconv.Itoa(stackScriptID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_stackscript_get", nil, stackScriptID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetStackScript", Err: err}
+		return nil, wrapRequestError("GetStackScript", err)
 	}
 
 	defer drainClose(resp)
@@ -961,16 +827,14 @@ func (c *Client) httpGetStackScript(ctx context.Context, stackScriptID int) (*St
 	return &script, nil
 }
 
-// httpGetStackScriptProto retrieves one StackScript as a proto message.
+// httpGetStackScriptProto retrieves one StackScript.
 func (c *Client) httpGetStackScriptProto(ctx context.Context, stackScriptID int) (*linodev1.StackScript, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointStackScripts + "/" + url.PathEscape(strconv.Itoa(stackScriptID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_stackscript_get", nil, stackScriptID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetStackScript", Err: err}
+		return nil, wrapRequestError("GetStackScript", err)
 	}
 
 	defer drainClose(resp)
@@ -983,16 +847,14 @@ func (c *Client) httpGetStackScriptProto(ctx context.Context, stackScriptID int)
 	return script, nil
 }
 
-// httpCreateStackScriptProto creates a StackScript and decodes the response into
-// the StackScript proto element so the write tool emits the same shape as the
-// StackScript read path.
+// httpCreateStackScriptProto creates a StackScript.
 func (c *Client) httpCreateStackScriptProto(ctx context.Context, req *CreateStackScriptRequest) (*linodev1.StackScript, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointStackScripts, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_stackscript_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateStackScript", Err: err}
+		return nil, wrapRequestError("CreateStackScript", err)
 	}
 
 	defer drainClose(resp)
@@ -1005,8 +867,7 @@ func (c *Client) httpCreateStackScriptProto(ctx context.Context, req *CreateStac
 	return script, nil
 }
 
-// httpUpdateStackScriptProto updates a StackScript and decodes the response into
-// the StackScript proto element.
+// httpUpdateStackScriptProto updates a StackScript.
 func (c *Client) httpUpdateStackScriptProto(ctx context.Context, stackScriptID int, req *UpdateStackScriptRequest) (*linodev1.StackScript, error) {
 	if stackScriptID <= 0 {
 		return nil, ErrStackScriptIDPositive
@@ -1019,12 +880,9 @@ func (c *Client) httpUpdateStackScriptProto(ctx context.Context, stackScriptID i
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	encodedStackScriptID := strings.ReplaceAll(url.PathEscape(strconv.Itoa(stackScriptID)), ".", "%2E")
-	endpoint := endpointStackScripts + "/" + encodedStackScriptID
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_stackscript_update", req, stackScriptID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateStackScript", Err: err}
+		return nil, wrapRequestError("UpdateStackScript", err)
 	}
 
 	defer drainClose(resp)
@@ -1042,11 +900,9 @@ func (c *Client) httpDeleteStackScript(ctx context.Context, stackScriptID int) e
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointStackScripts+"/%d", stackScriptID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_stackscript_delete", nil, stackScriptID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteStackScript", Err: err}
+		return wrapRequestError("DeleteStackScript", err)
 	}
 
 	defer drainClose(resp)
@@ -1067,16 +923,14 @@ func (c *Client) httpBootInstance(ctx context.Context, instanceID int, configID 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d/boot", instanceID)
-
 	var payload any
 	if configID != nil {
 		payload = map[string]int{"config_id": *configID}
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, payload)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_boot", payload, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "BootInstance", Err: err}
+		return wrapRequestError("BootInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -1089,16 +943,14 @@ func (c *Client) httpRebootInstance(ctx context.Context, instanceID int, configI
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d/reboot", instanceID)
-
 	var payload any
 	if configID != nil {
 		payload = map[string]int{"config_id": *configID}
 	}
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, payload)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_reboot", payload, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "RebootInstance", Err: err}
+		return wrapRequestError("RebootInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -1111,11 +963,9 @@ func (c *Client) httpShutdownInstance(ctx context.Context, instanceID int) error
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d/shutdown", instanceID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_shutdown", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "ShutdownInstance", Err: err}
+		return wrapRequestError("ShutdownInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -1123,15 +973,14 @@ func (c *Client) httpShutdownInstance(ctx context.Context, instanceID int) error
 	return c.handleResponse(resp, nil)
 }
 
-// httpCreateInstanceProto creates a Linode instance and decodes the response as
-// a proto message for the proto-backed write path.
+// httpCreateInstanceProto creates a Linode instance.
 func (c *Client) httpCreateInstanceProto(ctx context.Context, req *CreateInstanceRequest) (*linodev1.Instance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointInstances, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateInstance", Err: err}
+		return nil, wrapRequestError("CreateInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -1144,17 +993,14 @@ func (c *Client) httpCreateInstanceProto(ctx context.Context, req *CreateInstanc
 	return instance, nil
 }
 
-// httpUpdateInstanceProto updates a Linode instance and decodes the response as
-// a proto message for the proto-backed write path.
+// httpUpdateInstanceProto updates a Linode instance.
 func (c *Client) httpUpdateInstanceProto(ctx context.Context, instanceID int, req *UpdateInstanceRequest) (*linodev1.Instance, error) {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d", instanceID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_update", req, instanceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateInstance", Err: err}
+		return nil, wrapRequestError("UpdateInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -1172,11 +1018,9 @@ func (c *Client) httpDeleteInstance(ctx context.Context, instanceID int) error {
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d", instanceID)
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_delete", nil, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteInstance", Err: err}
+		return wrapRequestError("DeleteInstance", err)
 	}
 
 	defer drainClose(resp)
@@ -1189,11 +1033,9 @@ func (c *Client) httpResizeInstance(ctx context.Context, instanceID int, req Res
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointInstances+"/%d/resize", instanceID)
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_instance_resize", req, instanceID)
 	if err != nil {
-		return &NetworkError{Operation: "ResizeInstance", Err: err}
+		return wrapRequestError("ResizeInstance", err)
 	}
 
 	defer drainClose(resp)

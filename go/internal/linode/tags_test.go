@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/chadit/LinodeMCP/go/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 )
+
+const opDeleteTag = "DeleteTag"
 
 func TestClientListTaggedObjectsSuccess(t *testing.T) {
 	t.Parallel()
@@ -284,8 +287,81 @@ func TestClientDeleteTagNetworkError(t *testing.T) {
 		t.Fatalf("error %v is not *linode.NetworkError", err)
 	}
 
-	if netErr.Operation != "DeleteTag" {
-		t.Errorf("netErr.Operation = %v, want %v", netErr.Operation, "DeleteTag")
+	if netErr.Operation != opDeleteTag {
+		t.Errorf("netErr.Operation = %v, want %v", netErr.Operation, opDeleteTag)
+	}
+}
+
+// TestClientDeleteTagEscapesLabelIntoOneSegment pins the escaping exception: the
+// route builder encodes sub-delimiters but leaves the colon literal, because IP
+// address routes always sent it that way and the API is not proven to take %3A.
+func TestClientDeleteTagEscapesLabelIntoOneSegment(t *testing.T) {
+	t.Parallel()
+
+	const wantPath = "/tags/team:web%2Bstaging"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != wantPath {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), wantPath)
+		}
+
+		w.Header().Set("Content-Type", tcApplicationJSON)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	if err := client.DeleteTag(t.Context(), "team:web+staging"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestClientDeleteTagEmptyLabelReachesNoRequest guards the old shape, where an
+// empty label built "/tags/", a DELETE aimed at the whole collection. The path
+// builder now refuses before anything is sent, and it reports an argument error
+// rather than a network one, so the retry layer never sees a doomed request.
+func TestClientDeleteTagEmptyLabelReachesNoRequest(t *testing.T) {
+	t.Parallel()
+
+	var requestCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		requestCount.Add(1)
+		t.Errorf("r.URL.Path = %v, want no request at all", r.URL.Path)
+	}))
+	defer srv.Close()
+
+	client := linode.NewClient(srv.URL, "my-token", nil, linode.WithMaxRetries(0))
+
+	err := client.DeleteTag(t.Context(), "")
+	if !errors.Is(err, linoderoute.ErrEmptyValue) {
+		t.Fatalf("DeleteTag(\"\") error = %v, want ErrEmptyValue", err)
+	}
+
+	argErr, ok := errors.AsType[*linode.ArgumentError](err)
+	if !ok {
+		t.Fatalf("error %v is not *linode.ArgumentError", err)
+	}
+
+	if argErr.Operation != opDeleteTag {
+		t.Errorf("argErr.Operation = %v, want %v", argErr.Operation, opDeleteTag)
+	}
+
+	// Pinned whole, because this sentence is what a caller reads: it has to name
+	// the operation, the tool, and the path slot that was not filled.
+	const wantMessage = "invalid arguments for DeleteTag: route request: " +
+		"empty path value: linode_tag_delete slot tag_label"
+
+	if argErr.Error() != wantMessage {
+		t.Errorf("argErr.Error() = %v, want %v", argErr.Error(), wantMessage)
+	}
+
+	if _, isNetwork := errors.AsType[*linode.NetworkError](err); isNetwork {
+		t.Errorf("error %v is also *linode.NetworkError, want the argument class alone", err)
+	}
+
+	if requestCount.Load() != int32(0) {
+		t.Errorf("requestCount.Load() = %v, want %v", requestCount.Load(), int32(0))
 	}
 }
 

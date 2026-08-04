@@ -64,7 +64,11 @@ func handleLinodeDomainRecordCreateRequest(ctx context.Context, request *mcp.Cal
 	service := request.GetString("service", "")
 	protocol := request.GetString("protocol", "")
 	ttlSec := request.GetInt("ttl_sec", 0)
-	tag := request.GetString("tag", "")
+
+	tag, validationMessage := optionalEnumChoice(request, "tag", linodev1.DomainRecordCAATag_Value_value)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
 
 	if IsDryRun(request) {
 		if msg := validateDomainRecordCreateArgs(domainID, recordType, name, target); msg != "" {
@@ -185,7 +189,16 @@ func handleLinodeDomainRecordUpdateRequest(ctx context.Context, request *mcp.Cal
 		Weight:   weight,
 		Port:     port,
 		TTLSec:   ttlSec,
+		Service:  request.GetString("service", ""),
+		Protocol: request.GetString("protocol", ""),
 	}
+
+	tag, validationMessage := optionalEnumChoice(request, "tag", linodev1.DomainRecordCAATag_Value_value)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req.Tag = tag
 
 	record, err := client.UpdateDomainRecordProto(ctx, domainID, recordID, &req)
 	if err != nil {

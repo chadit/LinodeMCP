@@ -9,35 +9,207 @@
     },
     {
       "name": "rejects missing type",
-      "args": { "cluster_id": 12345 },
+      "args": {
+        "cluster_id": 12345
+      },
       "expect_error": "type is required"
     },
     {
       "name": "creates a node pool",
-      "args": { "cluster_id": 12345, "type": "g6-standard-1", "count": 3, "confirm": true },
-      "api_response": { "id": 7, "type": "g6-standard-1", "count": 3 },
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true
+      },
+      "api_response": {
+        "id": 7,
+        "type": "g6-standard-1",
+        "count": 3
+      },
       "expect_request": {
         "method": "POST",
         "path": "/lke/clusters/12345/pools",
-        "body": { "type": "g6-standard-1", "count": 3 }
+        "body": {
+          "type": "g6-standard-1",
+          "count": 3
+        }
       }
     },
     {
       "name": "requires confirm",
-      "args": {"cluster_id": 12345, "type": "g6-standard-1", "count": 3},
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3
+      },
       "expect_error": "This creates billable compute resources. Set confirm=true to proceed."
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "cluster_id": 12345, "type": "g6-standard-1", "count": 3, "confirm": true },
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to create"
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "cluster_id": 12345, "type": "g6-standard-1", "count": 3, "confirm": true },
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create"
+    },
+    {
+      "name": "carries the full documented pool body",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "label": "workers",
+        "k8s_version": "1.31",
+        "disks": [
+          {
+            "size": 4096,
+            "type": "ext4"
+          }
+        ],
+        "labels": {
+          "tier": "app"
+        },
+        "taints": [
+          {
+            "key": "dedicated",
+            "value": "app",
+            "effect": "NoSchedule"
+          }
+        ],
+        "firewall_id": 88,
+        "disk_encryption": "enabled",
+        "update_strategy": "rolling_update"
+      },
+      "api_response": {
+        "id": 10,
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/lke/clusters/12345/pools",
+        "body": {
+          "type": "g6-standard-1",
+          "count": 3,
+          "label": "workers",
+          "k8s_version": "1.31",
+          "disks": [
+            {
+              "size": 4096,
+              "type": "ext4"
+            }
+          ],
+          "labels": {
+            "tier": "app"
+          },
+          "taints": [
+            {
+              "key": "dedicated",
+              "value": "app",
+              "effect": "NoSchedule"
+            }
+          ],
+          "firewall_id": 88,
+          "disk_encryption": "enabled",
+          "update_strategy": "rolling_update"
+        }
+      }
+    },
+    {
+      "name": "rejects a labels value that is not an object",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "labels": 5
+      },
+      "expect_error": "labels must be an object"
+    },
+    {
+      "name": "rejects a non-string labels value",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "labels": {
+          "tier": 5
+        }
+      },
+      "expect_error": "labels values must be strings"
+    },
+    {
+      "name": "rejects a taints value that is not an array of objects",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "taints": "none"
+      },
+      "expect_error": "taints must be an array of objects"
+    },
+    {
+      "name": "rejects a non-positive firewall_id",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "firewall_id": 0
+      },
+      "expect_error": "firewall_id must be an integer greater than or equal to 1"
+    },
+    {
+      "name": "rejects a disks value that is not an array of objects",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "disks": 7
+      },
+      "expect_error": "disks must be an array of objects"
+    },
+    {
+      "name": "rejects an unknown disk_encryption",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "disk_encryption": "maybe"
+      },
+      "expect_error": "disk_encryption must be one of: disabled, enabled"
+    },
+    {
+      "name": "rejects an unknown update_strategy",
+      "args": {
+        "cluster_id": 12345,
+        "type": "g6-standard-1",
+        "count": 3,
+        "confirm": true,
+        "update_strategy": "asap"
+      },
+      "expect_error": "update_strategy must be one of: on_recycle, rolling_update"
     }
   ]
 }

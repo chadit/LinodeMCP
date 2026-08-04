@@ -1,25 +1,37 @@
 {
   "tool": "linode_firewall_create",
-  "description": "Firewall create gates on confirm then requires a label, then POSTs the label plus default policies. Both languages send only inbound_policy/outbound_policy under rules (Go no longer emits null inbound/outbound arrays). A response that is not a JSON object must fail rather than yield a zeroed firewall.",
+  "description": "Firewall create gates on confirm then requires a label, then POSTs the label plus a rules object. Both languages always send rules (the API requires it): a caller-supplied rules object wins key by key over the flat inbound_policy/outbound_policy arguments, which fill in the rest. devices rides through verbatim. A response that is not a JSON object must fail rather than yield a zeroed firewall.",
   "cases": [
     {
       "name": "requires confirm before creating",
-      "args": { "label": "web-fw" },
+      "args": {
+        "label": "web-fw"
+      },
       "expect_error": "This creates a Cloud Firewall. Set confirm=true to proceed."
     },
     {
       "name": "requires a label once confirmed",
-      "args": { "confirm": true },
+      "args": {
+        "confirm": true
+      },
       "expect_error": "label is required"
     },
     {
       "name": "creates a firewall with default policies",
-      "args": { "confirm": true, "label": "web-fw" },
+      "args": {
+        "confirm": true,
+        "label": "web-fw"
+      },
       "api_response": {
         "id": 100,
         "label": "web-fw",
         "status": "enabled",
-        "rules": { "inbound": [], "inbound_policy": "ACCEPT", "outbound": [], "outbound_policy": "ACCEPT" },
+        "rules": {
+          "inbound": [],
+          "inbound_policy": "ACCEPT",
+          "outbound": [],
+          "outbound_policy": "ACCEPT"
+        },
         "tags": [],
         "created": "2026-01-01T00:00:00",
         "updated": "2026-01-01T00:00:00"
@@ -29,31 +41,297 @@
         "path": "/networking/firewalls",
         "body": {
           "label": "web-fw",
-          "rules": { "inbound_policy": "ACCEPT", "outbound_policy": "ACCEPT" }
+          "rules": {
+            "inbound_policy": "ACCEPT",
+            "outbound_policy": "ACCEPT"
+          }
         }
       }
     },
     {
       "name": "rejects an invalid inbound_policy (proto FirewallPolicy enum)",
-      "args": { "confirm": true, "label": "web-fw", "inbound_policy": "MAYBE" },
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "inbound_policy": "MAYBE"
+      },
       "expect_error": "inbound_policy must be one of: ACCEPT, DROP"
     },
     {
       "name": "rejects an invalid outbound_policy (proto FirewallPolicy enum)",
-      "args": { "confirm": true, "label": "web-fw", "outbound_policy": "MAYBE" },
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "outbound_policy": "MAYBE"
+      },
       "expect_error": "outbound_policy must be one of: ACCEPT, DROP"
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "confirm": true, "label": "web-fw" },
+      "args": {
+        "confirm": true,
+        "label": "web-fw"
+      },
       "api_response": [],
       "expect_api_error": "Failed to create firewall"
     },
     {
       "name": "rejects a non-object API response",
-      "args": { "confirm": true, "label": "web-fw" },
+      "args": {
+        "confirm": true,
+        "label": "web-fw"
+      },
       "api_response": 7,
       "expect_api_error": "Failed to create firewall"
+    },
+    {
+      "name": "sends the tags array in the body",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "tags": [
+          "prod",
+          "web"
+        ]
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web-fw",
+        "status": "enabled"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/firewalls",
+        "body": {
+          "label": "web-fw",
+          "rules": {
+            "inbound_policy": "ACCEPT",
+            "outbound_policy": "ACCEPT"
+          },
+          "tags": [
+            "prod",
+            "web"
+          ]
+        }
+      }
+    },
+    {
+      "name": "rejects a tags value that is not an array",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "tags": 5
+      },
+      "expect_error": "tags must be a JSON string array"
+    },
+    {
+      "name": "rejects a blank tag entry",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "tags": [
+          "prod",
+          "  "
+        ]
+      },
+      "expect_error": "tags entries must be non-empty strings"
+    },
+    {
+      "name": "sends a caller-supplied rules object with the flat policies filling the gaps",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "inbound_policy": "DROP",
+        "rules": {
+          "inbound": [
+            {
+              "action": "ACCEPT",
+              "protocol": "TCP",
+              "ports": "443",
+              "label": "https",
+              "addresses": {
+                "ipv4": [
+                  "0.0.0.0/0"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web-fw",
+        "status": "enabled"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/firewalls",
+        "body": {
+          "label": "web-fw",
+          "rules": {
+            "inbound": [
+              {
+                "action": "ACCEPT",
+                "protocol": "TCP",
+                "ports": "443",
+                "label": "https",
+                "addresses": {
+                  "ipv4": [
+                    "0.0.0.0/0"
+                  ]
+                }
+              }
+            ],
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT"
+          }
+        }
+      }
+    },
+    {
+      "name": "a policy set inside rules wins over the flat argument",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "inbound_policy": "ACCEPT",
+        "rules": {
+          "inbound_policy": "DROP",
+          "outbound_policy": "DROP"
+        }
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web-fw",
+        "status": "enabled"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/firewalls",
+        "body": {
+          "label": "web-fw",
+          "rules": {
+            "inbound_policy": "DROP",
+            "outbound_policy": "DROP"
+          }
+        }
+      }
+    },
+    {
+      "name": "sends the devices object in the body",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "devices": {
+          "linodes": [
+            123
+          ],
+          "nodebalancers": [
+            456
+          ]
+        }
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web-fw",
+        "status": "enabled"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/firewalls",
+        "body": {
+          "label": "web-fw",
+          "rules": {
+            "inbound_policy": "ACCEPT",
+            "outbound_policy": "ACCEPT"
+          },
+          "devices": {
+            "linodes": [
+              123
+            ],
+            "nodebalancers": [
+              456
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects a rules value that is not an object",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "rules": 5
+      },
+      "expect_error": "rules must be an object"
+    },
+    {
+      "name": "rejects a devices value that is not an object",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "devices": [
+          1,
+          2
+        ]
+      },
+      "expect_error": "devices must be an object"
+    },
+    {
+      "name": "accepts the JSON-string form of rules some clients still send",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "rules": "{\"inbound_policy\": \"DROP\"}"
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web-fw",
+        "status": "enabled"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/firewalls",
+        "body": {
+          "label": "web-fw",
+          "rules": {
+            "inbound_policy": "DROP",
+            "outbound_policy": "ACCEPT"
+          }
+        }
+      }
+    },
+    {
+      "name": "treats a blank rules string as absent",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "rules": "   "
+      },
+      "api_response": {
+        "id": 100,
+        "label": "web-fw",
+        "status": "enabled"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/networking/firewalls",
+        "body": {
+          "label": "web-fw",
+          "rules": {
+            "inbound_policy": "ACCEPT",
+            "outbound_policy": "ACCEPT"
+          }
+        }
+      }
+    },
+    {
+      "name": "rejects a rules string that is not valid JSON",
+      "args": {
+        "confirm": true,
+        "label": "web-fw",
+        "rules": "{oops"
+      },
+      "expect_error": "rules must be an object"
     }
   ]
 }

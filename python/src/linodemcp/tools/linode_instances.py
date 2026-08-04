@@ -24,8 +24,8 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
-    paginated_path,
     pagination_int_argument,
+    pagination_query,
     required_int_id,
     standard_pagination_arguments,
 )
@@ -1067,7 +1067,9 @@ async def handle_linode_instance_list(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(paginated_path("/linode/instances", page, page_size))
+        raw = await client.route_raw(
+            "linode_instance_list", query=pagination_query(page, page_size)
+        )
         if not status_filter:
             return serialize_list_response(
                 raw, "instances", instance_pb2.InstanceListResponse()

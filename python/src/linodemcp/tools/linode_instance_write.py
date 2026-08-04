@@ -17,6 +17,7 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    optional_tags_argument,
     pagination_int_argument,
     preview_state_str,
     required_int_id,
@@ -465,6 +466,10 @@ async def handle_linode_instance_create(
     instance_type = arguments.get("type", "")
     firewall_id = arguments.get("firewall_id", 0)
 
+    tags, tags_error = optional_tags_argument(arguments)
+    if tags_error:
+        return _error_response(tags_error)
+
     if is_dry_run(arguments):
         fields_error = _instance_create_error(region, instance_type, firewall_id)
         if fields_error is not None:
@@ -505,6 +510,7 @@ async def handle_linode_instance_create(
             backups_enabled=arguments.get("backups_enabled", False),
             route_ipv4=arguments.get("route_ipv4", True),
             route_ipv6=arguments.get("route_ipv6", True),
+            tags=tags,
         )
         return serialize_api_response(
             {

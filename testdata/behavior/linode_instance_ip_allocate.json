@@ -4,69 +4,150 @@
   "cases": [
     {
       "name": "rejects missing linode_id once confirmed",
-      "args": { "confirm": true, "type": "ipv4" },
+      "args": {
+        "confirm": true,
+        "type": "ipv4"
+      },
       "expect_error": "linode_id is required"
     },
     {
       "name": "requires public once confirmed",
-      "args": { "confirm": true, "linode_id": 123, "type": "ipv4" },
+      "args": {
+        "confirm": true,
+        "linode_id": 123,
+        "type": "ipv4"
+      },
       "expect_error": "public is required"
     },
     {
       "name": "allocates an IP with the type/public body",
-      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
-      "api_response": { "address": "203.0.113.5" },
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "confirm": true
+      },
+      "api_response": {
+        "address": "203.0.113.5"
+      },
       "expect_request": {
         "method": "POST",
         "path": "/linode/instances/123/ips",
-        "body": { "type": "ipv4", "public": true }
+        "body": {
+          "type": "ipv4",
+          "public": true
+        }
       }
     },
     {
       "name": "rejects an invalid type",
-      "args": { "linode_id": 123, "type": "ipv6-range", "public": true, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "type": "ipv6-range",
+        "public": true,
+        "confirm": true
+      },
       "expect_error": "type must be one of: ipv4"
     },
     {
       "name": "requires confirm",
-      "args": {"linode_id": 123, "type": "ipv4", "public": true},
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true
+      },
       "expect_error": "This allocates a new IP address which may incur charges. Set confirm=true to proceed."
     },
     {
       "name": "rejects a null API response",
-      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "confirm": true
+      },
       "api_response": null,
       "expect_api_error": "Failed to allocate"
     },
     {
       "name": "rejects a bare-array API response",
-      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "confirm": true
+      },
       "api_response": [],
       "expect_api_error": "Failed to allocate"
     },
     {
       "name": "rejects a populated-array API response",
-      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
-      "api_response": [1, 2],
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "confirm": true
+      },
+      "api_response": [
+        1,
+        2
+      ],
       "expect_api_error": "Failed to allocate"
     },
     {
       "name": "rejects a string API response",
-      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "confirm": true
+      },
       "api_response": "not-an-object",
       "expect_api_error": "Failed to allocate"
     },
     {
       "name": "rejects a numeric API response",
-      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "confirm": true
+      },
       "api_response": 7,
       "expect_api_error": "Failed to allocate"
     },
     {
       "name": "rejects a boolean API response",
-      "args": { "linode_id": 123, "type": "ipv4", "public": true, "confirm": true },
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "confirm": true
+      },
       "api_response": true,
       "expect_api_error": "Failed to allocate"
+    },
+    {
+      "name": "carries a reserved address into the body",
+      "args": {
+        "linode_id": 123,
+        "type": "ipv4",
+        "public": true,
+        "confirm": true,
+        "address": "203.0.113.9"
+      },
+      "api_response": {
+        "address": "203.0.113.9"
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/linode/instances/123/ips",
+        "body": {
+          "type": "ipv4",
+          "public": true,
+          "address": "203.0.113.9"
+        }
+      }
     }
   ]
 }

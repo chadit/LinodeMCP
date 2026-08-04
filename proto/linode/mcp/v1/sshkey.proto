@@ -46,26 +46,35 @@ message SSHKeyGetInput {
     method: "GET"
     path: "/profile/sshkeys/{ssh_key_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKey";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the SSH key to retrieve (required).
-  int32 ssh_key_id = 2;
+  int32 ssh_key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
-// SSHKeyListInput is the input contract for linode_sshkey_list. label_contains
-// is a client-side filter (fetch-all-then-filter, not an API param).
+// SSHKeyListInput is the input contract for linode_sshkey_list. page and
+// page_size select the API page; label_contains is a client-side filter
+// applied to that page, not an API param.
 message SSHKeyListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_sshkey_list"
     method: "GET"
     path: "/profile/sshkeys"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter SSH keys by label containing this string (case-insensitive).
-  optional string label_contains = 2;
+  optional string label_contains = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // SSHKeyCreateInput is the input contract for linode_sshkey_create.
@@ -75,18 +84,23 @@ message SSHKeyCreateInput {
     method: "POST"
     path: "/profile/sshkeys"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This adds an SSH key to your Linode profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "SSH key '{label}' (ID: {id}) created successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // A label for the SSH key (must be unique).
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The public SSH key in authorized_keys format (e.g., 'ssh-rsa AAAA...').
-  string ssh_key = 3;
+  string ssh_key = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm SSH key creation. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // SSHKeyUpdateInput is the input contract for linode_sshkey_update. label is
@@ -97,18 +111,22 @@ message SSHKeyUpdateInput {
     method: "PUT"
     path: "/profile/sshkeys/{ssh_key_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates an SSH key in your Linode profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "SSH key '{label}' (ID: {id}) updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the SSH key to update.
-  int32 ssh_key_id = 2;
+  int32 ssh_key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The new label for the SSH key.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm SSH key update. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // SSHKeyDeleteInput is the input contract for linode_sshkey_delete (two-stage
@@ -119,20 +137,24 @@ message SSHKeyDeleteInput {
     method: "DELETE"
     path: "/profile/sshkeys/{ssh_key_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SSHKeyDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This removes an SSH key from your Linode profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "SSHKey";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the SSH key to delete.
-  int32 ssh_key_id = 2;
+  int32 ssh_key_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm SSH key deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

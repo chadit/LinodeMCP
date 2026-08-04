@@ -14,6 +14,12 @@ from linodemcp.genpb.linode.mcp.v1 import (
     sshkey_pb2,
     support_ticket_pb2,
 )
+from linodemcp.gentools import (
+    handle_linode_domain_get,
+    handle_linode_domain_list,
+    handle_linode_domain_record_get,
+    handle_linode_domain_record_list,
+)
 from linodemcp.linode import (
     Account,
     Alerts,
@@ -222,12 +228,8 @@ from linodemcp.tools import (
     handle_linode_domain_clone,
     handle_linode_domain_create,
     handle_linode_domain_delete,
-    handle_linode_domain_get,
-    handle_linode_domain_list,
     handle_linode_domain_record_create,
     handle_linode_domain_record_delete,
-    handle_linode_domain_record_get,
-    handle_linode_domain_record_list,
     handle_linode_domain_record_update,
     handle_linode_domain_update,
     handle_linode_firewall_create,
@@ -518,7 +520,7 @@ async def test_handle_linode_profile(
     """Test linode_profile_get tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = sample_profile_data
+        mock_client.route_raw.return_value = sample_profile_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -528,7 +530,7 @@ async def test_handle_linode_profile(
         assert len(result) == 1
         assert "testuser" in result[0].text
         assert "test@example.com" in result[0].text
-        mock_client.get_raw.assert_awaited_once_with("/profile")
+        mock_client.route_raw.assert_awaited_once_with("linode_profile_get")
 
 
 async def test_handle_linode_profile_with_environment(sample_config: Config) -> None:
@@ -545,7 +547,7 @@ async def test_handle_linode_profile_with_environment(sample_config: Config) -> 
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_profile
+        mock_client.route_raw.return_value = raw_profile
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -556,7 +558,7 @@ async def test_handle_linode_profile_with_environment(sample_config: Config) -> 
 
         assert len(result) == 1
         assert "envuser" in result[0].text
-        mock_client.get_raw.assert_awaited_once_with("/profile")
+        mock_client.route_raw.assert_awaited_once_with("linode_profile_get")
 
 
 async def test_handle_linode_profile_missing_environment(sample_config: Config) -> None:
@@ -1376,7 +1378,7 @@ async def test_handle_linode_instances_list(sample_config: Config) -> None:
     """Test linode_instance_list tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [{"id": 123456, "label": "test-instance", "status": "running"}]
         }
         mock_client.__aenter__.return_value = mock_client
@@ -1397,7 +1399,7 @@ async def test_handle_linode_instances_list_with_status_filter(
     """Test linode_instance_list tool with status filter."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 123456, "label": "running-instance", "status": "running"},
                 {"id": 789012, "label": "stopped-instance", "status": "stopped"},
@@ -1439,19 +1441,19 @@ async def test_handle_linode_instance_get(
     """Test linode_instance_get tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = sample_instance_data
+        mock_client.route_raw.return_value = sample_instance_data
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_instance_get(
-            {"instance_id": "123456"}, sample_config
+            {"instance_id": 123456}, sample_config
         )
 
         assert len(result) == 1
         assert "test-instance" in result[0].text
         assert "running" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/linode/instances/123456")
+        mock_client.route_raw.assert_called_once_with("linode_instance_get", 123456)
 
 
 async def test_handle_linode_instance_get_missing_id(sample_config: Config) -> None:
@@ -1497,7 +1499,7 @@ async def test_handle_linode_account(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_account
+        mock_client.route_raw.return_value = raw_account
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1507,7 +1509,7 @@ async def test_handle_linode_account(sample_config: Config) -> None:
         assert len(result) == 1
         assert "Test" in result[0].text
         assert "test@example.com" in result[0].text
-        mock_client.get_raw.assert_awaited_once_with("/account")
+        mock_client.route_raw.assert_awaited_once_with("linode_account_get")
 
 
 async def test_create_linode_account_beta_enroll_tool() -> None:
@@ -1771,7 +1773,7 @@ async def test_handle_linode_account_update(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.put_raw.return_value = mock_account
+        mock_client.route_raw.return_value = mock_account
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -1783,8 +1785,8 @@ async def test_handle_linode_account_update(sample_config: Config) -> None:
         assert len(result) == 1
         assert "updated@example.com" in result[0].text
         assert "Account updated successfully" in result[0].text
-        mock_client.put_raw.assert_called_once_with(
-            "/account", {"email": "updated@example.com"}
+        mock_client.route_raw.assert_called_once_with(
+            "linode_account_update", body={"email": "updated@example.com"}
         )
 
 
@@ -4124,6 +4126,7 @@ async def test_handle_linode_account_tag_create(sample_config: Config) -> None:
             linodes=[2],
             nodebalancers=[3],
             volumes=[4],
+            reserved_ipv4_addresses=None,
         )
 
 
@@ -4148,6 +4151,7 @@ async def test_handle_linode_account_tag_create_omits_empty_resource_lists(
             linodes=None,
             nodebalancers=None,
             volumes=None,
+            reserved_ipv4_addresses=None,
         )
 
 
@@ -5542,7 +5546,7 @@ async def test_handle_linode_regions_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_region
+        mock_client.route_raw.return_value = raw_region
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5557,7 +5561,7 @@ async def test_handle_linode_regions_get(sample_config: Config) -> None:
             "ipv4": "192.0.2.1",
             "ipv6": "2001:db8::1",
         }
-        mock_client.get_raw.assert_awaited_once_with("/regions/us-east")
+        mock_client.route_raw.assert_awaited_once_with("linode_region_get", "us-east")
 
 
 async def test_handle_linode_regions_get_rejects_malformed_region_id(
@@ -5585,7 +5589,7 @@ async def test_handle_linode_regions_get_error(sample_config: Config) -> None:
     """Test linode_region_get error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5756,7 +5760,7 @@ async def test_handle_linode_regions_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_regions
+        mock_client.route_raw.return_value = raw_regions
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5766,7 +5770,7 @@ async def test_handle_linode_regions_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "us-east" in result[0].text
         assert "eu-west" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/regions")
+        mock_client.route_raw.assert_called_once_with("linode_region_list", query="")
 
 
 async def test_handle_linode_regions_list_filter_country(sample_config: Config) -> None:
@@ -5805,7 +5809,7 @@ async def test_handle_linode_regions_list_filter_country(sample_config: Config) 
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_regions
+        mock_client.route_raw.return_value = raw_regions
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5930,7 +5934,7 @@ async def test_handle_linode_types_list(sample_config: Config) -> None:
     """Proto-canonical envelope: count plus full InstanceType elements."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = _type_list_page()
+        mock_client.route_raw.return_value = _type_list_page()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5957,14 +5961,14 @@ async def test_handle_linode_types_list(sample_config: Config) -> None:
             "price": {"hourly": 0.03, "monthly": 20.0},
             "addons": {"backups": {"price": {"hourly": 0.008, "monthly": 5.0}}},
         }
-        mock_client.get_raw.assert_awaited_once_with("/linode/types")
+        mock_client.route_raw.assert_awaited_once_with("linode_type_list")
 
 
 async def test_handle_linode_types_list_filter_class(sample_config: Config) -> None:
     """Class filter keeps matching elements and echoes the applied filter."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = _type_list_page()
+        mock_client.route_raw.return_value = _type_list_page()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -5998,7 +6002,7 @@ async def test_handle_linode_type_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_type
+        mock_client.route_raw.return_value = raw_type
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6012,7 +6016,7 @@ async def test_handle_linode_type_get(sample_config: Config) -> None:
         assert data["price"] == {"hourly": 0.0075, "monthly": 5.0}
         assert "successor" not in data
         assert "not_in_proto" not in result[0].text
-        mock_client.get_raw.assert_awaited_once_with("/linode/types/g6-nanode-1")
+        mock_client.route_raw.assert_awaited_once_with("linode_type_get", "g6-nanode-1")
 
 
 async def test_handle_linode_type_get_includes_successor(
@@ -6036,7 +6040,7 @@ async def test_handle_linode_type_get_includes_successor(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_type
+        mock_client.route_raw.return_value = raw_type
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6081,7 +6085,7 @@ async def test_handle_linode_type_get_error(sample_config: Config) -> None:
     """Test linode_type_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6112,7 +6116,7 @@ async def test_handle_linode_volume_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_volume
+        mock_client.route_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6125,7 +6129,7 @@ async def test_handle_linode_volume_get(sample_config: Config) -> None:
         assert body["volume"]["id"] == 12345
         assert body["volume"]["linode_id"] == 123
         assert "not_in_proto" not in result[0].text
-        mock_client.get_raw.assert_awaited_once_with("/volumes/12345")
+        mock_client.route_raw.assert_awaited_once_with("linode_volume_get", 12345)
 
 
 async def test_handle_linode_volume_get_requires_volume_id(
@@ -6210,7 +6214,7 @@ async def test_handle_linode_volumes_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_volumes
+        mock_client.route_raw.return_value = raw_volumes
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6220,7 +6224,7 @@ async def test_handle_linode_volumes_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "data-vol" in result[0].text
         assert "backup-vol" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/volumes")
+        mock_client.route_raw.assert_called_once_with("linode_volume_list", query="")
 
 
 async def test_handle_linode_volumes_list_filter_region(sample_config: Config) -> None:
@@ -6258,7 +6262,7 @@ async def test_handle_linode_volumes_list_filter_region(sample_config: Config) -
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_volumes
+        mock_client.route_raw.return_value = raw_volumes
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6698,7 +6702,7 @@ async def test_handle_linode_image_get_success(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_image
+        mock_client.route_raw.return_value = raw_image
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -6712,7 +6716,9 @@ async def test_handle_linode_image_get_success(sample_config: Config) -> None:
         body = json.loads(result[0].text)
         assert body["id"] == "linode/ubuntu24.04"
         assert body["label"] == "Ubuntu 24.04 LTS"
-        mock_client.get_raw.assert_awaited_once_with("/images/linode%2Fubuntu24.04")
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_image_get", "linode/ubuntu24.04"
+        )
 
 
 @pytest.mark.parametrize(
@@ -7122,7 +7128,7 @@ async def test_handle_linode_images_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_page
+        mock_client.route_raw.return_value = raw_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7133,7 +7139,7 @@ async def test_handle_linode_images_list(sample_config: Config) -> None:
         assert "linode/ubuntu22.04" in result[0].text
         assert "private/12345" in result[0].text
         assert '"count": 2' in result[0].text
-        mock_client.get_raw.assert_called_once_with("/images")
+        mock_client.route_raw.assert_called_once_with("linode_image_list", query="")
 
 
 async def test_handle_linode_images_list_filter_public(sample_config: Config) -> None:
@@ -7175,7 +7181,7 @@ async def test_handle_linode_images_list_filter_public(sample_config: Config) ->
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_page
+        mock_client.route_raw.return_value = raw_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7193,7 +7199,7 @@ async def test_handle_linode_account_error(sample_config: Config) -> None:
     """Test linode_account_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7268,13 +7274,13 @@ async def test_handle_linode_instance_get_error(sample_config: Config) -> None:
     """Test linode_instance_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_instance_get(
-            {"instance_id": "123456"}, sample_config
+            {"instance_id": 123456}, sample_config
         )
 
         assert len(result) == 1
@@ -7328,7 +7334,7 @@ async def test_handle_linode_volumes_list_filter_label(sample_config: Config) ->
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_volumes
+        mock_client.route_raw.return_value = raw_volumes
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7372,7 +7378,7 @@ async def test_handle_linode_regions_list_filter_capability(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_regions
+        mock_client.route_raw.return_value = raw_regions
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7409,7 +7415,7 @@ async def test_handle_linode_sshkeys_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_keys
+        mock_client.route_raw.return_value = raw_keys
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7419,7 +7425,7 @@ async def test_handle_linode_sshkeys_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "work-laptop" in result[0].text
         assert "home-desktop" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/profile/sshkeys")
+        mock_client.route_raw.assert_called_once_with("linode_sshkey_list", query="")
 
 
 async def test_handle_linode_sshkey_get(sample_config: Config) -> None:
@@ -7434,7 +7440,7 @@ async def test_handle_linode_sshkey_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_key
+        mock_client.route_raw.return_value = raw_key
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7445,7 +7451,7 @@ async def test_handle_linode_sshkey_get(sample_config: Config) -> None:
         assert "work-laptop" in result[0].text
         assert "12345" in result[0].text
         assert "not_in_proto" not in result[0].text
-        mock_client.get_raw.assert_called_once_with("/profile/sshkeys/12345")
+        mock_client.route_raw.assert_called_once_with("linode_sshkey_get", 12345)
 
 
 async def test_handle_linode_sshkey_get_requires_id(sample_config: Config) -> None:
@@ -7477,7 +7483,7 @@ async def test_handle_linode_sshkeys_list_filter_label(sample_config: Config) ->
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_keys
+        mock_client.route_raw.return_value = raw_keys
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7510,7 +7516,7 @@ async def test_handle_linode_domains_list(sample_config: Config) -> None:
     """Test linode_domain_list tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {
                     "id": 1,
@@ -7535,14 +7541,14 @@ async def test_handle_linode_domains_list(sample_config: Config) -> None:
         assert len(result) == 1
         assert "example.com" in result[0].text
         assert "test.com" in result[0].text
-        mock_client.get_raw.assert_called_once()
+        mock_client.route_raw.assert_called_once()
 
 
 async def test_handle_linode_domains_list_error(sample_config: Config) -> None:
     """Test linode_domain_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7569,7 +7575,7 @@ async def test_handle_linode_domain_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_domain
+        mock_client.route_raw.return_value = raw_domain
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7578,7 +7584,7 @@ async def test_handle_linode_domain_get(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "example.com" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/domains/1")
+        mock_client.route_raw.assert_called_once_with("linode_domain_get", 1)
 
 
 async def test_handle_linode_domain_get_missing_id(sample_config: Config) -> None:
@@ -7593,7 +7599,7 @@ async def test_handle_linode_domain_get_error(sample_config: Config) -> None:
     """Test linode_domain_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7631,7 +7637,7 @@ async def test_handle_linode_domain_records_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = mock_page
+        mock_client.route_raw.return_value = mock_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7649,7 +7655,9 @@ async def test_handle_linode_domain_records_list(sample_config: Config) -> None:
         # handler curated away (weight/port/service/protocol/tag/timestamps).
         assert body["records"][0]["weight"] == 0
         assert "tag" in body["records"][0]
-        mock_client.get_raw.assert_called_once_with("/domains/1/records")
+        mock_client.route_raw.assert_called_once_with(
+            "linode_domain_record_list", 1, query=""
+        )
 
 
 async def test_handle_linode_domain_record_get(sample_config: Config) -> None:
@@ -7669,7 +7677,7 @@ async def test_handle_linode_domain_record_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_record
+        mock_client.route_raw.return_value = raw_record
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7681,7 +7689,7 @@ async def test_handle_linode_domain_record_get(sample_config: Config) -> None:
         assert len(result) == 1
         assert "192.0.2.1" in result[0].text
         assert "www" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/domains/1/records/2")
+        mock_client.route_raw.assert_called_once_with("linode_domain_record_get", 1, 2)
 
 
 async def test_handle_linode_domain_record_get_missing_id(
@@ -7710,7 +7718,7 @@ async def test_handle_linode_domain_records_list_filter_type(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = mock_page
+        mock_client.route_raw.return_value = mock_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7742,7 +7750,7 @@ async def test_handle_linode_domain_records_list_filter_name_contains(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = mock_page
+        mock_client.route_raw.return_value = mock_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7774,7 +7782,7 @@ async def test_handle_linode_domain_records_list_filter_type_and_name(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = mock_page
+        mock_client.route_raw.return_value = mock_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7803,7 +7811,7 @@ async def test_handle_linode_domain_records_list_error(sample_config: Config) ->
     """Test linode_domain_record_list tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7853,7 +7861,7 @@ async def test_handle_linode_firewall_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_firewall
+        mock_client.route_raw.return_value = raw_firewall
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7862,7 +7870,7 @@ async def test_handle_linode_firewall_get(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "web-firewall" in result[0].text
-        mock_client.get_raw.assert_awaited_once_with("/networking/firewalls/12345")
+        mock_client.route_raw.assert_awaited_once_with("linode_firewall_get", 12345)
 
 
 async def test_handle_linode_firewall_get_missing_id(sample_config: Config) -> None:
@@ -7913,7 +7921,7 @@ async def test_handle_linode_firewall_rules_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_rules
+        mock_client.route_raw.return_value = raw_rules
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -7925,8 +7933,8 @@ async def test_handle_linode_firewall_rules_get(sample_config: Config) -> None:
         assert len(result) == 1
         assert "DROP" in result[0].text
         assert "ACCEPT" in result[0].text
-        mock_client.get_raw.assert_awaited_once_with(
-            "/networking/firewalls/12345/rules"
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_firewall_rules_get", 12345
         )
 
 
@@ -7944,7 +7952,7 @@ async def test_handle_linode_firewalls_list(sample_config: Config) -> None:
     """Test linode_firewall_list tool."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "web-firewall", "status": "enabled"},
             ]
@@ -7957,7 +7965,7 @@ async def test_handle_linode_firewalls_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "web-firewall" in result[0].text
-        mock_client.get_raw.assert_called_once()
+        mock_client.route_raw.assert_called_once()
 
 
 async def test_handle_linode_firewalls_list_filter_status(
@@ -7966,7 +7974,7 @@ async def test_handle_linode_firewalls_list_filter_status(
     """Test linode_firewall_list tool with status filter."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "enabled-fw", "status": "enabled"},
                 {"id": 2, "label": "disabled-fw", "status": "disabled"},
@@ -7989,7 +7997,7 @@ async def test_handle_linode_firewalls_list_filter_label_contains(
     """label_contains keeps matching firewalls and echoes the applied filter."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "prod-web", "status": "enabled"},
                 {"id": 2, "label": "staging-db", "status": "enabled"},
@@ -8046,7 +8054,7 @@ async def test_handle_linode_nodebalancers_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_nodebalancers
+        mock_client.route_raw.return_value = raw_nodebalancers
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8055,7 +8063,9 @@ async def test_handle_linode_nodebalancers_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "web-lb" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/nodebalancers")
+        mock_client.route_raw.assert_called_once_with(
+            "linode_nodebalancer_list", query=""
+        )
 
 
 async def test_handle_linode_nodebalancers_list_filter_region(
@@ -8095,7 +8105,7 @@ async def test_handle_linode_nodebalancers_list_filter_region(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_nodebalancers
+        mock_client.route_raw.return_value = raw_nodebalancers
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8146,7 +8156,7 @@ async def test_handle_linode_nodebalancers_list_filter_label_contains(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_nodebalancers
+        mock_client.route_raw.return_value = raw_nodebalancers
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8760,7 +8770,7 @@ async def test_handle_linode_nodebalancer_get(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_nodebalancer
+        mock_client.route_raw.return_value = raw_nodebalancer
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -8771,7 +8781,7 @@ async def test_handle_linode_nodebalancer_get(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "web-lb" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/nodebalancers/1")
+        mock_client.route_raw.assert_called_once_with("linode_nodebalancer_get", 1)
 
 
 async def test_handle_linode_nodebalancer_get_missing_id(
@@ -8788,7 +8798,7 @@ async def test_handle_linode_nodebalancer_get_error(sample_config: Config) -> No
     """Test linode_nodebalancer_get tool error handling."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = Exception("API error")
+        mock_client.route_raw.side_effect = Exception("API error")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9044,7 +9054,7 @@ async def test_handle_linode_stackscripts_list(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_page
+        mock_client.route_raw.return_value = raw_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9062,7 +9072,9 @@ async def test_handle_linode_stackscripts_list(sample_config: Config) -> None:
             "username"
         )
         assert "filter" not in payload
-        mock_client.get_raw.assert_called_once_with("/linode/stackscripts")
+        mock_client.route_raw.assert_called_once_with(
+            "linode_stackscript_list", query=""
+        )
 
 
 async def test_handle_linode_stackscripts_list_filter_mine(
@@ -9093,7 +9105,7 @@ async def test_handle_linode_stackscripts_list_filter_mine(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_page
+        mock_client.route_raw.return_value = raw_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9124,7 +9136,7 @@ async def test_handle_linode_stackscripts_list_filter_is_public(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_page
+        mock_client.route_raw.return_value = raw_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9155,7 +9167,7 @@ async def test_handle_linode_stackscripts_list_filter_label_contains(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_page
+        mock_client.route_raw.return_value = raw_page
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9347,7 +9359,7 @@ async def test_handle_linode_stackscript_create(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.post_raw.return_value = raw_stackscript
+        mock_client.route_raw.return_value = raw_stackscript
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -9373,9 +9385,9 @@ async def test_handle_linode_stackscript_create(sample_config: Config) -> None:
         )
         assert payload["stackscript"]["id"] == 12345
         assert payload["stackscript"]["label"] == "my-script"
-        mock_client.post_raw.assert_called_once_with(
-            "/linode/stackscripts",
-            {
+        mock_client.route_raw.assert_called_once_with(
+            "linode_stackscript_create",
+            body={
                 "label": "my-script",
                 "images": ["linode/ubuntu22.04"],
                 "script": "#!/bin/bash",
@@ -11164,7 +11176,7 @@ async def test_handle_linode_domain_clone(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.post_raw.return_value = raw_domain
+        mock_client.route_raw.return_value = raw_domain
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11179,8 +11191,8 @@ async def test_handle_linode_domain_clone(sample_config: Config) -> None:
     expected = "Domain 12345 cloned as 'clone.example.com' (ID: 23456)"
     assert payload["message"] == expected
     assert payload["domain"]["soa_email"] == "admin@example.com"
-    mock_client.post_raw.assert_awaited_once_with(
-        "/domains/12345/clone", {"domain": "clone.example.com"}, retry=False
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_domain_clone", 12345, body={"domain": "clone.example.com"}, retry=False
     )
 
 
@@ -11267,7 +11279,7 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.post_raw.return_value = raw_domain
+        mock_client.route_raw.return_value = raw_domain
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11285,9 +11297,9 @@ async def test_handle_linode_domain_create(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "example.com" in result[0].text
-        mock_client.post_raw.assert_awaited_once_with(
-            "/domains",
-            {
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_domain_create",
+            body={
                 "domain": "example.com",
                 "type": "master",
                 "soa_email": "admin@example.com",
@@ -11310,7 +11322,7 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.put_raw.return_value = raw_domain
+        mock_client.route_raw.return_value = raw_domain
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11328,9 +11340,10 @@ async def test_handle_linode_domain_update(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "modified" in result[0].text.lower()
-        mock_client.put_raw.assert_awaited_once_with(
-            "/domains/12345",
-            {"description": "Updated", "status": "disabled", "ttl_sec": 7200},
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_domain_update",
+            12345,
+            body={"description": "Updated", "status": "disabled", "ttl_sec": 7200},
         )
 
 
@@ -11449,7 +11462,7 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.post_raw.return_value = raw_record
+        mock_client.route_raw.return_value = raw_record
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11472,9 +11485,10 @@ async def test_handle_linode_domain_record_create(sample_config: Config) -> None
         payload = json.loads(result[0].text)
         assert payload["message"] == "A record (ID: 12345) created successfully"
         assert payload["record"]["name"] == "www"
-        mock_client.post_raw.assert_awaited_once_with(
-            "/domains/12345/records",
-            {
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_domain_record_create",
+            12345,
+            body={
                 "type": "A",
                 "name": "www",
                 "target": "8.8.8.8",
@@ -11497,7 +11511,7 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.put_raw.return_value = raw_record
+        mock_client.route_raw.return_value = raw_record
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11516,8 +11530,8 @@ async def test_handle_linode_domain_record_update(sample_config: Config) -> None
         payload = json.loads(result[0].text)
         assert payload["message"] == "Record 12345 modified successfully"
         assert payload["record"]["target"] == "192.0.2.2"
-        mock_client.put_raw.assert_awaited_once_with(
-            "/domains/12345/records/12345", {"target": "192.0.2.2"}
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_domain_record_update", 12345, 12345, body={"target": "192.0.2.2"}
         )
 
 
@@ -11667,7 +11681,7 @@ async def test_handle_linode_volume_create(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.post_raw.return_value = raw_volume
+        mock_client.route_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11683,8 +11697,10 @@ async def test_handle_linode_volume_create(sample_config: Config) -> None:
         )
         assert payload["volume"]["filesystem_path"].endswith("my-volume")
         # No size supplied -> omitted so the API applies its 20 GB default.
-        mock_client.post_raw.assert_awaited_once_with(
-            "/volumes", {"label": "my-volume", "region": "us-east"}, retry=False
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_volume_create",
+            body={"label": "my-volume", "region": "us-east"},
+            retry=False,
         )
 
 
@@ -11735,7 +11751,7 @@ async def test_handle_linode_volume_clone(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.post_raw.return_value = raw_volume
+        mock_client.route_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11749,8 +11765,8 @@ async def test_handle_linode_volume_clone(sample_config: Config) -> None:
             sample_config,
         )
 
-        mock_client.post_raw.assert_awaited_once_with(
-            "/volumes/12345/clone", {"label": "my-volume-clone"}, retry=False
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_volume_clone", 12345, body={"label": "my-volume-clone"}, retry=False
         )
         assert len(result) == 1
         payload = json.loads(result[0].text)
@@ -11775,7 +11791,7 @@ async def test_handle_linode_volume_attach(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.post_raw.return_value = raw_volume
+        mock_client.route_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11791,9 +11807,10 @@ async def test_handle_linode_volume_attach(sample_config: Config) -> None:
         )
         assert payload["volume"]["linode_id"] == 54321
         # persist_across_boots not supplied -> omitted so the API applies its default.
-        mock_client.post_raw.assert_awaited_once_with(
-            "/volumes/12345/attach",
-            {"linode_id": 54321},
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_volume_attach",
+            12345,
+            body={"linode_id": 54321},
         )
 
 
@@ -11837,7 +11854,7 @@ async def test_handle_linode_volume_resize(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.post_raw.return_value = raw_volume
+        mock_client.route_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11852,8 +11869,8 @@ async def test_handle_linode_volume_resize(sample_config: Config) -> None:
             "Volume 12345 resize to 40 GB initiated successfully"
         )
         assert payload["volume"]["size"] == 40
-        mock_client.post_raw.assert_awaited_once_with(
-            "/volumes/12345/resize", {"size": 40}
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_volume_resize", 12345, body={"size": 40}
         )
 
 
@@ -11893,7 +11910,7 @@ async def test_handle_linode_volume_update(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.put_raw.return_value = raw_volume
+        mock_client.route_raw.return_value = raw_volume
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -11908,9 +11925,10 @@ async def test_handle_linode_volume_update(sample_config: Config) -> None:
             sample_config,
         )
 
-        mock_client.put_raw.assert_awaited_once_with(
-            "/volumes/12345",
-            {"label": "renamed-volume", "tags": ["prod"]},
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_volume_update",
+            12345,
+            body={"label": "renamed-volume", "tags": ["prod"]},
         )
         assert len(result) == 1
         payload = json.loads(result[0].text)
@@ -12359,6 +12377,17 @@ def test_linode_nodebalancer_config_rebuild_tool_definition() -> None:
     ]
 
 
+_REBUILD_NODES = [{"label": "backend-1", "address": "192.0.2.10:80"}]
+# Rebuild replaces the whole backend node set, so nodes is required on every
+# call that gets far enough to reach the client.
+_REBUILD_ARGS = {
+    "nodebalancer_id": 8,
+    "config_id": 6,
+    "confirm": True,
+    "nodes": _REBUILD_NODES,
+}
+
+
 async def test_handle_linode_nodebalancer_config_rebuild(
     sample_config: Config,
 ) -> None:
@@ -12376,7 +12405,7 @@ async def test_handle_linode_nodebalancer_config_rebuild(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_nodebalancer_config_rebuild(
-            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
+            _REBUILD_ARGS,
             sample_config,
         )
 
@@ -12388,7 +12417,9 @@ async def test_handle_linode_nodebalancer_config_rebuild(
         assert data["config"]["nodebalancer_id"] == 8
         assert data["config"]["port"] == 80
         assert data["config"]["protocol"] == "http"
-        mock_client.rebuild_nodebalancer_config.assert_called_once_with(8, 6)
+        mock_client.rebuild_nodebalancer_config.assert_called_once_with(
+            8, 6, {"nodes": _REBUILD_NODES}
+        )
 
 
 async def test_handle_linode_nodebalancer_config_rebuild_empty_response(
@@ -12408,7 +12439,7 @@ async def test_handle_linode_nodebalancer_config_rebuild_empty_response(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_nodebalancer_config_rebuild(
-            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
+            _REBUILD_ARGS,
             sample_config,
         )
 
@@ -12417,7 +12448,9 @@ async def test_handle_linode_nodebalancer_config_rebuild_empty_response(
         assert data["message"] == "Rebuilt config 6 for NodeBalancer 8 successfully"
         assert data["config"]["id"] == 0
         assert data["config"]["nodebalancer_id"] == 0
-        mock_client.rebuild_nodebalancer_config.assert_called_once_with(8, 6)
+        mock_client.rebuild_nodebalancer_config.assert_called_once_with(
+            8, 6, {"nodes": _REBUILD_NODES}
+        )
 
 
 @pytest.mark.parametrize(
@@ -12491,6 +12524,99 @@ async def test_handle_linode_nodebalancer_config_rebuild_invalid_arguments(
     mock_client_class.assert_not_called()
 
 
+async def test_handle_linode_nodebalancer_config_rebuild_carries_body(
+    sample_config: Config,
+) -> None:
+    """Every documented rebuild body field reaches the client call."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.rebuild_nodebalancer_config.return_value = {"id": 6}
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client_class.return_value = mock_client
+
+        body = {
+            "port": 443,
+            "protocol": "http",
+            "algorithm": "leastconn",
+            "stickiness": "none",
+            "check": "connection",
+            "check_interval": 5,
+            "check_timeout": 3,
+            "check_attempts": 2,
+            "check_path": "/healthz",
+            "check_body": "ok",
+            "udp_check_port": 8080,
+        }
+        await handle_linode_nodebalancer_config_rebuild(
+            {**_REBUILD_ARGS, **body},
+            sample_config,
+        )
+
+        mock_client.rebuild_nodebalancer_config.assert_called_once_with(
+            8, 6, {"nodes": _REBUILD_NODES, **body}
+        )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "nodes is required"),
+        ({"nodes": 7}, "nodes must be an array of objects"),
+        ({"nodes": ["web"]}, "nodes must be an array of objects"),
+        (
+            {"nodes": [], "algorithm": "fastest"},
+            "algorithm must be one of: roundrobin, leastconn, source, ring_hash",
+        ),
+        (
+            {"nodes": [], "protocol": "gopher"},
+            "protocol must be one of: http, https, tcp, udp",
+        ),
+        (
+            {"nodes": [], "stickiness": "sticky"},
+            "stickiness must be one of: none, table, http_cookie, session, source_ip",
+        ),
+        (
+            {"nodes": [], "check": "ping"},
+            "check must be one of: none, connection, http, http_body",
+        ),
+        (
+            {"nodes": [], "port": 70000},
+            "port must be an integer from 1 through 65535",
+        ),
+        (
+            {"nodes": [], "check_interval": 0},
+            "check_interval must be an integer greater than or equal to 1",
+        ),
+        (
+            {"nodes": [], "check_timeout": 0},
+            "check_timeout must be an integer greater than or equal to 1",
+        ),
+        (
+            {"nodes": [], "check_attempts": 0},
+            "check_attempts must be an integer greater than or equal to 1",
+        ),
+        (
+            {"nodes": [], "udp_check_port": 0},
+            "udp_check_port must be an integer greater than or equal to 1",
+        ),
+    ],
+)
+async def test_handle_linode_nodebalancer_config_rebuild_body_errors(
+    sample_config: Config, arguments: dict[str, Any], message: str
+) -> None:
+    """Rebuild body validation rejects before any client call, with Go's text."""
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_nodebalancer_config_rebuild(
+            {"nodebalancer_id": 8, "config_id": 6, "confirm": True, **arguments},
+            sample_config,
+        )
+
+    assert len(result) == 1
+    assert result[0].text == f"Error: {message}"
+    mock_client_class.assert_not_called()
+
+
 async def test_handle_linode_nodebalancer_config_rebuild_error(
     sample_config: Config,
 ) -> None:
@@ -12503,7 +12629,7 @@ async def test_handle_linode_nodebalancer_config_rebuild_error(
         mock_client_class.return_value = mock_client
 
         result = await handle_linode_nodebalancer_config_rebuild(
-            {"nodebalancer_id": 8, "config_id": 6, "confirm": True},
+            _REBUILD_ARGS,
             sample_config,
         )
 
@@ -12607,6 +12733,8 @@ async def test_handle_linode_nodebalancer_create(sample_config: Config) -> None:
             label=None,
             client_conn_throttle=0,
             ipv4="192.0.2.141",
+            tags=None,
+            fields={},
         )
 
 
@@ -12636,6 +12764,8 @@ async def test_handle_linode_nodebalancer_create_omits_unselected_ipv4(
         label=None,
         client_conn_throttle=0,
         ipv4=None,
+        tags=None,
+        fields={},
     )
 
 
@@ -15350,7 +15480,7 @@ async def test_object_storage_key_update_success(
         mock_client = AsyncMock()
         # The update endpoint echoes the full key (no secret material), which
         # put_raw returns for the proto key element.
-        mock_client.put_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "id": 42,
             "label": "updated-key",
             "access_key": "SYNTHETICACCESSKEY000000",
@@ -16303,7 +16433,7 @@ async def test_lke_clusters_list(sample_config: Config) -> None:
     """LKE clusters list should return cluster data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {
                     "id": 1,
@@ -16321,14 +16451,14 @@ async def test_lke_clusters_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "my-cluster" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/lke/clusters")
+        mock_client.route_raw.assert_called_once_with("linode_lke_cluster_list")
 
 
 async def test_lke_clusters_list_no_filter_returns_all(sample_config: Config) -> None:
     """LKE cluster list without a label filter should return every cluster."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "prod-cluster", "region": "us-east"},
                 {"id": 2, "label": "dev-cluster", "region": "us-west"},
@@ -16351,7 +16481,7 @@ async def test_lke_clusters_list_filters_by_label_substring(
     """LKE cluster list label filter is a case-insensitive substring match."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "prod-cluster", "region": "us-east"},
                 {"id": 2, "label": "dev-cluster", "region": "us-west"},
@@ -16418,7 +16548,7 @@ async def test_lke_cluster_get_missing_id(sample_config: Config) -> None:
     ("arguments", "expected"),
     [
         ({}, "cluster_id is required"),
-        ({"cluster_id": "not-a-number"}, "cluster_id must be a valid integer"),
+        ({"cluster_id": "not-a-number"}, "cluster_id must be a positive integer"),
     ],
 )
 async def test_lke_cluster_id_path_handlers_reject_bad_id(
@@ -16679,16 +16809,16 @@ async def test_lke_pools_list_non_integer_cluster_id(sample_config: Config) -> N
     result = await handle_linode_lke_pool_list({"cluster_id": "abc"}, sample_config)
 
     assert len(result) == 1
-    assert "cluster_id must be a valid integer" in result[0].text
+    assert "cluster_id must be a positive integer" in result[0].text
 
 
 @pytest.mark.parametrize(
     ("arguments", "expected"),
     [
         ({}, "cluster_id is required"),
-        ({"cluster_id": "1"}, "pool_id is required"),
-        ({"cluster_id": "x", "pool_id": "2"}, "cluster_id must be a valid integer"),
-        ({"cluster_id": "1", "pool_id": "y"}, "pool_id must be a valid integer"),
+        ({"cluster_id": 1}, "pool_id is required"),
+        ({"cluster_id": "x", "pool_id": 2}, "cluster_id must be a positive integer"),
+        ({"cluster_id": 1, "pool_id": "y"}, "pool_id must be a positive integer"),
     ],
 )
 async def test_lke_pool_get_invalid_ids(
@@ -16705,8 +16835,8 @@ async def test_lke_pool_get_invalid_ids(
     ("arguments", "expected"),
     [
         ({}, "cluster_id is required"),
-        ({"cluster_id": "1"}, "node_id is required"),
-        ({"cluster_id": "x", "node_id": "n"}, "cluster_id must be a valid integer"),
+        ({"cluster_id": 1}, "node_id is required"),
+        ({"cluster_id": "x", "node_id": "n"}, "cluster_id must be a positive integer"),
     ],
 )
 async def test_lke_node_get_invalid_ids(
@@ -17732,7 +17862,7 @@ async def test_vpcs_list(sample_config: Config) -> None:
     """VPCs list should return VPC data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "my-vpc", "region": "us-east"},
             ]
@@ -17745,14 +17875,14 @@ async def test_vpcs_list(sample_config: Config) -> None:
 
         assert len(result) == 1
         assert "my-vpc" in result[0].text
-        mock_client.get_raw.assert_called_once_with("/vpcs")
+        mock_client.route_raw.assert_called_once_with("linode_vpc_list", query="")
 
 
 async def test_vpcs_list_no_filter_returns_all(sample_config: Config) -> None:
     """VPC list without filters should return every VPC and no filter key."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "prod-vpc", "region": "us-east"},
                 {"id": 2, "label": "dev-vpc", "region": "us-west"},
@@ -17773,7 +17903,7 @@ async def test_vpcs_list_filters_by_label_substring(sample_config: Config) -> No
     """VPC list label filter is a case-insensitive substring match."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "prod-vpc", "region": "us-east"},
                 {"id": 2, "label": "dev-vpc", "region": "us-west"},
@@ -17797,7 +17927,7 @@ async def test_vpcs_list_filters_by_region_exact(sample_config: Config) -> None:
     """VPC list region filter is a case-insensitive exact match, not substring."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "a", "region": "us-east"},
                 {"id": 2, "label": "b", "region": "us-west"},
@@ -17822,7 +17952,7 @@ async def test_vpcs_list_filters_by_label_and_region(sample_config: Config) -> N
     """VPC list applies label and region filters together."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "prod-vpc", "region": "us-east"},
                 {"id": 2, "label": "prod-vpc", "region": "us-west"},
@@ -18057,11 +18187,11 @@ async def test_vpc_get_missing_id(sample_config: Config) -> None:
 
 
 async def test_vpc_get_rejects_non_integer_id(sample_config: Config) -> None:
-    """VPC get rejects a vpc_id that is not a valid integer."""
+    """VPC get rejects a vpc_id that is not a positive integer."""
     result = list(await handle_linode_vpc_get({"vpc_id": "abc"}, sample_config))
 
     assert len(result) == 1
-    assert "vpc_id must be a valid integer" in result[0].text
+    assert "vpc_id must be a positive integer" in result[0].text
 
 
 async def test_ipv6_range_get_missing_range(sample_config: Config) -> None:
@@ -18642,14 +18772,14 @@ async def test_vpc_ip_list_rejects_non_integer_id(sample_config: Config) -> None
     )
 
     assert len(result) == 1
-    assert "vpc_id must be a valid integer" in result[0].text
+    assert "vpc_id must be a positive integer" in result[0].text
 
 
 async def test_vpc_subnets_list(sample_config: Config) -> None:
     """VPC subnets list should return proto-canonical subnet data."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [{"id": 1, "label": "my-subnet", "ipv4": "10.0.0.0/24"}],
             "page": 1,
             "pages": 1,
@@ -18675,7 +18805,9 @@ async def test_vpc_subnets_list(sample_config: Config) -> None:
                 }
             ],
         }
-        mock_client.get_raw.assert_awaited_once_with("/vpcs/1/subnets")
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_vpc_subnet_list", 1, query=""
+        )
 
 
 async def test_vpc_subnet_list_missing_id(sample_config: Config) -> None:
@@ -18687,11 +18819,11 @@ async def test_vpc_subnet_list_missing_id(sample_config: Config) -> None:
 
 
 async def test_vpc_subnet_list_rejects_non_integer_id(sample_config: Config) -> None:
-    """VPC subnet list rejects a vpc_id that is not a valid integer."""
+    """VPC subnet list rejects a vpc_id that is not a positive integer."""
     result = list(await handle_linode_vpc_subnet_list({"vpc_id": "x"}, sample_config))
 
     assert len(result) == 1
-    assert "vpc_id must be a valid integer" in result[0].text
+    assert "vpc_id must be a positive integer" in result[0].text
 
 
 async def test_vpc_subnet_get(sample_config: Config) -> None:
@@ -20025,7 +20157,7 @@ async def test_execute_tool_callback_exception(sample_config: Config) -> None:
     """execute_tool catches handler exceptions and wraps them in error text."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.side_effect = RuntimeError("boom")
+        mock_client.route_raw.side_effect = RuntimeError("boom")
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -20076,7 +20208,7 @@ async def test_instance_status_filter_returns_matching(
     """Filtering by status=running keeps only running instances."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "web-1", "status": "running"},
                 {"id": 2, "label": "db-1", "status": "offline"},
@@ -20103,7 +20235,7 @@ async def test_instance_no_filter_returns_all(
     """Without a status filter, all instances are returned."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = {
+        mock_client.route_raw.return_value = {
             "data": [
                 {"id": 1, "label": "web-1", "status": "running"},
                 {"id": 2, "label": "db-1", "status": "offline"},
@@ -20155,7 +20287,7 @@ async def test_region_capability_filter(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_regions
+        mock_client.route_raw.return_value = raw_regions
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -20199,7 +20331,7 @@ async def test_region_no_filter_returns_all(sample_config: Config) -> None:
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_regions
+        mock_client.route_raw.return_value = raw_regions
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -20374,6 +20506,8 @@ async def test_handle_linode_instance_disk_create_success(
         root_pass=None,
         authorized_keys=None,
         authorized_users=None,
+        stackscript_id=None,
+        stackscript_data=None,
     )
 
 
@@ -20718,7 +20852,7 @@ async def test_handle_linode_instance_ip_allocate_success(
         "region": "",
     }
     mock_linode_client.allocate_instance_ip.assert_called_once_with(
-        123, ip_type="ipv4", public=True
+        123, ip_type="ipv4", public=True, address=None
     )
 
 
@@ -21620,7 +21754,7 @@ async def test_handle_linode_monitor_service_token_create(
         "expiry": "2026-06-01T00:00:00Z",
     }
     mock_linode_client.create_monitor_service_token.assert_awaited_once_with(
-        "dbaas", [1, 2, 3]
+        "dbaas", [1, 2, 3], None
     )
 
 
@@ -25114,7 +25248,7 @@ async def test_handle_linode_firewall_rule_version_get(
         cfg: Any, arguments: Any, description: Any, call_fn: Any
     ) -> Any:
         mock_client = MagicMock()
-        mock_client.get_raw = AsyncMock(return_value=raw_rule_version)
+        mock_client.route_raw = AsyncMock(return_value=raw_rule_version)
         version_data = await call_fn(mock_client)
         return [TextContent(type="text", text=json.dumps(version_data))]
 
@@ -25225,7 +25359,7 @@ async def test_handle_linode_firewall_template_get(sample_config: Config) -> Non
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_template
+        mock_client.route_raw.return_value = raw_template
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -25239,8 +25373,8 @@ async def test_handle_linode_firewall_template_get(sample_config: Config) -> Non
         # not part of the FirewallTemplate proto, so they are dropped).
         assert '"slug": "public"' in result[0].text
         assert '"inbound_policy": "DROP"' in result[0].text
-        mock_client.get_raw.assert_awaited_once_with(
-            "/networking/firewalls/templates/public"
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_firewall_template_get", "public", query=""
         )
 
 
@@ -25260,7 +25394,7 @@ async def test_handle_linode_firewall_template_get_with_pagination(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = raw_template
+        mock_client.route_raw.return_value = raw_template
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -25271,8 +25405,8 @@ async def test_handle_linode_firewall_template_get_with_pagination(
 
         assert len(result) == 1
         assert '"slug": "vpc"' in result[0].text
-        mock_client.get_raw.assert_awaited_once_with(
-            "/networking/firewalls/templates/vpc?page=2&page_size=25"
+        mock_client.route_raw.assert_awaited_once_with(
+            "linode_firewall_template_get", "vpc", query="page=2&page_size=25"
         )
 
 
@@ -25600,7 +25734,7 @@ async def test_handle_linode_firewall_rule_version_list(
 
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
         mock_client = AsyncMock()
-        mock_client.get_raw.return_value = history
+        mock_client.route_raw.return_value = history
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         mock_client_class.return_value = mock_client
@@ -25614,7 +25748,9 @@ async def test_handle_linode_firewall_rule_version_list(
     assert body["firewall_rule_versions"][0]["version"] == 2
     assert body["firewall_rule_versions"][0]["rules"]["inbound_policy"] == "DROP"
     assert body["firewall_rule_versions"][0]["tags"] == ["edge"]
-    mock_client.get_raw.assert_awaited_once_with("/networking/firewalls/7/history")
+    mock_client.route_raw.assert_awaited_once_with(
+        "linode_firewall_rule_version_list", 7
+    )
 
 
 async def test_handle_linode_firewall_rule_version_list_rejects_page(
@@ -26035,6 +26171,7 @@ async def test_monitor_alert_definition_create_dry_run_returns_preview(
             "rule_criteria": {"rules": [{"metric": "cpu", "operator": "gt"}]},
             "trigger_conditions": {"criteria_condition": "ALL"},
             "channel_ids": [546],
+            "scope": "account",
             "dry_run": True,
         },
         sample_config,
@@ -26244,7 +26381,7 @@ async def test_networking_ip_update_happy_path_sets_rdns(
     assert body["ip"]["address"] == "192.0.2.21"
     assert body["ip"]["rdns"] == "host.example.com"
     mock_client.update_networking_ip.assert_awaited_once_with(
-        "192.0.2.21", "host.example.com"
+        "192.0.2.21", "host.example.com", None
     )
 
 
@@ -28408,3 +28545,50 @@ async def test_instance_firewalls_list_rejects_invalid_page(
 
     assert len(result) == 1
     assert "page_size" in result[0].text
+
+
+async def test_handle_linode_instance_disk_create_requires_size(
+    mock_linode_client: AsyncMock, sample_config: Config
+) -> None:
+    """Disk create rejects a missing size before reaching the client."""
+    result = await handle_linode_instance_disk_create(
+        {"linode_id": 123, "label": "boot", "confirm": True},
+        sample_config,
+    )
+
+    assert result[0].text == "Error: size is required"
+    mock_linode_client.create_instance_disk.assert_not_called()
+
+
+async def test_handle_linode_domain_update_rejects_non_integer_soa_timer(
+    sample_config: Config,
+) -> None:
+    """Domain update rejects a non-integer SOA timer with Go's message."""
+    from linodemcp.tools.linode_domains_write import handle_linode_domain_update
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_domain_update(
+            {"domain_id": 5, "confirm": True, "expire_sec": "soon"},
+            sample_config,
+        )
+
+    assert result[0].text == "Error: expire_sec must be an integer"
+    mock_client_class.assert_not_called()
+
+
+async def test_handle_linode_object_storage_key_update_rejects_bad_bucket_access(
+    sample_config: Config,
+) -> None:
+    """Key update surfaces a malformed bucket_access before the client call."""
+    from linodemcp.tools.linode_object_storage_write import (
+        handle_linode_object_storage_key_update,
+    )
+
+    with patch("linodemcp.tools.helpers.RetryableClient") as mock_client_class:
+        result = await handle_linode_object_storage_key_update(
+            {"key_id": 7, "confirm": True, "bucket_access": "{oops"},
+            sample_config,
+        )
+
+    assert "Invalid bucket_access JSON" in result[0].text
+    mock_client_class.assert_not_called()

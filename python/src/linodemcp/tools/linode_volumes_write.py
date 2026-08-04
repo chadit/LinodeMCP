@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from mcp.types import TextContent, Tool
 
-from linodemcp.genpb.linode.mcp.v1 import volume_pb2
+from linodemcp.genpb.linode.mcp.v1 import common_pb2, volume_pb2
 from linodemcp.linode import validate_label, validate_volume_size
 from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
@@ -15,8 +15,10 @@ from linodemcp.tools.helpers import (
     execute_dry_run,
     execute_tool,
     is_dry_run,
+    optional_tags_argument,
     required_int_id,
 )
+from linodemcp.tools.proto_enum import optional_enum_error
 from linodemcp.tools.proto_response import raw_int, raw_str, serialize_api_response
 from linodemcp.tools.toolschemas import schema
 from linodemcp.tools.twostage_destroy import run_two_stage_destroy
@@ -58,7 +60,38 @@ def _volume_create_error(arguments: dict[str, Any]) -> list[TextContent] | None:
             validate_volume_size(size)
     except ValueError as exc:
         return error_response(str(exc))
+    encryption_error = optional_enum_error(
+        arguments, "encryption", common_pb2.DiskEncryption.Value
+    )
+    if encryption_error is not None:
+        return error_response(encryption_error)
     return None
+
+
+def _volume_create_preview(arguments: dict[str, Any], label: str) -> list[TextContent]:
+    """Render the linode_volume_create dry-run preview."""
+    if not label:
+        return error_response("label is required")
+    size = arguments.get("size", 20)
+    region = arguments.get("region")
+    attach_to = arguments.get("linode_id")
+    effect = f"A new {size} GB volume {label!r} will be created"
+    if region:
+        effect += f" in region {region}"
+    side_effects = [f"{effect}."]
+    if attach_to:
+        side_effects.append(
+            f"The volume is attached to instance {attach_to} on creation."
+        )
+    return build_dry_run_response(
+        "linode_volume_create",
+        arguments.get("environment", ""),
+        "POST",
+        "/volumes",
+        None,
+        side_effects=side_effects,
+        warnings=["Billing for the volume starts immediately on creation."],
+    )
 
 
 async def handle_linode_volume_create(
@@ -67,29 +100,12 @@ async def handle_linode_volume_create(
     """Handle linode_volume_create tool request."""
     label = arguments.get("label", "")
 
+    tags, tags_error = optional_tags_argument(arguments)
+    if tags_error:
+        return error_response(tags_error)
+
     if is_dry_run(arguments):
-        if not label:
-            return error_response("label is required")
-        size = arguments.get("size", 20)
-        region = arguments.get("region")
-        attach_to = arguments.get("linode_id")
-        effect = f"A new {size} GB volume {label!r} will be created"
-        if region:
-            effect += f" in region {region}"
-        side_effects = [f"{effect}."]
-        if attach_to:
-            side_effects.append(
-                f"The volume is attached to instance {attach_to} on creation."
-            )
-        return build_dry_run_response(
-            "linode_volume_create",
-            arguments.get("environment", ""),
-            "POST",
-            "/volumes",
-            None,
-            side_effects=side_effects,
-            warnings=["Billing for the volume starts immediately on creation."],
-        )
+        return _volume_create_preview(arguments, label)
 
     confirm = arguments.get("confirm", False)
 
@@ -112,12 +128,20 @@ async def handle_linode_volume_create(
         body["region"] = arguments.get("region")
     if arguments.get("linode_id") is not None:
         body["linode_id"] = arguments.get("linode_id")
+    if tags:
+        body["tags"] = tags
+    # Falsy values are dropped rather than sent, matching the omitempty tags on
+    # Go's CreateVolumeRequest so both clients put the same bytes on the wire.
+    for field in ("config_id", "encryption"):
+        value = arguments.get(field)
+        if value:
+            body[field] = value
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         # retry=False because POST /volumes is not idempotent: the API assigns
         # the ID, so replaying after a transient failure leaves a second
         # billable volume the caller never learns about.
-        raw = await client.post_raw("/volumes", body, retry=False)
+        raw = await client.route_raw("linode_volume_create", body=body, retry=False)
         vol_label = raw_str(raw, "label")
         vol_id = raw_int(raw, "id")
         vol_region = raw_str(raw, "region")
@@ -203,11 +227,12 @@ async def handle_linode_volume_clone(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        endpoint = f"/volumes/{int(volume_id)}/clone"
         # retry=False because the clone POST creates a new volume with its own
         # API-assigned ID, so replaying after a transient failure leaves a
         # second billable copy the caller never learns about.
-        raw = await client.post_raw(endpoint, {"label": label}, retry=False)
+        raw = await client.route_raw(
+            "linode_volume_clone", int(volume_id), body={"label": label}, retry=False
+        )
         vol_label = raw_str(raw, "label")
         return serialize_api_response(
             {
@@ -288,11 +313,10 @@ async def handle_linode_volume_attach(
         body["config_id"] = arguments.get("config_id")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        endpoint = f"/volumes/{int(volume_id)}/attach"
         # Retry stays on: attach names both sides of an existing pairing and
         # creates nothing, so a replay converges on the same attachment rather
         # than leaving a duplicate behind.
-        raw = await client.post_raw(endpoint, body)
+        raw = await client.route_raw("linode_volume_attach", int(volume_id), body=body)
         return serialize_api_response(
             {
                 "message": (
@@ -465,10 +489,11 @@ async def handle_linode_volume_resize(
         return error_response(str(exc))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        endpoint = f"/volumes/{int(volume_id)}/resize"
         # Retry stays on: resize states a target size on an existing volume, so
         # a replay asks for the same end state rather than creating anything.
-        raw = await client.post_raw(endpoint, {"size": int(size)})
+        raw = await client.route_raw(
+            "linode_volume_resize", int(volume_id), body={"size": int(size)}
+        )
         return serialize_api_response(
             {
                 "message": (
@@ -571,7 +596,7 @@ async def handle_linode_volume_update(
         body["tags"] = tags
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.put_raw(f"/volumes/{int(volume_id)}", body)
+        raw = await client.route_raw("linode_volume_update", int(volume_id), body=body)
         return serialize_api_response(
             {
                 "message": f"Volume {volume_id} updated successfully",

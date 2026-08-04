@@ -93,12 +93,19 @@ def contract_routes() -> dict[str, str]:
     }
 
 
-def go_evidence(workdir: Path, dump_path: str | None = None) -> _routescan.Evidence:
+def go_evidence(
+    workdir: Path, dump_path: str | None = None, declared: dict[str, str] | None = None
+) -> _routescan.Evidence:
     """Resolve Go's route surface through cmd/route-dump.
 
     A non-zero exit (a renamed request primitive, an unparsable file) raises, so
     the gate fails loudly rather than treating Go as a language with no routes
     and reporting every contracted route as missing.
+
+    declared is the contract in the gate's own shape, {tool: "<METHOD> <path>"}.
+    The dump cannot supply it: cmd/route-dump reads source with go/ast and never
+    imports the generated descriptors, so a call site that names a tool instead
+    of a path arrives here as a name, and this is where it becomes a route.
     """
     if dump_path:
         raw = json.loads(Path(dump_path).read_text(encoding="utf-8"))
@@ -118,15 +125,43 @@ def go_evidence(workdir: Path, dump_path: str | None = None) -> _routescan.Evide
             raise RuntimeError(msg)
         raw = json.loads(proc.stdout)
 
-    return _routescan.Evidence(
-        routes={str(route) for route in raw.get("routes", [])},
-        unresolved=[str(site) for site in raw.get("unresolved", [])],
-    )
+    routes = {str(route) for route in raw.get("routes", [])}
+    unresolved = [str(site) for site in raw.get("unresolved", [])]
+
+    for entry in raw.get("contracted", []):
+        route = (declared or {}).get(str(entry.get("tool", "")))
+        if route is None:
+            unresolved.append(_undeclared(entry))
+            continue
+        routes.add(route)
+
+    return _routescan.Evidence(routes=routes, unresolved=unresolved)
+
+
+def _undeclared(entry: dict[str, str]) -> str:
+    """Name a call site that resolves its route from a tool nothing declares.
+
+    Its own error class rather than silence: the name is the whole route at such
+    a site, so a typo is a call that raises the first time it runs, and this is
+    the offline reading that can still catch it. The wording matches what
+    scripts/_routescan.py emits for the same case, so both languages report it
+    the same way.
+    """
+    tool = str(entry.get("tool", ""))
+    site = str(entry.get("site", ""))
+
+    return f"{site}: undeclared tool {tool!r}"
 
 
 def python_evidence(workdir: Path) -> _routescan.Evidence:
-    """Resolve Python's route surface from the source tree under workdir."""
-    return _routescan.scan_python(workdir, _REPO_ROOT)
+    """Resolve Python's route surface from the source tree under workdir.
+
+    The contract goes in because a call site that resolves its route from the
+    proto names its tool and no path, so the declaration is where its route
+    lives. Evidence for those call sites is that the tool is named and declared,
+    which is all there is to be right about once the path is single-sourced.
+    """
+    return _routescan.scan_python(workdir, _REPO_ROOT, contract_routes())
 
 
 def coverage(go_routes: str | None = None) -> dict[str, Scanner]:
@@ -135,9 +170,14 @@ def coverage(go_routes: str | None = None) -> dict[str, Scanner]:
     Built per call rather than held as a constant so the Go scanner can be
     pointed at a recorded dump, which is what lets the gate's own tests run
     without the Go toolchain.
+
+    Both scanners get the contract, because in both languages a call site that
+    resolves its route from the proto names a tool and no path. Go takes it as
+    an argument since its dump comes back from a subprocess that cannot read the
+    descriptors at all.
     """
     return {
-        "go": lambda workdir: go_evidence(workdir, go_routes),
+        "go": lambda workdir: go_evidence(workdir, go_routes, contract_routes()),
         "python": python_evidence,
     }
 

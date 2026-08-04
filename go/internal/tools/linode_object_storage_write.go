@@ -81,10 +81,17 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.Ca
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	endpointType, validationMessage := optionalEnumChoice(request, "endpoint_type", linodev1.ObjectStorageEndpointType_Value_value)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	req := linode.CreateObjectStorageBucketRequest{
-		Label:  label,
-		Region: region,
-		ACL:    acl,
+		Label:        label,
+		Region:       region,
+		ACL:          acl,
+		EndpointType: endpointType,
+		S3Endpoint:   request.GetString("s3_endpoint", ""),
 	}
 
 	if _, ok := request.GetArguments()["cors_enabled"]; ok {
@@ -92,7 +99,7 @@ func handleObjectStorageBucketCreateRequest(ctx context.Context, request *mcp.Ca
 		req.CORSEnabled = &corsEnabled
 	}
 
-	bucket, err := client.CreateObjectStorageBucketProto(ctx, req)
+	bucket, err := client.CreateObjectStorageBucketProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create bucket: %v", err)), nil
 	}
@@ -548,6 +555,15 @@ func handleObjectStorageKeyUpdateRequest(ctx context.Context, request *mcp.CallT
 	req := linode.UpdateObjectStorageKeyRequest{
 		Label:        label,
 		BucketAccess: bucketAccess,
+	}
+
+	if raw, exists := request.GetArguments()["regions"]; exists {
+		regions, validationMessage := stringSliceFromToolArg(raw, "regions")
+		if validationMessage != "" {
+			return mcp.NewToolResultError(validationMessage), nil
+		}
+
+		req.Regions = regions
 	}
 
 	key, err := client.UpdateObjectStorageKeyProto(ctx, keyID, req)

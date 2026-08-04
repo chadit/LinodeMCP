@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -16,7 +17,9 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/appinfo"
 	"github.com/chadit/LinodeMCP/go/internal/audit"
 	"github.com/chadit/LinodeMCP/go/internal/config"
+	"github.com/chadit/LinodeMCP/go/internal/gentools"
 	"github.com/chadit/LinodeMCP/go/internal/linode"
+	"github.com/chadit/LinodeMCP/go/internal/linoderoute"
 	"github.com/chadit/LinodeMCP/go/internal/profiles"
 	"github.com/chadit/LinodeMCP/go/internal/profiles/builder"
 	"github.com/chadit/LinodeMCP/go/internal/tools"
@@ -28,10 +31,9 @@ import (
 // toolHandler is the callback signature mcp-go invokes for each tool call.
 type toolHandler = func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 
-// toolEntry is the staged shape produced by the per-category collectors before
-// profile filtering decides which tools actually reach mcp-go. Pass 1 of the
-// two-pass registration builds a flat slice of these; pass 2 calls addTool
-// only for entries whose name appears in the resolved profile's AllowedTools.
+// toolEntry is what the per-category collectors stage in pass 1. Pass 2 calls
+// addTool only for entries whose name appears in the resolved profile's
+// AllowedTools.
 type toolEntry struct {
 	tool       mcp.Tool
 	handler    toolHandler
@@ -45,53 +47,46 @@ type Server struct {
 
 	// registered tracks the tools currently live in mcp-go by name, so
 	// ReloadProfile can compute additions and removals without walking the
-	// tools slice. The map value is the index into tools for O(1) lookup
-	// when rebuilding the slice after a reload.
+	// tools slice.
 	registered map[string]*toolWrapper
 
-	// draftRegistry holds Phase 8 profile-builder drafts. One per server
-	// process. Drafts live in memory only; the Phase 8.5 _draft_save tool
-	// is the bridge from this registry back into Config.Profiles.
+	// draftRegistry holds profile-builder drafts in memory only, one set per
+	// server process. The _draft_save tool is the bridge from this registry
+	// back into Config.Profiles.
 	draftRegistry *builder.Registry
 
-	// auditSink consumes audit events emitted by the per-handler
-	// capture middleware (Phase 1b). Defaults to NoopSink so Phase
-	// 1b ships without a real sink; Phase 2 swaps in the JSONL
-	// writer. Tests inject a CapturingSink via SetAuditSink to
-	// assert handler-call events.
+	// auditSink consumes audit events emitted by the per-handler capture
+	// middleware. Defaults to NoopSink; tests inject a CapturingSink via
+	// SetAuditSink to assert handler-call events.
 	auditSink audit.Sink
 
 	// planStore holds outstanding two-stage plans for the life of the
-	// process. The capture middleware attaches it to every call's context
-	// so a two-stage-aware destroy handler can produce a plan and later
-	// apply it after a drift check. Start launches the TTL janitor.
+	// process. The capture middleware attaches it to every call's context so
+	// a destroy handler can produce a plan and apply it after a drift check.
+	// Start launches the TTL janitor.
 	planStore *twostage.PlanStore
 
-	// metrics wraps each tool dispatch so request totals, durations, and
-	// errors record on the OpenTelemetry meter. Defaults to a no-op so a
-	// Server built without observability (tests, the CLI front-end)
-	// dispatches unchanged; the serve path injects the real
-	// *observability.Observability via SetMetricsRecorder. Without this the
-	// recording middleware is built but never reached, so the /metrics
-	// endpoint carries no application series.
+	// metrics wraps each tool dispatch. Defaults to a no-op so a Server built
+	// without observability (tests, the CLI front-end) dispatches unchanged;
+	// the serve path injects the real *observability.Observability via
+	// SetMetricsRecorder. Skip that call and the recording middleware is
+	// built but never reached, so /metrics carries no application series.
 	metrics MetricsRecorder
 
 	tools []contracts.Tool
 
 	// allEntries holds every tool the server could register, regardless of
-	// the active profile. Built once in New and reused by ReloadProfile so a
-	// profile change can re-add tools that were filtered out at startup
-	// without re-running the per-category collectors.
+	// the active profile. Built once in New so ReloadProfile can re-add tools
+	// filtered out at startup without re-running the collectors.
 	allEntries []toolEntry
 
 	activeProfile profiles.Profile
 
 	inflight sync.WaitGroup
 
-	// profileMu guards activeProfile, tools, and registered against
-	// concurrent reads from Tools/ActiveProfile/ToolInfos and writes from
-	// ReloadProfile. mcp-go's internal mutex protects its own tool map, but
-	// the Server's view of which tools are live needs its own gate.
+	// profileMu guards activeProfile, tools, and registered. mcp-go's
+	// internal mutex protects its own tool map, but the Server's view of
+	// which tools are live needs its own gate.
 	profileMu sync.RWMutex
 
 	// shutdownMu serializes positive inflight.Add calls with Shutdown's
@@ -99,22 +94,20 @@ type Server struct {
 	// when the counter is zero, so tool dispatch must pass this gate first.
 	shutdownMu sync.Mutex
 
-	// auditRedactPII selects which redaction tier the capture
-	// middleware uses (Phase 4c). False applies the always-on
-	// credential list only; true also applies the PII list. main wires
-	// this to cfg.Audit.RedactPII via SetAuditRedactPII at startup.
-	// Default false so tests that build a Server without going through
-	// main keep credential-only redaction behavior; production startup
-	// flips it to true unless the operator opts out.
+	// auditRedactPII selects which redaction tier the capture middleware
+	// uses. False applies the always-on credential list only; true also
+	// applies the PII list. Default false so tests that build a Server
+	// without going through main keep credential-only behavior; main wires
+	// it to cfg.Audit.RedactPII via SetAuditRedactPII at startup.
 	auditRedactPII bool
 
 	shuttingDown bool
 }
 
-// New creates a new LinodeMCP server. Returns an error if config is nil or if
-// the active profile cannot be resolved (unknown profile, disabled built-in,
-// etc.). A resolution error surfaces here rather than at request time so a
-// misconfigured server fails fast instead of silently registering nothing.
+// New creates a new LinodeMCP server. A profile that cannot be resolved
+// (unknown name, disabled built-in) errors here rather than at request time,
+// so a misconfigured server fails fast instead of silently registering
+// nothing.
 func New(cfg *config.Config) (*Server, error) {
 	if cfg == nil {
 		return nil, ErrConfigNil
@@ -150,17 +143,12 @@ func New(cfg *config.Config) (*Server, error) {
 // ValidateGeneratedSchemas rejects any tool still advertising the permissive
 // placeholder toolschemas.Schema returns for a name the proto contract does not
 // define. Such a tool would accept any arguments at all, so the server refuses
-// to start rather than serve it.
+// to start rather than serve it. The Python twin aborts startup at the same
+// point, so neither server serves a tool that validates nothing.
 //
-// The Python twin raises FileNotFoundError from its own schema loader, which
-// aborts startup at the same point. Failing here keeps the two servers behaving
-// the same way: neither starts, and neither serves a tool that validates
-// nothing.
-//
-// Exported because the failure it guards cannot be produced from a config. The
-// tool factories embed their schemas at compile time, so every catalog New can
-// build is already valid, and a test has to hand this a tool directly to prove
-// the check still bites.
+// Exported because the failure it guards cannot be produced from a config: the
+// tool factories embed their schemas at compile time, so a test has to hand
+// this a tool directly to prove the check still bites.
 func ValidateGeneratedSchemas(list []mcp.Tool) error {
 	for i := range list {
 		if toolschemas.IsFallback(list[i].RawInputSchema) {
@@ -171,16 +159,11 @@ func ValidateGeneratedSchemas(list []mcp.Tool) error {
 	return nil
 }
 
-// builderToolEntries assembles the Phase 8 profile-builder tool
-// entries. Built outside collectAllToolEntries because the builder
-// handlers need a closure over the server itself (Server.ToolCatalog,
-// future draft registry access). The CapMeta tag means the active
-// profile filter always passes them through.
-//
-// Calling Server.ToolCatalog from a builder handler returns the
-// catalog as it stands at call time, including the builder tools
-// themselves. That self-inclusion is deliberate: a user composing a
-// new profile may want to know which builder tools they're inheriting.
+// builderToolEntries assembles the profile-builder tool entries. Built outside
+// collectAllToolEntries because the handlers need a closure over the server
+// itself, and tagged CapMeta so the active profile filter always passes them
+// through. ToolCatalog reports the builder tools themselves, which is
+// deliberate: a user composing a new profile wants to see what they inherit.
 func builderToolEntries(srv *Server) []toolEntry {
 	listTool, listCap, listHandler := tools.NewLinodeProfileListToolsTool(srv.ToolCatalog)
 	catTool, catCap, catHandler := tools.NewLinodeProfileListCategoriesTool(srv.ToolCatalog)
@@ -216,9 +199,8 @@ func (tw *toolWrapper) Name() string        { return tw.tool.Name }
 func (tw *toolWrapper) Description() string { return tw.tool.Description }
 func (tw *toolWrapper) InputSchema() any    { return tw.tool.InputSchema }
 
-// Capability returns the tool's capability tag. Server-internal accessor used
-// by the invariant tests and (in later phases) the audit middleware. The
-// public pkg/contracts/Tool interface deliberately does not expose this.
+// Capability returns the tool's capability tag. Server-internal: the public
+// pkg/contracts.Tool interface deliberately does not expose this.
 func (tw *toolWrapper) Capability() profiles.Capability { return tw.capability }
 
 // RawTool returns the underlying mcp.Tool so the invariant tests can inspect
@@ -234,9 +216,8 @@ func (*toolWrapper) Execute(ctx context.Context, _ map[string]any) (*mcp.CallToo
 	}
 }
 
-// Tools returns the registered tool list. The slice is a snapshot copy so
-// callers can iterate safely even if ReloadProfile mutates the live set
-// concurrently.
+// Tools returns the registered tool list as a snapshot copy, so callers can
+// iterate safely while ReloadProfile mutates the live set.
 func (s *Server) Tools() []contracts.Tool {
 	s.profileMu.RLock()
 	defer s.profileMu.RUnlock()
@@ -247,10 +228,8 @@ func (s *Server) Tools() []contracts.Tool {
 	return out
 }
 
-// ActiveProfile returns the profile the server is currently running under.
-// Reflects the most recent successful ReloadProfile if one has been called;
-// otherwise the profile resolved at construction time. Returned by value so
-// callers cannot mutate the server's internal state.
+// ActiveProfile returns the profile the server is currently running under, by
+// value so callers cannot mutate the server's internal state.
 func (s *Server) ActiveProfile() profiles.Profile {
 	s.profileMu.RLock()
 	defer s.profileMu.RUnlock()
@@ -259,12 +238,10 @@ func (s *Server) ActiveProfile() profiles.Profile {
 }
 
 // LookupProfile resolves a profile by name across both built-in and
-// user-defined entries. Used by Phase 8.3 _draft_new with the
-// optional clone_from parameter. Returns the materialized Profile and
-// true on hit; the zero Profile and false on miss. Ignores the
-// Disabled flag so users can clone from disabled built-ins like
-// full-access and emergency. User-defined entries shadow built-ins
-// by name, matching ResolveActiveProfile's precedence.
+// user-defined entries, returning the materialized Profile and true on hit.
+// Ignores the Disabled flag so _draft_new can clone from disabled built-ins
+// like full-access and emergency. User-defined entries shadow built-ins by
+// name, matching ResolveActiveProfile's precedence.
 func (s *Server) LookupProfile(name string) (profiles.Profile, bool) {
 	s.profileMu.RLock()
 	defer s.profileMu.RUnlock()
@@ -281,23 +258,17 @@ func (s *Server) LookupProfile(name string) (profiles.Profile, bool) {
 }
 
 // DraftRegistry returns the server's in-memory profile-builder draft
-// registry. Phase 8.3+ builder tool handlers acquire it through this
-// accessor; tests inject a fresh registry by constructing their own
-// Server. The returned pointer is stable for the server's lifetime.
+// registry. The pointer is stable for the server's lifetime; tests get a fresh
+// registry by constructing their own Server.
 func (s *Server) DraftRegistry() *builder.Registry {
 	return s.draftRegistry
 }
 
-// ToolCatalog returns the full set of tools the server could register,
-// regardless of the active profile's filter. The Phase 8 builder tools
-// read this to surface the registerable surface to the model; profile
-// filtering controls which subset reaches handlers, but the catalog is
-// always the full menu so the user can build a new profile against
-// anything available.
-//
-// Returns a snapshot copy so callers can iterate without holding the
-// server lock. Order matches the construction order in
-// collectAllToolEntries (category-by-category, factory-by-factory).
+// ToolCatalog returns a snapshot of every tool the server could register,
+// regardless of the active profile's filter. Profile filtering controls which
+// subset reaches handlers, but the catalog stays the full menu so the builder
+// tools can compose a new profile against anything available. Order matches
+// collectAllToolEntries: category by category, factory by factory.
 func (s *Server) ToolCatalog() []profiles.ToolDescriptor {
 	s.profileMu.RLock()
 	defer s.profileMu.RUnlock()
@@ -313,21 +284,14 @@ func (s *Server) ToolCatalog() []profiles.ToolDescriptor {
 	return out
 }
 
-// ValidateScopes runs Phase 6.4 token-scope validation against the
-// active profile. It builds a Linode client from the default
-// environment in the current config and delegates to
-// profiles.ValidateScopes for PAT-vs-OAuth dispatch.
+// ValidateScopes runs token-scope validation against the active profile,
+// building a Linode client from the config's default environment and
+// delegating to profiles.ValidateScopes for PAT-vs-OAuth dispatch.
 //
-// Returns profiles.ErrTokenNotConfigured (no API call made) when the
-// active environment has no token set; the caller decides whether to
-// fail load (elevated profile) or warn-and-continue (read-only) per
-// the missing-token policy. Other errors come from the underlying
-// /profile and /profile/grants calls, wrapped in
-// ErrProfileFetchFailed / ErrGrantsFetchFailed.
-//
-// On success, the returned ScopeValidationResult carries the actual
-// scope set, the diff against the profile's required scopes, and the
-// token kind for audit logging.
+// Returns profiles.ErrTokenNotConfigured, with no API call made, when that
+// environment has no token set; the caller decides whether to fail load
+// (elevated profile) or warn and continue (read-only). Other errors come from
+// the underlying /profile and /profile/grants calls.
 func (s *Server) ValidateScopes(ctx context.Context) (*profiles.ScopeValidationResult, error) {
 	s.profileMu.RLock()
 	cfg := s.config
@@ -353,11 +317,9 @@ func (s *Server) ValidateScopes(ctx context.Context) (*profiles.ScopeValidationR
 	return result, nil
 }
 
-// parseRequiredScopes converts the profile's stored []string scope
-// values into the typed Scope slice ValidateScopes expects. Stored as
-// strings so user-defined profiles can declare custom scopes the
-// catalog doesn't yet name; the cast back to Scope is a string alias
-// so no data is lost.
+// parseRequiredScopes converts the profile's stored []string scopes into the
+// typed slice ValidateScopes expects. Stored as strings so user-defined
+// profiles can declare scopes the catalog doesn't yet name.
 func parseRequiredScopes(stored []string) []profiles.Scope {
 	out := make([]profiles.Scope, len(stored))
 	for i, s := range stored {
@@ -367,10 +329,9 @@ func parseRequiredScopes(stored []string) []profiles.Scope {
 	return out
 }
 
-// ToolInfo describes a registered tool's capability and input schema for the
-// capability invariant tests. The public contracts.Tool deliberately stays
-// minimal; this accessor lives on Server so tests in package server_test can
-// inspect the capability tag without widening the public contract.
+// ToolInfo describes a registered tool's capability and input schema, so tests
+// in package server_test can inspect the capability tag without widening the
+// public contracts.Tool interface.
 type ToolInfo struct {
 	InputSchema    mcp.ToolInputSchema
 	Name           string
@@ -378,9 +339,8 @@ type ToolInfo struct {
 	Capability     profiles.Capability
 }
 
-// ToolInfos returns one entry per registered tool, exposing the capability
-// tag and input schema. Test-only accessor; the audit middleware reads
-// capability via its own server-internal path.
+// ToolInfos returns one entry per registered tool. Test-only accessor; the
+// audit middleware reads capability via its own server-internal path.
 func (s *Server) ToolInfos() []ToolInfo {
 	s.profileMu.RLock()
 	defer s.profileMu.RUnlock()
@@ -404,12 +364,10 @@ func (s *Server) ToolInfos() []ToolInfo {
 	return out
 }
 
-// AllToolInfos returns one entry per tool the server could register,
-// independent of the active profile's filter. ToolInfos only sees the
-// tools the active profile exposes; this returns the full catalog from
-// allEntries. The audit redaction-coverage invariant uses this because
-// a sensitive arg must be redacted whenever ANY profile can expose the
-// tool, not just the profile that happens to be active.
+// AllToolInfos returns one entry per tool the server could register, where
+// ToolInfos sees only what the active profile exposes. The audit
+// redaction-coverage invariant needs this: a sensitive arg must be redacted
+// whenever ANY profile can expose the tool, not just the active one.
 func (s *Server) AllToolInfos() []ToolInfo {
 	out := make([]ToolInfo, 0, len(s.allEntries))
 
@@ -426,9 +384,9 @@ func (s *Server) AllToolInfos() []ToolInfo {
 }
 
 // HandleMessage dispatches a JSON-RPC message into the underlying mcp-go
-// server. Exposes the in-process transport for tests and embedders that
-// don't go through stdio. Tool handlers invoked via this path are still
-// tracked in the inflight WaitGroup, so Shutdown drains them correctly.
+// server, exposing the in-process transport for tests and embedders that skip
+// stdio. Handlers invoked this way are still tracked in the inflight
+// WaitGroup, so Shutdown drains them correctly.
 func (s *Server) HandleMessage(ctx context.Context, message json.RawMessage) mcp.JSONRPCMessage {
 	return s.mcp.HandleMessage(ctx, message)
 }
@@ -466,7 +424,6 @@ func (s *Server) Start(ctx context.Context) error {
 
 	log.Printf("LinodeMCP server started")
 
-	// Reap expired two-stage plans for the life of the serve context.
 	s.planStore.StartJanitor(ctx, time.Minute)
 
 	errCh := make(chan error, 1)
@@ -489,20 +446,17 @@ func (s *Server) Start(ctx context.Context) error {
 
 type toolFactory func(*config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error))
 
-// ReloadProfile swaps the running server to the profile resolved from cfg.
-// Tools the new profile allows that weren't previously registered are added;
-// tools the new profile excludes are removed. mcp-go fires
-// notifications/tools/list_changed on both paths so connected clients
-// refresh their tool cache.
+// ReloadProfile swaps the running server to the profile resolved from cfg,
+// adding tools the new profile allows and removing the ones it excludes.
+// mcp-go fires notifications/tools/list_changed on both paths so connected
+// clients refresh their tool cache.
 //
-// On error (unknown profile, disabled built-in, malformed config) the server
-// keeps its current active profile and tool set. A failed reload is a
-// no-op, not a partial update.
+// A failed reload is a no-op, not a partial update: the server keeps its
+// current profile and tool set.
 //
-// Concurrency: holds s.profileMu in write mode for the duration. Reads on
-// Tools/ActiveProfile/ToolInfos block until the swap completes. In-flight
-// tool handlers that already passed the dispatch gate continue to run; the
-// reload only changes what the gate accepts on future calls.
+// Holds s.profileMu in write mode throughout. In-flight handlers that already
+// passed the dispatch gate continue to run; the reload only changes what the
+// gate accepts on future calls.
 func (s *Server) ReloadProfile(cfg *config.Config) error {
 	if cfg == nil {
 		return ErrConfigNil
@@ -580,10 +534,8 @@ func (s *Server) ReloadProfile(cfg *config.Config) error {
 	return nil
 }
 
-// SetAuditSink swaps the audit sink. Phase 2 main wires this to the
-// JSONL writer at startup; tests use it to inject CapturingSink
-// before exercising the dispatch path. Passing nil restores the
-// NoopSink default rather than producing a nil-deref crash.
+// SetAuditSink swaps the audit sink. Passing nil restores the NoopSink
+// default rather than producing a nil-deref crash.
 func (s *Server) SetAuditSink(sink audit.Sink) {
 	if sink == nil {
 		sink = audit.NoopSink{}
@@ -592,10 +544,8 @@ func (s *Server) SetAuditSink(sink audit.Sink) {
 	s.auditSink = sink
 }
 
-// SetAuditRedactPII selects the redaction tier the capture middleware
-// applies to event args (Phase 4c). Main wires this to
-// cfg.Audit.RedactPII at startup; tests use it to opt into PII
-// redaction when asserting the combined-redaction path.
+// SetAuditRedactPII selects the redaction tier the capture middleware applies
+// to event args. Main wires this to cfg.Audit.RedactPII at startup.
 func (s *Server) SetAuditRedactPII(redactPII bool) {
 	s.auditRedactPII = redactPII
 }
@@ -887,7 +837,43 @@ func (s *Server) registerTools() error {
 		s.addTool(&entry.tool, entry.capability, entry.handler)
 	}
 
-	return ValidateGeneratedSchemas(s.entryTools())
+	return ValidateCatalog(s.entryTools())
+}
+
+// ValidateCatalog runs the three contract checks a staged catalog has to pass
+// before the server starts: every tool advertises a generated schema, the proto
+// contract describes one tool per message at one capability tier, and the staged
+// set is exactly the set that contract declares.
+//
+// The last one is what the capability option bought. The contract used to know
+// only which tools were routed, so the server had to say which of its own tools
+// to expect, and a tool it never staged at all was a gap neither side could see.
+// Now the expected set comes from the descriptors, and a handler dropped or
+// renamed without the contract moving with it fails startup by name.
+//
+// Exported for the same reason ValidateGeneratedSchemas is: none of these can be
+// produced from a config, since the tool factories embed their schemas at
+// compile time and the proto contract ships in the same binary, so proving the
+// checks still bite means handing this a bad catalog directly.
+func ValidateCatalog(list []mcp.Tool) error {
+	if err := ValidateGeneratedSchemas(list); err != nil {
+		return err
+	}
+
+	staged := make([]string, len(list))
+	for i := range list {
+		staged[i] = list[i].Name
+	}
+
+	// Both contract checks are evaluated before either is reported, so a
+	// startup failure states everything wrong with the contract at once rather
+	// than one defect per restart.
+	contract := errors.Join(linoderoute.Validate(), linoderoute.ValidateRegistered(staged))
+	if contract != nil {
+		return fmt.Errorf("tool contract: %w", contract)
+	}
+
+	return nil
 }
 
 // entryTools copies the mcp.Tool out of every staged entry so the schema check
@@ -961,6 +947,7 @@ func collectAllToolEntries(cfg *config.Config) []toolEntry {
 		lkeToolEntries(cfg),
 		vpcToolEntries(cfg),
 		instanceDeepToolEntries(cfg),
+		generatedToolEntries(cfg),
 	}
 
 	var total int
@@ -1274,13 +1261,25 @@ func networkingToolEntries(cfg *config.Config) []toolEntry {
 	})
 }
 
+// generatedToolEntries stages the tools cmd/toolgen emits from the proto
+// contract. They are collected apart from the category lists above because
+// nothing here is a choice a reader can make: the set comes from
+// docs/contracts/generated-tools.txt, and a factory named in a category list
+// would be a second place a generated tool could be added or forgotten.
+func generatedToolEntries(cfg *config.Config) []toolEntry {
+	generated := gentools.Factories()
+
+	factories := make([]toolFactory, 0, len(generated))
+	for _, factory := range generated {
+		factories = append(factories, toolFactory(factory))
+	}
+
+	return entriesFromFactories(cfg, factories)
+}
+
 func dnsToolEntries(cfg *config.Config) []toolEntry {
 	return entriesFromFactories(cfg, []toolFactory{
-		tools.NewLinodeDomainListTool,
-		tools.NewLinodeDomainGetTool,
 		tools.NewLinodeDomainZoneFileGetTool,
-		tools.NewLinodeDomainRecordListTool,
-		tools.NewLinodeDomainRecordGetTool,
 		tools.NewLinodeDomainImportTool,
 		tools.NewLinodeDomainCreateTool,
 		tools.NewLinodeDomainCloneTool,

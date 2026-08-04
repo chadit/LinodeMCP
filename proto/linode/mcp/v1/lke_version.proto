@@ -26,11 +26,13 @@ message LKEVersionGetInput {
     method: "GET"
     path: "/lke/versions/{version}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEVersion";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The Kubernetes version ID (required).
-  string version = 2;
+  string version = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // LKEVersionListInput is the input contract for linode_lke_version_list.
@@ -40,7 +42,9 @@ message LKEVersionListInput {
     method: "GET"
     path: "/lke/versions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.LKEVersionListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

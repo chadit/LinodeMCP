@@ -15,7 +15,7 @@ const (
 	linodeTypeID                   = "g6-standard-2"
 	linodeTypeEscapedPath          = "/linode/types/g6-standard-2"
 	linodeTypeIDWithSeparators     = "g6/standard?plan=2"
-	linodeTypeEscapedSeparatorPath = "/linode/types/g6%2Fstandard%3Fplan=2"
+	linodeTypeEscapedSeparatorPath = "/linode/types/g6%2Fstandard%3Fplan%3D2"
 )
 
 func TestClientGetTypeSuccess(t *testing.T) {

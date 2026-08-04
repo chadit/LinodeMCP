@@ -11,10 +11,10 @@ import json
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
+from linodemcp.gentools import handle_linode_domain_record_get
 from linodemcp.tools.linode_domain_records import (
     handle_linode_domain_record_create,
     handle_linode_domain_record_delete,
-    handle_linode_domain_record_get,
     handle_linode_domain_record_update,
 )
 

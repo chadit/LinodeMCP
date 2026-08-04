@@ -76,6 +76,40 @@
         "side_effects": [],
         "warnings": []
       }
+    },
+    {
+      "name": "sends the selected credentials in the body",
+      "args": {
+        "cluster_id": 12345,
+        "confirm": true,
+        "confirm_bypass_dry_run": true,
+        "kubeconfig": true,
+        "servicetoken": true
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/lke/clusters/12345/regenerate",
+        "body": {
+          "kubeconfig": true,
+          "servicetoken": true
+        }
+      }
+    },
+    {
+      "name": "sends only the kubeconfig flag when that is the one selected",
+      "args": {
+        "cluster_id": 12345,
+        "confirm": true,
+        "confirm_bypass_dry_run": true,
+        "kubeconfig": true
+      },
+      "expect_request": {
+        "method": "POST",
+        "path": "/lke/clusters/12345/regenerate",
+        "body": {
+          "kubeconfig": true
+        }
+      }
     }
   ]
 }

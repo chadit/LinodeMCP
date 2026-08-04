@@ -8,7 +8,7 @@ from mcp.types import TextContent, Tool
 
 from linodemcp.genpb.linode.mcp.v1 import instance_pb2
 from linodemcp.profiles import Capability
-from linodemcp.tools.helpers import error_response, execute_tool
+from linodemcp.tools.helpers import error_response, execute_tool, required_int_id
 from linodemcp.tools.proto_response import serialize_api_response
 from linodemcp.tools.toolschemas import schema
 
@@ -34,18 +34,12 @@ async def handle_linode_instance_get(
         arguments: InstanceIDArgs - instance_id, environment (optional)
         cfg: Configuration object
     """
-    instance_id_str = arguments.get("instance_id", "")
-
-    if not instance_id_str:
-        return error_response("instance_id is required")
-
-    try:
-        instance_id = int(instance_id_str)
-    except ValueError:
-        return error_response("instance_id must be a valid integer")
+    instance_id, instance_id_error = required_int_id(arguments, "instance_id")
+    if instance_id is None:
+        return error_response(instance_id_error)
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(f"/linode/instances/{instance_id}")
+        raw = await client.route_raw("linode_instance_get", instance_id)
         return serialize_api_response(raw, instance_pb2.Instance())
 
     return await execute_tool(cfg, arguments, "retrieve Linode instance", _call)

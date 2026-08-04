@@ -627,9 +627,10 @@ func handleObjectStoragePresignedURLRequest(ctx context.Context, request *mcp.Ca
 	}
 
 	req := linode.PresignedURLRequest{
-		Method:    method,
-		Name:      name,
-		ExpiresIn: expiresIn,
+		Method:      method,
+		Name:        name,
+		ExpiresIn:   expiresIn,
+		ContentType: request.GetString("content_type", ""),
 	}
 
 	result, err := client.CreatePresignedURLProto(ctx, region, label, req)

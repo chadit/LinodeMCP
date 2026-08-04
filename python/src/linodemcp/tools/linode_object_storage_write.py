@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.types import TextContent, Tool
 
@@ -24,7 +24,7 @@ from linodemcp.tools.helpers import (
     execute_tool,
     is_dry_run,
 )
-from linodemcp.tools.proto_enum import required_enum_error
+from linodemcp.tools.proto_enum import optional_enum_error, required_enum_error
 from linodemcp.tools.proto_response import (
     raw_int,
     raw_str,
@@ -64,9 +64,8 @@ def _validate_bucket_label(label: str) -> str | None:
 def _validate_bucket_acl(acl: str) -> str | None:
     """Validate bucket ACL. Returns error message or None."""
     if acl not in _VALID_ACLS:
-        # Preserve API/create-endpoint order (no sorting) so the message is
-        # byte-identical to Go's ErrBucketACLInvalid; pinned by the shared
-        # objstorage behavior fixtures.
+        # Create-endpoint order, never sorted, so the message stays
+        # byte-identical to Go's ErrBucketACLInvalid.
         return f"acl must be one of: {', '.join(_VALID_ACLS)}"
     return None
 
@@ -105,9 +104,8 @@ async def handle_linode_object_storage_cancel(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         await client.cancel_object_storage()
-        # The cancel endpoint returns an empty body, so the canonical response is
-        # the confirmation message alone, routed through the shared proto so it
-        # matches Go's MarshalProtoToolResponse output.
+        # The cancel endpoint returns an empty body, so the response is the
+        # confirmation alone, shaped by the proto to match Go's output.
         return serialize_api_response(
             {"message": "Object Storage cancellation requested successfully"},
             common_pb2.MessageResponse(),
@@ -127,7 +125,9 @@ def create_linode_object_storage_bucket_create_tool() -> tuple[Tool, Capability]
     ), Capability.Write
 
 
-def _bucket_create_error(label: str, region: str, acl: Any) -> str | None:
+def _bucket_create_error(
+    label: str, region: str, acl: Any, arguments: dict[str, Any]
+) -> str | None:
     """Validate bucket create args; return an error message or None."""
     label_err = _validate_bucket_label(label)
     if label_err:
@@ -135,8 +135,14 @@ def _bucket_create_error(label: str, region: str, acl: Any) -> str | None:
     if not region:
         return "region is required"
     if acl is not None:
-        return _validate_bucket_acl(acl)
-    return None
+        acl_err = _validate_bucket_acl(acl)
+        if acl_err:
+            return acl_err
+    return optional_enum_error(
+        arguments,
+        "endpoint_type",
+        object_storage_pb2.ObjectStorageEndpointType.Value,
+    )
 
 
 async def handle_linode_object_storage_bucket_create(
@@ -149,7 +155,7 @@ async def handle_linode_object_storage_bucket_create(
     cors_enabled = arguments.get("cors_enabled")
 
     if is_dry_run(arguments):
-        validation_err = _bucket_create_error(label, region, acl)
+        validation_err = _bucket_create_error(label, region, acl, arguments)
         if validation_err:
             return _error_response(validation_err)
         return build_dry_run_response(
@@ -169,7 +175,7 @@ async def handle_linode_object_storage_bucket_create(
             "This operation creates a billable resource. Set confirm=true to proceed."
         )
 
-    validation_err = _bucket_create_error(label, region, acl)
+    validation_err = _bucket_create_error(label, region, acl, arguments)
     if validation_err:
         return _error_response(validation_err)
 
@@ -179,6 +185,8 @@ async def handle_linode_object_storage_bucket_create(
             region=region,
             acl=acl,
             cors_enabled=cors_enabled,
+            endpoint_type=arguments.get("endpoint_type"),
+            s3_endpoint=arguments.get("s3_endpoint"),
         )
         return serialize_api_response(
             {
@@ -249,9 +257,7 @@ async def handle_linode_object_storage_bucket_delete(
     region = arguments.get("region", "")
     label = arguments.get("label", "")
 
-    # Both branches need region and label, and the spec is explicit that
-    # dry-run errors out on missing required args the same way the real
-    # call would.
+    # Dry-run rejects missing required args the same way the real call does.
     if not region:
         return _error_response("region is required")
     if not label:
@@ -320,9 +326,7 @@ def _bucket_access_error(region: str, label: str, acl: Any) -> str | None:
 
 
 def _bucket_access_update_side_effects(new_acl: Any, new_cors: Any) -> DryRunDetails:
-    """Phase 2 Tier B walk for bucket access update. Reports the ACL change and
-    a CORS enable/disable toggle.
-    """
+    """Tier B dry-run walk: reports the ACL change and the CORS toggle."""
     side_effects: list[str] = []
     if new_acl:
         side_effects.append(f"Bucket access control is set to {new_acl!r}.")
@@ -380,9 +384,8 @@ async def handle_linode_object_storage_bucket_access_update(
             acl=acl,
             cors_enabled=cors_enabled,
         )
-        # The update endpoint returns no body, so the access element is built
-        # from the request args (acl + cors_enabled). Go builds the same
-        # element so the output matches.
+        # The update endpoint returns no body, so the access element comes from
+        # the request args; Go builds the same element, so the output matches.
         return serialize_api_response(
             {
                 "message": (
@@ -452,9 +455,8 @@ async def handle_linode_object_storage_bucket_access_allow(
             acl=acl,
             cors_enabled=cors_enabled,
         )
-        # The allow endpoint returns no body, so the access element is built
-        # from the request args (acl + cors_enabled). Go builds the same
-        # element so the output matches.
+        # The allow endpoint returns no body, so the access element comes from
+        # the request args; Go builds the same element, so the output matches.
         return serialize_api_response(
             {
                 "message": (
@@ -631,7 +633,9 @@ async def handle_linode_object_storage_key_create(
     return await execute_tool(cfg, arguments, "create access key", _call)
 
 
-def _key_update_error(key_id: Any, label: str, bucket_access_json: str) -> str | None:
+def _key_update_error(
+    key_id: Any, label: str, bucket_access_json: str, arguments: dict[str, Any]
+) -> str | None:
     """Validate key update args; return an error message or None."""
     if not key_id or int(key_id) <= 0:
         return "key_id is required and must be a positive integer"
@@ -640,15 +644,25 @@ def _key_update_error(key_id: Any, label: str, bucket_access_json: str) -> str |
         if label_err:
             return label_err
     _, access_err = _parse_key_bucket_access(bucket_access_json)
-    return access_err
+    if access_err is not None:
+        return access_err
+    regions: Any = arguments.get("regions")
+    # Wording matches Go's stringSliceFromToolArg; the message must stay
+    # byte-identical in both languages.
+    if regions is not None and (
+        not isinstance(regions, list)
+        or not all(isinstance(item, str) for item in cast("list[object]", regions))
+    ):
+        return "regions must be an array of strings"
+    return None
 
 
 def _key_update_side_effects(
     state: Any, new_label: Any, new_bucket_access: Any
 ) -> DryRunDetails:
-    """Phase 2 Tier B walk for object-storage key update. Reports the label
-    change against the fetched key (credential-safe: the GET never returns the
-    secret) and notes when bucket access scopes are replaced.
+    """Tier B dry-run walk for key update: label change and scope replacement.
+
+    Credential-safe because the fetched key never carries the secret.
     """
     side_effects: list[str] = []
     if new_label:
@@ -670,7 +684,7 @@ async def handle_linode_object_storage_key_update(
     label = arguments.get("label", "")
     bucket_access_json = arguments.get("bucket_access", "")
 
-    validation_err = _key_update_error(key_id_raw, label, bucket_access_json)
+    validation_err = _key_update_error(key_id_raw, label, bucket_access_json, arguments)
     if validation_err:
         return _error_response(validation_err)
 
@@ -706,16 +720,20 @@ async def handle_linode_object_storage_key_update(
         ]
 
     bucket_access, _ = _parse_key_bucket_access(bucket_access_json)
+    regions = cast("list[str] | None", arguments.get("regions"))
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        # The update endpoint echoes the full key (without secret material), so
-        # put_raw returns the body Go decodes into the key element.
+        # The update endpoint echoes the full key, minus secret material.
         body: dict[str, Any] = {}
         if label:
             body["label"] = label
         if bucket_access is not None:
             body["bucket_access"] = bucket_access
-        key = await client.put_raw(f"/object-storage/keys/{key_id}", body)
+        if regions is not None:
+            body["regions"] = regions
+        key = await client.route_raw(
+            "linode_object_storage_key_update", key_id, body=body
+        )
         return serialize_api_response(
             {
                 "message": f"Access key {key_id} modified successfully",
@@ -765,9 +783,8 @@ async def handle_linode_object_storage_key_delete(
     """Handle the linode_object_storage_key_delete tool."""
     key_id_raw = arguments.get("key_id", 0)
 
-    # ID validation runs before both branches: dry-run and the real call
-    # both need a positive integer, and the spec is explicit that dry-run
-    # errors out on missing required args the same way the real call would.
+    # Dry-run rejects a missing or non-positive key_id the same way the real
+    # call does.
     if not key_id_raw or int(key_id_raw) <= 0:
         return _error_response("key_id is required and must be a positive integer")
 
@@ -853,15 +870,13 @@ async def handle_linode_object_storage_presigned_url_create(
     region = arguments.get("region", "")
     label = arguments.get("label", "")
     name = arguments.get("name", "")
-    # Presigned method is case-insensitive: GET/PUT are the canonical S3 verbs the
-    # schema advertises, but a caller passing "get" must still work, so normalize
-    # to uppercase before the enum check and send the canonical form.
+    # Callers may send "get", so normalize to the canonical S3 verb before the
+    # enum check and on the wire.
     method = arguments.get("method", "")
     if isinstance(method, str):
         method = method.upper()
-    # expires_in defers to the API's documented default (3600) when absent, so
-    # the wire body carries only what the caller sent; validate a value only
-    # when the caller provided one.
+    # An absent expires_in defers to the API default (3600), so send nothing
+    # and validate only what the caller provided.
     raw_expires_in = arguments.get("expires_in")
     expires_in = int(raw_expires_in) if raw_expires_in is not None else None
 
@@ -887,7 +902,14 @@ async def handle_linode_object_storage_presigned_url_create(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
-            await client.create_presigned_url(region, label, name, method, expires_in),
+            await client.create_presigned_url(
+                region,
+                label,
+                name,
+                method,
+                expires_in,
+                arguments.get("content_type"),
+            ),
             object_storage_pb2.PresignedURLResponse(),
         )
 
@@ -957,9 +979,7 @@ def _object_acl_update_error(
 
 
 def _object_acl_update_side_effects(new_acl: Any) -> DryRunDetails:
-    """Phase 2 Tier B walk for object ACL update. Reports the new access-control
-    level the object is set to.
-    """
+    """Tier B dry-run walk: reports the new object access level."""
     if not new_acl:
         return {}
     return {"side_effects": [f"Object access control is set to {new_acl!r}."]}
@@ -1094,8 +1114,7 @@ async def handle_linode_object_storage_ssl_upload(
         validation_err = _ssl_upload_error(region, label, certificate, private_key)
         if validation_err is not None:
             return _error_response(validation_err)
-        # current_state null; the request body (cert + private_key) is never
-        # echoed in the v0 preview, so no key material leaks.
+        # current_state stays null: the preview never echoes the private key.
         return build_dry_run_response(
             "linode_object_storage_ssl_upload",
             arguments.get("environment", ""),
@@ -1177,9 +1196,7 @@ async def handle_linode_object_storage_ssl_delete(
     region = arguments.get("region", "")
     label = arguments.get("label", "")
 
-    # Both branches need region and label, and the spec is explicit that
-    # dry-run errors out on missing required args the same way the real
-    # call would.
+    # Dry-run rejects missing required args the same way the real call does.
     if not region:
         return _error_response("region is required")
     if not label:
@@ -1220,10 +1237,8 @@ async def handle_linode_object_storage_ssl_delete(
 
 
 def _object_storage_ssl_delete_response(region: str, label: str) -> dict[str, Any]:
-    """Build the SSL-delete echo, routed through the proto.
-
-    The bucket label is keyed "bucket" to match the tool's established response
-    shape and Go's MarshalProtoToolResponse output.
+    """Build the SSL-delete echo; the label is keyed "bucket" to match the
+    tool's established response shape and Go's output.
     """
     return serialize_api_response(
         {

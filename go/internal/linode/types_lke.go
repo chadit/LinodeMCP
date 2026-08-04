@@ -113,11 +113,34 @@ type LKEControlPlaneACLAddresses struct {
 // CreateLKEClusterRequest represents the request body for creating an LKE cluster.
 type CreateLKEClusterRequest struct {
 	ControlPlane *LKEControlPlane           `json:"control_plane,omitempty"`
+	APLEnabled   *bool                      `json:"apl_enabled,omitempty"`
 	Label        string                     `json:"label"`
 	Region       string                     `json:"region"`
 	K8sVersion   string                     `json:"k8s_version"`
+	Tier         string                     `json:"tier,omitempty"`
+	StackType    string                     `json:"stack_type,omitempty"`
 	Tags         []string                   `json:"tags,omitempty"`
 	NodePools    []CreateLKEClusterNodePool `json:"node_pools"`
+	VPCID        int                        `json:"vpc_id,omitempty"`
+	SubnetID     int                        `json:"subnet_id,omitempty"`
+}
+
+// RegenerateLKEClusterRequest represents the request body for regenerating an
+// LKE cluster's credentials. Each flag selects one credential, so a body with
+// neither set regenerates nothing.
+type RegenerateLKEClusterRequest struct {
+	Kubeconfig   bool `json:"kubeconfig,omitempty"`
+	ServiceToken bool `json:"servicetoken,omitempty"`
+}
+
+// Payload returns the request body, or nil when neither credential is selected,
+// so a plain regenerate sends no body rather than an empty object.
+func (r RegenerateLKEClusterRequest) Payload() any {
+	if !r.Kubeconfig && !r.ServiceToken {
+		return nil
+	}
+
+	return r
 }
 
 // CreateLKEClusterNodePool represents a node pool in a create cluster request.
@@ -139,18 +162,28 @@ type UpdateLKEClusterRequest struct {
 
 // CreateLKENodePoolRequest represents the request body for creating a node pool.
 type CreateLKENodePoolRequest struct {
-	Autoscaler *LKENodePoolAutoscaler `json:"autoscaler,omitempty"`
-	Type       string                 `json:"type"`
-	Disks      []LKENodePoolDisk      `json:"disks,omitempty"`
-	Tags       []string               `json:"tags,omitempty"`
-	Count      int                    `json:"count"`
+	Autoscaler     *LKENodePoolAutoscaler `json:"autoscaler,omitempty"`
+	Labels         map[string]string      `json:"labels,omitempty"`
+	Type           string                 `json:"type"`
+	Label          string                 `json:"label,omitempty"`
+	K8sVersion     string                 `json:"k8s_version,omitempty"`
+	DiskEncryption string                 `json:"disk_encryption,omitempty"`
+	UpdateStrategy string                 `json:"update_strategy,omitempty"`
+	Disks          []LKENodePoolDisk      `json:"disks,omitempty"`
+	Tags           []string               `json:"tags,omitempty"`
+	Taints         []map[string]any       `json:"taints,omitempty"`
+	Count          int                    `json:"count"`
+	FirewallID     int                    `json:"firewall_id,omitempty"`
 }
 
 // UpdateLKENodePoolRequest represents the request body for updating a node pool.
 type UpdateLKENodePoolRequest struct {
 	Count      *int                   `json:"count,omitempty"`
 	Autoscaler *LKENodePoolAutoscaler `json:"autoscaler,omitempty"`
+	Labels     map[string]string      `json:"labels,omitempty"`
 	Tags       []string               `json:"tags,omitempty"`
+	Taints     []map[string]any       `json:"taints,omitempty"`
+	FirewallID int                    `json:"firewall_id,omitempty"`
 }
 
 // UpdateLKEControlPlaneACLRequest represents the request body for updating a control plane ACL.

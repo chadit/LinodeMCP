@@ -5,6 +5,7 @@ package linode.mcp.v1;
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
 import "google/protobuf/struct.proto";
+import "linode/mcp/v1/options.proto";
 
 // AuditExportFormat is the output format the linode_audit_export tool writes.
 // This is a tool-level choice (the audit tools read local stores, not the
@@ -23,11 +24,23 @@ message AuditExportFormat {
 // AuditHealthInput is the input contract for linode_audit_health. The tool
 // reads local audit stores (no Linode API), so it advertises no environment
 // param and takes no parameters at all.
-message AuditHealthInput {}
+message AuditHealthInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_audit_health"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditHealthResponse";
+}
 
 // AuditReportInput is the input contract for linode_audit_report. The audit
 // tools read local stores, so there is no environment param; name is required.
 message AuditReportInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_audit_report"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditReportResponse";
+
   // Name of the report from audit.reports.
   string name = 1;
 }
@@ -36,6 +49,12 @@ message AuditReportInput {
 // are optional; the tool reads local audit stores, so there is no environment
 // param.
 message AuditRecentInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_audit_recent"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditRecentResponse";
+
   // Max events to return. Default 20, capped at 200.
   optional int32 limit = 1;
   // Only events at or after this RFC 3339 timestamp (e.g.
@@ -58,6 +77,12 @@ message AuditRecentInput {
 // required; the filters are optional. The tool reads local audit stores, so
 // there is no environment param.
 message AuditExportInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_audit_export"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditExportResponse";
+
   // Output format: json, csv, or ndjson.
   AuditExportFormat.Value format = 1;
   // Only events at or after this RFC 3339 timestamp.
@@ -75,6 +100,12 @@ message AuditExportInput {
 // AuditSummaryInput is the input contract for linode_audit_summary. The tool
 // reads local audit stores, so there is no environment param.
 message AuditSummaryInput {
+  option (linode.mcp.v1.tool_meta) = {
+    tool: "linode_audit_summary"
+  };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_META;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.AuditSummaryResponse";
+
   // Only count events at or after this RFC 3339 timestamp.
   optional string since = 1;
   // Columns to group by. Allowed: tool, status, capability, profile,

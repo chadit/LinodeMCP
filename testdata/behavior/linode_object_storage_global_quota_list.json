@@ -1,0 +1,12 @@
+{
+  "tool": "linode_object_storage_global_quota_list",
+  "description": "No local validation; pins the plain global-quotas list GET. The route publishes no page controls, so no query travels with it.",
+  "cases": [
+    {
+      "name": "lists global quotas",
+      "args": {},
+      "api_response": { "data": [], "page": 1, "pages": 1, "results": 0 },
+      "expect_request": { "method": "GET", "path": "/object-storage/global-quotas" }
+    }
+  ]
+}

@@ -67,8 +67,8 @@ func TestClientDeleteImageEscapesPathSeparators(t *testing.T) {
 			t.Errorf("r.Method = %v, want %v", r.Method, http.MethodDelete)
 		}
 
-		if r.URL.EscapedPath() != "/images/private%2F%2E%2E%3Fquery%23frag" {
-			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2F%2E%2E%3Fquery%23frag")
+		if r.URL.EscapedPath() != "/images/private%2F..%3Fquery%23frag" {
+			t.Errorf("r.URL.EscapedPath() = %v, want %v", r.URL.EscapedPath(), "/images/private%2F..%3Fquery%23frag")
 		}
 
 		w.WriteHeader(http.StatusOK)

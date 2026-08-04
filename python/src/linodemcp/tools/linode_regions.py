@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
@@ -12,7 +11,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     error_response,
     execute_tool,
-    paginated_path,
+    pagination_query,
     standard_pagination_arguments,
 )
 from linodemcp.tools.proto_response import (
@@ -78,7 +77,9 @@ async def handle_linode_region_list(
         applied.append(f"capability={capability_filter}")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(paginated_path("/regions", page, page_size))
+        raw = await client.route_raw(
+            "linode_region_list", query=pagination_query(page, page_size)
+        )
         return serialize_list_response(
             raw,
             "regions",
@@ -112,7 +113,7 @@ async def handle_linode_region_get(
         )
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(f"/regions/{quote(region_id, safe='')}")
+        raw = await client.route_raw("linode_region_get", region_id)
         return serialize_api_response(raw, region_pb2.Region())
 
     return await execute_tool(cfg, arguments, f"retrieve region {region_id}", _call)

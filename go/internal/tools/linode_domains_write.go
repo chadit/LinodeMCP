@@ -27,9 +27,8 @@ const (
 )
 
 // domainCreateNamePattern is the domain-name pattern POST /domains documents.
-// Rejecting locally keeps a malformed name from burning an API call, and
-// pinning the documented pattern (rather than a looser hand-rolled one) is
-// what keeps both languages rejecting the same set of names.
+// Pinning the documented pattern is what keeps both languages rejecting the
+// same set of names.
 var domainCreateNamePattern = regexp.MustCompile(
 	`^(\*\.)?([a-zA-Z0-9-_]{1,63}\.)+([a-zA-Z]{2,3}\.)?([a-zA-Z]{2,16}|xn--[a-zA-Z0-9]+)$`,
 )
@@ -220,10 +219,10 @@ func handleLinodeDomainCreateRequest(ctx context.Context, request *mcp.CallToolR
 	return MarshalProtoToolResponse(response)
 }
 
-// domainCreateRequestFromTool builds the POST /domains body from the tool
-// arguments, returning a non-empty message when the arguments do not satisfy
-// the documented create contract. The dry-run and live branches share it so a
-// preview cannot advertise a body the live call would reject, or vice versa.
+// domainCreateRequestFromTool builds the POST /domains body, returning a
+// non-empty message when the arguments miss the documented create contract.
+// Dry-run and live share it so a preview cannot advertise a body the live call
+// would reject, or vice versa.
 func domainCreateRequestFromTool(request *mcp.CallToolRequest) (linode.CreateDomainRequest, string) {
 	req := linode.CreateDomainRequest{
 		Domain: request.GetString("domain", ""),
@@ -325,9 +324,9 @@ func populateDomainCreateIntervals(request *mcp.CallToolRequest, req *linode.Cre
 	return ""
 }
 
-// validateDomainCreateConditionals enforces the two cross-field rules POST
-// /domains documents: a master zone needs an SOA email to answer with, and a
-// slave zone needs somewhere to transfer from.
+// validateDomainCreateConditionals enforces the cross-field rules POST /domains
+// documents: a master zone needs an SOA email, a slave zone needs somewhere to
+// transfer from.
 func validateDomainCreateConditionals(req *linode.CreateDomainRequest) string {
 	if req.Status != nil && *req.Status != domainCreateStatusActive && *req.Status != domainCreateStatusDisabled {
 		return "status must be one of: active, disabled"
@@ -428,6 +427,11 @@ func NewLinodeDomainUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
 	domainID := request.GetInt("domain_id", 0)
 
+	tags, _, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	if IsDryRun(request) {
 		return handleLinodeDomainUpdateDryRun(ctx, request, cfg, domainID)
 	}
@@ -457,6 +461,11 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 		Description: description,
 		Status:      status,
 		TTLSec:      ttlSec,
+		Tags:        tags,
+	}
+
+	if validationMessage = populateDomainUpdateOptionals(request, &req); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	updatedDomain, err := client.UpdateDomainProto(ctx, domainID, &req)
@@ -470,6 +479,60 @@ func handleLinodeDomainUpdateRequest(ctx context.Context, request *mcp.CallToolR
 	}
 
 	return MarshalProtoToolResponse(response)
+}
+
+// populateDomainUpdateOptionals reads the zone-transfer and SOA-timer arguments
+// PUT /domains/{id} accepts beyond the ones the handler reads inline. The
+// deprecated group field is deliberately absent: Linode replaced it with tags.
+func populateDomainUpdateOptionals(request *mcp.CallToolRequest, req *linode.UpdateDomainRequest) string {
+	axfrIPs, validationMessage := domainCreateStringSlice(request, "axfr_ips")
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if axfrIPs != nil {
+		req.AXFRIPs = *axfrIPs
+	}
+
+	masterIPs, validationMessage := domainCreateStringSlice(request, "master_ips")
+	if validationMessage != "" {
+		return validationMessage
+	}
+
+	if masterIPs != nil {
+		req.MasterIPs = *masterIPs
+	}
+
+	if req.Type, validationMessage = optionalEnumChoice(request, "type", linodev1.DomainType_Value_value); validationMessage != "" {
+		return validationMessage
+	}
+
+	return populateDomainUpdateIntervals(request, req)
+}
+
+// populateDomainUpdateIntervals reads the three SOA timers, kept separate so
+// each populate function stays a single responsibility (mirrors the create
+// side's split).
+func populateDomainUpdateIntervals(request *mcp.CallToolRequest, req *linode.UpdateDomainRequest) string {
+	for _, timer := range []struct {
+		dst  *int
+		name string
+	}{
+		{&req.ExpireSec, "expire_sec"},
+		{&req.RefreshSec, "refresh_sec"},
+		{&req.RetrySec, "retry_sec"},
+	} {
+		value, validationMessage := domainCreateOptionalInt(request, timer.name)
+		if validationMessage != "" {
+			return validationMessage
+		}
+
+		if value != nil {
+			*timer.dst = *value
+		}
+	}
+
+	return ""
 }
 
 // handleLinodeDomainUpdateDryRun fetches the current domain state and

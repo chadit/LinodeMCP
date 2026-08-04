@@ -127,7 +127,7 @@ async def test_handle_linode_stackscript_get_success(
     sample_config: Any, mock_linode_client: AsyncMock
 ) -> None:
     """Handler returns StackScript details."""
-    mock_linode_client.get_raw.return_value = _stackscript_payload(123)
+    mock_linode_client.route_raw.return_value = _stackscript_payload(123)
 
     result = await handle_linode_stackscript_get({"stackscript_id": 123}, sample_config)
 
@@ -148,7 +148,7 @@ async def test_handle_linode_stackscript_get_success(
         "is_public": False,
         "mine": True,
     }
-    mock_linode_client.get_raw.assert_awaited_once_with("/linode/stackscripts/123")
+    mock_linode_client.route_raw.assert_awaited_once_with("linode_stackscript_get", 123)
 
 
 @pytest.mark.asyncio

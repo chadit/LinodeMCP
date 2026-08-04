@@ -2,21 +2,16 @@ package linode
 
 import (
 	"context"
-	"fmt"
-	"net/http"
-	"net/url"
-	"strconv"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
-
-const endpointPlacementGroups = "/placement/groups"
 
 // httpListPlacementGroupsProto retrieves placement groups as proto messages for
 // the proto-backed list path. The page/page_size pair flows through the shared
 // withPaginationQuery helper, so the request matches httpListPlacementGroups.
 func (c *Client) httpListPlacementGroupsProto(ctx context.Context, page, pageSize int) ([]*linodev1.PlacementGroup, error) {
-	return listProtoElementsPaginated(ctx, c, "ListPlacementGroups", endpointPlacementGroups, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListPlacementGroups",
+		"linode_placement_group_list", "", nil, page, pageSize,
 		func() *linodev1.PlacementGroup { return &linodev1.PlacementGroup{} })
 }
 
@@ -26,11 +21,9 @@ func (c *Client) httpAssignPlacementGroupLinodesProto(ctx context.Context, group
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointPlacementGroups + "/" + url.PathEscape(strconv.Itoa(groupID)) + "/assign"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_placement_group_assign", req, groupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "AssignPlacementGroupLinodes", Err: err}
+		return nil, wrapRequestError("AssignPlacementGroupLinodes", err)
 	}
 
 	defer drainClose(resp)
@@ -48,11 +41,9 @@ func (c *Client) httpGetPlacementGroup(ctx context.Context, groupID int) (*Place
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointPlacementGroups+"/%d", groupID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_placement_group_get", nil, groupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetPlacementGroup", Err: err}
+		return nil, wrapRequestError("GetPlacementGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -70,11 +61,9 @@ func (c *Client) httpGetPlacementGroupProto(ctx context.Context, groupID int) (*
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := fmt.Sprintf(endpointPlacementGroups+"/%d", groupID)
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_placement_group_get", nil, groupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetPlacementGroup", Err: err}
+		return nil, wrapRequestError("GetPlacementGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -92,9 +81,9 @@ func (c *Client) httpCreatePlacementGroupProto(ctx context.Context, req *CreateP
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointPlacementGroups, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_placement_group_create", req)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreatePlacementGroup", Err: err}
+		return nil, wrapRequestError("CreatePlacementGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -112,11 +101,9 @@ func (c *Client) httpUpdatePlacementGroupProto(ctx context.Context, groupID int,
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointPlacementGroups + "/" + url.PathEscape(strconv.Itoa(groupID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_placement_group_update", request, groupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdatePlacementGroup", Err: err}
+		return nil, wrapRequestError("UpdatePlacementGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -134,11 +121,9 @@ func (c *Client) httpDeletePlacementGroup(ctx context.Context, groupID int) erro
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointPlacementGroups + "/" + url.PathEscape(strconv.Itoa(groupID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_placement_group_delete", nil, groupID)
 	if err != nil {
-		return &NetworkError{Operation: "DeletePlacementGroup", Err: err}
+		return wrapRequestError("DeletePlacementGroup", err)
 	}
 
 	defer drainClose(resp)
@@ -160,11 +145,9 @@ func (c *Client) httpUnassignPlacementGroupProto(ctx context.Context, groupID in
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointPlacementGroups + "/" + url.PathEscape(strconv.Itoa(groupID)) + "/unassign"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_placement_group_unassign", req, groupID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UnassignPlacementGroup", Err: err}
+		return nil, wrapRequestError("UnassignPlacementGroup", err)
 	}
 
 	defer drainClose(resp)

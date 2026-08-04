@@ -4,6 +4,7 @@ package linode.mcp.v1;
 
 option go_package = "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1;linodev1";
 
+import "google/protobuf/struct.proto";
 import "linode/mcp/v1/options.proto";
 
 // Transfer is the bandwidth transfer summary attached to several resources.
@@ -57,13 +58,15 @@ message NodeBalancerGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_get"
     method: "GET"
-    path: "/nodebalancers/{node_balancer_id}"
+    path: "/nodebalancers/{nodebalancer_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancer";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer to retrieve (required).
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceNodeBalancerListInput is the input contract for
@@ -74,11 +77,13 @@ message InstanceNodeBalancerListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/nodebalancers"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // NodeBalancerListInput is the input contract for linode_nodebalancer_list.
@@ -88,13 +93,19 @@ message NodeBalancerListInput {
     method: "GET"
     path: "/nodebalancers"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter by region ID (e.g., us-east, eu-west).
-  optional string region = 2;
+  optional string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Filter NodeBalancers by label containing this string (case-insensitive).
-  optional string label_contains = 3;
+  optional string label_contains = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // NodeBalancerCreateInput is the input contract for linode_nodebalancer_create.
@@ -104,24 +115,41 @@ message NodeBalancerCreateInput {
     method: "POST"
     path: "/nodebalancers"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "NodeBalancer '{label}' (ID: {id}) created successfully in {region}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Region where the NodeBalancer will be created (e.g., 'us-east').
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // A label for the NodeBalancer (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Connections per second throttle limit (0-20). Default is 0 (no throttle).
-  optional int32 client_conn_throttle = 4;
+  optional int32 client_conn_throttle = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm creation. This operation incurs billing
   // charges. Ignored when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Reserved public IPv4 address to assign. When omitted, the API allocates
   // an ephemeral IPv4 address.
-  optional string ipv4 = 7;
+  optional string ipv4 = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Tags to apply to the new NodeBalancer (optional).
+  repeated string tags = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Port configurations to create with the NodeBalancer, each an object with
+  // the same fields linode_nodebalancer_config_create takes (optional). The
+  // item shape is free-form because the API documents it only as an object.
+  repeated google.protobuf.Struct configs = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // VPC configurations to attach, each an object with subnet_id and the VPC
+  // address ranges (optional). The item shape is free-form because the API
+  // documents it only as an object.
+  repeated google.protobuf.Struct vpcs = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // ID of the Cloud Firewall to assign to the new NodeBalancer (optional).
+  optional int32 firewall_id = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // NodeBalancerUpdateInput is the input contract for linode_nodebalancer_update.
@@ -129,23 +157,30 @@ message NodeBalancerUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_update"
     method: "PUT"
-    path: "/nodebalancers/{node_balancer_id}"
+    path: "/nodebalancers/{nodebalancer_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a NodeBalancer. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "NodeBalancer {nodebalancer_id} modified successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer to update.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New label for the NodeBalancer (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New connections per second throttle limit (0-20) (optional).
-  optional int32 client_conn_throttle = 4;
+  optional int32 client_conn_throttle = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm NodeBalancer update. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Complete replacement set of tags (optional). Omitting it leaves the
+  // NodeBalancer's tags unchanged; an empty list removes all of them.
+  repeated string tags = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // NodeBalancerDeleteInput is the input contract for linode_nodebalancer_delete.
@@ -153,24 +188,28 @@ message NodeBalancerDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_delete"
     method: "DELETE"
-    path: "/nodebalancers/{node_balancer_id}"
+    path: "/nodebalancers/{nodebalancer_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "NodeBalancer";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer to delete.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // NodeBalancerFirewallListInput is the input contract for
@@ -179,17 +218,19 @@ message NodeBalancerFirewallListInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_firewall_list"
     method: "GET"
-    path: "/nodebalancers/{node_balancer_id}/firewalls"
+    path: "/nodebalancers/{nodebalancer_id}/firewalls"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose Cloud Firewalls should be listed.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page number to retrieve.
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page, from 25 through 500.
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // NodeBalancerFirewallUpdateInput is the input contract for
@@ -200,25 +241,29 @@ message NodeBalancerFirewallUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_firewall_update"
     method: "PUT"
-    path: "/nodebalancers/{node_balancer_id}/firewalls"
+    path: "/nodebalancers/{nodebalancer_id}/firewalls"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.FirewallListResponse";
+  option (linode.mcp.v1.confirm_message) = "This replaces firewall assignments for a NodeBalancer. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose Cloud Firewall assignments should be
   // replaced.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Complete list of firewall IDs to assign to the NodeBalancer. Use an empty
   // list to remove all firewall assignments.
-  repeated int32 firewall_ids = 3;
+  repeated int32 firewall_ids = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 4;
+  optional int32 page = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 5;
+  optional int32 page_size = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Must be set to true to confirm firewall assignment changes. Ignored when
   // dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

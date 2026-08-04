@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 
 from mcp.types import TextContent, Tool
 
@@ -10,6 +10,7 @@ from linodemcp.profiles import Capability
 from linodemcp.tools.helpers import (
     error_response,
     execute_tool,
+    pagination_query,
     required_int_id,
     standard_pagination_arguments,
 )
@@ -55,7 +56,7 @@ async def handle_linode_firewall_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
-            await client.get_raw(f"/networking/firewalls/{int(firewall_id)}"),
+            await client.route_raw("linode_firewall_get", int(firewall_id)),
             firewall_pb2.Firewall(),
         )
 
@@ -81,7 +82,7 @@ async def handle_linode_firewall_rules_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
-            await client.get_raw(f"/networking/firewalls/{int(firewall_id)}/rules"),
+            await client.route_raw("linode_firewall_rules_get", int(firewall_id)),
             firewall_pb2.FirewallRules(),
         )
 
@@ -108,8 +109,15 @@ async def handle_linode_firewall_list(
     if label_contains:
         filters.append(f"label_contains={label_contains}")
 
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/networking/firewalls")
+        raw = await client.route_raw(
+            "linode_firewall_list", query=pagination_query(page, page_size)
+        )
         return serialize_list_response(
             raw,
             "firewalls",
@@ -152,7 +160,7 @@ async def handle_linode_firewall_rule_version_list(
         # {data:[...]} page. Surface it as the single version snapshot, with
         # the snapshot's top-level version lifted out of rules.version; the
         # Go client performs the identical lift.
-        raw = await client.get_raw(f"/networking/firewalls/{fw_id}/history")
+        raw = await client.route_raw("linode_firewall_rule_version_list", fw_id)
         if not isinstance(raw, dict) or "rules" not in raw:
             msg = "firewall history response must be a firewall object"
             raise TypeError(msg)
@@ -300,8 +308,8 @@ async def handle_linode_firewall_rule_version_get(
         return error_response("version is required")
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(
-            f"/networking/firewalls/{fw_id}/history/rules/{version_int}"
+        raw = await client.route_raw(
+            "linode_firewall_rule_version_get", fw_id, version_int
         )
         return serialize_api_response(raw, firewall_pb2.FirewallRuleVersion())
 
@@ -397,12 +405,10 @@ async def handle_linode_firewall_template_get(
         params["page"] = page
     if page_size is not None:
         params["page_size"] = page_size
-    query = f"?{urlencode(params)}" if params else ""
+    query = urlencode(params) if params else ""
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw(
-            f"/networking/firewalls/templates/{quote(slug, safe='')}{query}"
-        )
+        raw = await client.route_raw("linode_firewall_template_get", slug, query=query)
         return serialize_api_response(raw, firewall_pb2.FirewallTemplate())
 
     return await execute_tool(cfg, arguments, "retrieve firewall template", _call)

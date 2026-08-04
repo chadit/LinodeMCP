@@ -50,11 +50,13 @@ message StackScriptGetInput {
     method: "GET"
     path: "/linode/stackscripts/{stackscript_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScript";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the StackScript to retrieve (required).
-  int32 stackscript_id = 2;
+  int32 stackscript_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // StackScriptWriteResponse is the {message, stackscript} envelope the
@@ -82,15 +84,21 @@ message StackScriptListInput {
     method: "GET"
     path: "/linode/stackscripts"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter by public status (true, false).
-  optional string is_public = 2;
+  optional string is_public = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Filter by ownership - only your own StackScripts (true, false).
-  optional string mine = 3;
+  optional string mine = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Filter StackScripts by label containing this string (case-insensitive).
-  optional string label_contains = 4;
+  optional string label_contains = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Page of results to return (optional, minimum 1).
+  optional int32 page = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
+  // Number of results per page (optional, 25-500).
+  optional int32 page_size = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // StackScriptCreateInput is the input contract for linode_stackscript_create.
@@ -104,28 +112,33 @@ message StackScriptCreateInput {
     method: "POST"
     path: "/linode/stackscripts"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a new StackScript in your account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "StackScript '{label}' (ID: {id}) created successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // A label for the StackScript (max 64 characters, must be unique).
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The script content (bash, compatible with the selected images).
-  string script = 3;
+  string script = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Image IDs that the StackScript supports (e.g., ["linode/debian12",
   // "linode/ubuntu24.04"]).
-  repeated string images = 4;
+  repeated string images = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // A description of the StackScript.
-  optional string description = 5;
+  optional string description = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the StackScript should be public (default: false).
-  optional bool is_public = 6;
+  optional bool is_public = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // A revision note for this version of the StackScript.
-  optional string rev_note = 7;
+  optional string rev_note = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm StackScript creation. Ignored when
   // dry_run=true.
-  bool confirm = 8; // system param
+  bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 9; // system param
+  optional bool dry_run = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // StackScriptUpdateInput is the input contract for linode_stackscript_update.
@@ -138,30 +151,35 @@ message StackScriptUpdateInput {
     method: "PUT"
     path: "/linode/stackscripts/{stackscript_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a StackScript in your account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "StackScript '{label}' (ID: {id}) updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the StackScript to update.
-  int32 stackscript_id = 2;
+  int32 stackscript_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New label for the StackScript (max 64 characters, must be unique).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New script content (bash, compatible with the selected images).
-  optional string script = 4;
+  optional string script = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Image IDs that the StackScript supports (e.g., ["linode/debian12",
   // "linode/ubuntu24.04"]).
-  repeated string images = 5;
+  repeated string images = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // New description of the StackScript.
-  optional string description = 6;
+  optional string description = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the StackScript should be public.
-  optional bool is_public = 7;
+  optional bool is_public = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // A revision note for this version of the StackScript.
-  optional string rev_note = 8;
+  optional string rev_note = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm the StackScript update. Ignored when
   // dry_run=true.
-  bool confirm = 9; // system param
+  bool confirm = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 10; // system param
+  optional bool dry_run = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // StackScriptDeleteInput is the input contract for linode_stackscript_delete,
@@ -172,20 +190,24 @@ message StackScriptDeleteInput {
     method: "DELETE"
     path: "/linode/stackscripts/{stackscript_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.StackScriptDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation is destructive. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "StackScript";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the StackScript to delete.
-  int32 stackscript_id = 2;
+  int32 stackscript_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

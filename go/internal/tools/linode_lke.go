@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -55,9 +54,9 @@ func NewLinodeLKEClusterGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 }
 
 func handleLKEClusterGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	clusterID, err := parseLKEClusterID(request.GetString("cluster_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	clusterID, validationMessage := requiredIDArgument(request, "cluster_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -81,7 +80,7 @@ func NewLinodeLKEPoolListTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 		"Lists all node pools for a specific LKE cluster",
 		"linode.mcp.v1.LKENodePoolListInput",
 		protoListPathID{
-			option: mcp.WithString("cluster_id", mcp.Required(),
+			option: mcp.WithNumber("cluster_id", mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			parse: lkePoolListClusterIDFromTool,
 		},
@@ -95,16 +94,10 @@ func NewLinodeLKEPoolListTool(cfg *config.Config) (mcp.Tool, profiles.Capability
 	return tool, profiles.CapRead, handler
 }
 
-// lkePoolListClusterIDFromTool validates the cluster_id path param exactly like
-// the non-proto handler did (via parseLKEClusterID), returning the same error
-// text. cluster_id is a string param, so this preserves the family's schema.
+// lkePoolListClusterIDFromTool adapts requiredIDArgument for the sub-resource
+// list factories, which take the cluster_id reader as a value.
 func lkePoolListClusterIDFromTool(request *mcp.CallToolRequest) (int, string) {
-	clusterID, err := parseLKEClusterID(request.GetString("cluster_id", ""))
-	if err != nil {
-		return 0, err.Error()
-	}
-
-	return clusterID, ""
+	return requiredIDArgument(request, "cluster_id")
 }
 
 func lkePoolListResponse(items []*linodev1.LKENodePool, count int32, filter *string) *linodev1.LKENodePoolListResponse {
@@ -127,14 +120,14 @@ func NewLinodeLKEPoolGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 }
 
 func handleLKEPoolGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	clusterID, err := parseLKEClusterID(request.GetString("cluster_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	clusterID, validationMessage := requiredIDArgument(request, "cluster_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	poolID, err := parseLKEPoolID(request.GetString("pool_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	poolID, validationMessage := requiredIDArgument(request, "pool_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -166,9 +159,9 @@ func NewLinodeLKENodeGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 }
 
 func handleLKENodeGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	clusterID, err := parseLKEClusterID(request.GetString("cluster_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	clusterID, validationMessage := requiredIDArgument(request, "cluster_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	nodeID := request.GetString("node_id", "")
@@ -205,9 +198,9 @@ func NewLinodeLKEKubeconfigGetTool(cfg *config.Config) (mcp.Tool, profiles.Capab
 }
 
 func handleLKEKubeconfigGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	clusterID, err := parseLKEClusterID(request.GetString("cluster_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	clusterID, validationMessage := requiredIDArgument(request, "cluster_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -239,9 +232,9 @@ func NewLinodeLKEDashboardGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabi
 }
 
 func handleLKEDashboardGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	clusterID, err := parseLKEClusterID(request.GetString("cluster_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	clusterID, validationMessage := requiredIDArgument(request, "cluster_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -265,7 +258,7 @@ func NewLinodeLKEAPIEndpointListTool(cfg *config.Config) (mcp.Tool, profiles.Cap
 		"Lists the API endpoints for an LKE cluster",
 		"linode.mcp.v1.LKEAPIEndpointListInput",
 		protoListPathID{
-			option: mcp.WithString("cluster_id", mcp.Required(),
+			option: mcp.WithNumber("cluster_id", mcp.Required(),
 				mcp.Description("The ID of the LKE cluster")),
 			parse: lkePoolListClusterIDFromTool,
 		},
@@ -299,9 +292,9 @@ func NewLinodeLKEACLGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, 
 }
 
 func handleLKEACLGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	clusterID, err := parseLKEClusterID(request.GetString("cluster_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	clusterID, validationMessage := requiredIDArgument(request, "cluster_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -430,9 +423,8 @@ func lkeTierVersionListResponse(items []*linodev1.LKETierVersion, count int32, f
 	return &linodev1.LKETierVersionListResponse{Count: count, Filter: filter, TierVersions: items}
 }
 
-// lkeTierVersionListTierFromTool validates the required tier path-id against the
-// generated LKETier enum (standard or enterprise), returning the validated tier
-// and any error message.
+// lkeTierVersionListTierFromTool validates the tier path-id against the
+// generated LKETier enum (standard or enterprise).
 func lkeTierVersionListTierFromTool(request *mcp.CallToolRequest) (string, string) {
 	return validateLKETierParam(request.GetString("tier", ""))
 }
@@ -499,31 +491,4 @@ func validateLKETierParam(raw string) (string, string) {
 	}
 
 	return raw, ""
-}
-
-func parseLKEClusterID(raw string) (int, error) {
-	if raw == "" {
-		return 0, ErrLKEClusterIDRequired
-	}
-
-	clusterID, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %s", ErrLKEClusterIDInvalid, raw)
-	}
-
-	return clusterID, nil
-}
-
-// parseLKEPoolID validates and converts the pool ID string to an integer.
-func parseLKEPoolID(raw string) (int, error) {
-	if raw == "" {
-		return 0, ErrLKEPoolIDRequired
-	}
-
-	poolID, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %s", ErrLKEPoolIDInvalid, raw)
-	}
-
-	return poolID, nil
 }

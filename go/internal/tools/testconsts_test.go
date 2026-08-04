@@ -108,6 +108,7 @@ const (
 	schemaTypeInteger            = "integer"
 	keyServiceType               = "service_type"
 	keyEntityIDs                 = "entity_ids"
+	keyScope                     = "scope"
 	keyWidgets                   = "widgets"
 	keyMetric                    = "metric"
 	keyMetricType                = "metric_type"

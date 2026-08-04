@@ -58,7 +58,7 @@ func handleLinodeNodeBalancerCreateRequest(ctx context.Context, request *mcp.Cal
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	nodeBalancer, err := client.CreateNodeBalancerProto(ctx, req)
+	nodeBalancer, err := client.CreateNodeBalancerProto(ctx, &req)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create NodeBalancer: %v", err)), nil
 	}
@@ -77,10 +77,30 @@ func nodeBalancerCreateRequestFromTool(request *mcp.CallToolRequest) (linode.Cre
 		return linode.CreateNodeBalancerRequest{}, "region is required"
 	}
 
+	tags, _, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return linode.CreateNodeBalancerRequest{}, validationMessage
+	}
+
 	req := linode.CreateNodeBalancerRequest{
 		Region:             region,
 		Label:              request.GetString("label", ""),
 		ClientConnThrottle: request.GetInt("client_conn_throttle", 0),
+		Tags:               tags,
+	}
+
+	args := request.GetArguments()
+
+	if req.Configs, validationMessage = objectSliceFromToolArg[map[string]any](args["configs"], "configs"); validationMessage != "" {
+		return linode.CreateNodeBalancerRequest{}, validationMessage
+	}
+
+	if req.VPCs, validationMessage = objectSliceFromToolArg[map[string]any](args["vpcs"], "vpcs"); validationMessage != "" {
+		return linode.CreateNodeBalancerRequest{}, validationMessage
+	}
+
+	if req.FirewallID, validationMessage = optionalPaginationInt(args, "firewall_id", 1, 0); validationMessage != "" {
+		return linode.CreateNodeBalancerRequest{}, validationMessage
 	}
 
 	rawIPv4, present := request.GetArguments()["ipv4"]
@@ -126,6 +146,11 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 	label := request.GetString("label", "")
 	clientConnThrottle := request.GetInt("client_conn_throttle", notProvided)
 
+	tags, _, validationMessage := optionalTagsField(request.GetArguments())
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	if IsDryRun(request) {
 		if nodeBalancerID == 0 {
 			return mcp.NewToolResultError("nodebalancer_id is required"), nil
@@ -156,6 +181,7 @@ func handleLinodeNodeBalancerUpdateRequest(ctx context.Context, request *mcp.Cal
 
 	req := linode.UpdateNodeBalancerRequest{
 		Label: label,
+		Tags:  tags,
 	}
 
 	if clientConnThrottle >= 0 {

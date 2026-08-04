@@ -201,7 +201,7 @@ func TestLinodeLKEClusterGetToolValidation(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingClusterID, args: map[string]any{}, wantContains: errClusterIDRequired},
-		{name: "invalid cluster id", args: map[string]any{keyClusterID: notANumber}, wantContains: "cluster_id must be a valid integer"},
+		{name: "invalid cluster id", args: map[string]any{keyClusterID: notANumber}, wantContains: "cluster_id must be a positive integer"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -255,7 +255,7 @@ func TestLinodeLKEClusterGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKEClusterGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: 123})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -368,7 +368,7 @@ func TestLinodeLKEPoolsListToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKEPoolListTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: 123})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -441,8 +441,8 @@ func TestLinodeLKEPoolGetToolValidation(t *testing.T) {
 		args         map[string]any
 		wantContains string
 	}{
-		{name: caseMissingClusterID, args: map[string]any{keyPoolID: "10"}, wantContains: errClusterIDRequired},
-		{name: "missing pool id", args: map[string]any{keyClusterID: "123"}, wantContains: "pool_id is required"},
+		{name: caseMissingClusterID, args: map[string]any{keyPoolID: 10}, wantContains: errClusterIDRequired},
+		{name: "missing pool id", args: map[string]any{keyClusterID: 123}, wantContains: "pool_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -494,7 +494,7 @@ func TestLinodeLKEPoolGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKEPoolGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyPoolID: "10"})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: 123, keyPoolID: 10})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -560,7 +560,7 @@ func TestLinodeLKENodeGetToolValidation(t *testing.T) {
 		wantContains string
 	}{
 		{name: caseMissingClusterID, args: map[string]any{keyNodeID: idAbc123}, wantContains: errClusterIDRequired},
-		{name: "missing node id", args: map[string]any{keyClusterID: "123"}, wantContains: "node_id is required"},
+		{name: "missing node id", args: map[string]any{keyClusterID: 123}, wantContains: "node_id is required"},
 	}
 	for _, tt := range validationTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -612,7 +612,7 @@ func TestLinodeLKENodeGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKENodeGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123", keyNodeID: idAbc123})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: 123, keyNodeID: idAbc123})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -722,7 +722,7 @@ func TestLinodeLKEKubeconfigGetToolSuccess(t *testing.T) {
 	}
 	_, _, srvHandler := tools.NewLinodeLKEKubeconfigGetTool(srvCfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
+	req := createRequestWithArgs(t, map[string]any{keyClusterID: 123})
 
 	result, err := srvHandler(t.Context(), req)
 	if err != nil {
@@ -796,7 +796,7 @@ func TestLinodeLKEDashboardGetTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEDashboardGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: 123})
 
 		result, err := srvHandler(t.Context(), req)
 		if err != nil {
@@ -875,7 +875,7 @@ func TestLinodeLKEAPIEndpointsListTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEAPIEndpointListTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: 123})
 
 		result, err := srvHandler(t.Context(), req)
 		if err != nil {
@@ -962,7 +962,7 @@ func TestLinodeLKEACLGetTool(t *testing.T) {
 		}
 		_, _, srvHandler := tools.NewLinodeLKEACLGetTool(srvCfg)
 
-		req := createRequestWithArgs(t, map[string]any{keyClusterID: "123"})
+		req := createRequestWithArgs(t, map[string]any{keyClusterID: 123})
 
 		result, err := srvHandler(t.Context(), req)
 		if err != nil {

@@ -55,11 +55,13 @@ message PlacementGroupGetInput {
     method: "GET"
     path: "/placement/groups/{group_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroup";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the placement group to retrieve (required).
-  int32 group_id = 2;
+  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // PlacementGroupWriteResponse is the {message, placement_group} envelope the
@@ -93,13 +95,15 @@ message PlacementGroupListInput {
     method: "GET"
     path: "/placement/groups"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // PlacementGroupCreateInput is the input contract for
@@ -111,22 +115,26 @@ message PlacementGroupCreateInput {
     method: "POST"
     path: "/placement/groups"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a placement group. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Placement group '{label}' created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Placement group label.
-  string label = 2;
+  string label = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Region where the placement group is created.
-  string region = 3;
+  string region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Placement group type. Currently anti_affinity:local.
-  string placement_group_type = 4;
+  string placement_group_type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Placement group policy: flexible or strict.
-  PlacementGroupPolicy.Value placement_group_policy = 5;
+  PlacementGroupPolicy.Value placement_group_policy = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm placement group creation. Ignored when
   // dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview placement group creation without creating it.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // PlacementGroupUpdateInput is the input contract for
@@ -137,18 +145,21 @@ message PlacementGroupUpdateInput {
     method: "PUT"
     path: "/placement/groups/{group_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroup";
+  option (linode.mcp.v1.confirm_message) = "This updates a placement group. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Placement group ID to update.
-  int32 group_id = 2;
+  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New placement group label.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm placement group update.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // PlacementGroupDeleteInput is the input contract for
@@ -159,22 +170,26 @@ message PlacementGroupDeleteInput {
     method: "DELETE"
     path: "/placement/groups/{group_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "confirm=true is required to delete the placement group";
+  option (linode.mcp.v1.resource_type) = "PlacementGroup";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the placement group to delete.
-  int32 group_id = 2;
+  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // PlacementGroupAssignInput is the input contract for
@@ -188,19 +203,22 @@ message PlacementGroupAssignInput {
     method: "POST"
     path: "/placement/groups/{group_id}/assign"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This assigns Linodes to a placement group. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the placement group to assign Linodes to.
-  int32 group_id = 2;
+  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Array of Linode IDs to assign to the placement group.
-  repeated int32 linodes = 3;
+  repeated int32 linodes = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm assigning Linodes to the placement group. Ignored
   // when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // PlacementGroupUnassignInput is the input contract for
@@ -214,17 +232,21 @@ message PlacementGroupUnassignInput {
     method: "POST"
     path: "/placement/groups/{group_id}/unassign"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.PlacementGroupWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This unassigns Linodes from a placement group. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Linodes unassigned from placement group {group_id} successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the placement group.
-  int32 group_id = 2;
+  int32 group_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Linode IDs to unassign from the placement group.
-  repeated int32 linodes = 3;
+  repeated int32 linodes = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm placement group unassignment. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

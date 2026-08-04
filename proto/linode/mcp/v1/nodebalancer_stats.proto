@@ -38,11 +38,13 @@ message NodeBalancerStatsGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_nodebalancer_stats_get"
     method: "GET"
-    path: "/nodebalancers/{node_balancer_id}/stats"
+    path: "/nodebalancers/{nodebalancer_id}/stats"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.NodeBalancerStats";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the NodeBalancer whose statistics should be retrieved.
-  int32 nodebalancer_id = 2;
+  int32 nodebalancer_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }

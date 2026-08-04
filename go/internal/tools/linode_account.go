@@ -1701,10 +1701,8 @@ func NewLinodeAccountUpdateTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	return tool, profiles.CapAdmin, handler
 }
 
-// runProfilePhoneAction is the shared path for the phone-number send and
-// verify tools, which post a body to a /profile/phone-number route. It
-// previews with an arg-only side effect, then confirms and runs the caller's
-// client action (which returns an error message or "").
+// runProfilePhoneAction is the shared preview/confirm/execute path for the
+// phone-number send and verify tools. execute returns a failure message or "".
 func runProfilePhoneAction(
 	ctx context.Context,
 	request *mcp.CallToolRequest,
@@ -1902,8 +1900,7 @@ func handleLinodeProfileTFAEnableConfirmRequest(ctx context.Context, request *mc
 	})
 }
 
-// tfaEnableConfirmString reads a string field from the confirm endpoint's
-// untyped response body, returning "" when the field is absent or non-string.
+// tfaEnableConfirmString reads a string field from the confirm endpoint's untyped response body.
 func tfaEnableConfirmString(body linode.ProfileTFAEnableConfirmResponse, key string) string {
 	if value, ok := body[key].(string); ok {
 		return value
@@ -2377,8 +2374,8 @@ func paymentMethodCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.C
 		return nil, errPaymentMethodTypeRequired
 	}
 
-	// The API accepts only credit_card here; Google Pay/PayPal are added through
-	// the Cloud Manager, not this endpoint. Reject other types before the call.
+	// The API accepts only credit_card here; Google Pay and PayPal are added
+	// through the Cloud Manager, not this endpoint.
 	if paymentType != "credit_card" {
 		return nil, "type must be credit_card"
 	}
@@ -2520,9 +2517,8 @@ func handleLinodeAccountPaymentMethodMakeDefaultRequest(ctx context.Context, req
 	})
 }
 
-// paymentMethodIDInt converts the validated payment-method ID string back to an
-// int32 for the id-echo response. The string comes from accountPaymentMethodIDFromTool,
-// which already validated it as a positive integer, so the parse cannot fail.
+// paymentMethodIDInt converts the ID string back to int32 for the id-echo response.
+// accountPaymentMethodIDFromTool already validated it, so the parse cannot fail.
 func paymentMethodIDInt(paymentMethodID string) int32 {
 	id, _ := strconv.Atoi(paymentMethodID)
 
@@ -2803,8 +2799,7 @@ func handleLinodeAccountOAuthClientResetSecretRequest(ctx context.Context, reque
 	}
 
 	if IsDryRun(request) {
-		// Credential-safe: fetch the client metadata (not the secret) and
-		// preview the POST; the new secret is never surfaced.
+		// Credential-safe: the preview fetches client metadata, never the new secret.
 		return RunDryRunPreview(ctx, request, cfg, "linode_account_oauth_client_secret_reset", httpMethodPost,
 			accountOAuthClientsPath+"/"+clientID+"/reset-secret",
 			func(ctx context.Context, c *linode.Client) (any, error) {
@@ -2856,7 +2851,7 @@ func oauthClientCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.Cre
 		return nil, errRedirectURIRequired
 	}
 
-	return &linode.CreateOAuthClientRequest{Label: label, RedirectURI: redirectURI}, ""
+	return &linode.CreateOAuthClientRequest{Label: label, RedirectURI: redirectURI, Public: request.GetBool("public", false)}, ""
 }
 
 func oauthClientUpdateRequestFromTool(request *mcp.CallToolRequest) (*linode.UpdateOAuthClientRequest, string) {
@@ -4327,7 +4322,20 @@ func acceptAccountServiceTransfer(ctx context.Context, client *linode.Client, to
 	return ""
 }
 
+// accountServiceTransferCreateRequestFromTool builds the transfer body. A
+// caller-supplied entities object wins outright, since it can name entity types
+// the linode_ids convenience form cannot; otherwise linode_ids fills
+// entities.linodes.
 func accountServiceTransferCreateRequestFromTool(request *mcp.CallToolRequest) (*linode.CreateAccountServiceTransferRequest, string) {
+	entities, validationMessage := objectMapFromToolArg(request.GetArguments()["entities"], "entities")
+	if validationMessage != "" {
+		return nil, validationMessage
+	}
+
+	if len(entities) > 0 {
+		return &linode.CreateAccountServiceTransferRequest{Entities: entities}, ""
+	}
+
 	raw, exists := request.GetArguments()["linode_ids"]
 	if !exists {
 		return nil, "linode_ids is required"
@@ -4339,7 +4347,7 @@ func accountServiceTransferCreateRequestFromTool(request *mcp.CallToolRequest) (
 	}
 
 	return &linode.CreateAccountServiceTransferRequest{
-		Entities: linode.AccountEntityTransferEntities{Linodes: ids},
+		Entities: map[string]any{"linodes": ids},
 	}, ""
 }
 

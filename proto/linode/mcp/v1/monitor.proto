@@ -20,11 +20,13 @@ message MonitorServiceGetInput {
     method: "GET"
     path: "/monitor/services/{service_type}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorService";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The monitoring service type to retrieve (required).
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // MonitorServiceListInput is the input contract for
@@ -35,9 +37,11 @@ message MonitorServiceListInput {
     method: "GET"
     path: "/monitor/services"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // MonitorServiceDashboardListInput is the input contract for
@@ -48,11 +52,13 @@ message MonitorServiceDashboardListInput {
     method: "GET"
     path: "/monitor/services/{service_type}/dashboards"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceDashboardListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug whose dashboards should be listed.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // MonitorServiceMetricDefinitionListInput is the input contract for
@@ -63,12 +69,14 @@ message MonitorServiceMetricDefinitionListInput {
     method: "GET"
     path: "/monitor/services/{service_type}/metric-definitions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceMetricDefinitionListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug whose metric definitions should be
   // listed.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // MonitorServiceAlertDefinitionListInput is the input contract for
@@ -79,12 +87,14 @@ message MonitorServiceAlertDefinitionListInput {
     method: "GET"
     path: "/monitor/services/{service_type}/alert-definitions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceAlertDefinitionListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug whose alert definitions should be
   // listed.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // MonitorServiceMetricQueryInput is the input contract for
@@ -96,11 +106,15 @@ message MonitorServiceMetricQueryInput {
     method: "POST"
     path: "/monitor/services/{service_type}/metrics"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceMetricQueryResponse";
+  option (linode.mcp.v1.success_message) = "Monitor service metrics read for '{service_type}'";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug whose metrics should be retrieved.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // MonitorAlertDefinitionGetInput is the input contract for
@@ -112,14 +126,16 @@ message MonitorAlertDefinitionGetInput {
     method: "GET"
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinition";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug whose alert definition should be
   // retrieved.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Alert definition ID to retrieve.
-  int32 alert_id = 3;
+  int32 alert_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // MonitorAlertDefinitionDeleteInput is the input contract for
@@ -131,20 +147,36 @@ message MonitorAlertDefinitionDeleteInput {
     method: "DELETE"
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes a monitor alert definition. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor service alert definition {alert_id} deleted for '{service_type}'";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug whose alert definition should be
   // deleted.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Alert definition ID to delete.
-  int32 alert_id = 3;
+  int32 alert_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm deleting an alert definition. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+}
+
+// MonitorAlertScope is the breadth an alert definition applies to. The API
+// documents exactly one value today, but declares it as a closed set rather
+// than free-form text, so it is wrapped like the other closed sets (see
+// FirewallTemplateSlug in firewall.proto for the same situation).
+message MonitorAlertScope {
+  enum Value {
+    unspecified = 0;
+    account = 1;
+  }
 }
 
 // MonitorServiceTokenCreateInput is the input contract for
@@ -158,19 +190,27 @@ message MonitorServiceTokenCreateInput {
     method: "POST"
     path: "/monitor/services/{service_type}/token"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorServiceTokenCreateResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a monitor service token. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug for the token.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Service entity IDs to include in the token (non-empty positive integers).
-  repeated int32 entity_ids = 3;
+  repeated int32 entity_ids = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm creating a monitor service token. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Optional string the token request carries alongside entity_ids. The API
+  // documents it only as an untyped string with no described meaning, so it is
+  // passed through verbatim rather than interpreted.
+  optional string add = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // MonitorServiceTokenCreateResponse is the linode_monitor_service_token_create
@@ -194,31 +234,40 @@ message MonitorServiceAlertDefinitionCreateInput {
     method: "POST"
     path: "/monitor/services/{service_type}/alert-definitions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a monitor alert definition. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor service alert definition created for '{service_type}'";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug for the alert definition.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Alert definition label.
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Alert severity: 0 severe, 1 medium, 2 low, or 3 info.
-  int32 severity = 4;
+  int32 severity = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Alert rule criteria object.
-  map<string, google.protobuf.Value> rule_criteria = 5;
+  map<string, google.protobuf.Value> rule_criteria = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Alert trigger conditions object.
-  map<string, google.protobuf.Value> trigger_conditions = 6;
+  map<string, google.protobuf.Value> trigger_conditions = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Alert channel IDs (non-empty positive integers).
-  repeated int32 channel_ids = 7;
+  repeated int32 channel_ids = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert definition description.
-  optional string description = 8;
+  optional string description = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional service entity IDs.
-  repeated string entity_ids = 9;
+  repeated string entity_ids = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm creating an alert definition. Ignored when
   // dry_run=true.
-  bool confirm = 10; // system param
+  bool confirm = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 11; // system param
+  optional bool dry_run = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // The breadth the alert applies to: account (required).
+  MonitorAlertScope.Value scope = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Optional fields used to group alert data.
+  repeated string group_by = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // MonitorServiceAlertDefinitionCloneInput is the input contract for
@@ -230,37 +279,42 @@ message MonitorServiceAlertDefinitionCloneInput {
     method: "POST"
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}/clone"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This clones a monitor alert definition. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor alert definition {alert_id} cloned";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug for the source alert definition.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Source alert definition ID to clone.
-  int32 alert_id = 3;
+  int32 alert_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Label for the cloned alert definition.
-  string label = 4;
+  string label = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert channel IDs.
-  repeated int32 channel_ids = 5;
+  repeated int32 channel_ids = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional cloned alert definition description.
-  optional string description = 6;
+  optional string description = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional fields used to group alert data.
-  repeated string group_by = 7;
+  repeated string group_by = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert rule criteria object.
-  map<string, google.protobuf.Value> rule_criteria = 8;
+  map<string, google.protobuf.Value> rule_criteria = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert severity: 0 severe, 1 medium, 2 low, or 3 info.
-  optional int32 severity = 9;
+  optional int32 severity = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert trigger conditions object.
-  map<string, google.protobuf.Value> trigger_conditions = 10;
+  map<string, google.protobuf.Value> trigger_conditions = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm cloning an alert definition. Ignored when
   // dry_run=true.
-  bool confirm = 11; // system param
+  bool confirm = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 12; // system param
+  optional bool dry_run = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Optional service entity IDs for an entity-scope clone.
-  repeated string entity_ids = 13;
+  repeated string entity_ids = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional region IDs for a region-scope clone.
-  repeated string regions = 14;
+  repeated string regions = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // MonitorServiceAlertDefinitionUpdateInput is the input contract for
@@ -273,35 +327,42 @@ message MonitorServiceAlertDefinitionUpdateInput {
     method: "PUT"
     path: "/monitor/services/{service_type}/alert-definitions/{alert_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a monitor alert definition. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Monitor alert definition {alert_id} updated";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Supported monitoring service type slug for the alert definition.
-  string service_type = 2;
+  string service_type = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Alert definition ID to update.
-  int32 alert_id = 3;
+  int32 alert_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Optional alert definition label.
-  optional string label = 4;
+  optional string label = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert definition description.
-  optional string description = 5;
+  optional string description = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert severity: 0 severe, 1 medium, 2 low, or 3 info.
-  optional int32 severity = 6;
+  optional int32 severity = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert status: enabled or disabled.
-  optional string status = 7;
+  optional string status = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert rule criteria object.
-  map<string, google.protobuf.Value> rule_criteria = 8;
+  map<string, google.protobuf.Value> rule_criteria = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert trigger conditions object.
-  map<string, google.protobuf.Value> trigger_conditions = 9;
+  map<string, google.protobuf.Value> trigger_conditions = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional alert channel IDs.
-  repeated int32 channel_ids = 10;
+  repeated int32 channel_ids = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional service entity IDs.
-  repeated string entity_ids = 11;
+  repeated string entity_ids = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm updating an alert definition. Ignored when
   // dry_run=true.
-  bool confirm = 12; // system param
+  bool confirm = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 13; // system param
+  optional bool dry_run = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Optional fields used to group alert data.
+  repeated string group_by = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // MonitorDashboardListInput is the input contract for
@@ -312,13 +373,15 @@ message MonitorDashboardListInput {
     method: "GET"
     path: "/monitor/dashboards"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorDashboardListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // MonitorDashboardGetInput is the input contract for
@@ -329,11 +392,13 @@ message MonitorDashboardGetInput {
     method: "GET"
     path: "/monitor/dashboards/{dashboard_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorDashboard";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Monitoring dashboard ID to retrieve.
-  int32 dashboard_id = 2;
+  int32 dashboard_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // MonitorAlertDefinitionListInput is the input contract for the top-level
@@ -344,13 +409,15 @@ message MonitorAlertDefinitionListInput {
     method: "GET"
     path: "/monitor/alert-definitions"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertDefinitionListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // MonitorAlertChannelListInput is the input contract for
@@ -361,13 +428,15 @@ message MonitorAlertChannelListInput {
     method: "GET"
     path: "/monitor/alert-channels"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.MonitorAlertChannelListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // MonitorServiceListResponse is the linode_monitor_service_list envelope: count

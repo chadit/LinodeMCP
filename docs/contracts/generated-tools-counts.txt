@@ -1,0 +1,31 @@
+# Generated-tools counts: how many tools each registered language still
+# serves from a hand-written factory, rather than from the tree its
+# emitter writes out of the proto contract.
+# Owner: scripts/verify_generated_tools.py (`make generated-tools`,
+# inside `make check`).
+#
+# Direction: counts only FALL. A count above its line fails (a tool went
+# back to being hand-written, or new surface was written by hand instead
+# of declared). A count below its line fails too, asking for the line to
+# be lowered in the same change, so this file keeps stating the real
+# remaining work rather than an old high-water mark.
+#
+# New surface that is born generated does not move these numbers, which
+# is the point: it adds no debt, so there is nothing for the ratchet to
+# record.
+#
+# One line per language registered in languages.txt:
+#   <language> <hand-written tools>
+# A registered language with no line fails by name, and a line naming no
+# registered language fails by name, so this file and the registry cannot
+# drift apart.
+#
+# Deliberately not named *-baseline.txt: files under that glob hold one
+# accepted divergence per line, each carrying a dated tracking-issue
+# annotation. A line here is a measurement, not an acceptance, so there
+# is no promise for an annotation to record.
+#
+# Regenerate with:
+#   python3 scripts/verify_generated_tools.py --update-baseline
+go 457
+python 457

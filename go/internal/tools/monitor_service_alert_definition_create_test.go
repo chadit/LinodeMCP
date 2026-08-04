@@ -35,6 +35,7 @@ func monitorAlertDefinitionCreateArgs() map[string]any {
 		monitorAlertDefinitionChannelIDsParam:   []any{546, 392},
 		keyDescription:                          "Alert when CPU usage is high",
 		keyEntityIDs:                            []any{"13116"},
+		keyScope:                                "account",
 		keyConfirm:                              true,
 	}
 }

@@ -62,7 +62,7 @@ func runNodeBalancerCreateParityCase(t *testing.T, tt nodeBalancerCreateCase) {
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
 	req := linode.CreateNodeBalancerRequest{Region: regionUSEast, IPv4: tt.ipv4}
 
-	protoResponse, err := client.CreateNodeBalancerProto(t.Context(), req)
+	protoResponse, err := client.CreateNodeBalancerProto(t.Context(), &req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestClientCreateNodeBalancerRejectsInvalidIPv4BeforeRequest(t *testing.T) {
 	invalidIPv4 := "2001:db8::1"
 	req := linode.CreateNodeBalancerRequest{Region: regionUSEast, IPv4: &invalidIPv4}
 
-	if _, err := client.CreateNodeBalancerProto(t.Context(), req); !errors.Is(err, linode.ErrIPv4AddressInvalid) {
+	if _, err := client.CreateNodeBalancerProto(t.Context(), &req); !errors.Is(err, linode.ErrIPv4AddressInvalid) {
 		t.Errorf("error = %v, want %v", err, linode.ErrIPv4AddressInvalid)
 	}
 
@@ -161,7 +161,7 @@ func TestClientCreateNodeBalancerDoesNotRetryTransientError(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	client := linode.NewClient(srv.URL, "test-token", nil, linode.WithMaxRetries(2))
-	if _, err := client.CreateNodeBalancerProto(t.Context(), linode.CreateNodeBalancerRequest{Region: regionUSEast}); err == nil {
+	if _, err := client.CreateNodeBalancerProto(t.Context(), &linode.CreateNodeBalancerRequest{Region: regionUSEast}); err == nil {
 		t.Fatal("expected an error, got nil")
 	}
 

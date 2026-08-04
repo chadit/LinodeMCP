@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-from urllib.parse import quote
 
 from mcp.types import TextContent, Tool
 
@@ -19,7 +18,9 @@ from linodemcp.tools.helpers import (
     error_response,
     execute_tool,
     pagination_int_argument,
+    pagination_query,
     required_int_id,
+    standard_pagination_arguments,
 )
 from linodemcp.tools.proto_response import (
     serialize_api_response,
@@ -88,8 +89,15 @@ async def handle_linode_nodebalancer_list(
     if label_contains:
         filters.append(f"label_contains={label_contains}")
 
+    try:
+        page, page_size = standard_pagination_arguments(arguments)
+    except (TypeError, ValueError) as exc:
+        return error_response(str(exc))
+
     async def _call(client: RetryableClient) -> dict[str, Any]:
-        raw = await client.get_raw("/nodebalancers")
+        raw = await client.route_raw(
+            "linode_nodebalancer_list", query=pagination_query(page, page_size)
+        )
         return serialize_list_response(
             raw,
             "nodebalancers",
@@ -121,11 +129,9 @@ async def handle_linode_nodebalancer_get(
     if nodebalancer_id is None:
         return error_response(error)
 
-    encoded_nodebalancer_id = quote(str(nodebalancer_id), safe="")
-
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
-            await client.get_raw(f"/nodebalancers/{encoded_nodebalancer_id}"),
+            await client.route_raw("linode_nodebalancer_get", nodebalancer_id),
             nodebalancer_pb2.NodeBalancer(),
         )
 

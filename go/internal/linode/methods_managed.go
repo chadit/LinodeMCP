@@ -2,19 +2,8 @@ package linode
 
 import (
 	"context"
-	"net/http"
-	"net/url"
-	"strconv"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
-)
-
-const (
-	endpointManagedContacts       = "/managed/contacts"
-	endpointManagedServices       = "/managed/services"
-	endpointManagedIssues         = "/managed/issues"
-	endpointManagedLinodeSettings = "/managed/linode-settings"
-	endpointManagedStats          = "/managed/stats"
 )
 
 // httpGetManagedLinodeSettings retrieves Managed settings for one Linode.
@@ -22,11 +11,9 @@ func (c *Client) httpGetManagedLinodeSettings(ctx context.Context, linodeID int)
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedLinodeSettings + "/" + url.PathEscape(strconv.Itoa(linodeID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_linode_settings_get", nil, linodeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedLinodeSettings", Err: err}
+		return nil, wrapRequestError("GetManagedLinodeSettings", err)
 	}
 
 	defer drainClose(resp)
@@ -45,11 +32,9 @@ func (c *Client) httpGetManagedLinodeSettingsProto(ctx context.Context, linodeID
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedLinodeSettings + "/" + url.PathEscape(strconv.Itoa(linodeID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_linode_settings_get", nil, linodeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedLinodeSettings", Err: err}
+		return nil, wrapRequestError("GetManagedLinodeSettings", err)
 	}
 
 	defer drainClose(resp)
@@ -67,11 +52,9 @@ func (c *Client) httpGetManagedContact(ctx context.Context, contactID int) (*Man
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_contact_get", nil, contactID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedContact", Err: err}
+		return nil, wrapRequestError("GetManagedContact", err)
 	}
 
 	defer drainClose(resp)
@@ -89,11 +72,9 @@ func (c *Client) httpGetManagedContactProto(ctx context.Context, contactID int) 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_contact_get", nil, contactID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedContact", Err: err}
+		return nil, wrapRequestError("GetManagedContact", err)
 	}
 
 	defer drainClose(resp)
@@ -111,11 +92,9 @@ func (c *Client) httpDeleteManagedContact(ctx context.Context, contactID int) er
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_contact_delete", nil, contactID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteManagedContact", Err: err}
+		return wrapRequestError("DeleteManagedContact", err)
 	}
 
 	defer drainClose(resp)
@@ -128,9 +107,9 @@ func (c *Client) httpGetManagedStats(ctx context.Context) (map[string]any, error
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpointManagedStats, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_stats_get", nil)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedStats", Err: err}
+		return nil, wrapRequestError("GetManagedStats", err)
 	}
 
 	defer drainClose(resp)
@@ -150,11 +129,9 @@ func (c *Client) httpUpdateManagedLinodeSettingsProto(ctx context.Context, linod
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedLinodeSettings + "/" + url.PathEscape(strconv.Itoa(linodeID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_linode_settings_update", req, linodeID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedLinodeSettings", Err: err}
+		return nil, wrapRequestError("UpdateManagedLinodeSettings", err)
 	}
 
 	defer drainClose(resp)
@@ -172,11 +149,9 @@ func (c *Client) httpGetManagedService(ctx context.Context, serviceID int) (*Man
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_service_get", nil, serviceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedService", Err: err}
+		return nil, wrapRequestError("GetManagedService", err)
 	}
 
 	defer drainClose(resp)
@@ -194,11 +169,9 @@ func (c *Client) httpGetManagedServiceProto(ctx context.Context, serviceID int) 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_service_get", nil, serviceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedService", Err: err}
+		return nil, wrapRequestError("GetManagedService", err)
 	}
 
 	defer drainClose(resp)
@@ -218,11 +191,9 @@ func (c *Client) httpUpdateManagedServiceProto(ctx context.Context, serviceID in
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_service_update", req, serviceID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedService", Err: err}
+		return nil, wrapRequestError("UpdateManagedService", err)
 	}
 
 	defer drainClose(resp)
@@ -240,11 +211,9 @@ func (c *Client) httpDeleteManagedService(ctx context.Context, serviceID int) er
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID))
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_service_delete", nil, serviceID)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteManagedService", Err: err}
+		return wrapRequestError("DeleteManagedService", err)
 	}
 
 	defer drainClose(resp)
@@ -257,11 +226,9 @@ func (c *Client) httpDisableManagedService(ctx context.Context, serviceID int) e
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID)) + "/disable"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_service_disable", nil, serviceID)
 	if err != nil {
-		return &NetworkError{Operation: "DisableManagedService", Err: err}
+		return wrapRequestError("DisableManagedService", err)
 	}
 
 	defer drainClose(resp)
@@ -274,11 +241,9 @@ func (c *Client) httpEnableManagedService(ctx context.Context, serviceID int) er
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedServices + "/" + url.PathEscape(strconv.Itoa(serviceID)) + "/enable"
-
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_service_enable", nil, serviceID)
 	if err != nil {
-		return &NetworkError{Operation: "EnableManagedService", Err: err}
+		return wrapRequestError("EnableManagedService", err)
 	}
 
 	defer drainClose(resp)
@@ -290,7 +255,8 @@ func (c *Client) httpEnableManagedService(ctx context.Context, serviceID int) er
 // the proto-backed list path. The page/page_size pair flows through
 // withPaginationQuery, so the request matches httpListManagedServices.
 func (c *Client) httpListManagedServicesProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedService, error) {
-	return listProtoElementsPaginated(ctx, c, "ListManagedServices", endpointManagedServices, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListManagedServices",
+		"linode_managed_service_list", "", nil, page, pageSize,
 		func() *linodev1.ManagedService { return &linodev1.ManagedService{} })
 }
 
@@ -298,7 +264,8 @@ func (c *Client) httpListManagedServicesProto(ctx context.Context, page, pageSiz
 // the proto-backed list path. page/page_size flows through withPaginationQuery,
 // so the request matches httpListManagedContacts.
 func (c *Client) httpListManagedContactsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedContact, error) {
-	return listProtoElementsPaginated(ctx, c, "ListManagedContacts", endpointManagedContacts, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListManagedContacts",
+		"linode_managed_contact_list", "", nil, page, pageSize,
 		func() *linodev1.ManagedContact { return &linodev1.ManagedContact{} })
 }
 
@@ -306,7 +273,8 @@ func (c *Client) httpListManagedContactsProto(ctx context.Context, page, pageSiz
 // messages for the proto-backed list path. page/page_size flows through
 // withPaginationQuery, so the request matches httpListManagedLinodeSettings.
 func (c *Client) httpListManagedLinodeSettingsProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedLinodeSettings, error) {
-	return listProtoElementsPaginated(ctx, c, "ListManagedLinodeSettings", endpointManagedLinodeSettings, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListManagedLinodeSettings",
+		"linode_managed_linode_settings_list", "", nil, page, pageSize,
 		func() *linodev1.ManagedLinodeSettings { return &linodev1.ManagedLinodeSettings{} })
 }
 
@@ -314,7 +282,8 @@ func (c *Client) httpListManagedLinodeSettingsProto(ctx context.Context, page, p
 // proto-backed list path. page/page_size flows through withPaginationQuery, so
 // the request matches httpListManagedIssues.
 func (c *Client) httpListManagedIssuesProto(ctx context.Context, page, pageSize int) ([]*linodev1.ManagedIssue, error) {
-	return listProtoElementsPaginated(ctx, c, "ListManagedIssues", endpointManagedIssues, page, pageSize,
+	return listProtoElementsPaginatedRouted(ctx, c, "ListManagedIssues",
+		"linode_managed_issue_list", "", nil, page, pageSize,
 		func() *linodev1.ManagedIssue { return &linodev1.ManagedIssue{} })
 }
 
@@ -323,11 +292,9 @@ func (c *Client) httpGetManagedIssueProto(ctx context.Context, issueID int) (*li
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedIssues + "/" + url.PathEscape(strconv.Itoa(issueID))
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_issue_get", nil, issueID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetManagedIssue", Err: err}
+		return nil, wrapRequestError("GetManagedIssue", err)
 	}
 
 	defer drainClose(resp)
@@ -347,9 +314,9 @@ func (c *Client) httpCreateManagedServiceProto(ctx context.Context, request *Cre
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedServices, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_service_create", request)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateManagedService", Err: err}
+		return nil, wrapRequestError("CreateManagedService", err)
 	}
 
 	defer drainClose(resp)
@@ -369,11 +336,9 @@ func (c *Client) httpUpdateManagedContactProto(ctx context.Context, contactID in
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	endpoint := endpointManagedContacts + "/" + url.PathEscape(strconv.Itoa(contactID))
-
-	resp, err := c.makeRequest(ctx, http.MethodPut, endpoint, req)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_contact_update", req, contactID)
 	if err != nil {
-		return nil, &NetworkError{Operation: "UpdateManagedContact", Err: err}
+		return nil, wrapRequestError("UpdateManagedContact", err)
 	}
 
 	defer drainClose(resp)
@@ -393,9 +358,9 @@ func (c *Client) httpCreateManagedContactProto(ctx context.Context, request *Cre
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	resp, err := c.makeRequest(ctx, http.MethodPost, endpointManagedContacts, request)
+	resp, err := c.makeRouteRequest(ctx, "linode_managed_contact_create", request)
 	if err != nil {
-		return nil, &NetworkError{Operation: "CreateManagedContact", Err: err}
+		return nil, wrapRequestError("CreateManagedContact", err)
 	}
 
 	defer drainClose(resp)

@@ -185,6 +185,17 @@ func handleInstanceDiskCreateRequest(ctx context.Context, request *mcp.CallToolR
 		req.AuthorizedUsers = splitCommaSeparated(usersStr)
 	}
 
+	stackScriptID, validationMessage := optionalPaginationInt(request.GetArguments(), "stackscript_id", 1, 0)
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
+	req.StackScriptID = stackScriptID
+
+	if req.StackScriptData, validationMessage = stringMapFromToolArg(request.GetArguments()["stackscript_data"], "stackscript_data"); validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
+	}
+
 	client, err := prepareClient(request, cfg)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil

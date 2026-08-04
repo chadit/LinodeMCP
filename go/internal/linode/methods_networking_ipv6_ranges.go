@@ -2,9 +2,7 @@ package linode
 
 import (
 	"context"
-	"net/http"
 	"net/netip"
-	"net/url"
 
 	linodev1 "github.com/chadit/LinodeMCP/go/internal/genpb/linode/mcp/v1"
 )
@@ -21,12 +19,9 @@ func (c *Client) httpGetIPv6Range(ctx context.Context, ipv6Range string) (*IPv6R
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	encodedRange := url.PathEscape(ipv6Range)
-	endpoint := endpointNetworkingIPv6Ranges + "/" + encodedRange
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_ipv6_range_get", nil, ipv6Range)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetIPv6Range", Err: err}
+		return nil, wrapRequestError("GetIPv6Range", err)
 	}
 
 	defer drainClose(resp)
@@ -52,12 +47,9 @@ func (c *Client) httpGetIPv6RangeProto(ctx context.Context, ipv6Range string) (*
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	encodedRange := url.PathEscape(ipv6Range)
-	endpoint := endpointNetworkingIPv6Ranges + "/" + encodedRange
-
-	resp, err := c.makeRequest(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_ipv6_range_get", nil, ipv6Range)
 	if err != nil {
-		return nil, &NetworkError{Operation: "GetIPv6Range", Err: err}
+		return nil, wrapRequestError("GetIPv6Range", err)
 	}
 
 	defer drainClose(resp)
@@ -80,12 +72,9 @@ func (c *Client) httpDeleteIPv6Range(ctx context.Context, ipv6Range string) erro
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
 
-	encodedRange := url.PathEscape(ipv6Range)
-	endpoint := endpointNetworkingIPv6Ranges + "/" + encodedRange
-
-	resp, err := c.makeRequest(ctx, http.MethodDelete, endpoint, nil)
+	resp, err := c.makeRouteRequest(ctx, "linode_ipv6_range_delete", nil, ipv6Range)
 	if err != nil {
-		return &NetworkError{Operation: "DeleteIPv6Range", Err: err}
+		return wrapRequestError("DeleteIPv6Range", err)
 	}
 
 	defer drainClose(resp)

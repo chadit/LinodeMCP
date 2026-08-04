@@ -10,9 +10,9 @@ import (
 	"github.com/chadit/LinodeMCP/go/internal/linode"
 )
 
-// pageQueryServer serves an empty paginated envelope and records the raw query
-// string of the request it received, so a test can assert the page pair reached
-// the wire rather than being dropped between the tool and the client.
+// pageQueryServer serves an empty paginated envelope and records the request's
+// raw query string, so a test can assert the page pair reached the wire rather
+// than being dropped between the tool and the client.
 func pageQueryServer(t *testing.T, wantPath string, gotQuery *string) *httptest.Server {
 	t.Helper()
 
@@ -32,10 +32,19 @@ func pageQueryServer(t *testing.T, wantPath string, gotQuery *string) *httptest.
 	}))
 }
 
+// pageQueryProbe drops the decoded elements: these tests assert on the query
+// string the method put on the wire, and pageQueryServer's envelope is empty.
+func pageQueryProbe[T any](_ []T, err error) error {
+	if err != nil {
+		return fmt.Errorf("list call: %w", err)
+	}
+
+	return nil
+}
+
 // TestPaginatedListsSendPageQuery covers every list client method that gained a
-// page/page_size pair: the pair must reach the query string. A method that
-// accepts the arguments and drops them would silently return page one forever,
-// which is the failure the CLI cannot see.
+// page/page_size pair. A method that accepts the arguments and drops them
+// returns page one forever, a failure the CLI cannot see.
 func TestPaginatedListsSendPageQuery(t *testing.T) {
 	t.Parallel()
 
@@ -48,55 +57,112 @@ func TestPaginatedListsSendPageQuery(t *testing.T) {
 			name: "regions",
 			path: "/regions",
 			call: func(client *linode.Client) error {
-				if _, err := client.ListRegionsProto(t.Context(), 2, 50); err != nil {
-					return fmt.Errorf("list call: %w", err)
-				}
-
-				return nil
+				return pageQueryProbe(client.ListRegionsProto(t.Context(), 2, 50))
 			},
 		},
 		{
 			name: "object storage endpoints",
 			path: "/object-storage/endpoints",
 			call: func(client *linode.Client) error {
-				if _, err := client.ListObjectStorageEndpointsProto(t.Context(), 2, 50); err != nil {
-					return fmt.Errorf("list call: %w", err)
-				}
-
-				return nil
+				return pageQueryProbe(client.ListObjectStorageEndpointsProto(t.Context(), 2, 50))
 			},
 		},
 		{
 			name: "instances",
 			path: "/linode/instances",
 			call: func(client *linode.Client) error {
-				if _, err := client.ListInstancesProto(t.Context(), 2, 50); err != nil {
-					return fmt.Errorf("list call: %w", err)
-				}
-
-				return nil
+				return pageQueryProbe(client.ListInstancesProto(t.Context(), 2, 50))
 			},
 		},
 		{
 			name: "images",
 			path: "/images",
 			call: func(client *linode.Client) error {
-				if _, err := client.ListImagesProto(t.Context(), 2, 50); err != nil {
-					return fmt.Errorf("list call: %w", err)
-				}
-
-				return nil
+				return pageQueryProbe(client.ListImagesProto(t.Context(), 2, 50))
 			},
 		},
 		{
 			name: "instance disks",
 			path: "/linode/instances/123/disks",
 			call: func(client *linode.Client) error {
-				if _, err := client.ListInstanceDisksProto(t.Context(), 123, 2, 50); err != nil {
-					return fmt.Errorf("list call: %w", err)
-				}
-
-				return nil
+				return pageQueryProbe(client.ListInstanceDisksProto(t.Context(), 123, 2, 50))
+			},
+		},
+		{
+			name: "domains",
+			path: clientRoutePathDomains,
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListDomainsProto(t.Context(), 2, 50))
+			},
+		},
+		{
+			name: "domain records",
+			path: "/domains/123/records",
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListDomainRecordsProto(t.Context(), 123, 2, 50))
+			},
+		},
+		{
+			name: "firewalls",
+			path: clientRoutePathNetworkingFirewalls,
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListFirewallsProto(t.Context(), 2, 50))
+			},
+		},
+		{
+			name: "nodebalancers",
+			path: clientRoutePathNodebalancers,
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListNodeBalancersProto(t.Context(), 2, 50))
+			},
+		},
+		{
+			name: "ssh keys",
+			path: clientRoutePathProfileSshkeys,
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListSSHKeysProto(t.Context(), 2, 50))
+			},
+		},
+		{
+			name: "stackscripts",
+			path: clientRoutePathLinodeStackscripts,
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListStackScriptsProto(t.Context(), 2, 50))
+			},
+		},
+		{
+			name: "volumes",
+			path: clientRoutePathVolumes,
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListVolumesProto(t.Context(), 2, 50))
+			},
+		},
+		{
+			name: "vpcs",
+			path: clientRoutePathVpcs,
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListVPCsProto(t.Context(), 2, 50))
+			},
+		},
+		{
+			name: "vpc ip addresses across all vpcs",
+			path: "/vpcs/ips",
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListVPCIPsProto(t.Context(), 2, 50))
+			},
+		},
+		{
+			name: "vpc ip addresses",
+			path: "/vpcs/123/ips",
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListVPCIPAddressesProto(t.Context(), 123, 2, 50))
+			},
+		},
+		{
+			name: "vpc subnets",
+			path: "/vpcs/123/subnets",
+			call: func(client *linode.Client) error {
+				return pageQueryProbe(client.ListVPCSubnetsProto(t.Context(), 123, 2, 50))
 			},
 		},
 	}

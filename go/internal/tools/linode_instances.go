@@ -85,9 +85,9 @@ func handleLinodeInstanceTransferGetRequest(ctx context.Context, request *mcp.Ca
 }
 
 func handleLinodeInstanceGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	instanceID, err := parseInstanceID(request.GetString("instance_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	instanceID, validationMessage := requiredIDArgument(request, "instance_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -909,18 +909,4 @@ func validateLinodeConfig(env *config.EnvironmentConfig) error {
 	}
 
 	return nil
-}
-
-// parseInstanceID validates and converts the instance ID string to an integer.
-func parseInstanceID(raw string) (int, error) {
-	if raw == "" {
-		return 0, ErrInstanceIDRequired
-	}
-
-	instanceID, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %s", ErrInvalidInstanceID, raw)
-	}
-
-	return instanceID, nil
 }

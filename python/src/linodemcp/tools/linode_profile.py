@@ -51,7 +51,7 @@ async def handle_linode_profile_get(
 
     async def _call(client: RetryableClient) -> dict[str, Any]:
         return serialize_api_response(
-            await client.get_raw("/profile"), profile_pb2.Profile()
+            await client.route_raw("linode_profile_get"), profile_pb2.Profile()
         )
 
     return await execute_tool(cfg, arguments, "retrieve Linode profile", _call)

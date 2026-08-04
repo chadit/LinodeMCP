@@ -18,13 +18,21 @@ const clientDir = "../../internal/linode"
 // dump is the command's JSON contract, mirrored here rather than shared so a
 // change to the real struct has to be made deliberately in both places.
 type dump struct {
-	Routes     []string `json:"routes"`
-	Unresolved []string `json:"unresolved"`
+	Routes     []string         `json:"routes"`
+	Contracted []contractedSite `json:"contracted"`
+	Unresolved []string         `json:"unresolved"`
 }
 
-// runDump executes the command the way the Python gate does and returns its
-// streams. Black-box on purpose: the gate depends on the real contract (JSON on
-// stdout, non-zero exit on failure), so the test exercises that, not internals.
+// contractedSite mirrors one entry of the contracted list the gate looks up in
+// the proto contract.
+type contractedSite struct {
+	Tool string `json:"tool"`
+	Site string `json:"site"`
+}
+
+// runDump executes the command the way the Python gate does. Black-box on
+// purpose: the gate depends on JSON on stdout and a non-zero exit on failure,
+// so the test exercises that contract rather than internals.
 func runDump(t *testing.T, dir string) (dump, []byte, error) {
 	t.Helper()
 
@@ -48,8 +56,8 @@ func runDump(t *testing.T, dir string) (dump, []byte, error) {
 	return decoded, errBuf.Bytes(), nil
 }
 
-// writeFixture writes one Go source file into a fresh directory and returns it.
-// The file only has to parse: the dumper reads source and never builds it.
+// writeFixture writes one Go source file into a fresh directory. The file only
+// has to parse: the dumper reads source and never builds it.
 func writeFixture(t *testing.T, source string) string {
 	t.Helper()
 
@@ -61,9 +69,91 @@ func writeFixture(t *testing.T, source string) string {
 	return dir
 }
 
+// writeFixtureDir writes a fixture into a named subdirectory of a shared root.
+// The multi-directory scan needs two separate arguments, not two neighboring
+// files.
+func writeFixtureDir(t *testing.T, root, name, source string) string {
+	t.Helper()
+
+	dir := filepath.Join(root, name)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatalf("create fixture dir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "client.go"), []byte(source), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	return dir
+}
+
+// fixtureGeneratedCaller is the shape a born-generated tool has: it names its
+// tool to a primitive that lives in another package and builds no path itself.
+const fixtureGeneratedCaller = `package gentools
+
+func handleThingGet(ctx context.Context, id string) error {
+	return client.CallProtoRoute(ctx, "fake_thing_get", []any{id})
+}
+`
+
+// TestDumpFollowsACallerInASecondDirectory pins the scan's scope. A tool born
+// generated has no call site in the client package: the client declares the
+// primitive and the generated package names the tool to it, so scanning the
+// client alone would report that route as one no client can build.
+func TestDumpFollowsACallerInASecondDirectory(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	client := writeFixtureDir(t, root, "client", fixtureChainedBuilder)
+	generated := writeFixtureDir(t, root, "generated", fixtureGeneratedCaller)
+
+	got, stderr, err := runDump(t, client+","+generated)
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if len(got.Unresolved) != 0 {
+		t.Errorf("unresolved call sites across the two directories: %v", got.Unresolved)
+	}
+
+	var found bool
+
+	for _, site := range got.Contracted {
+		if site.Tool == "fake_thing_get" {
+			found = true
+
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("contracted = %v, want the tool named in the second directory", got.Contracted)
+	}
+}
+
+// TestDumpNamesADirectoryThatIsNotThere pins the other half: the generated tree
+// is gitignored, so a checkout where it has not been written must fail rather
+// than report every born-generated route as one nothing builds.
+func TestDumpNamesADirectoryThatIsNotThere(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	client := writeFixtureDir(t, root, "client", fixtureChainedBuilder)
+	absent := filepath.Join(root, "generated")
+
+	_, stderr, err := runDump(t, client+","+absent)
+	if err == nil {
+		t.Fatal("route-dump accepted a directory that does not exist")
+	}
+
+	if !strings.Contains(string(stderr), absent) {
+		t.Errorf("stderr = %s, want the missing directory named", stderr)
+	}
+}
+
 // fixtureClient exercises every endpoint shape the real client builds, so a
-// resolver that stops understanding one of them fails here with the shape
-// named rather than as a count that moved.
+// resolver that stops understanding one fails here by name rather than as a
+// count that moved.
 const fixtureClient = `package fake
 
 const (
@@ -172,8 +262,8 @@ func TestDumpResolvesEveryEndpointShape(t *testing.T) {
 }
 
 // TestDumpReportsWhatItCannotFollow proves an endpoint the resolver cannot read
-// is named rather than dropped. A dropped one would read as a client that does
-// not build the route, which is the false negative this tool exists to remove.
+// is named rather than dropped. A dropped one reads as a client that does not
+// build the route, the false negative this tool exists to remove.
 func TestDumpReportsWhatItCannotFollow(t *testing.T) {
 	t.Parallel()
 
@@ -212,7 +302,232 @@ func (c *Client) httpMystery(ctx context.Context) error {
 	}
 }
 
-// TestDumpSkipsTestFiles proves a fixture endpoint in a _test.go never counts
+// fixtureContracted is the client shape that resolves its route from the proto
+// contract: a primitive taking a tool name where the others take a method and a
+// path, one call site that names its tool, and one that takes the name from its
+// caller.
+const fixtureContracted = `package fake
+
+func (c *Client) makeRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
+	return http.NewRequestWithContext(ctx, method, c.baseURL+endpoint, nil)
+}
+
+func (c *Client) makeRouteRequest(ctx context.Context, tool string, payload any, values ...any) (*http.Response, error) {
+	method, endpoint, err := linoderoute.Resolve(tool, values...)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.makeRequest(ctx, method, endpoint, payload)
+}
+
+func (c *Client) httpDeleteThing(ctx context.Context, id int) error {
+	_, err := c.makeRouteRequest(ctx, "fake_thing_delete", nil, id)
+
+	return err
+}
+
+func (c *Client) httpDeleteWhatever(ctx context.Context, tool string, id int) error {
+	_, err := c.makeRouteRequest(ctx, tool, nil, id)
+
+	return err
+}
+`
+
+// TestDumpNamesTheToolAContractedCallSiteUses covers the evidence a migrated
+// call site leaves. It writes no path, so the tool name is the whole route and
+// the gate resolves it through the same contract it checks against.
+func TestDumpNamesTheToolAContractedCallSiteUses(t *testing.T) {
+	t.Parallel()
+
+	got, stderr, err := runDump(t, writeFixture(t, fixtureContracted))
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if len(got.Contracted) != 1 {
+		t.Fatalf("contracted = %v, want the one call site that names its tool", got.Contracted)
+	}
+
+	if got.Contracted[0].Tool != "fake_thing_delete" {
+		t.Errorf("contracted tool = %q, want %q", got.Contracted[0].Tool, "fake_thing_delete")
+	}
+
+	if !strings.Contains(got.Contracted[0].Site, "httpDeleteThing") {
+		t.Errorf("contracted site %q should name the calling function", got.Contracted[0].Site)
+	}
+}
+
+// TestDumpReportsAContractedCallWithNoToolName pins the hole this leaves open.
+// A tool name the resolver cannot read leaves no route an offline reader can
+// check, so it is reported the way an unreadable endpoint is rather than going
+// silent and reading as a route the client never builds.
+func TestDumpReportsAContractedCallWithNoToolName(t *testing.T) {
+	t.Parallel()
+
+	got, stderr, err := runDump(t, writeFixture(t, fixtureContracted))
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if len(got.Unresolved) != 1 {
+		t.Fatalf("unresolved = %v, want the one call site that does not name its tool", got.Unresolved)
+	}
+
+	for _, want := range []string{"httpDeleteWhatever", "unnamed tool"} {
+		if !strings.Contains(got.Unresolved[0], want) {
+			t.Errorf("unresolved entry %q should mention %q", got.Unresolved[0], want)
+		}
+	}
+}
+
+// TestDumpDoesNotReportTheRouteBuilderItself is the other half: the primitive
+// looks up its own method and path at run time, so its body resolves to
+// nothing. Reported as unresolved it would fail the gate on every run, and the
+// only fix would be a baseline entry for a call site working as designed.
+func TestDumpDoesNotReportTheRouteBuilderItself(t *testing.T) {
+	t.Parallel()
+
+	got, stderr, err := runDump(t, writeFixture(t, fixtureContracted))
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	for _, entry := range got.Unresolved {
+		if strings.Contains(entry, "makeRouteRequest") {
+			t.Errorf("unresolved entry %q reports the route builder's own body", entry)
+		}
+	}
+}
+
+// fixtureRoutedShapes holds the three routed primitives: one carrying a query
+// string, one sending a pre-framed body under its own content type, and a
+// routed list fetcher. None writes a URL, so every call site below is contract
+// evidence and nothing here resolves to a route.
+const fixtureRoutedShapes = `package fake
+
+func (c *Client) makeRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
+	return http.NewRequestWithContext(ctx, method, c.baseURL+endpoint, nil)
+}
+
+func (c *Client) makeRequestWithContentType(ctx context.Context, method, endpoint string, body io.Reader, contentType string) (*http.Response, error) {
+	return http.NewRequestWithContext(ctx, method, c.baseURL+endpoint, body)
+}
+
+func (c *Client) makeRouteRequestQuery(ctx context.Context, tool, rawQuery string, payload any, values ...any) (*http.Response, error) {
+	method, endpoint, err := routedRequest(tool, rawQuery, values)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.makeRequest(ctx, method, endpoint, payload)
+}
+
+func (c *Client) makeRouteRequestContentType(ctx context.Context, tool, contentType string, body io.Reader, values ...any) (*http.Response, error) {
+	method, endpoint, err := routedRequest(tool, "", values)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.makeRequestWithContentType(ctx, method, endpoint, body, contentType)
+}
+
+func listThings[T any](ctx context.Context, client *Client, operation, endpoint string) ([]T, error) {
+	return nil, client.makeRequest(ctx, http.MethodGet, endpoint, nil)
+}
+
+func listThingsRouted[T any](ctx context.Context, client *Client, operation, tool, rawQuery string, values []any) ([]T, error) {
+	return routedList(operation, tool, rawQuery, values, func(endpoint string) ([]T, error) {
+		return listThings[T](ctx, client, operation, endpoint)
+	})
+}
+
+func (c *Client) httpListThings(ctx context.Context) error {
+	_, err := listThingsRouted[string](ctx, c, "ListThings", "fake_thing_list", "page=1", nil)
+
+	return err
+}
+
+func (c *Client) httpFilterThings(ctx context.Context, id int) error {
+	_, err := c.makeRouteRequestQuery(ctx, "fake_thing_filter", "skip=true", nil, id)
+
+	return err
+}
+
+func (c *Client) httpUploadThing(ctx context.Context, id int, body io.Reader) error {
+	_, err := c.makeRouteRequestContentType(ctx, "fake_thing_upload", "image/png", body, id)
+
+	return err
+}
+`
+
+// TestDumpNamesTheToolEveryRoutedShapeUses covers the routed shapes besides the
+// plain primitive. A shape the resolver stops recognizing takes its call sites
+// with it: they build no path, so losing them reads as a client that never had
+// the route rather than as a resolver gap. The content-type primitive is the
+// one recognized purely by inference, because it takes a tool and hands off to
+// a function declaring an endpoint. Renaming either parameter silently drops it
+// and every upload route with it.
+func TestDumpNamesTheToolEveryRoutedShapeUses(t *testing.T) {
+	t.Parallel()
+
+	got, stderr, err := runDump(t, writeFixture(t, fixtureRoutedShapes))
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if len(got.Unresolved) != 0 {
+		t.Errorf("unresolved = %v, want none", got.Unresolved)
+	}
+
+	want := []contractedSite{
+		{Tool: "fake_thing_filter", Site: "httpFilterThings"},
+		{Tool: "fake_thing_list", Site: "httpListThings"},
+		{Tool: "fake_thing_upload", Site: "httpUploadThing"},
+	}
+
+	if len(got.Contracted) != len(want) {
+		t.Fatalf("contracted = %v, want one entry per routed call site", got.Contracted)
+	}
+
+	for _, entry := range want {
+		if !hasContracted(got.Contracted, entry) {
+			t.Errorf("contracted = %v, missing %q at %q", got.Contracted, entry.Tool, entry.Site)
+		}
+	}
+}
+
+// TestDumpAcceptsAClientWithNoBuiltPaths pins the migration's end state. Once
+// every call site names a tool the client builds no path, and the hard fail on
+// an empty dump has to read that as done rather than as a resolver that stopped
+// following the call graph.
+func TestDumpAcceptsAClientWithNoBuiltPaths(t *testing.T) {
+	t.Parallel()
+
+	got, stderr, err := runDump(t, writeFixture(t, fixtureRoutedShapes))
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if len(got.Routes) != 0 {
+		t.Errorf("routes = %v, want none: every call site names a tool", got.Routes)
+	}
+}
+
+// hasContracted reports whether the dump names this tool at a call site in the
+// named function. The site carries a file and a line that shift with the
+// fixture, so only the function name is matched.
+func hasContracted(contracted []contractedSite, want contractedSite) bool {
+	for _, entry := range contracted {
+		if entry.Tool == want.Tool && strings.Contains(entry.Site, want.Site) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// TestDumpSkipsTestFiles proves an endpoint written in a _test.go never counts
 // as evidence that the client builds that route.
 func TestDumpSkipsTestFiles(t *testing.T) {
 	t.Parallel()
@@ -252,7 +567,7 @@ func (c *Client) httpFromATest(ctx context.Context) error {
 
 // TestDumpWithoutARequestPrimitiveIsHardFail proves the tripwire: a tree where
 // nothing builds a request exits non-zero instead of reporting a client with no
-// routes, which the gate would read as every contracted route being missing.
+// routes, which the gate would read as every contracted route missing.
 func TestDumpWithoutARequestPrimitiveIsHardFail(t *testing.T) {
 	t.Parallel()
 
@@ -268,8 +583,8 @@ func TestDumpWithoutARequestPrimitiveIsHardFail(t *testing.T) {
 
 // TestDumpResolvesTheRealClient pins the two properties the gate depends on:
 // every request call site resolves, and a route the client assembles from a
-// base constant and a format verb is present. That second one is the shape a
-// text search cannot find, which is the whole reason this command exists.
+// base constant and a format verb is present. That second shape is the one a
+// text search cannot find, which is why this command exists.
 func TestDumpResolvesTheRealClient(t *testing.T) {
 	t.Parallel()
 
@@ -282,10 +597,105 @@ func TestDumpResolvesTheRealClient(t *testing.T) {
 		t.Errorf("unresolved call sites in the real client: %v", got.Unresolved)
 	}
 
-	// Built as endpointInstanceDeep + "/%s/interfaces", so no search for the
-	// whole path matches the source.
-	const assembled = "GET /linode/instances/{p}/interfaces"
+	// Assembled from endpointProfile and an http.MethodPut the resolver has to
+	// read off the call, so no search for "PUT /profile" matches the source. It
+	// is the last route the client still builds by hand: when the profile pair
+	// migrates, delete this assertion rather than hunting for a replacement,
+	// since TestDumpAcceptsAClientWithNoBuiltPaths already pins that end state.
+	const assembled = "PUT /profile"
 	if !slices.Contains(got.Routes, assembled) {
 		t.Errorf("route surface is missing %q", assembled)
+	}
+
+	// A migrated call site names its tool instead of assembling a path, so its
+	// evidence has to survive as a contracted entry or the migration silently
+	// costs the route its coverage.
+	const migratedTool = "linode_instance_interface_list"
+
+	var migrated bool
+
+	for _, site := range got.Contracted {
+		if site.Tool == migratedTool {
+			migrated = true
+
+			break
+		}
+	}
+
+	if !migrated {
+		t.Errorf("contracted call sites are missing %q", migratedTool)
+	}
+}
+
+// fixtureChainedBuilder is the shape the generated tool package calls into: an
+// exported primitive that takes a tool and hands it to another primitive rather
+// than to a function carrying a path. Its callers live in another package, so
+// no tool name it carries is written in this one.
+const fixtureChainedBuilder = `package fake
+
+func (c *Client) makeRequest(ctx context.Context, method, endpoint string, payload any) (*http.Response, error) {
+	return http.NewRequestWithContext(ctx, method, c.baseURL+endpoint, nil)
+}
+
+func (c *Client) makeRouteRequest(ctx context.Context, tool string, payload any, values ...any) (*http.Response, error) {
+	method, endpoint, err := linoderoute.Resolve(tool, values...)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.makeRequest(ctx, method, endpoint, payload)
+}
+
+func (c *Client) CallProtoRoute(ctx context.Context, tool string, values []any) error {
+	_, err := c.makeRouteRequest(ctx, tool, nil, values...)
+
+	return err
+}
+
+func (c *Client) httpDeleteThing(ctx context.Context, id int) error {
+	_, err := c.makeRouteRequest(ctx, "fake_thing_delete", nil, id)
+
+	return err
+}
+`
+
+// TestDumpTreatsAnExportedToolForwarderAsAPrimitive pins the shape the
+// generated tool package needs. An exported forwarder is called from outside
+// this package, where the tool name is written and this scan cannot see it, so
+// reporting it would report the design rather than a gap.
+func TestDumpTreatsAnExportedToolForwarderAsAPrimitive(t *testing.T) {
+	t.Parallel()
+
+	got, stderr, err := runDump(t, writeFixture(t, fixtureChainedBuilder))
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	for _, entry := range got.Unresolved {
+		if strings.Contains(entry, "CallProtoRoute") {
+			t.Errorf("unresolved names the exported primitive: %q", entry)
+		}
+	}
+
+	if len(got.Contracted) != 1 || got.Contracted[0].Tool != "fake_thing_delete" {
+		t.Errorf("contracted = %v, want only the call site that names its tool", got.Contracted)
+	}
+}
+
+// TestDumpStillReportsAnUnexportedToolForwarder is the other half of the same
+// rule. Everything reaching an unexported forwarder is in this package, so a
+// tool name it carries is one this scan can read: a forwarder with no such call
+// site is the hole the unresolved report exists to show, and the exported case
+// above must not have widened its way out of that report.
+func TestDumpStillReportsAnUnexportedToolForwarder(t *testing.T) {
+	t.Parallel()
+
+	got, stderr, err := runDump(t, writeFixture(t, fixtureContracted))
+	if err != nil {
+		t.Fatalf("route-dump failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if len(got.Unresolved) != 1 || !strings.Contains(got.Unresolved[0], "httpDeleteWhatever") {
+		t.Fatalf("unresolved = %v, want the unexported forwarder", got.Unresolved)
 	}
 }

@@ -1,24 +1,19 @@
 // Command route-dump AST-extracts every HTTP route the Go Linode client can
 // build and prints them on stdout as JSON.
 //
-// A catalog scan that greps for whole path literals cannot see a route the
-// client assembles from a base constant and a format verb, which is what
-// fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", id) is. The scan then
-// reports the route as unimplemented in Go while the client has had it all
-// along, and each false positive costs a full investigation to disprove. This
-// resolves the concatenation instead of grepping for it, so
-// scripts/verify_route_evidence.py can check the routes the proto contract
-// declares against a real route surface rather than against whatever a text
-// search happened to match.
+// Grepping for whole path literals cannot see a route assembled from a base
+// constant and a format verb, such as
+// fmt.Sprintf(endpointInstanceDeep+"/%s/interfaces", id), so it reports that
+// route as unimplemented. Resolving the concatenation instead gives
+// scripts/verify_route_evidence.py a real route surface to check the proto
+// contract against.
 //
-// The tool reads .go source as text only with go/parser and go/ast. It never
-// imports internal/linode or builds the package: the genpb generated tree is
-// gitignored and may be absent, so a real import would fail the gate for the
-// wrong reason. Zero third-party dependencies.
+// Source is read as text with go/parser and go/ast only. Importing
+// internal/linode would fail the gate for the wrong reason: the genpb generated
+// tree is gitignored and may be absent.
 //
-// Hard-fail contract: resolving zero routes exits non-zero and names the
-// directory. An empty dump is always a broken resolver, never a client with no
-// routes, and it must not reach the gate as data.
+// Resolving zero routes exits non-zero. An empty dump is always a broken
+// resolver, never a client with no routes.
 package main
 
 import (
@@ -26,41 +21,75 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // dump is the JSON contract scripts/verify_route_evidence.py reads.
 type dump struct {
 	// Routes is the sorted "<METHOD> <path>" set the client can build, with
-	// every path parameter collapsed to the {p} placeholder. The client
-	// assembles paths from variables, so no name is available here; a
-	// declared route names its parameters and the gate normalizes them off
-	// before comparing.
+	// every path parameter collapsed to the {p} placeholder: the client
+	// assembles paths from variables, so no parameter name is available. The
+	// gate normalizes declared parameter names off before comparing.
 	Routes []string `json:"routes"`
-	// Unresolved names the request call sites whose method or path the
-	// resolver could not follow, as "<file>:<line> <function>: <reason>". They
-	// are reported rather than dropped: a route whose only construction site
-	// lands here surfaces as missing evidence in the gate, and this is the
-	// list that says why.
+	// Contracted names call sites that take their route from the proto contract
+	// instead of building a path. Nothing to resolve: the route is whatever the
+	// named tool declares, and the gate reads it there.
+	Contracted []contractedSite `json:"contracted"`
+	// Unresolved names request call sites whose method or path the resolver
+	// could not follow, as "<file>:<line> <function>: <reason>". Reporting
+	// rather than dropping them means a route with no resolvable construction
+	// site surfaces as missing evidence in the gate with a stated reason.
 	Unresolved []string `json:"unresolved"`
 }
 
+// contractedSite is one call that names a tool instead of a path. The site
+// travels with the tool so the gate can name the call when the contract does
+// not declare that tool.
+type contractedSite struct {
+	Tool string `json:"tool"`
+	Site string `json:"site"`
+}
+
 func main() {
-	clientDir := flag.String("client-dir", "internal/linode",
-		"path to the Linode client package, resolved relative to the working directory")
+	clientDir := flag.String("client-dir", defaultDirs,
+		"comma-separated packages to scan, resolved relative to the working directory")
 
 	flag.Parse()
 
-	if err := run(*clientDir); err != nil {
+	if err := run(splitDirs(*clientDir)); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-// run parses the client package, resolves its route surface, and prints it. It
-// returns any error so main owns the sole os.Exit and flag.Parse (revive
+// defaultDirs are the two places a route is reached from: the client package
+// builds paths and holds the request primitives, and the generated tool package
+// names its tool to those primitives without writing a path. Scanning the
+// client alone reports every generated tool's route as missing.
+//
+// Both parse into one symbol table because a call and the primitive it reaches
+// sit on opposite sides of the package boundary. A name declared in both is
+// ambiguous and resolves to nothing, which surfaces the affected call sites
+// rather than attributing a route to the wrong body.
+const defaultDirs = "internal/linode,internal/gentools"
+
+// splitDirs drops empty entries so a trailing comma is not a directory named "".
+func splitDirs(value string) []string {
+	dirs := make([]string, 0, strings.Count(value, ",")+1)
+
+	for entry := range strings.SplitSeq(value, ",") {
+		if trimmed := strings.TrimSpace(entry); trimmed != "" {
+			dirs = append(dirs, trimmed)
+		}
+	}
+
+	return dirs
+}
+
+// run returns errors instead of exiting so main owns the sole os.Exit (revive
 // deep-exit).
-func run(clientDir string) error {
-	pkg, err := parsePackage(clientDir)
+func run(dirs []string) error {
+	pkg, err := parsePackage(dirs)
 	if err != nil {
 		return err
 	}
@@ -70,8 +99,11 @@ func run(clientDir string) error {
 		return err
 	}
 
-	if len(result.Routes) == 0 {
-		return fmt.Errorf("%s: %w", clientDir, errNoRoutes)
+	// Contracted sites count as route surface: a client whose call sites have
+	// all moved onto the proto contract builds no path in source, and that end
+	// state must not read as a broken resolver.
+	if len(result.Routes) == 0 && len(result.Contracted) == 0 {
+		return fmt.Errorf("%s: %w", strings.Join(dirs, ", "), errNoRoutes)
 	}
 
 	encoder := json.NewEncoder(os.Stdout)

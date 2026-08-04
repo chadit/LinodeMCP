@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -16,14 +15,15 @@ import (
 
 // NewLinodeVPCListTool creates a tool for listing all VPCs with optional label and region filtering.
 func NewLinodeVPCListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	tool, handler := newProtoListToolRawSchema(
+	tool, handler := newProtoListToolPaginatedRawSchema(
 		cfg,
 		"linode_vpc_list",
 		"Lists all VPCs. Can filter by label or region.",
 		"linode.mcp.v1.VpcListInput",
-		func(ctx context.Context, client *linode.Client) ([]*linodev1.Vpc, error) {
-			return client.ListVPCsProto(ctx)
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.Vpc, error) {
+			return client.ListVPCsProto(ctx, page, pageSize)
 		},
+		standardPaginationFromTool,
 		[]listFilterParam[*linodev1.Vpc]{
 			containsFilter("label", "Filter VPCs by label containing this string (case-insensitive)",
 				func(v *linodev1.Vpc) string { return v.GetLabel() }),
@@ -56,9 +56,9 @@ func NewLinodeVPCGetTool(cfg *config.Config) (mcp.Tool, profiles.Capability, fun
 }
 
 func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	vpcID, err := parseVPCID(request.GetString("vpc_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	vpcID, validationMessage := requiredIDArgument(request, "vpc_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -76,13 +76,14 @@ func handleVPCGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg 
 
 // NewLinodeVPCIPsListTool creates a tool for listing all VPC IP addresses across all VPCs.
 func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListTool(
+	_, handler := newProtoListToolPaginated(
 		cfg,
 		"linode_vpc_ip_all_list",
 		"Lists all IP addresses across all VPCs",
-		func(ctx context.Context, client *linode.Client) ([]*linodev1.VPCIP, error) {
-			return client.ListVPCIPsProto(ctx)
+		func(ctx context.Context, client *linode.Client, page, pageSize int) ([]*linodev1.VPCIP, error) {
+			return client.ListVPCIPsProto(ctx, page, pageSize)
 		},
+		standardPaginationFromTool,
 		nil,
 		vpcIPListResponse,
 	)
@@ -98,16 +99,17 @@ func NewLinodeVPCIPsListTool(cfg *config.Config) (mcp.Tool, profiles.Capability,
 
 // NewLinodeVPCIPListTool creates a tool for listing IP addresses for a specific VPC.
 func NewLinodeVPCIPListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListToolSubresource(
+	_, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_vpc_ip_list",
 		"Lists all IP addresses for a specific VPC",
 		protoListPathID{
-			option: mcp.WithString("vpc_id", mcp.Required(), mcp.Description("The ID of the VPC")),
+			option: mcp.WithNumber("vpc_id", mcp.Required(), mcp.Description("The ID of the VPC")),
 			parse:  parseVPCSubnetListPathID,
 		},
-		func(ctx context.Context, client *linode.Client, vpcID int) ([]*linodev1.VPCIP, error) {
-			return client.ListVPCIPAddressesProto(ctx, vpcID)
+		standardPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, vpcID, page, pageSize int) ([]*linodev1.VPCIP, error) {
+			return client.ListVPCIPAddressesProto(ctx, vpcID, page, pageSize)
 		},
 		nil,
 		vpcIPListResponse,
@@ -128,16 +130,17 @@ func vpcIPListResponse(items []*linodev1.VPCIP, count int32, filter *string) *li
 
 // NewLinodeVPCSubnetListTool creates a tool for listing subnets in a specific VPC.
 func NewLinodeVPCSubnetListTool(cfg *config.Config) (mcp.Tool, profiles.Capability, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
-	_, handler := newProtoListToolSubresource(
+	_, handler := newProtoListToolSubresourcePaginated(
 		cfg,
 		"linode_vpc_subnet_list",
 		"Lists all subnets for a specific VPC",
 		protoListPathID{
-			option: mcp.WithString("vpc_id", mcp.Required(), mcp.Description("The ID of the VPC")),
+			option: mcp.WithNumber("vpc_id", mcp.Required(), mcp.Description("The ID of the VPC")),
 			parse:  parseVPCSubnetListPathID,
 		},
-		func(ctx context.Context, client *linode.Client, vpcID int) ([]*linodev1.VpcSubnet, error) {
-			return client.ListVPCSubnetsProto(ctx, vpcID)
+		standardPaginationFromTool,
+		func(ctx context.Context, client *linode.Client, vpcID, page, pageSize int) ([]*linodev1.VpcSubnet, error) {
+			return client.ListVPCSubnetsProto(ctx, vpcID, page, pageSize)
 		},
 		nil,
 		vpcSubnetListResponse,
@@ -152,16 +155,11 @@ func NewLinodeVPCSubnetListTool(cfg *config.Config) (mcp.Tool, profiles.Capabili
 	return tool, profiles.CapRead, handler
 }
 
-// parseVPCSubnetListPathID validates the vpc_id path param the same way the
-// non-proto handler did, returning the same error text (ErrVPCIDRequired /
-// ErrVPCIDInvalid via parseVPCID).
+// parseVPCSubnetListPathID reads the vpc_id path param for the sub-resource
+// list factories, which take the reader as a value rather than calling
+// requiredIDArgument themselves.
 func parseVPCSubnetListPathID(request *mcp.CallToolRequest) (int, string) {
-	vpcID, err := parseVPCID(request.GetString("vpc_id", ""))
-	if err != nil {
-		return 0, err.Error()
-	}
-
-	return vpcID, ""
+	return requiredIDArgument(request, "vpc_id")
 }
 
 func vpcSubnetListResponse(items []*linodev1.VpcSubnet, count int32, filter *string) *linodev1.VpcSubnetListResponse {
@@ -184,14 +182,14 @@ func NewLinodeVPCSubnetGetTool(cfg *config.Config) (mcp.Tool, profiles.Capabilit
 }
 
 func handleVPCSubnetGetRequest(ctx context.Context, request *mcp.CallToolRequest, cfg *config.Config) (*mcp.CallToolResult, error) {
-	vpcID, err := parseVPCID(request.GetString("vpc_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	vpcID, validationMessage := requiredIDArgument(request, "vpc_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
-	subnetID, err := parseSubnetID(request.GetString("subnet_id", ""))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	subnetID, validationMessage := requiredIDArgument(request, "subnet_id")
+	if validationMessage != "" {
+		return mcp.NewToolResultError(validationMessage), nil
 	}
 
 	client, err := prepareClient(request, cfg)
@@ -205,32 +203,4 @@ func handleVPCSubnetGetRequest(ctx context.Context, request *mcp.CallToolRequest
 	}
 
 	return MarshalProtoToolResponse(subnet)
-}
-
-// parseVPCID validates and converts the VPC ID string to an integer.
-func parseVPCID(raw string) (int, error) {
-	if raw == "" {
-		return 0, ErrVPCIDRequired
-	}
-
-	vpcID, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %s", ErrVPCIDInvalid, raw)
-	}
-
-	return vpcID, nil
-}
-
-// parseSubnetID validates and converts the subnet ID string to an integer.
-func parseSubnetID(raw string) (int, error) {
-	if raw == "" {
-		return 0, ErrSubnetIDRequired
-	}
-
-	subnetID, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %s", ErrSubnetIDInvalid, raw)
-	}
-
-	return subnetID, nil
 }

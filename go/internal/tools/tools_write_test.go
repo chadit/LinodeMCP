@@ -1226,7 +1226,7 @@ func TestLinodeInstanceGetParsesInterfaces(t *testing.T) {
 	}}
 	_, _, handler := tools.NewLinodeInstanceGetTool(cfg)
 
-	req := createRequestWithArgs(t, map[string]any{keyInstanceID: "321"})
+	req := createRequestWithArgs(t, map[string]any{keyInstanceID: 321})
 
 	result, err := handler(t.Context(), req)
 	if err != nil {

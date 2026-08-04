@@ -57,11 +57,13 @@ message SupportTicketGetInput {
     method: "GET"
     path: "/support/tickets/{ticket_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicket";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the support ticket to retrieve (required).
-  int32 ticket_id = 2;
+  int32 ticket_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // SupportTicketReply mirrors one reply from
@@ -116,13 +118,15 @@ message SupportTicketListInput {
     method: "GET"
     path: "/support/tickets"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 2;
+  optional int32 page = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 3;
+  optional int32 page_size = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // SupportTicketCreateInput is the input contract for
@@ -134,47 +138,51 @@ message SupportTicketCreateInput {
     method: "POST"
     path: "/support/tickets"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a support ticket. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Support ticket opened successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Short summary for the support ticket.
-  string summary = 2;
+  string summary = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Detailed support ticket description.
-  string description = 3;
+  string description = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object Storage bucket related to the ticket (optional).
-  optional string bucket = 4;
+  optional string bucket = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Database ID related to the ticket (optional).
-  optional int32 database_id = 5;
+  optional int32 database_id = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Domain ID related to the ticket (optional).
-  optional int32 domain_id = 6;
+  optional int32 domain_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Firewall ID related to the ticket (optional).
-  optional int32 firewall_id = 7;
+  optional int32 firewall_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Linode ID related to the ticket (optional).
-  optional int32 linode_id = 8;
+  optional int32 linode_id = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // LKE cluster ID related to the ticket (optional).
-  optional int32 lkecluster_id = 9;
+  optional int32 lkecluster_id = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Longview client ID related to the ticket (optional).
-  optional int32 longviewclient_id = 10;
+  optional int32 longviewclient_id = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the ticket concerns a Managed service issue (optional).
-  optional bool managed_issue = 11;
+  optional bool managed_issue = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // NodeBalancer ID related to the ticket (optional).
-  optional int32 nodebalancer_id = 12;
+  optional int32 nodebalancer_id = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Region related to the ticket (optional).
-  optional string region = 13;
+  optional string region = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Support ticket severity level 1, 2, or 3 (optional).
-  optional int32 severity = 14;
+  optional int32 severity = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // VLAN related to the ticket (optional).
-  optional string vlan = 15;
+  optional string vlan = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Volume ID related to the ticket (optional).
-  optional int32 volume_id = 16;
+  optional int32 volume_id = 16 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // VPC ID related to the ticket (optional).
-  optional int32 vpc_id = 17;
+  optional int32 vpc_id = 17 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm support ticket creation. Ignored when
   // dry_run=true.
-  bool confirm = 18; // system param
+  bool confirm = 18 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 19; // system param
+  optional bool dry_run = 19 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // SupportTicketCloseInput is the input contract for
@@ -185,17 +193,21 @@ message SupportTicketCloseInput {
     method: "POST"
     path: "/support/tickets/{ticket_id}/close"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This closes a support ticket. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Support ticket closed successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Support ticket ID to close.
-  int32 ticket_id = 2;
+  int32 ticket_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm closing the support ticket. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // SupportTicketReplyListInput is the input contract for
@@ -206,15 +218,17 @@ message SupportTicketReplyListInput {
     method: "GET"
     path: "/support/tickets/{ticket_id}/replies"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketReplyListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Support ticket ID whose replies should be listed.
-  int32 ticket_id = 2;
+  int32 ticket_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // SupportTicketReplyCreateInput is the input contract for
@@ -225,19 +239,23 @@ message SupportTicketReplyCreateInput {
     method: "POST"
     path: "/support/tickets/{ticket_id}/replies"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketReplyWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a support ticket reply. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Support ticket reply created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Support ticket ID to reply to.
-  int32 ticket_id = 2;
+  int32 ticket_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Reply description to add to the support ticket.
-  string description = 3;
+  string description = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm support ticket reply creation. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // SupportTicketAttachmentCreateInput is the input contract for
@@ -248,17 +266,21 @@ message SupportTicketAttachmentCreateInput {
     method: "POST"
     path: "/support/tickets/{ticket_id}/attachments"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.SupportTicketIDResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a support ticket attachment. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Support ticket attachment created successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Support ticket ID to attach the file to.
-  int32 ticket_id = 2;
+  int32 ticket_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Attachment file content or reference accepted by the Linode API.
-  string file = 3;
+  string file = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm support ticket attachment creation. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }

@@ -77,7 +77,7 @@ async def test_create_confirmed_requires_domain(sample_config: Config) -> None:
 async def test_create_threads_description_into_body(sample_config: Config) -> None:
     """A confirmed create forwards a description in the POST body."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        client = _patch_client(post_raw={"id": 1, "domain": "x.com"})
+        client = _patch_client(route_raw={"id": 1, "domain": "x.com"})
         mock_cls.return_value = client
 
         await handle_linode_domain_create(
@@ -91,9 +91,9 @@ async def test_create_threads_description_into_body(sample_config: Config) -> No
             sample_config,
         )
 
-    client.post_raw.assert_awaited_once_with(
-        "/domains",
-        {
+    client.route_raw.assert_awaited_once_with(
+        "linode_domain_create",
+        body={
             "domain": "x.com",
             "type": "master",
             "soa_email": "admin@example.com",
@@ -168,7 +168,7 @@ async def test_update_body_omits_absent_and_keeps_present(
 ) -> None:
     """The PUT body carries domain and soa_email, omitting the rest."""
     with patch("linodemcp.tools.helpers.RetryableClient") as mock_cls:
-        client = _patch_client(put_raw={"id": 5, "domain": "new.example.com"})
+        client = _patch_client(route_raw={"id": 5, "domain": "new.example.com"})
         mock_cls.return_value = client
 
         await handle_linode_domain_update(
@@ -181,9 +181,10 @@ async def test_update_body_omits_absent_and_keeps_present(
             sample_config,
         )
 
-    client.put_raw.assert_awaited_once_with(
-        "/domains/5",
-        {"domain": "new.example.com", "soa_email": "new@example.com"},
+    client.route_raw.assert_awaited_once_with(
+        "linode_domain_update",
+        5,
+        body={"domain": "new.example.com", "soa_email": "new@example.com"},
     )
 
 

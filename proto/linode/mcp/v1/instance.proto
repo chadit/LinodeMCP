@@ -201,11 +201,13 @@ message InstanceInterfaceSettingsGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/interfaces/settings"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceSettings";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceInterfaceGetInput is the input contract for
@@ -216,13 +218,15 @@ message InstanceInterfaceGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterface";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the Linode interface (required).
-  int32 interface_id = 3;
+  int32 interface_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // ===== Instance config profiles (GET /linode/instances/{id}/configs) =====
@@ -348,13 +352,15 @@ message InstanceBackupGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/backups/{backup_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackup";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the backup to retrieve (required).
-  int32 backup_id = 3;
+  int32 backup_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceConfigInterfaceGetInput is the input contract for
@@ -365,15 +371,17 @@ message InstanceConfigInterfaceGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile interface (required).
-  int32 interface_id = 4;
+  int32 interface_id = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 message InstanceBackupsResponse {
@@ -561,13 +569,15 @@ message InstanceGetInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_get"
     method: "GET"
-    path: "/linode/instances/{linode_id}"
+    path: "/linode/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.Instance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to retrieve (required).
-  string instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceListInput is the input contract for linode_instance_list. Both fields
@@ -578,15 +588,17 @@ message InstanceListInput {
     method: "GET"
     path: "/linode/instances"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Filter instances by status (running, stopped, etc.).
-  optional string status = 2;
+  optional string status = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // InstanceBootInput is the input contract for linode_instance_boot.
@@ -595,21 +607,24 @@ message InstanceBootInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_boot"
     method: "POST"
-    path: "/linode/instances/{linode_id}/boot"
+    path: "/linode/instances/{instance_id}/boot"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
+  option (linode.mcp.v1.confirm_message) = "This boots a Linode instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to boot (required).
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile to boot with (optional).
-  optional int32 config_id = 3;
+  optional int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm booting the instance. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceRebootInput is the input contract for linode_instance_reboot.
@@ -618,21 +633,24 @@ message InstanceRebootInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_reboot"
     method: "POST"
-    path: "/linode/instances/{linode_id}/reboot"
+    path: "/linode/instances/{instance_id}/reboot"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
+  option (linode.mcp.v1.confirm_message) = "This reboots a Linode instance and causes a brief outage. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to reboot (required).
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile to boot with after reboot (optional).
-  optional int32 config_id = 3;
+  optional int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm rebooting the instance. This causes a brief
   // outage. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceShutdownInput is the input contract for linode_instance_shutdown.
@@ -641,19 +659,22 @@ message InstanceShutdownInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_shutdown"
     method: "POST"
-    path: "/linode/instances/{linode_id}/shutdown"
+    path: "/linode/instances/{instance_id}/shutdown"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstancePowerActionResponse";
+  option (linode.mcp.v1.confirm_message) = "This shuts down a Linode instance. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to shut down (required).
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm shutting down the instance. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceCreateInput is the input contract for linode_instance_create.
@@ -664,43 +685,50 @@ message InstanceCreateInput {
     method: "POST"
     path: "/linode/instances"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation creates a billable resource. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance '{label}' (ID: {id}) created successfully in {region}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The region where the instance will be created (e.g., 'us-east').
-  string region = 2;
+  string region = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The Linode plan type (e.g., 'g6-nanode-1').
-  string type = 3;
+  string type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // A label for the instance (optional).
-  optional string label = 4;
+  optional string label = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The image ID to deploy (e.g., 'linode/debian11'). Required for provisioned
   // instances.
-  optional string image = 5;
+  optional string image = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The root password for the instance. Required if image is provided.
-  optional string root_pass = 6;
+  optional string root_pass = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Cloud Firewall ID to attach to the public interface. Required under the
   // current Linode Interfaces generation.
-  int32 firewall_id = 7;
+  int32 firewall_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the public interface owns the IPv4 default route (optional,
   // default: true).
-  optional bool route_ipv4 = 8;
+  optional bool route_ipv4 = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the public interface owns the IPv6 default route (optional,
   // default: true).
-  optional bool route_ipv6 = 9;
+  optional bool route_ipv6 = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Enable backups for this instance (optional, default: false).
-  optional bool backups_enabled = 10;
+  optional bool backups_enabled = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // SSH public keys to install for the root user (optional). Requires an
   // image.
-  repeated string authorized_keys = 11;
+  repeated string authorized_keys = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to boot the instance after creation (optional, defaults to true
   // when an image is provided).
-  optional bool booted = 12;
+  optional bool booted = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm instance creation. This operation incurs
   // billing charges. Ignored when dry_run=true.
-  bool confirm = 13; // system param
+  bool confirm = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 14; // system param
+  optional bool dry_run = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
+  // Tags to apply to the new instance (optional).
+  repeated string tags = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
 }
 
 // InstanceUpdateInput is the input contract for linode_instance_update.
@@ -710,30 +738,35 @@ message InstanceUpdateInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_update"
     method: "PUT"
-    path: "/linode/instances/{linode_id}"
+    path: "/linode/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a Linode instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance {id} updated successfully";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the instance to update (required).
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New Linode label (optional).
-  optional string label = 3;
-  // Deprecated group label (optional).
-  optional string group = 4;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
+  // Group label (optional). Linode deprecated group in favor of tags; new
+  // callers should send tags instead.
+  optional string group = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Tags to assign to the Linode (optional).
-  repeated string tags = 5;
+  repeated string tags = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Alert threshold settings (optional).
-  map<string, google.protobuf.Value> alerts = 6;
+  map<string, google.protobuf.Value> alerts = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Maintenance policy, such as linode/migrate (optional).
-  optional string maintenance_policy = 7;
+  optional string maintenance_policy = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether the Lassie shutdown watchdog is enabled (optional).
-  optional bool watchdog_enabled = 8;
+  optional bool watchdog_enabled = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm the update. Ignored when dry_run=true.
-  bool confirm = 9; // system param
+  bool confirm = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 10; // system param
+  optional bool dry_run = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceDeleteInput is the input contract for linode_instance_delete, a
@@ -743,25 +776,29 @@ message InstanceDeleteInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_delete"
     method: "DELETE"
-    path: "/linode/instances/{linode_id}"
+    path: "/linode/instances/{instance_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation is destructive and irreversible. Set confirm=true to proceed.";
+  option (linode.mcp.v1.resource_type) = "Instance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to delete (required).
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be set to true to confirm deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
   // plan_id re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceCloneInput is the input contract for linode_instance_clone.
@@ -772,30 +809,35 @@ message InstanceCloneInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/clone"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This clones a Linode instance and creates a billable resource. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance {linode_id} cloned as '{label}' (ID: {id}) in {region}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to clone (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Region for the cloned instance (optional, defaults to same region).
-  optional string region = 3;
+  optional string region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Instance type for the clone (optional, defaults to same type).
-  optional string type = 4;
+  optional string type = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Label for the cloned instance (optional).
-  optional string label = 5;
+  optional string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Enable backups on the cloned instance (optional).
-  optional bool backups_enabled = 6;
+  optional bool backups_enabled = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Config profile IDs to clone (optional). Defaults to all configs when
   // omitted.
-  repeated int32 configs = 7;
+  repeated int32 configs = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Disk IDs to clone (optional). Defaults to all disks when omitted.
-  repeated int32 disks = 8;
+  repeated int32 disks = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm instance cloning. This creates a billable
   // resource. Ignored when dry_run=true.
-  bool confirm = 9; // system param
+  bool confirm = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 10; // system param
+  optional bool dry_run = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceMigrateInput is the input contract for linode_instance_migrate.
@@ -806,19 +848,22 @@ message InstanceMigrateInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/migrate"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceMigrateWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This migrates the instance and causes downtime during migration. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to migrate (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Target region for migration (optional, Linode picks if omitted).
-  optional string region = 3;
+  optional string region = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm migration. The instance will be shut down during
   // migration. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceMutateInput is the input contract for linode_instance_mutate.
@@ -829,19 +874,24 @@ message InstanceMutateInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/mutate"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This upgrades the instance and may cause downtime. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Upgrade initiated for instance {linode_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to upgrade (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Automatically resize disks during the upgrade when possible (optional,
   // API default: true).
-  optional bool allow_auto_disk_resize = 3;
+  optional bool allow_auto_disk_resize = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm the instance upgrade. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceRebuildInput is the input contract for linode_instance_rebuild, a
@@ -853,35 +903,40 @@ message InstanceRebuildInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/rebuild"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This DESTROYS ALL DATA on the instance and rebuilds it. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance {linode_id} rebuilt with image {image}";
+  option (linode.mcp.v1.resource_type) = "Instance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to rebuild (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The image to rebuild with (e.g. 'linode/ubuntu24.04'). Use
   // linode_image_list to find valid values.
-  string image = 3;
+  string image = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Root password for the rebuilt instance (min 12 chars, must include upper,
   // lower, and digits).
-  string root_pass = 4;
+  string root_pass = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // SSH public keys to add to root's authorized_keys (optional).
-  repeated string authorized_keys = 5;
+  repeated string authorized_keys = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Linode usernames whose SSH keys to add (optional).
-  repeated string authorized_users = 6;
+  repeated string authorized_users = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether to boot the instance after rebuild (optional, defaults to true).
-  optional bool booted = 7;
+  optional bool booted = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm rebuild. WARNING: This destroys ALL existing data.
   // Ignored when dry_run=true.
-  bool confirm = 8; // system param
+  bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 9; // system param
+  optional bool dry_run = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
   // plan_id re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 10; // system param
+  optional string mode = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 11; // system param
+  optional string plan_id = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstancePasswordResetInput is the input contract for
@@ -893,24 +948,29 @@ message InstancePasswordResetInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/password"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This resets the root password on the instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Root password reset for instance {linode_id}";
+  option (linode.mcp.v1.resource_type) = "Instance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // New root password (min 12 chars, must include upper, lower, and digits).
-  string root_pass = 3;
+  string root_pass = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm password reset. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
   // plan_id re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 6; // system param
+  optional string mode = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 7; // system param
+  optional string plan_id = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceResizeInput is the input contract for linode_instance_resize, an
@@ -920,32 +980,35 @@ message InstanceResizeInput {
   option (linode.mcp.v1.tool_route) = {
     tool: "linode_instance_resize"
     method: "POST"
-    path: "/linode/instances/{linode_id}/resize"
+    path: "/linode/instances/{instance_id}/resize"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceResizeWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This operation causes downtime and may affect billing. Set confirm=true to proceed.";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to resize (required).
-  int32 instance_id = 2;
+  int32 instance_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The new Linode plan type (e.g., 'g6-standard-1').
-  string type = 3;
+  string type = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Automatically resize disks when resizing to a larger plan (optional,
   // default: false).
-  optional bool allow_auto_disk_resize = 4;
+  optional bool allow_auto_disk_resize = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Migration type: 'cold' (default) or 'warm' (optional).
-  optional string migration_type = 5;
+  optional string migration_type = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be set to true to confirm resize. This operation causes downtime.
   // Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with
   // plan_id re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 8; // system param
+  optional string mode = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 9; // system param
+  optional string plan_id = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceRescueInput is the input contract for linode_instance_rescue.
@@ -957,20 +1020,24 @@ message InstanceRescueInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/rescue"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This reboots the instance into rescue mode. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Instance {linode_id} is booting into rescue mode";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to boot into rescue mode (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Object mapping device slots to disk/volume IDs, e.g.
   // {"sda":{"disk_id":123},"sdb":{"volume_id":456}} (optional).
-  map<string, google.protobuf.Value> devices = 3;
+  map<string, google.protobuf.Value> devices = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm booting into rescue mode. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceFirewallApplyInput is the input contract for
@@ -981,17 +1048,22 @@ message InstanceFirewallApplyInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/firewalls/apply"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This reapplies assigned firewalls to the Linode. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Firewall apply initiated for instance {linode_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm reapplying firewalls to this Linode. Ignored when
   // dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceTransferGetInput is the input contract for
@@ -1002,11 +1074,13 @@ message InstanceTransferGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/transfer"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceTransfer";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceTransferMonthGetInput is the input contract for
@@ -1017,15 +1091,17 @@ message InstanceTransferMonthGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/transfer/{year}/{month}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceTransferMonth";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The year for the transfer stats, for example 2024 (required).
-  int32 year = 3;
+  int32 year = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The month for the transfer stats, 1 through 12 (required).
-  int32 month = 4;
+  int32 month = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceConfigGetInput is the input contract for linode_instance_config_get.
@@ -1035,13 +1111,15 @@ message InstanceConfigGetInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/configs/{config_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfig";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile to retrieve (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceConfigListInput is the input contract for
@@ -1052,15 +1130,17 @@ message InstanceConfigListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/configs"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // InstanceConfigCreateInput is the input contract for
@@ -1075,38 +1155,43 @@ message InstanceConfigCreateInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/configs"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a configuration profile on the instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Configuration profile '{label}' (ID: {id}) created on instance {linode_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Label for the configuration profile (required).
-  string label = 3;
+  string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object mapping device slots to disk/volume IDs, e.g. {"sda":{"disk_id":123}}
   // (required at the handler level).
-  map<string, google.protobuf.Value> devices = 4;
+  map<string, google.protobuf.Value> devices = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Kernel ID to boot, e.g. linode/latest-64bit (optional).
-  optional string kernel = 5;
+  optional string kernel = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional comments for the configuration profile.
-  optional string comments = 6;
+  optional string comments = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional memory limit in MB.
-  optional int32 memory_limit = 7;
+  optional int32 memory_limit = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Root device to boot, e.g. /dev/sda (optional).
-  optional string root_device = 8;
+  optional string root_device = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Run level: default, single, or binbash (optional).
-  optional ConfigRunLevel.Value run_level = 9;
+  optional ConfigRunLevel.Value run_level = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Virtualization mode: paravirt or fullvirt (optional).
-  optional ConfigVirtMode.Value virt_mode = 10;
+  optional ConfigVirtMode.Value virt_mode = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional helpers as a JSON object string.
-  optional string helpers = 11;
+  optional string helpers = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional interfaces as a JSON array string.
-  optional string interfaces = 12;
+  optional string interfaces = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm configuration profile creation. Ignored when
   // dry_run=true.
-  bool confirm = 13; // system param
+  bool confirm = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 14; // system param
+  optional bool dry_run = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceConfigUpdateInput is the input contract for
@@ -1120,39 +1205,43 @@ message InstanceConfigUpdateInput {
     method: "PUT"
     path: "/linode/instances/{linode_id}/configs/{config_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a configuration profile on the instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Configuration profile '{label}' (ID: {id}) updated on instance {linode_id}";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Updated label for the configuration profile (optional).
-  optional string label = 4;
+  optional string label = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Object mapping device slots to disk/volume IDs (optional).
-  map<string, google.protobuf.Value> devices = 5;
+  map<string, google.protobuf.Value> devices = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Kernel ID to boot, e.g. linode/latest-64bit (optional).
-  optional string kernel = 6;
+  optional string kernel = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional comments for the configuration profile.
-  optional string comments = 7;
+  optional string comments = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional memory limit in MB.
-  optional int32 memory_limit = 8;
+  optional int32 memory_limit = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Root device to boot, e.g. /dev/sda (optional).
-  optional string root_device = 9;
+  optional string root_device = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Run level: default, single, or binbash (optional).
-  optional ConfigRunLevel.Value run_level = 10;
+  optional ConfigRunLevel.Value run_level = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Virtualization mode: paravirt or fullvirt (optional).
-  optional ConfigVirtMode.Value virt_mode = 11;
+  optional ConfigVirtMode.Value virt_mode = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional helpers object.
-  map<string, google.protobuf.Value> helpers = 12;
+  map<string, google.protobuf.Value> helpers = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Optional array of interface objects.
-  repeated google.protobuf.Struct interfaces = 13;
+  repeated google.protobuf.Struct interfaces = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm configuration profile update. Ignored when
   // dry_run=true.
-  bool confirm = 14; // system param
+  bool confirm = 14 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 15; // system param
+  optional bool dry_run = 15 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceConfigDeleteInput is the input contract for
@@ -1165,19 +1254,24 @@ message InstanceConfigDeleteInput {
     method: "DELETE"
     path: "/linode/instances/{linode_id}/configs/{config_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This is irreversible. The configuration profile will be permanently deleted. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Configuration profile {config_id} deleted from instance {linode_id} successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile to delete (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm deletion. This action is irreversible. Ignored when
   // dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceConfigInterfaceListInput is the input contract for
@@ -1188,13 +1282,15 @@ message InstanceConfigInterfaceListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceConfigInterfaceAddInput is the input contract for
@@ -1208,35 +1304,40 @@ message InstanceConfigInterfaceAddInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This adds a network interface to the configuration profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Configuration profile interface added to config {config_id} on instance {linode_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The interface purpose: public, vlan, or vpc (required).
-  ConfigInterfacePurpose.Value purpose = 4;
+  ConfigInterfacePurpose.Value purpose = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Interface label. Required for vlan interfaces (optional).
-  optional string label = 5;
+  optional string label = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Private CIDR address for vlan interfaces (optional).
-  optional string ipam_address = 6;
+  optional string ipam_address = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Whether this is the primary non-vlan interface (optional).
-  optional bool primary = 7;
+  optional bool primary = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // The VPC subnet ID. Required for vpc interfaces (optional).
-  optional int32 subnet_id = 8;
+  optional int32 subnet_id = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // IPv4 CIDR VPC subnet ranges routed to this interface (optional).
-  repeated string ip_ranges = 9;
+  repeated string ip_ranges = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // VPC IPv4 configuration for this interface (optional).
-  map<string, google.protobuf.Value> ipv4 = 10;
+  map<string, google.protobuf.Value> ipv4 = 10 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // VPC IPv6 configuration for this interface (optional).
-  map<string, google.protobuf.Value> ipv6 = 11;
+  map<string, google.protobuf.Value> ipv6 = 11 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm configuration profile interface creation. Ignored
   // when dry_run=true.
-  bool confirm = 12; // system param
+  bool confirm = 12 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 13; // system param
+  optional bool dry_run = 13 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceConfigInterfaceUpdateInput is the input contract for
@@ -1249,27 +1350,31 @@ message InstanceConfigInterfaceUpdateInput {
     method: "PUT"
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.ConfigInterfaceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a network interface on the configuration profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Configuration profile interface {interface_id} updated on config {config_id} for instance {linode_id}";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile interface (required).
-  int32 interface_id = 4;
+  int32 interface_id = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Whether this is the primary interface (optional).
-  optional bool primary = 5;
+  optional bool primary = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // IPv4 ranges routed to this interface (optional).
-  repeated string ip_ranges = 6;
+  repeated string ip_ranges = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // IPv4 configuration for this interface (optional).
-  map<string, google.protobuf.Value> ipv4 = 7;
+  map<string, google.protobuf.Value> ipv4 = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm configuration profile interface update. Ignored
   // when dry_run=true.
-  bool confirm = 8; // system param
+  bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 9; // system param
+  optional bool dry_run = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceConfigInterfaceDeleteInput is the input contract for
@@ -1281,21 +1386,26 @@ message InstanceConfigInterfaceDeleteInput {
     method: "DELETE"
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/{interface_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigInterfaceDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This removes a network interface from the configuration profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Configuration profile interface {interface_id} removed from config {config_id} on instance {linode_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile interface to delete (required).
-  int32 interface_id = 4;
+  int32 interface_id = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm configuration profile interface deletion. Ignored
   // when dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceConfigInterfaceReorderInput is the input contract for
@@ -1309,22 +1419,27 @@ message InstanceConfigInterfaceReorderInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/configs/{config_id}/interfaces/order"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceConfigInterfaceReorderResponse";
+  option (linode.mcp.v1.confirm_message) = "This reorders network interfaces on the configuration profile. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Configuration profile {config_id} interfaces reordered on instance {linode_id}";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the configuration profile (required).
-  int32 config_id = 3;
+  int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Existing configuration profile interface IDs in the desired order, e.g.
   // [101,102,103] (required at the handler level).
-  repeated int32 ids = 4;
+  repeated int32 ids = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm configuration interface reorder. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceInterfaceListInput is the input contract for
@@ -1335,11 +1450,13 @@ message InstanceInterfaceListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/interfaces"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceInterfaceAddInput is the input contract for
@@ -1353,19 +1470,24 @@ message InstanceInterfaceAddInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/interfaces"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This adds a network interface to the Linode instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Interface added to instance {linode_id} successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Object defining exactly one interface type: public, vpc, or vlan (required
   // at the handler level).
-  map<string, google.protobuf.Value> interface = 3;
+  map<string, google.protobuf.Value> interface = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm interface creation. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceInterfaceDeleteInput is the input contract for
@@ -1377,19 +1499,24 @@ message InstanceInterfaceDeleteInput {
     method: "DELETE"
     path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceDeleteResponse";
+  option (linode.mcp.v1.confirm_message) = "This deletes a Linode interface and changes instance networking. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Interface {interface_id} deleted from instance {linode_id} successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the Linode interface to delete (required).
-  int32 interface_id = 3;
+  int32 interface_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm interface deletion. This action is irreversible.
   // Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceInterfaceUpdateInput is the input contract for
@@ -1402,28 +1529,33 @@ message InstanceInterfaceUpdateInput {
     method: "PUT"
     path: "/linode/instances/{linode_id}/interfaces/{interface_id}"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates a network interface on the Linode instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Interface {interface_id} updated on instance {linode_id} successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the Linode interface (required).
-  int32 interface_id = 3;
+  int32 interface_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Default route settings for the interface (optional).
-  map<string, google.protobuf.Value> default_route = 4;
+  map<string, google.protobuf.Value> default_route = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Public interface settings. Set exactly one of public, vpc, or vlan
   // (optional).
-  map<string, google.protobuf.Value> public = 5;
+  map<string, google.protobuf.Value> public = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // VLAN interface settings. Set exactly one of public, vpc, or vlan
   // (optional).
-  map<string, google.protobuf.Value> vlan = 6;
+  map<string, google.protobuf.Value> vlan = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // VPC interface settings. Set exactly one of public, vpc, or vlan (optional).
-  map<string, google.protobuf.Value> vpc = 7;
+  map<string, google.protobuf.Value> vpc = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm interface update. Ignored when dry_run=true.
-  bool confirm = 8; // system param
+  bool confirm = 8 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 9; // system param
+  optional bool dry_run = 9 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceInterfaceSettingsUpdateInput is the input contract for
@@ -1435,22 +1567,27 @@ message InstanceInterfaceSettingsUpdateInput {
     method: "PUT"
     path: "/linode/instances/{linode_id}/interfaces/settings"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceSettingsWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This updates interface settings for the Linode instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Interface settings for instance {linode_id} updated successfully";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Enable or disable Network Helper (optional).
-  optional bool network_helper = 3;
+  optional bool network_helper = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Default route interface IDs (ipv4_interface_id and/or ipv6_interface_id)
   // (optional).
-  map<string, google.protobuf.Value> default_route = 4;
+  map<string, google.protobuf.Value> default_route = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm interface settings update. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceInterfaceUpgradeInput is the input contract for
@@ -1463,22 +1600,26 @@ message InstanceInterfaceUpgradeInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/upgrade-interfaces"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceUpgradeWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This irreversibly upgrades Linode network interfaces. Set confirm=true to proceed.";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Optional configuration profile ID to upgrade.
-  optional int32 config_id = 3;
+  optional int32 config_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Pass dry_run to the Linode API to validate the upgrade without applying it
   // (optional).
-  optional bool api_dry_run = 4;
+  optional bool api_dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm the interface upgrade request. Ignored when
   // dry_run=true.
-  bool confirm = 5; // system param
+  bool confirm = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 6; // system param
+  optional bool dry_run = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceInterfaceHistoryListInput is the input contract for
@@ -1489,15 +1630,17 @@ message InstanceInterfaceHistoryListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/interfaces/history"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceInterfaceHistoryListResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Page of results to return (optional, minimum 1).
-  optional int32 page = 3;
+  optional int32 page = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
   // Number of results per page (optional, 25-500).
-  optional int32 page_size = 4;
+  optional int32 page_size = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_QUERY];
 }
 
 // InstanceBackupListInput is the input contract for
@@ -1508,11 +1651,13 @@ message InstanceBackupListInput {
     method: "GET"
     path: "/linode/instances/{linode_id}/backups"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_READ;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupsResponse";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
 }
 
 // InstanceBackupCreateInput is the input contract for
@@ -1523,19 +1668,24 @@ message InstanceBackupCreateInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/backups"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This creates a manual snapshot and overwrites any existing one. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Snapshot created for instance {linode_id} (backup ID: {id})";
+  option (linode.mcp.v1.retry_disabled) = true;
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance to snapshot (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Label for the manual snapshot (optional).
-  optional string label = 3;
+  optional string label = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm snapshot creation. This overwrites any existing
   // manual snapshot. Ignored when dry_run=true.
-  bool confirm = 4; // system param
+  bool confirm = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 5; // system param
+  optional bool dry_run = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceBackupRestoreInput is the input contract for
@@ -1547,24 +1697,27 @@ message InstanceBackupRestoreInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/backups/{backup_id}/restore"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceBackupRestoreWriteResponse";
+  option (linode.mcp.v1.success_message) = "Backup {backup_id} restore initiated to instance {target_linode_id} (overwrite={overwrite})";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance that owns the backup (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the backup to restore (required).
-  int32 backup_id = 3;
+  int32 backup_id = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // The ID of the Linode instance to restore the backup to (required).
-  int32 target_linode_id = 4;
+  int32 target_linode_id = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // If true, deletes all disks and configs on the target before restoring.
   // Defaults to false (optional).
-  optional bool overwrite = 5;
+  optional bool overwrite = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_BODY];
   // Must be true to confirm restore. With overwrite=true, all existing data on
   // the target is destroyed. Ignored when dry_run=true.
-  bool confirm = 6; // system param
+  bool confirm = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 7; // system param
+  optional bool dry_run = 7 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceBackupsEnableInput is the input contract for
@@ -1575,17 +1728,21 @@ message InstanceBackupsEnableInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/backups/enable"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_WRITE;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "Enabling backups adds a recurring charge to your account. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Backup service enabled for instance {linode_id}";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm enabling backups. This adds a recurring billing
   // charge. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceBackupsCancelInput is the input contract for
@@ -1597,23 +1754,28 @@ message InstanceBackupsCancelInput {
     method: "POST"
     path: "/linode/instances/{linode_id}/backups/cancel"
   };
+  option (linode.mcp.v1.tool_capability) = TOOL_CAPABILITY_DESTROY;
+  option (linode.mcp.v1.tool_response) = "linode.mcp.v1.InstanceActionWriteResponse";
+  option (linode.mcp.v1.confirm_message) = "This permanently deletes all backups for the instance. Set confirm=true to proceed.";
+  option (linode.mcp.v1.success_message) = "Backup service canceled for instance {linode_id}. All backups have been deleted.";
+  option (linode.mcp.v1.resource_type) = "Instance";
 
   // Linode environment to use (optional, defaults to "default").
-  optional string environment = 1; // system param
+  optional string environment = 1 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The ID of the Linode instance (required).
-  int32 linode_id = 2;
+  int32 linode_id = 2 [(linode.mcp.v1.field_location) = FIELD_LOCATION_PATH];
   // Must be true to confirm cancellation. All existing backups will be
   // permanently deleted. Ignored when dry_run=true.
-  bool confirm = 3; // system param
+  bool confirm = 3 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Preview the call without making it: returns the would-be request and
   // current resource state. Default false.
-  optional bool dry_run = 4; // system param
+  optional bool dry_run = 4 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // Two-stage flow: "plan" previews and returns a plan_id; "apply" with plan_id
   // re-checks drift and executes. Omit for a single-step call.
-  optional string mode = 5; // system param
+  optional string mode = 5 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
   // The plan_id returned by a mode:"plan" call, supplied with mode:"apply" to
   // execute it.
-  optional string plan_id = 6; // system param
+  optional string plan_id = 6 [(linode.mcp.v1.field_location) = FIELD_LOCATION_LOCAL]; // system param
 }
 
 // InstanceDiskDeleteResponse is the id-echo envelope linode_instance_disk_delete
