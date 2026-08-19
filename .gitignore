@@ -34,9 +34,10 @@ coverage.xml
 .mypy_cache/
 .ruff_cache/
 
-# binaries from testing
-route-dump
-toolgen
+# binaries from testing; anchored so the cmd/ source packages stay tracked
+/go/route-dump
+/go/toolgen
+/go/cmd/toolgen/toolgen
 
 # IDE
 .idea/
@@ -69,3 +70,16 @@ toolgen
 # Re-include them here.
 !/docs/
 !/docs/**
+
+# Tool registries written from the proto contract by scripts/gen_tool_registries.py
+# (also `make proto`). Ignored for the same reason the generated trees above are:
+# they restate what the descriptors declare, so a hand edit would be a second
+# copy of a fact rather than a decision. The contract files beside them that DO
+# hold decisions (handwritten-tools.txt, every *-baseline.txt, languages.txt)
+# stay committed.
+#
+# Below the docs re-include on purpose: that `!/docs/**` line un-ignores
+# everything under docs/, and the last matching pattern wins, so these two would
+# not be ignored at all if they sat above it.
+/docs/contracts/tools-manifest.txt
+/docs/contracts/tools-capabilities.txt

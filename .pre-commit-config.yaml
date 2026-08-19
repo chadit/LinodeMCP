@@ -112,12 +112,12 @@ repos:
 
       # Handler-level write-proto completeness. Statically classifies every
       # mutating tool's success path (Go: go run ./cmd/write-proto-dump; Python:
-      # the _write_proto_classifier module) and ratchets the straggler + missing
-      # fixture sets down against docs/contracts/write-proto-baseline.txt and
-      # docs/contracts/write-proto-fixture-baseline.txt. language: system because it needs
-      # both the Go toolchain and the Python venv. Fires when either
-      # implementation's source or the protos change so a handler cannot stay or
-      # go legacy without the baseline moving.
+      # the _write_proto_classifier module) and fails on any handler that is not
+      # proto-routed on both sides, plus any *WriteResponse proto with no
+      # conformance fixture. No baseline: the conversion is done, so a straggler
+      # is hand-written code to fix. language: system because it needs both the
+      # Go toolchain and the Python venv. Fires when either implementation's
+      # source or the protos change.
       - id: write-proto
         name: write-proto (handler proto-routing completeness)
         entry: bash -c 'python/.venv/bin/python scripts/verify_write_proto.py'
@@ -126,9 +126,7 @@ repos:
         pass_filenames: false
 
       # Read-surface sibling of write-proto: classifies every Read tool's
-      # handler on both sides and ratchets the straggler set against
-      # docs/contracts/read-proto-baseline.txt (that baseline is the authoritative
-      # remaining-work list for the read-surface proto conversion).
+      # handler on both sides and fails on any that is not proto-routed.
       - id: read-proto
         name: read-proto (read handler proto-routing completeness)
         entry: bash -c 'python/.venv/bin/python scripts/verify_read_proto.py'
@@ -139,9 +137,7 @@ repos:
       # Input-schema sibling of write-proto/read-proto: classifies every tool's
       # factory on both sides (Go: go run ./cmd/write-proto-dump -surface input;
       # Python: the _write_proto_classifier module in input mode) as
-      # proto-generated or hand-built and ratchets the straggler set against
-      # docs/contracts/input-proto-baseline.txt (the authoritative remaining-work list for
-      # the input-surface proto conversion).
+      # proto-generated or hand-built, and fails on any hand-built schema.
       - id: input-proto
         name: input-proto (tool input-schema proto completeness)
         entry: bash -c 'python/.venv/bin/python scripts/verify_input_proto.py'
@@ -150,8 +146,8 @@ repos:
         pass_filenames: false
 
       # Meta-capability sibling of write-proto/read-proto: classifies every
-      # Meta tool's handler on both sides and ratchets the straggler set
-      # against docs/contracts/meta-proto-baseline.txt.
+      # Meta tool's handler on both sides and fails on any that is not
+      # proto-routed.
       - id: meta-proto
         name: meta-proto (meta handler proto-routing completeness)
         entry: bash -c 'python/.venv/bin/python scripts/verify_meta_proto.py'
@@ -159,9 +155,9 @@ repos:
         language: system
         pass_filenames: false
 
-      # Handler-semantics gate: ratchets behavior-fixture coverage against
-      # docs/contracts/behavior-baseline.txt (the Go/Python test runners enforce the
-      # fixtures themselves; this keeps coverage from regressing).
+      # Handler-semantics gate: every manifest tool needs a behavior fixture or
+      # a line in docs/contracts/behavior-exempt.txt (the Go/Python test runners
+      # enforce the fixtures themselves; this is what keeps coverage complete).
       - id: behavior
         name: behavior (cross-language handler fixture coverage)
         entry: bash -c 'python/.venv/bin/python scripts/verify_behavior.py'
@@ -169,9 +165,10 @@ repos:
         language: system
         pass_filenames: false
 
-      # Confirm-message text parity: diffs every extractable confirm-gate
-      # message across both languages so text drift on branches no fixture
-      # exercises still fails (ratchets docs/contracts/message-parity-baseline.txt).
+      # Confirm-sentence rendering parity: both emitters render the contract's
+      # confirm_message into their own tool tree, and this diffs the two
+      # renderings over every extractable gate, including branches no fixture
+      # exercises. Any divergence fails; there is no baseline.
       - id: messages
         name: messages (cross-language confirm-text parity)
         entry: bash -c 'python/.venv/bin/python scripts/verify_messages.py'
@@ -179,27 +176,35 @@ repos:
         language: system
         pass_filenames: false
 
-      # The stdlib-only offline gates (no venv needed). Same commit-stage
-      # placement as the gates above: `make check` at push runs them all
-      # anyway, but failing at commit time keeps the fix in the same change.
+      # The offline gates (no venv of their own; tool-count reaches the
+      # descriptors through scripts/_toolroutes.py, which falls back to the
+      # venv). Same commit-stage placement as the gates above: `make check` at
+      # push runs them all anyway, but failing at commit time keeps the fix in
+      # the same change.
+      #
+      # Neither watches docs/contracts/tools-manifest.txt or
+      # tools-capabilities.txt any more: both files are written from the proto
+      # by `make proto` and gitignored, so they never appear in a commit and a
+      # pattern naming one would match nothing forever. The proto that decides
+      # their contents is what they watch instead.
       - id: tool-count
-        name: tool-count (README count vs tools-manifest)
+        name: tool-count (README count vs the declared tool surface)
         entry: bash -c 'python3 scripts/verify_docs_tool_count.py'
-        files: ^(README\.md|docs/contracts/tools-manifest\.txt)$
+        files: ^(README\.md$|proto/)
         language: system
         pass_filenames: false
 
       - id: dryrun
         name: dryrun (dry_run advertised per capability tier)
         entry: bash -c 'python3 scripts/verify_dryrun.py'
-        files: ^(go|python|proto)/|^docs/contracts/tools-capabilities\.txt$
+        files: ^(go|python|proto)/
         language: system
         pass_filenames: false
 
       - id: pagination
         name: pagination (list tools paginate per the spec snapshot)
         entry: bash -c 'python3 scripts/verify_pagination.py'
-        files: ^(go|python|proto|testdata/behavior)/|^docs/contracts/(pagination-baseline|api-pagination-baseline)\.txt$
+        files: ^(go|python|proto|testdata/behavior)/|^docs/contracts/api-pagination-baseline\.txt$
         language: system
         pass_filenames: false
 

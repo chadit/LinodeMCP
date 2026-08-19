@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "linodemcp"
 version = "0.1.0"
 description = "MCP server for Linode API access"
-readme = "../README.md"
+readme = "README.md"
 requires-python = ">=3.14.6"
 license = { text = "MIT" }
 authors = [{ name = "LinodeMCP Contributors" }]
@@ -31,6 +31,9 @@ dependencies = [
     # _pb2 import when the runtime is older than the gencode. Move the plugin
     # tags and this floor together, never one without the other.
     "protobuf>=7.35.1",
+    # Evaluates the buf.validate CEL constraints the proto contract carries, so
+    # a rule is written once in the proto instead of once per language.
+    "protovalidate==1.2.0",
     # Security floors for transitive deps pulled in by mcp. mcp's own
     # constraints are open (starlette>=0.27, python-multipart>=0.0.9), so
     # without these a resolve can land on versions trivy flags HIGH.
@@ -122,6 +125,13 @@ exclude_lines = [
     "@abstractmethod",
 ]
 
+# src/linodemcp/py.typed is load-bearing for these settings, not just for
+# downstream consumers: the dev venv installs linodemcp editable, so any mypy
+# run that does not name src/ on the command line (an editor, `mypy tests/`,
+# one file) resolves the package from site-packages instead. Without the PEP 561
+# marker that resolution is "installed but untyped", every genpb submodule stops
+# being an attribute of its parent package, and the result lands in the shared
+# .mypy_cache where the next full `mypy src/ tests/` reuses it.
 [tool.mypy]
 python_version = "3.13"
 strict = true
