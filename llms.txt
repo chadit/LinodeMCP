@@ -23,13 +23,15 @@ The proto contract lives in `proto/linode/mcp/v1`. Go lives in `go/`, Python in 
 - [Verifying releases](docs/verifying-releases.md): checking checksums, signatures, SBOMs, and SLSA provenance
 - [Cross-language parity](docs/parity.md): how a change in one language reaches the others; tool add/change/remove playbooks and the accepted-absence flow
 - [Adding a language](docs/adding-a-language.md): checklist and gates for a new language implementation
+- [The check gates](docs/gates.md): every make check gate in one page, what it checks and which contract file it ratchets
 
 ## Machine contracts
 
 Gate-read files, never hand-edited. Each file's header comment names its rules and regenerate command.
 
-- [tools-manifest.txt](docs/contracts/tools-manifest.txt): the full tool surface, one name per line
-- [tools-capabilities.txt](docs/contracts/tools-capabilities.txt): capability tier for every tool
+- tools-manifest.txt: the full tool surface, one name per line (written from the proto by `make proto`, gitignored)
+- tools-capabilities.txt: capability tier for every tool (written from the proto by `make proto`, gitignored)
+- [handwritten-tools.txt](docs/contracts/handwritten-tools.txt): the tools still served by a hand-written factory; everything else is generated
 - [languages.txt](docs/contracts/languages.txt): registry of language implementations and their surface-dump commands
 - Baseline ratchets (`docs/contracts/*-baseline.txt`, `docs/contracts/behavior-exempt.txt`): remaining-work and accepted-divergence lists, one per gate; the [docs index](docs/README.md) holds the full table
 

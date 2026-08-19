@@ -19,6 +19,25 @@ here is hand-written; the **input-proto**, **read-proto**, **write-proto**,
 and **meta-proto** gates fail any handler that hand-builds what should be
 generated.
 
+The per-tool code is derived the same way, from one emitter. `make proto` runs
+`go/cmd/toolgen` once: it reads the descriptors into a single contract model and
+each registered language's renderer arm writes that model into that language's
+`gentools` tree. There is no second generator to forget to run, and an option
+one arm acts and another says nothing about stops the run before either tree is
+rewritten, so a capability cannot land in one language and go missing in the
+other. Which languages get an arm comes from
+[`contracts/languages.txt`](./contracts/languages.txt); a registered language
+with no arm fails by name.
+
+The route a tool calls is derived the same way, and so is the API surface it
+answers on: `tool_route` and `tool_api_surface` sit on the tool's input message,
+and every language resolves both at runtime rather than spelling out a URL. A
+tool on a non-default surface also leads its advertised description with a
+`[v4beta]` marker, so a caller choosing from a tool listing can tell which
+surface it reaches. The **api-surfaces** gate holds the census in
+`contracts/api-surfaces.txt`, the contract, and every language's descriptions to
+one answer, in both directions.
+
 **2. Shared behavior fixtures.** The hand-written part of a tool (argument
 validation, error text, the HTTP call it makes, its dry-run preview) is
 pinned by `testdata/behavior/*.json`. Every fixture case replays through each
@@ -29,17 +48,21 @@ compared as JSON against routed `api_responses` fakes. Both runners
 `python/tests/unit/test_behavior_conformance.py`) run every case, so a
 semantic change in one language fails the other language's test suite until
 its twin catches up. Destroy tools must additionally carry a `dry_run: true`
-case that pins their preview content, because previews are hand-written per
-language and are exactly where drift hides.
+case that pins their preview content, because a preview is where drift hides:
+the prose most tools report is declared once in the proto and emitted into
+both languages, but the bodies that compute it from fetched state are still
+written per language.
 
-**3. Registries and ratchets.** [`contracts/tools-manifest.txt`](./contracts/tools-manifest.txt)
-lists the full tool surface and
-[`contracts/tools-capabilities.txt`](./contracts/tools-capabilities.txt) pins
-each tool's tier; per-language tests enforce both. Every remaining gap lives
-in a baseline ratchet under [`contracts/`](./contracts/): the gate fails on
-any NEW divergence and on any stale entry, so the lists only shrink. When a
-gap is accepted on purpose (one language landing ahead), its baseline line
-must carry an annotation, and CI's baseline guard blocks unannotated growth.
+**3. Registries and ratchets.** `contracts/tools-manifest.txt` lists the full
+tool surface and `contracts/tools-capabilities.txt` pins each tool's tier;
+per-language tests enforce both. `make proto` writes both from the proto
+contract and they are gitignored, so they are read and never edited. Most
+gates keep no list: a finding fails on the spot, which is what "the gap class
+is closed" looks like once it is. The gaps that remain live in a baseline
+ratchet under [`contracts/`](./contracts/): the gate fails on any NEW
+divergence and on any stale entry, so those lists only shrink. When a gap is
+accepted on purpose (one language landing ahead), its baseline line must carry
+an annotation, and CI's baseline guard blocks unannotated growth.
 
 ## You changed one language. What pulls the others along?
 
@@ -49,9 +72,10 @@ Start at the proto: define the input message (and response message for the
 output surface), run `make proto`, and every language gets the schema and
 types. Then, in the same change:
 
-- implement the tool in **every** registered language,
-- add its name to `contracts/tools-manifest.txt` and its tier to
-  `contracts/tools-capabilities.txt`,
+- nothing per-language: the emitter covers every tier, so `make proto` writes
+  the tool into every registered language's tree. Only a tool still named in
+  [`contracts/handwritten-tools.txt`](./contracts/handwritten-tools.txt) needs
+  hand-written code, and that list is empty,
 - add a behavior fixture in `testdata/behavior/` (Write tools need a
   confirm-rejection case, Destroy tools need the destroy-gate case and a
   dry-run preview case).
@@ -82,24 +106,51 @@ is allowed, but never silent:
    lands, at which point the gate fails on the stale line and the entry
    comes out.
 
-The same flow covers the other ratchets (behavior coverage, proto-routing)
-when a partial landing touches them.
+The same flow covers the dry-run preview ratchet when a partial landing
+touches it. It does not extend to the hard gates: behavior coverage,
+proto-routing, confirm text, pagination, fixture response shapes and route
+evidence have no list to add a line to, so a partial landing that breaks one
+of them is not a partial landing, it is a broken build.
 
 ### Changing a tool's input contract
 
 Edit the proto message, run `make proto`, and both languages advertise the
-new schema automatically. What does not move automatically is hand-written
-validation around it: error messages and rejection behavior are pinned by
-the behavior fixtures, so update the fixture case and both languages must
-match it. **tool-parity** catches param/type/required and OAuth-scope drift;
-**input-proto** catches a language quietly reverting to a hand-built schema.
+new schema automatically. **tool-parity** catches param/type/required and
+OAuth-scope drift; **input-proto** catches a language quietly reverting to a
+hand-built schema.
+
+An argument check belongs on the message too, as a `buf.validate` message-level
+CEL rule carrying the exact sentence the tool answers with. One rule, one
+wording, both languages: `go/internal/toolvalidate` and
+`linodemcp.tools.constraints` evaluate it, and every generated handler asks them
+before it asks the tool's own hook. Rules are evaluated in declaration order and
+the first one broken is the answer, so the order is part of the contract.
+
+Use message-level rules only. A field-level `buf.validate` rule becomes a JSON
+Schema keyword, which changes the schema every client reads.
+
+Two things a rule cannot say, both worth knowing before reaching for one:
+
+- Anything about an enum value that names no member. It reaches a rule as the
+  enum's zero, which is what an absent argument reaches it as too, so
+  "type is required" and "type must be one of: ..." cannot be told apart. Those
+  stay in a `validate` hook, and any rule ordered behind one has to hold its
+  peace until the enum names something (see `DomainCreateInput`).
+- Anything about an argument the message does not declare.
+
+What is left in hooks is counted by **hand-validators**, and the count only
+falls. Every other `tool_hooks` kind is counted the same way by
+**hook-bodies**, per language per kind, so a hand-written step that a
+declaration could carry shows up as a number that has to come down. Rejection
+behavior is pinned by the behavior fixtures either way, so update the fixture
+case and both languages must match it.
 
 ### Adding pagination to a list tool
 
-Eleven entries in
-[pagination-baseline.txt](./contracts/pagination-baseline.txt) are list tools
-whose spec route paginates but whose input has no `page`/`page_size` yet. To
-clear one:
+A tool whose spec route paginates must expose `page` and `page_size`, and
+**pagination** fails by name when one does not. That makes this the recipe for
+a new list tool, and for the moment a spec refresh turns an existing route
+paginated:
 
 1. Add `optional int32 page` and `optional int32 page_size` to the tool's
    proto input message and run `make proto`. Both languages pick up the
@@ -116,7 +167,6 @@ clear one:
    both bound rejections, and one `expect_request` whose path carries
    `?page=2&page_size=50`. The fixture is the cross-language contract; a
    language-only test is not.
-5. Remove the tool's line from the baseline.
 
 Do not declare new page-size constants. The bounds live in
 [api-pagination-baseline.txt](./contracts/api-pagination-baseline.txt),
@@ -132,9 +182,10 @@ through the fixture: change the case, and the language you did not touch
 fails its conformance run until its handler matches. This is deliberate. A
 preview enrichment added only to Go, for example, changes Go's pinned
 `expect_result` and immediately reddens Python's runner, which is the
-mechanism that used to be missing. Confirm-message wording is additionally
-diffed repo-wide by the **messages** gate even for branches no fixture
-exercises.
+mechanism that used to be missing. Confirm wording is additionally covered
+repo-wide by the **messages** gate, which diffs how the emitter rendered the
+contract's `confirm_message` into each language's tool tree, even for branches
+no fixture exercises.
 
 ### Removing a tool
 
@@ -149,7 +200,7 @@ baseline entries).
 | Command | What it does |
 |---|---|
 | `make check` | The gate. Both languages' lint and tests plus every cross-language gate; local green, hook green, and CI green are the same fact. |
-| `make parity-todo` | Per-language remaining-work report aggregated from the baselines. |
+| `make parity-todo` | Per-language remaining-work report aggregated from the baselines, plus the gates that keep their own class at zero. |
 | `make baseline-guard BASE=<rev>` | Baseline growth must carry issue-linked annotations. Runs inside `make check` against origin/main; CI re-runs it with the event's true base. |
 | `make diff-coverage BASE=<rev>` | Added (and untracked) source lines must be covered by tests. Runs inside `make check` against origin/main; CI re-runs it with the event's true base. |
 | `make tool-parity` / `behavior` / `input-proto` / `read-proto` / `write-proto` / `meta-proto` / `messages` / `pagination` / `dryrun` / `env-parity` / `cli-surface` / `docs-links` / `metrics-surface` / `coverage-floor` | Run one gate alone while iterating. |

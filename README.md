@@ -107,6 +107,14 @@ environments:
       token: "your-linode-api-token"
 ```
 
+`apiUrl` carries the API version segment, and a handful of tools answer only
+under `/v4beta`. Those tools swap the trailing `/v4` for themselves, per call,
+so nothing else moves; the tools are listed in
+[`docs/contracts/api-surfaces.txt`](docs/contracts/api-surfaces.txt) and each
+one leads its description with `[v4beta]`. A base that does not end in `/v4`,
+such as a proxy or a mock, is used exactly as written, so pointing `apiUrl`
+somewhere else keeps every call there and the server says so once at startup.
+
 Token values are literal: the config loader performs no `${VAR}` expansion.
 Write the token into the file and keep the file's permissions tight, or
 omit it and set `LINODEMCP_LINODE_TOKEN` in the environment, which
@@ -668,7 +676,7 @@ LinodeMCP/
 
 ## Status
 
-This project is in active development (v0.1.0). Both implementations are pinned by [docs/contracts/tools-manifest.txt](docs/contracts/tools-manifest.txt), which lists 465 tools, and the surface is enforced by parity tests in each language. Python implements the full set; Go implements all but a few routes that are tracked as accepted differences in [docs/contracts/tool-parity-baseline.txt](docs/contracts/tool-parity-baseline.txt). Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages, and the Python implementation is at full feature parity with Go.
+This project is in active development (v0.1.0). Both implementations are pinned by [docs/contracts/tools-manifest.txt](docs/contracts/tools-manifest.txt), which lists 520 tools, and the surface is enforced by parity tests in each language. Python implements the full set; Go implements all but a few routes that are tracked as accepted differences in [docs/contracts/tool-parity-baseline.txt](docs/contracts/tool-parity-baseline.txt). Coverage spans compute, block storage, Object Storage, networking, DNS, LKE, VPCs, managed databases, images, placement groups, tags, support, Longview, Managed, Monitor, account, and profile operations. The trust-and-safety layer (profiles, dry-run previews, two-stage writes, audit log) is complete in both languages, and the Python implementation is at full feature parity with Go.
 
 ## License
 

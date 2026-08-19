@@ -61,10 +61,10 @@ API's own default applies rather than a value the CLI invents. Both are
 rejected before any request when they are not integers or fall outside the
 range, so a typo fails locally instead of returning a surprising page.
 
-Not every list tool takes them yet;
-[contracts/pagination-baseline.txt](./contracts/pagination-baseline.txt) is
-the current list of the ones that don't, and `linodemcp tools` shows the real
-input schema for any tool.
+Every tool whose Linode route paginates takes them: `make pagination` fails a
+tool that reaches a paginated route without them, so there is no list of
+stragglers to consult. `linodemcp tools` shows the real input schema for any
+tool.
 
 ## Why profile switching is CLI-only
 
